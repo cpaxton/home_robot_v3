@@ -1,0 +1,56 @@
+"""Translation-invariant convex separation lower bounds in private FK state.
+
+A positive projection gap proves separation; this is not exact Euclidean clearance.
+No live physics changes or additional rollouts. Retargeted nominal paths are
+reported separately from the initial reference.
+"""
+import gzip,hashlib,json
+from pathlib import Path
+import mujoco,numpy as np
+from scipy.spatial.transform import Rotation
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.regression_gate import ROOT
+out=ROOT/'logs/eval/hand-tracking-deep-dive-v1';report={'scope':'static private FK and convex separating axes, not dynamics or exact Euclidean distance','runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cases':[]}
+def shape_vertices(m,d,g,frame):
+ kind=int(m.geom_type[g]);R=d.geom_xmat[g].reshape(3,3).copy();t=d.geom_xpos[g].copy();F=d.geom_xmat[frame].reshape(3,3).copy();origin=d.geom_xpos[frame].copy()
+ if kind==mujoco.mjtGeom.mjGEOM_BOX:
+  local=np.array([[x,y,z] for x in (-1,1) for y in (-1,1) for z in (-1,1)])*m.geom_size[g]
+  axes=(F.T@R).T
+ elif kind==mujoco.mjtGeom.mjGEOM_MESH:
+  index=int(m.geom_dataid[g]);a,n=int(m.mesh_vertadr[index]),int(m.mesh_vertnum[index]);local=m.mesh_vert[a:a+n].copy()
+  f,k=int(m.mesh_faceadr[index]),int(m.mesh_facenum[index]);faces=m.mesh_face[f:f+k].copy();tri=local[faces]
+  normals=np.cross(tri[:,1]-tri[:,0],tri[:,2]-tri[:,0]);normals=normals[np.linalg.norm(normals,axis=1)>1e-12];normals/=np.linalg.norm(normals,axis=1)[:,None];axes=normals@R.T@F
+ else:raise ValueError('unexpected collision proxy type')
+ return local@R.T@F+(t-origin)@F,axes
+
+def gap(m,d,ids):
+ a,axes_a=shape_vertices(m,d,ids[0],ids[1]);b,axes_b=shape_vertices(m,d,ids[1],ids[1]);axes=np.vstack([axes_a,axes_b]);A,B=a@axes.T,b@axes.T;gaps=np.maximum(A.min(0)-B.max(0),B.min(0)-A.max(0));return float(max(gaps))
+for index in (6,8,15,17):
+ with gzip.open(out/f'episode-{index:02d}.json.gz','rt') as stream:raw=json.load(stream)
+ case=raw['case']['case'];env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+ try:
+  env.reset();c,m,d=e.control,e.model,e.data;path=c.task_trajectory;ids=[m.geom(n).id for n in ('rl_link3','rl_base_link')]
+  poses=[];first_relative=None;max_relative_change=0.
+  for time in np.r_[np.arange(0,path.end,.01),path.end]:
+   base,q=path.coordinates(time);path.fk(base,q);private=path.fk.data;rb=private.geom_xmat[ids[1]].reshape(3,3).copy();relative=np.r_[rb.T@(private.geom_xpos[ids[0]].copy()-private.geom_xpos[ids[1]].copy()),(rb.T@private.geom_xmat[ids[0]].reshape(3,3).copy()).ravel()]
+   if first_relative is None:first_relative=relative.copy()
+   max_relative_change=max(max_relative_change,float(np.max(abs(relative-first_relative))))
+   poses.append({'time_s':float(time),'projection_gap_lower_bound_m':gap(m,private,ids)})
+  actual=[];scratch=mujoco.MjData(m);address=int(m.jnt_qposadr[m.body_jntadr[c.base]])
+  rows=raw['trace']
+  for state in rows[::5]+rows[-5:]:
+   scratch.qpos[:]=d.qpos.copy()
+   for group,value in zip(c.q,state['joint_position'],strict=True):scratch.qpos[group]=value/len(group)
+   quat=Rotation.from_euler('xyz',state['body_tilt_rad']).as_quat();scratch.qpos[address:address+3]=0;scratch.qpos[address+3:address+7]=quat[[3,0,1,2]];mujoco.mj_kinematics(m,scratch)
+   actual.append({'tick':state['tick'],'time_s':state['physics_time_s'],'projection_gap_lower_bound_m':gap(m,scratch,ids)})
+  restarts=[]
+  for a,b in zip(rows,rows[1:]):
+   if b['reference_progress_s']<a['reference_progress_s']:
+    # This suite's retarget keeps zero arm delta, so the witness holds the
+    # measured arm at the state immediately before the internal replan.
+    assert case['retarget'] and not any(case['arm_delta'])
+    for group,value in zip(c.q,a['joint_position'],strict=True):scratch.qpos[group]=value/len(group)
+    mujoco.mj_kinematics(m,scratch);restarts.append({'tick_before_replan':a['tick'],'new_path_arm_delta':case['arm_delta'],'new_nominal_projection_gap_lower_bound_m':gap(m,scratch,ids)})
+  entry={'episode':index,'id':case['id'],'controller':raw['case']['controller'],'geom_types':[int(m.geom_type[g]) for g in ids],'nominal_projection_gap_minimum_m':min(x['projection_gap_lower_bound_m'] for x in poses),'initial_nominal_relative_transform_max_change':max_relative_change,'retarget_nominal':restarts,'actual_projection_gap_minimum_m':min(x['projection_gap_lower_bound_m'] for x in actual),'nominal':poses,'actual':actual};report['cases'].append(entry);print({k:v for k,v in entry.items() if k not in ('nominal','actual')},flush=True)
+ finally:env.close()
+(out/'separation.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')

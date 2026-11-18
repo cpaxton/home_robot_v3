@@ -1,0 +1,66 @@
+"""Architectural diagnostic, not a trained or exported replacement policy.
+
+Rectify base-only feedback signs/symmetry, using a declared coarse hold region.
+The original actor is unchanged for every active-hand command. Native guards
+remain authoritative. No teacher/witness is read at inference.
+"""
+import json,runpy,hashlib
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+from emet.rl.manipulation.safety import whole_body_stopped
+from emet.rl.regression_gate import ROOT,source_state
+from emet.rl.manipulation.carry_benchmark import digest
+
+def main():
+ torch.set_num_threads(1)
+ out=ROOT/'logs/eval/base-feedback-structure-probe-v1';out.mkdir(parents=True,exist_ok=False)
+ prior=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'))
+ bundle=WholeBodyBundle(ROOT/'logs/eval/coupled-base-feedback-v1/actor');a=bundle.actor;cache={}
+ def encoder_hook(_,args,result):cache['obs']=args[0];cache['preview']=result[1];cache['motion']=result[2]
+ def gain_hook(_,args,result):
+  gain=result.reshape(-1,7,a.feedback_width).clone();obs=cache['obs'];f,pf=a.encoder.fields,a.encoder.preview_fields
+  eligible=(obs['history'][:,-1,f['hand_mask']].squeeze(-1)<.5)&(obs['history'][:,-1,f['base_mask']]> .5).all(-1)
+  preview=cache['preview'];motion=cache['motion'];x=preview[:,4,pf['base_error']][:,0]
+  direction=torch.where(motion[:,0].abs()>1e-5,motion[:,0],x).sign();direction=torch.where(direction==0,1.,direction)
+  proposed=torch.zeros_like(gain[:,:2])
+  for offset in (0,12):
+   proposed[:,0,offset]=gain[:,0,offset].abs()
+   proposed[:,1,offset+1]=gain[:,1,offset+1].abs()*direction
+   proposed[:,1,offset+2]=gain[:,1,offset+2].abs()
+  proposed[:,0,35]=gain[:,0,35].abs();proposed[:,1,37]=gain[:,1,37].abs()
+  constant=(preview[:,1:,pf['base_error']]==preview[:,1:2,pf['base_error']]).all(dim=(1,2))
+  stationary=(motion[:,:3]==0).all(-1)&constant
+  for row,offset in ((1,0),(4,12)):
+   value=preview[:,row,pf['base_error']]
+   xy=(1-.025/.1/value[:,:2].norm(dim=-1).clamp_min(1e-8)).clamp_min(0)
+   yaw=(1-np.deg2rad(2.5)/.5/value[:,2].abs().clamp_min(1e-8)).clamp_min(0)
+   proposed[:,0,offset]*=torch.where(stationary,xy,1.)
+   proposed[:,1,offset+1]*=torch.where(stationary,xy,1.)
+   proposed[:,1,offset+2]*=torch.where(stationary,yaw,1.)
+  gain[:,:2]=torch.where(eligible[:,None,None],proposed,gain[:,:2])
+  return gain.reshape_as(result)
+ hooks=[a.encoder.register_forward_hook(encoder_hook),a.gain.register_forward_hook(gain_hook)]
+ report={'format':'base-feedback-structure-probe-v1','source_state_digest':digest(source_state(ROOT)),'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'weights_sha256':bundle.manifest['weights_sha256'],'scope':'manual architectural intervention, no learned-policy improvement claim','coarse_hold_region':{'xy_inner_m':.025,'yaw_inner_rad':float(np.deg2rad(2.5))},'new_training_steps':0,'hardware_used':False,'safety_promoted':False,'cases':[],'complete':False}
+ cases=prior['new_base_cases']()+json.loads((ROOT/'logs/manipulation/base-direction-bootstrap-v1/audit-cases.json').read_text())
+ env=CoupledTrackingEnv('innate_mars',cases,suite_path=COARSE_SUITE);e=env.unwrapped
+ try:
+  for c in cases:
+   obs,_=env.reset(options={'case_id':c['id']});trace=[]
+   for tick in range(500):
+    action=bundle({k:obs[k] for k in ('history','preview','motion')});obs,_,done,truncated,info=env.step(action)
+    trace.append({'tick':tick,'base':e.control.base_pose().tolist(),'action':action[:2].tolist()})
+    if done or truncated:break
+   metrics=e._info();e.control.stop()
+   for _ in range(16):
+    if whole_body_stopped(e.control) or e._physics_invalid:break
+    e._tick(np.zeros(e.profile.action_size))
+   report['cases'].append({'case':c,'success':bool(info.get('is_success')),'code':info['code'],'metrics':metrics,'stop_confirmed':bool(whole_body_stopped(e.control) and not e._physics_invalid),'trace':trace})
+   (out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n');print(c['id'],info.get('is_success'),info['code'],flush=True)
+ finally:
+  env.close()
+  for hook in hooks:hook.remove()
+ report['complete']=True;(out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
+if __name__=='__main__':main()

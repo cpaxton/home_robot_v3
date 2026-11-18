@@ -1,0 +1,51 @@
+import json
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,load_suite
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+from emet.rl.manipulation.safety import whole_body_stopped
+
+out=Path('logs/eval/base-role-full-horizon-v1');out.mkdir(parents=True,exist_ok=True)
+rows=[]
+for mode in ('baseline','no_outer_rate'):
+ for case in load_suite()['robots']['innate_mars']:
+  env=CoupledTrackingEnv('innate_mars',[case]);e=env.unwrapped
+  try:
+   torch.set_num_threads(1)
+   bundle=WholeBodyBundle('logs/manipulation/coupled-bootstrap-v1/final/actor',robot='innate_mars',fingerprint=e.fingerprint)
+   actor=bundle.actor;cache={}
+   def encoder_hook(_,args,result):cache['preview']=result[1]
+   def gain_hook(_,args,result):
+    gain=result.reshape(-1,7,actor.feedback_width).clone()
+    
+    if mode!='baseline':gain[:,:2,24:35]=0
+    if mode=='coarse_and_no_outer_rate':
+     for row,offset in ((1,0),(4,12)):
+      value=cache['preview'][:,row,actor.encoder.preview_fields['base_error']]
+      ratio=(1-.02/.1/value[:,:2].norm(dim=-1).clamp_min(1e-8)).clamp_min(0)
+      yaw_ratio=(1-.04/.5/value[:,2].abs().clamp_min(1e-8)).clamp_min(0)
+      gain[:,:2,offset:offset+2]*=ratio[:,None,None]
+      gain[:,:2,offset+2]*=yaw_ratio[:,None]
+    return gain.reshape_as(result)
+   hooks=[actor.encoder.register_forward_hook(encoder_hook),actor.gain.register_forward_hook(gain_hook)]
+   obs,_=env.reset();last=[]
+   for tick in range(500):
+    action=bundle({k:obs[k] for k in ('history','preview','motion')})
+    obs,_,done,truncated,info=env.step(action)
+    if e.control.trajectory_end_elapsed()>=0:last.append(abs(float(action[1]))*.5)
+    if done or truncated:break
+   e.control.stop()
+   for _ in range(16):
+    if whole_body_stopped(e.control) or e._physics_invalid:break
+    e._tick(np.zeros(e.profile.action_size))
+   m=e._info()
+   record={'mode':mode,'id':case['id'],'success':bool(info.get('is_success')),'code':info['code'],
+           'position_error_m':m['ee_position_error'],'orientation_error_rad':m['ee_orientation_error'],
+           'base_error_m':m['base_goal_error'],'mean_abs_terminal_yaw_request':float(np.mean(last)) if last else None,
+           'stop_confirmed':whole_body_stopped(e.control),'metrics':m}
+   rows.append(record);(out/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
+   print(mode,case['id'],record['success'],record['code'],record['mean_abs_terminal_yaw_request'],flush=True)
+  finally:
+   for hook in hooks:hook.remove()
+   env.close()

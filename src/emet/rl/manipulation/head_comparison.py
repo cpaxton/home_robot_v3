@@ -1,0 +1,265 @@
+"""Experimental motion heads for a matched, frozen-backbone diagnostic.
+
+These are in-memory simulator experiments. The direct head has no deployment
+bundle format and must not be substituted into an existing actor-only bundle.
+"""
+
+import copy
+import math
+from numbers import Real
+
+import torch
+from torch import nn
+
+from emet.rl.manipulation.whole_body_actor import WholeBodyActor
+
+
+class DirectMotionActor(WholeBodyActor):
+    """Same measured history/context/masks; bounded direct motion outputs."""
+
+    def __init__(self, source):
+        super().__init__(source.robot, source.hidden)
+        self.encoder = copy.deepcopy(source.encoder)
+        self.gru = copy.deepcopy(source.gru)
+        self.context = copy.deepcopy(source.context)
+        self.grip = copy.deepcopy(source.grip)
+        del self.gain
+        self.motion_head = nn.Sequential(
+            nn.Linear(128, 256), nn.ELU(), nn.Linear(256, self.encoder.profile.action_size - 1)
+        )
+        nn.init.zeros_(self.motion_head[-1].weight)
+        nn.init.zeros_(self.motion_head[-1].bias)
+
+    def forward(self, obs):
+        history, preview, motion = self.encoder(obs)
+        context = self.gru(history)[0][:, -1]
+        context = self.context(torch.cat([context, preview.flatten(1), motion], dim=-1))
+        action = torch.cat([torch.tanh(self.motion_head(context)), torch.tanh(self.grip(context))], dim=-1)
+        return action * self.action_mask(obs)
+
+
+def matched_heads(source, *, seed=20261118, backbone_frozen=True, source_base_feedback=False):
+    """Clone one backbone and zero both motion means with explicit fitting mode.
+
+    Disable base-only gain priors in this comparison: a direct head does not
+    possess them. The retained, unchanged source remains a separate baseline.
+    Head parameter counts differ and are reported rather than called equal.
+    Explicit source-base-feedback mode is a gain-only follow-up, not a matched
+    direct-head comparison. It preserves both source base-feedback settings.
+    """
+    if type(backbone_frozen) is not bool:
+        raise ValueError("explicit boolean backbone fitting mode required")
+    if type(source_base_feedback) is not bool:
+        raise ValueError("explicit boolean source base feedback mode required")
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(seed)
+        gain = copy.deepcopy(source)
+        if not source_base_feedback:
+            gain.base_navigation_feedback = None
+            gain.base_rate_feedback = True
+        nn.init.zeros_(gain.gain.weight)
+        nn.init.zeros_(gain.gain.bias)
+        heads = {"gain": gain} if source_base_feedback else {"gain": gain, "direct": DirectMotionActor(gain)}
+    for actor in heads.values():
+        actor.requires_grad_(not backbone_frozen)
+        actor.grip.requires_grad_(False)
+        (
+            actor.gain
+            if isinstance(actor, WholeBodyActor) and not isinstance(actor, DirectMotionActor)
+            else actor.motion_head
+        ).requires_grad_(True)
+    return heads
+
+
+def recovery_reference(env, *, seed, offset_rad=0.08, acquisition_s=1.5):
+    """At reset, announce a nearby admitted goal with an explicit capture hold.
+
+    Only a scratch FK view is offset. The measured plant is never teleported or
+    pushed, and the original evaluation cases/precision gates stay unchanged.
+    """
+    from dataclasses import replace
+
+    import numpy as np
+
+    from emet.rl.manipulation.arm_splines import ArmSplineReference, SplineLevel
+    from emet.rl.manipulation.coupled_tracking import admit_reference
+    from emet.rl.manipulation.tracking import TaskFrameFK
+
+    if (
+        isinstance(offset_rad, (bool, np.bool_))
+        or isinstance(acquisition_s, (bool, np.bool_))
+        or not 0 < offset_rad <= 0.1
+        or not 0.5 <= acquisition_s <= 2
+        or env.unwrapped.steps != 0
+    ):
+        raise ValueError("bounded reset-only acquisition reference required")
+    e, old = env.unwrapped, env.reference
+    rng = np.random.default_rng(seed)
+    original_level = SplineLevel(**old.certificate["level"])
+    # Acquisition is an explicit extra hold, not a larger motion-time budget.
+    level = replace(
+        original_level,
+        initial_hold_s=acquisition_s,
+        maximum_duration_s=original_level.maximum_duration_s + acquisition_s - original_level.initial_hold_s,
+    )
+    low = np.maximum(-offset_rad, e.control.limits[:, 0] + 0.01 - np.asarray(old.certificate["joint_minimum"]))
+    high = np.minimum(offset_rad, e.control.limits[:, 1] - 0.01 - np.asarray(old.certificate["joint_maximum"]))
+    rejections = []
+    for _ in range(16):
+        offset = rng.uniform(low, high)
+        points = np.asarray(old.certificate["joint_waypoints"]) + offset
+        scratch = TaskFrameFK(e.model, e.data, e.control)
+        scratch(e.control.base_pose(), points[0])
+        view = copy.copy(e.control)
+        view.data = scratch.data
+        try:
+            reference = ArmSplineReference(view, points, level, timing="bounded_v2")
+            admission = admit_reference(e, reference)
+            if not admission["accepted"]:
+                raise ValueError(str(admission["reason"]))
+            break
+        except ValueError as exc:
+            rejections.append({"joint_offset_rad": offset.tolist(), "reason": str(exc)})
+    else:
+        raise ValueError("bounded recovery reference sampling exhausted: " + str(rejections))
+    initial_error = float(np.linalg.norm(reference.hand[0, :3] - e.control.ee_pose()[:3]))
+    e.set_task_trajectory(reference)
+    env.reference = reference
+    env.admission = admission
+    e.config = replace(e.config, horizon=float(np.ceil((reference.end + 3) / e.profile.dt) * e.profile.dt))
+    return env.observe(e.control.observe()), {
+        "joint_offset_rad": offset.tolist(),
+        "initial_hand_error_m": initial_error,
+        "acquisition_seconds": acquisition_s,
+        "admission": admission,
+        "rejected_proposals": rejections,
+    }
+
+
+def label_nearby_goals(env, *, seed, count=2, offset_rad=0.08):
+    """Label virtual goal changes at a measured state, without executing them.
+
+    This augments corrective directions missing from near-perfect teacher
+    rollouts. Static FK/path checks do not qualify the resulting controller.
+    """
+    import numpy as np
+
+    from emet.eval.physical_tamp import make_scene_checker
+    from emet.rl.manipulation.command_runtime import TaskPoseTeacherConfig, task_pose_teacher_action
+    from emet.rl.manipulation.coupled_tracking import reference_support_margin
+    from emet.rl.manipulation.tracking import TaskFrameFK
+    from emet.rl.manipulation.whole_body_observation import actor_observation
+
+    if type(count) is not int or not 0 <= count <= 4 or not 0 < offset_rad <= 0.1:
+        raise ValueError("bounded counterfactual goal population required")
+    e, c = env.unwrapped, env.unwrapped.control
+    if c.stopped or not c.hand_mask:
+        raise ValueError("counterfactual labels require active hand tracking")
+    rng = np.random.default_rng(seed)
+    initial = c.positions()
+    low = np.maximum(initial - offset_rad, c.limits[:, 0] + 0.01)
+    high = np.minimum(initial + offset_rad, c.limits[:, 1] - 0.01)
+    if np.any(low > high):
+        return [], [{"reason": "measured_pose_outside_sampling_margin"}]
+    fk = TaskFrameFK(e.model, e.data, c)
+    checker = make_scene_checker(e.model, {"object_body": e.payload_name, "gripper_bodies": e.profile.finger_bodies})
+    labels, rejections = [], []
+    for _ in range(count):
+        for _ in range(8):
+            target = rng.uniform(low, high)
+            accepted = True
+            for fraction in np.linspace(0, 1, 9):
+                fk(c.base_pose(), initial + fraction * (target - initial))
+                if (
+                    checker.configuration_collides(e.model, fk.data)
+                    or reference_support_margin(e.model, fk.data, e.profile) < 0.005
+                ):
+                    accepted = False
+                    break
+            if not accepted:
+                rejections.append({"joint_target": target.tolist(), "reason": "static_collision_or_support"})
+                continue
+            hand = fk(c.base_pose(), target)
+            shadow = copy.copy(c)
+            shadow.task_trajectory = None
+            shadow.preview_sampler = None
+            shadow.history = None if c.history is None else c.history.copy()
+            shadow.set_pose_targets(c.base_goal.copy(), c.base_mask.copy(), hand, True)
+            observation = actor_observation(shadow)
+            action = task_pose_teacher_action(shadow, config=TaskPoseTeacherConfig(coupled_base_tracking=True))
+            labels.append(
+                {
+                    "observation": observation,
+                    "action": action,
+                    "hand_error_m": float(np.linalg.norm(hand[:3] - c.ee_pose()[:3])),
+                }
+            )
+            break
+    return labels, rejections
+
+
+def fit_head(
+    actor,
+    observations,
+    targets,
+    *,
+    updates=1000,
+    batch_size=128,
+    seed=20261118,
+    learning_rate=3e-3,
+    sample_weights=None,
+):
+    """Teacher-action fitting isolates the head; this is not a PPO result."""
+    if type(updates) is not int or updates <= 0 or type(batch_size) is not int or batch_size <= 0:
+        raise ValueError("positive integer diagnostic fitting budget required")
+    if (
+        isinstance(learning_rate, bool)
+        or not isinstance(learning_rate, Real)
+        or not math.isfinite(learning_rate)
+        or not 0 < learning_rate <= 0.01
+    ):
+        raise ValueError("bounded positive diagnostic learning rate required")
+    if set(observations) != {"history", "preview", "motion"}:
+        raise ValueError("sensor-only fitting observations required")
+    tensors = {k: torch.as_tensor(v, dtype=torch.float32) for k, v in observations.items()}
+    targets = torch.as_tensor(targets, dtype=torch.float32)
+    count = len(targets)
+    if (
+        targets.shape != (count, actor.encoder.profile.action_size)
+        or not count
+        or any(len(v) != count or not torch.isfinite(v).all() for v in tensors.values())
+        or not torch.isfinite(targets).all()
+        or torch.any(targets.abs() > 1)
+    ):
+        raise ValueError("finite bounded teacher actions and aligned sensor observations required")
+    weights = None
+    if sample_weights is not None:
+        weights = torch.as_tensor(sample_weights, dtype=torch.float64)
+        if (
+            weights.shape != (count,)
+            or not torch.isfinite(weights).all()
+            or torch.any(weights < 0)
+            or not torch.isfinite(weights.sum())
+            or weights.sum() <= 0
+        ):
+            raise ValueError("finite nonnegative aligned sample weights with positive total required")
+        weights = weights / weights.sum()
+    optimizer = torch.optim.Adam([p for p in actor.parameters() if p.requires_grad], lr=learning_rate)
+    generator = torch.Generator().manual_seed(seed)
+    losses = []
+    for step in range(updates):
+        indices = (
+            torch.randint(count, (min(batch_size, count),), generator=generator)
+            if weights is None
+            else torch.multinomial(weights, min(batch_size, count), replacement=True, generator=generator)
+        )
+        batch = {k: v[indices] for k, v in tensors.items()}
+        mask = actor.action_mask(batch)[:, :-1]
+        loss = (((actor(batch)[:, :-1] - targets[indices, :-1]) ** 2) * mask).sum() / mask.sum().clamp_min(1)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_([p for p in actor.parameters() if p.requires_grad], 1.0)
+        optimizer.step()
+        if step % 100 == 0 or step + 1 == updates:
+            losses.append({"update": step + 1, "action_mse": float(loss.detach())})
+    return losses

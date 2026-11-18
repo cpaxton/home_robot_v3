@@ -1,0 +1,15 @@
+{
+  "format": "scoped-wheel-feedback-paired-protocol-v1",
+  "baseline": {"wheel_feedback_gain": 0.5, "wheel_feedback_base_only_gains": null},
+  "candidate": {"wheel_feedback_gain": 0.5, "wheel_feedback_base_only_gains": [0.0, 0.5]},
+  "same_source_and_learned_tensors": true,
+  "cohorts_per_contract": {"moving_goals":12,"viewer":3,"base_trajectories":24,"small_general":10,"larger_general":10,"unloaded_TAMP":6,"raw_endpoints":8,"compiled_development":8,"compiled_audit":16,"base_to_hand":4,"reverse_audit":8,"mask_handoffs":4},
+  "total_per_contract":113,
+  "reverse_audit_seeds": [35875000,35875001,35875002,35875003,35875004,35875005,35875006,35875007],
+  "mask_handoff_seeds": [35876000,35876001,35876002,35876003],
+  "mask_changes_at_ticks": [20,40,60,80],
+  "new_training_steps":0,
+  "hardware_used":false,
+  "automatic_promotion":false,
+  "note":"Matched deterministic repeats compare contracts; do not pool them as independent reliability trials. Existing failures stay in denominators. No sweep or gate relaxation."
+}

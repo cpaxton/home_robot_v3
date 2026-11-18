@@ -1,0 +1,68 @@
+{
+  "format": "long-finetune-v1",
+  "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "initializer": "logs/manipulation/quiet-reference-pilot-v1/ordinary_noise/checkpoint-16384/actor",
+  "seed": 108,
+  "decisions_per_arm": 65536,
+  "critic_only_decisions": 0,
+  "rollout_steps": 256,
+  "actor_learning_rate": [
+    1e-05,
+    1e-06
+  ],
+  "critic_learning_rate": 0.001,
+  "initial_action_std": 0.02,
+  "epochs": 3,
+  "batch_size": 64,
+  "clip": 0.05,
+  "target_kl": 0.01,
+  "entropy_weight": 0.0001,
+  "family_control_tick_weights": [
+    0.5,
+    0.5
+  ],
+  "general_hand_base_tick_weights": [
+    0.8,
+    0.2
+  ],
+  "training_horizon_s": 25,
+  "evaluation_horizon_s": 25,
+  "randomization_scale": 0,
+  "case_manifest": "cases.json",
+  "training_cases": 12,
+  "fresh_audit_cases": 12,
+  "reward_arms": [
+    "ordinary_noise",
+    "continued"
+  ],
+  "intermediate_checkpoint_selection": false,
+  "teacher_actions_in_loss": false,
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "distribution": "FK-witness nonholonomic coupled trajectories with full/XY-only/free base masks, forward/reverse/base-yaw cases; separate audit motions/seeds; 50% TAMP grasp-pose unloaded prefix by physical ticks",
+  "checkpoint_admission": "raw actor is trained/evaluated on separately fingerprinted general and TAMP plants; export is scoped to its declared general plant, not qualified TAMP checkpoint deployment",
+  "preceding_attempt": {
+    "report": "docs/experiments/hand_priority_training_20261117.md",
+    "runtime": "9d0620f9",
+    "reason": "short noise/reward probes do not improve joint accuracy/safety; test longer lower-rate fine-tuning with unchanged ordinary objective"
+  },
+  "independent_critic_epochs": 3,
+  "episode_contract": "finite_tracking_deadline_v1",
+  "reward": "unchanged legacy reward; ordinary exploration",
+  "comparison": "checkpoint fine-tuning after explicit fresh physical reset, not an exactly resumed environment or matched fresh-initialization experiment",
+  "previous_preflight": null,
+  "quiet_reference_std_scale": 1.0,
+  "hand_pose_weight": 1.0,
+  "control_run": "logs/manipulation/quiet-reference-pilot-v1/ordinary_noise/run.json",
+  "control_physical_report": "logs/manipulation/quiet-reference-pilot-v1/physical-comparison.json",
+  "control_retrained": false,
+  "admission_reuse": "same frozen source, initializer, physical distribution, guards, reference and case identities; source-bound teacher admission and retained physics reused explicitly; no new teacher rollout",
+  "audit_scope": "reused development audit; adaptively inspected across experiments; fresh confirmatory cases required before promotion",
+  "source_training_state": "logs/manipulation/quiet-reference-pilot-v1/ordinary_noise/training.pt",
+  "source_training_state_sha256": "39f1b73d265c36daec42511285399a3fdb4d84cde26aa557d21f9448a6c3922e",
+  "source_decisions": 16384,
+  "optimizer_state_restored": true,
+  "environment_state_restored": false,
+  "checkpoint_every_decisions": 8192
+}

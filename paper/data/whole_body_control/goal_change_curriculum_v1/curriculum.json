@@ -1,0 +1,778 @@
+{
+  "format": "coupled-tracking-v2",
+  "scope": "Mars-only training curriculum. Stretch entries preserve base schema validation, not additional training. Both nominal stages require independent geometry/support admission.",
+  "robots": {
+    "innate_mars": [
+      {
+        "id": "innate_mars:goal-change-v1:train:0",
+        "seed": 410400000,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.13161551144146974,
+        "turn_rad": 0.1504596978956604,
+        "arm_delta": [
+          -0.02060545772084003,
+          0.006432654871004438,
+          -0.012916588670291933,
+          -0.033041081940172336,
+          0.022471183544876018
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:1",
+        "seed": 410400001,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": -0.15833105599525824,
+        "turn_rad": 0.18753423902983105,
+        "arm_delta": [
+          -0.014479759081456843,
+          0.02779149135155419,
+          0.03200602972119439,
+          -0.02237280396155682,
+          -0.01896571162165485
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:2",
+        "seed": 410400002,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.12610905356453198,
+        "turn_rad": -0.2580824250569139,
+        "arm_delta": [
+          0.01683763218981471,
+          0.013568752106998781,
+          -0.01540602857917938,
+          0.027527730503780143,
+          -0.0017677885227289844
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:3",
+        "seed": 410400003,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.0,
+        "turn_rad": 0.0,
+        "arm_delta": [
+          0.001693528374995916,
+          0.021339918116853172,
+          0.003729215494577817,
+          -0.025943444695267565,
+          0.0028510766725041714
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:4",
+        "seed": 410400004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15942204218742845,
+        "turn_rad": 0.298921381017508,
+        "arm_delta": [
+          -0.028962745349649946,
+          0.022399231006961326,
+          0.033112743373648196,
+          -0.034415107954237405,
+          -0.029778317342653727
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:5",
+        "seed": 410400005,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": -0.13822239920622365,
+        "turn_rad": 0.2508143545679278,
+        "arm_delta": [
+          0.01221763609102023,
+          0.005268341042830062,
+          -0.028068605477408644,
+          -0.030467358639741714,
+          -0.012459448580700135
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:6",
+        "seed": 410400006,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.13410891473412415,
+        "turn_rad": -0.15833893672449678,
+        "arm_delta": [
+          0.007392213180219688,
+          0.007693083197891359,
+          0.016384983998719127,
+          -0.03109546429453158,
+          0.03054955402793301
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:train:7",
+        "seed": 410400007,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.0,
+        "turn_rad": 0.0,
+        "arm_delta": [
+          0.027134399620387606,
+          -0.016533419870845133,
+          0.03204252805188117,
+          0.006486989488961092,
+          0.03361334849423771
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:8",
+        "seed": 410400008,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": 0.12508960412704226,
+        "turn_rad": 0.29079755814153996,
+        "arm_delta": [
+          0.0006512080431674006,
+          -0.0014914722393110785,
+          -0.023515155342291358,
+          0.02778807171327413,
+          -0.01457013249326745
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:9",
+        "seed": 410400009,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.12928176317247334,
+        "turn_rad": 0.18906994064402532,
+        "arm_delta": [
+          0.02923919390561565,
+          0.026717776051239928,
+          0.006899032794631138,
+          -0.033635128440420346,
+          -0.022082957430080603
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:10",
+        "seed": 410400010,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": 0.14806567816755892,
+        "turn_rad": -0.24699275759782335,
+        "arm_delta": [
+          -0.00011902072638109162,
+          0.014566567888392161,
+          -0.00798272061116494,
+          0.01447958050675898,
+          -0.0041567396367540935
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:11",
+        "seed": 410400011,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.0,
+        "turn_rad": 0.0,
+        "arm_delta": [
+          0.0070843474153029495,
+          -0.006353665075086251,
+          0.027741705244180542,
+          -0.02475345981111762,
+          0.008475521865409383
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:12",
+        "seed": 410400012,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": 0.1333673921120087,
+        "turn_rad": 0.1765605714954296,
+        "arm_delta": [
+          -0.020264732138052226,
+          0.03325693571387171,
+          0.01737992162782736,
+          0.028882402851252098,
+          -0.0007312835038867024
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:13",
+        "seed": 410400013,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.15768403259565872,
+        "turn_rad": 0.24453424390444778,
+        "arm_delta": [
+          0.005189901289059405,
+          0.03424163921254923,
+          0.007047222714696544,
+          0.021665282401952785,
+          -0.003892726825509573
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:14",
+        "seed": 410400014,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": 0.14436722032196053,
+        "turn_rad": -0.184345567983556,
+        "arm_delta": [
+          -0.00258824465151615,
+          -0.007484647424179879,
+          -0.014799408936134857,
+          -0.028645021830547512,
+          0.03301223497911955
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:goal-change-v1:audit:15",
+        "seed": 410400015,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.0,
+        "turn_rad": 0.0,
+        "arm_delta": [
+          0.011052199589730312,
+          0.03348262536841137,
+          0.0031441148153772205,
+          -0.034829528984047765,
+          0.02234536924617883
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      }
+    ],
+    "stretch": [
+      {
+        "id": "stretch:v2:train:base_only:0",
+        "seed": 35710000,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:hand_free_base:1",
+        "seed": 35710001,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:hand_free_base:2",
+        "seed": 35710002,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0.24,
+        "arm_delta": [
+          0,
+          0.005,
+          -0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:coupled:3",
+        "seed": 35710003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15,
+        "turn_rad": -0.24,
+        "arm_delta": [
+          0,
+          -0.005,
+          0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:coupled:4",
+        "seed": 35710004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15,
+        "turn_rad": 0.24,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0.01
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:fixed_world_hand:5",
+        "seed": 35710005,
+        "split": "train",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": 1.0,
+        "purpose": "hand_hold_nullspace_diagnostic"
+      },
+      {
+        "id": "stretch:v2:audit:hand_free_base:6",
+        "seed": 35710006,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          -0.01
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:audit:coupled:7",
+        "seed": 35710007,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.15,
+        "turn_rad": -0.24,
+        "arm_delta": [
+          0,
+          0.007,
+          -0.007,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:audit:fixed_world_hand:8",
+        "seed": 35710008,
+        "split": "audit",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": -0.75,
+        "purpose": "hand_hold_nullspace_diagnostic"
+      },
+      {
+        "id": "stretch:v2:audit:hand_free_base:9",
+        "seed": 35710009,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "retarget": {
+          "at_fraction": 0.5,
+          "travel_m": -0.15
+        },
+        "purpose": "tracking"
+      }
+    ]
+  },
+  "acceptance": {
+    "base_xy_tolerance": 0.05,
+    "base_heading_tolerance": 0.08726646259971647,
+    "hand_position_tolerance": 0.003,
+    "hand_orientation_tolerance": 0.02
+  },
+  "curriculum_format": "nominal-goal-change-v1",
+  "curriculum_robot": "innate_mars",
+  "goal_changes": {
+    "innate_mars:goal-change-v1:train:0": {
+      "travel_m": -0.12422645183770877,
+      "turn_rad": -0.13757890327229869,
+      "arm_delta": [
+        0.014490014908209914,
+        -0.006798613885335878,
+        0.008682304081640052,
+        0.03002987338109059,
+        -0.021774206417114868
+      ],
+      "dwell_s": 0.19350019548814218
+    },
+    "innate_mars:goal-change-v1:train:1": {
+      "travel_m": 0.1613288002539443,
+      "turn_rad": -0.18224825595845567,
+      "arm_delta": [
+        0.017408579982120084,
+        -0.02126140489747426,
+        -0.030097244904540302,
+        0.0216900182932301,
+        0.01566742197665402
+      ],
+      "dwell_s": 0.35144626641783816
+    },
+    "innate_mars:goal-change-v1:train:2": {
+      "travel_m": -0.12728828328527267,
+      "turn_rad": 0.24742049811079017,
+      "arm_delta": [
+        -0.016758111418042405,
+        -0.014616565599518017,
+        0.012815319399560338,
+        -0.021380371957213366,
+        9.782296209968075e-05
+      ],
+      "dwell_s": 0.5330143802085595
+    },
+    "innate_mars:goal-change-v1:train:3": {
+      "travel_m": -0.0,
+      "turn_rad": -0.0,
+      "arm_delta": [
+        -0.00542698512142035,
+        -0.016659512203733604,
+        -0.0005874295965356685,
+        0.023768632278389178,
+        0.002549688422760349
+      ],
+      "dwell_s": 0.5266541959959189
+    },
+    "innate_mars:goal-change-v1:train:4": {
+      "travel_m": -0.15083641170148215,
+      "turn_rad": -0.2527238318981868,
+      "arm_delta": [
+        0.029631915231014966,
+        -0.020522454009944437,
+        -0.029061660160445334,
+        0.02660850878924826,
+        0.025719654825204417
+      ],
+      "dwell_s": 0.12176636012997168
+    },
+    "innate_mars:goal-change-v1:train:5": {
+      "travel_m": 0.13267071987506304,
+      "turn_rad": -0.2525546349003112,
+      "arm_delta": [
+        -0.015140845417072718,
+        -0.002954419486914707,
+        0.02432695561627904,
+        0.02788783453715762,
+        0.01304023655007414
+      ],
+      "dwell_s": 0.15228644644208805
+    },
+    "innate_mars:goal-change-v1:train:6": {
+      "travel_m": -0.13180111168603628,
+      "turn_rad": 0.16480306979865644,
+      "arm_delta": [
+        -0.003843637181982892,
+        -0.00845783391935698,
+        -0.010087343442313105,
+        0.023241573344085414,
+        -0.02388374495563765
+      ],
+      "dwell_s": 0.27191949388285747
+    },
+    "innate_mars:goal-change-v1:train:7": {
+      "travel_m": -0.0,
+      "turn_rad": -0.0,
+      "arm_delta": [
+        -0.02601356067318505,
+        0.02023742248393791,
+        -0.03172138548638349,
+        -0.004961584492927429,
+        -0.033576478324217805
+      ],
+      "dwell_s": 0.40060908050941957
+    },
+    "innate_mars:goal-change-v1:audit:8": {
+      "travel_m": -0.10118169494551045,
+      "turn_rad": -0.29491469499175527,
+      "arm_delta": [
+        0.0014208280989196588,
+        0.0037736549536737385,
+        0.02287424104021761,
+        -0.030018796419735032,
+        0.011924564917414511
+      ],
+      "dwell_s": 0.40016588233571543
+    },
+    "innate_mars:goal-change-v1:audit:9": {
+      "travel_m": 0.13352340514172742,
+      "turn_rad": -0.16213633289474363,
+      "arm_delta": [
+        -0.03336088752811734,
+        -0.03240021615454908,
+        -0.007587237986386726,
+        0.03265607759774084,
+        0.022246687765766993
+      ],
+      "dwell_s": 0.44320539429800787
+    },
+    "innate_mars:goal-change-v1:audit:10": {
+      "travel_m": -0.14479078384829436,
+      "turn_rad": 0.21393494486306042,
+      "arm_delta": [
+        0.003402334878815098,
+        -0.015403511182680484,
+        0.010572452931808127,
+        -0.007117569461517355,
+        0.007475507954352371
+      ],
+      "dwell_s": 0.2497530288998135
+    },
+    "innate_mars:goal-change-v1:audit:11": {
+      "travel_m": -0.0,
+      "turn_rad": -0.0,
+      "arm_delta": [
+        -0.007237828900537416,
+        0.010600727752428395,
+        -0.03309319258843627,
+        0.02708969225042341,
+        -0.008115936067990973
+      ],
+      "dwell_s": 0.32780953316487565
+    },
+    "innate_mars:goal-change-v1:audit:12": {
+      "travel_m": -0.11834385773253986,
+      "turn_rad": -0.17368441060588682,
+      "arm_delta": [
+        0.015643854087100697,
+        -0.035725234782763814,
+        -0.01680047603542955,
+        -0.03030178717625947,
+        0.003741335649259418
+      ],
+      "dwell_s": 0.10334562220994908
+    },
+    "innate_mars:goal-change-v1:audit:13": {
+      "travel_m": 0.16317742730547188,
+      "turn_rad": -0.2397402697702775,
+      "arm_delta": [
+        -0.0029731841704722563,
+        -0.032308110591268244,
+        -0.0010484339019642937,
+        -0.017436644674056454,
+        0.0006369577609115313
+      ],
+      "dwell_s": 0.4078955093348797
+    },
+    "innate_mars:goal-change-v1:audit:14": {
+      "travel_m": -0.12560729312048835,
+      "turn_rad": 0.17450350190493125,
+      "arm_delta": [
+        -0.0017836964444120926,
+        0.006603524299370545,
+        0.014599735031285498,
+        0.030508912372681454,
+        -0.031425471128805615
+      ],
+      "dwell_s": 0.14618449500306124
+    },
+    "innate_mars:goal-change-v1:audit:15": {
+      "travel_m": -0.0,
+      "turn_rad": -0.0,
+      "arm_delta": [
+        -0.01428704536001998,
+        -0.02898754239147966,
+        -0.001327402446695971,
+        0.03667366041938555,
+        -0.023458658493572045
+      ],
+      "dwell_s": 0.286109789430931
+    }
+  },
+  "training_mix": {
+    "general": 0.5,
+    "tamp": 0.5,
+    "within_general": {
+      "hand": 0.6,
+      "base": 0.2,
+      "goal_changes": 0.2
+    }
+  },
+  "generator": {
+    "seed": 2026111710,
+    "count_per_split": 8,
+    "reset_seed_start": 410400000
+  }
+}

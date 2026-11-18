@@ -1,0 +1,350 @@
+{
+  "source_state_digest": "adbf52c79155ca2a396ee357f480b034e230def13d8766459a4aa3eaeb1e7578",
+  "runner_sha256": "7fae7c27a04ae0be45407b6a755bf01404fb5319834d219c43efb3962375d868",
+  "actor_weights_sha256": "46291c71ea4dccd93feaf94d4b0e88f3deb1ee5945667964300f3c9f1c165813",
+  "profile_records": {
+    "legacy": {
+      "format": "whole_body_reward_v1",
+      "position_scale_m": 0.01,
+      "rotation_scale_rad": 0.1,
+      "fine_pose_weight": 0.0,
+      "hand_pose_weight": 1.0,
+      "hand_velocity_weight": 0.5,
+      "base_pose_weight": 1.0,
+      "base_velocity_weight": 0.5,
+      "hand_linear_velocity_scale_m_s": 0.02,
+      "hand_angular_velocity_scale_rad_s": 0.2,
+      "base_position_scale_m": 0.02,
+      "base_heading_scale_rad": 0.05,
+      "base_linear_velocity_scale_m_s": 0.02,
+      "base_angular_velocity_scale_rad_s": 0.1,
+      "pose_gated_velocity": false,
+      "progress_weight": 0.0,
+      "stability_scale": 1.0,
+      "jerk_weight": 0.01,
+      "effort_weight": 0.001,
+      "command_delta_weight": 0.01,
+      "force_free_N": 3.0,
+      "force_scale_N": 3.0,
+      "force_weight": 0.1,
+      "guard_penalty": 10.0,
+      "success_bonus": 2.0,
+      "failure_penalty": 2.0,
+      "tamp_failure_penalty": 10.0
+    },
+    "priority_only": {
+      "format": "whole_body_reward_v1",
+      "position_scale_m": 0.01,
+      "rotation_scale_rad": 0.1,
+      "fine_pose_weight": 0.0,
+      "hand_pose_weight": 4.0,
+      "hand_velocity_weight": 0.5,
+      "base_pose_weight": 1.0,
+      "base_velocity_weight": 0.5,
+      "hand_linear_velocity_scale_m_s": 0.02,
+      "hand_angular_velocity_scale_rad_s": 0.2,
+      "base_position_scale_m": 0.02,
+      "base_heading_scale_rad": 0.05,
+      "base_linear_velocity_scale_m_s": 0.02,
+      "base_angular_velocity_scale_rad_s": 0.1,
+      "pose_gated_velocity": false,
+      "progress_weight": 0.0,
+      "stability_scale": 1.0,
+      "jerk_weight": 0.01,
+      "effort_weight": 0.001,
+      "command_delta_weight": 0.01,
+      "force_free_N": 3.0,
+      "force_scale_N": 3.0,
+      "force_weight": 0.1,
+      "guard_penalty": 10.0,
+      "success_bonus": 2.0,
+      "failure_penalty": 2.0,
+      "tamp_failure_penalty": 10.0
+    },
+    "fine_only": {
+      "format": "whole_body_reward_v1",
+      "position_scale_m": 0.02,
+      "rotation_scale_rad": 0.2,
+      "fine_pose_weight": 0.75,
+      "hand_pose_weight": 1.0,
+      "hand_velocity_weight": 0.5,
+      "base_pose_weight": 1.0,
+      "base_velocity_weight": 0.5,
+      "hand_linear_velocity_scale_m_s": 0.02,
+      "hand_angular_velocity_scale_rad_s": 0.2,
+      "base_position_scale_m": 0.02,
+      "base_heading_scale_rad": 0.05,
+      "base_linear_velocity_scale_m_s": 0.02,
+      "base_angular_velocity_scale_rad_s": 0.1,
+      "pose_gated_velocity": false,
+      "progress_weight": 0.0,
+      "stability_scale": 1.0,
+      "jerk_weight": 0.01,
+      "effort_weight": 0.001,
+      "command_delta_weight": 0.01,
+      "force_free_N": 3.0,
+      "force_scale_N": 3.0,
+      "force_weight": 0.1,
+      "guard_penalty": 10.0,
+      "success_bonus": 2.0,
+      "failure_penalty": 2.0,
+      "tamp_failure_penalty": 10.0
+    },
+    "progress_only": {
+      "format": "whole_body_reward_v1",
+      "position_scale_m": 0.01,
+      "rotation_scale_rad": 0.1,
+      "fine_pose_weight": 0.0,
+      "hand_pose_weight": 1.0,
+      "hand_velocity_weight": 0.5,
+      "base_pose_weight": 1.0,
+      "base_velocity_weight": 0.5,
+      "hand_linear_velocity_scale_m_s": 0.02,
+      "hand_angular_velocity_scale_rad_s": 0.2,
+      "base_position_scale_m": 0.02,
+      "base_heading_scale_rad": 0.05,
+      "base_linear_velocity_scale_m_s": 0.02,
+      "base_angular_velocity_scale_rad_s": 0.1,
+      "pose_gated_velocity": false,
+      "progress_weight": 0.1,
+      "stability_scale": 1.0,
+      "jerk_weight": 0.01,
+      "effort_weight": 0.001,
+      "command_delta_weight": 0.01,
+      "force_free_N": 3.0,
+      "force_scale_N": 3.0,
+      "force_weight": 0.1,
+      "guard_penalty": 10.0,
+      "success_bonus": 2.0,
+      "failure_penalty": 2.0,
+      "tamp_failure_penalty": 10.0
+    },
+    "gating_only": {
+      "format": "whole_body_reward_v1",
+      "position_scale_m": 0.01,
+      "rotation_scale_rad": 0.1,
+      "fine_pose_weight": 0.0,
+      "hand_pose_weight": 1.0,
+      "hand_velocity_weight": 0.5,
+      "base_pose_weight": 1.0,
+      "base_velocity_weight": 0.5,
+      "hand_linear_velocity_scale_m_s": 0.02,
+      "hand_angular_velocity_scale_rad_s": 0.2,
+      "base_position_scale_m": 0.02,
+      "base_heading_scale_rad": 0.05,
+      "base_linear_velocity_scale_m_s": 0.02,
+      "base_angular_velocity_scale_rad_s": 0.1,
+      "pose_gated_velocity": true,
+      "progress_weight": 0.0,
+      "stability_scale": 1.0,
+      "jerk_weight": 0.01,
+      "effort_weight": 0.001,
+      "command_delta_weight": 0.01,
+      "force_free_N": 3.0,
+      "force_scale_N": 3.0,
+      "force_weight": 0.1,
+      "guard_penalty": 10.0,
+      "success_bonus": 2.0,
+      "failure_penalty": 2.0,
+      "tamp_failure_penalty": 10.0
+    },
+    "contract": {
+      "format": "whole_body_reward_v1",
+      "position_scale_m": 0.02,
+      "rotation_scale_rad": 0.2,
+      "fine_pose_weight": 0.75,
+      "hand_pose_weight": 4.0,
+      "hand_velocity_weight": 0.5,
+      "base_pose_weight": 1.0,
+      "base_velocity_weight": 0.5,
+      "hand_linear_velocity_scale_m_s": 0.02,
+      "hand_angular_velocity_scale_rad_s": 0.2,
+      "base_position_scale_m": 0.02,
+      "base_heading_scale_rad": 0.05,
+      "base_linear_velocity_scale_m_s": 0.02,
+      "base_angular_velocity_scale_rad_s": 0.1,
+      "pose_gated_velocity": true,
+      "progress_weight": 0.1,
+      "stability_scale": 1.0,
+      "jerk_weight": 0.01,
+      "effort_weight": 0.001,
+      "command_delta_weight": 0.01,
+      "force_free_N": 3.0,
+      "force_scale_N": 3.0,
+      "force_weight": 0.1,
+      "guard_penalty": 10.0,
+      "success_bonus": 2.0,
+      "failure_penalty": 2.0,
+      "tamp_failure_penalty": 10.0
+    }
+  },
+  "cases": [
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:0",
+      "seed": 35900000,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": 0.09,
+      "turn_rad": -0.16,
+      "arm_delta": [
+        0.0,
+        -0.004,
+        0.004,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:1",
+      "seed": 35900001,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": -0.09,
+      "turn_rad": -0.18,
+      "arm_delta": [
+        0.0,
+        0.006,
+        -0.006,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:3",
+      "seed": 35900003,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": -0.12,
+      "turn_rad": 0.16,
+      "arm_delta": [
+        0.0,
+        -0.003,
+        0.003,
+        0.0,
+        0.006
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:4",
+      "seed": 35900004,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": 0.1,
+      "turn_rad": 0.14,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.006
+      ],
+      "base_mask": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:base:2",
+      "seed": 35900022,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.0,
+      "turn_rad": 0.18,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "seed": 35901001,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": -0.09720000000000001,
+      "turn_rad": -0.19440000000000002,
+      "arm_delta": [
+        0.0,
+        0.0064800000000000005,
+        -0.0064800000000000005,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:2",
+      "seed": 35901002,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.1296,
+      "turn_rad": 0.20520000000000002,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.00864
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:7",
+      "seed": 35901007,
+      "split": "audit",
+      "mode": "hand_free_base",
+      "travel_m": -0.0648,
+      "turn_rad": 0.10800000000000001,
+      "arm_delta": [
+        0.0,
+        0.0032400000000000003,
+        -0.0032400000000000003,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        false,
+        false,
+        false
+      ]
+    }
+  ],
+  "noise_seeds": [
+    108,
+    109
+  ],
+  "gamma": 0.9975,
+  "actor_updated": false,
+  "scope": "same retained-actor physical traces across reward profiles; trained critics evaluated off-policy; finite-contract MC is not an infinite-horizon value certificate"
+}

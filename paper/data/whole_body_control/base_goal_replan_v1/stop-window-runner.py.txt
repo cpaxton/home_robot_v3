@@ -1,0 +1,42 @@
+"""Offline physical stopping window after the two retained caster failures."""
+import hashlib,json,runpy
+from pathlib import Path
+import numpy as np,torch
+from emet.rl.manipulation.base_goal_reference import install_base_goal
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.manipulation.policy import load_control_policy
+from emet.rl.manipulation.safety import whole_body_stopped
+from emet.rl.regression_gate import ROOT,source_state
+
+def main():
+ torch.set_num_threads(1)
+ out=ROOT/'logs/eval/base-goal-stop-window-v1';out.mkdir(parents=True,exist_ok=False)
+ helpers=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'))
+ specs=json.loads((ROOT/'logs/eval/base-goal-replan-native-v1/moving-protocol.json').read_text())['cases']
+ bundle=load_control_policy(ROOT/'logs/eval/base-goal-reference-native-v1/actor',robot='innate_mars')
+ before=source_state(ROOT)
+ report={'format':'base-goal-stop-window-v1','source_state_digest':digest(before),'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'scope':'offline deterministic diagnostic; not wall-clock deadline or independent reliability evidence','simulation_budget_s':.75,'new_training_steps':0,'hardware_used':False,'cases':[],'complete':False}
+ for spec in specs:
+  if not spec['id'].endswith((':5',':7')):continue
+  case={**helpers['new_base_cases']()[0],'id':spec['id'],'seed':spec['seed']}
+  env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+  try:
+   env.reset();origin=e.control.base_pose().copy();install_base_goal(e,origin+spec['initial']);obs=env.observe(e.control.observe());updates=dict(spec['updates'])
+   for tick in range(500):
+    if tick in updates:install_base_goal(e,origin+updates[tick]);obs=env.observe(e.control.observe())
+    obs,_,done,truncated,info=env.step(helpers['predict'](bundle.actor,obs))
+    if done or truncated:break
+   assert e.monitor.wheel_lift and not info.get('is_success')
+   started=float(e.data.time);e.control.stop();hold=e.control.reference.copy() if hasattr(e.control,'reference') else None
+   rows=[]
+   while not e._physics_invalid and not whole_body_stopped(e.control) and float(e.data.time)-started<.75-1e-9:
+    e._tick(np.zeros(e.action_space.shape),score=False)
+    rows.append({'elapsed_s':float(e.data.time)-started,'base_velocity':e.data.qvel[e.control.base_dof:e.control.base_dof+6].copy().tolist(),'arm_velocity':e.control.velocities().copy().tolist()})
+   row={'id':spec['id'],'seed':spec['seed'],'original_code':info['code'],'original_success':False,'wheel_lift_still_latched':bool(e.monitor.wheel_lift),'stopped_still_latched':bool(e.control.stopped),'stop_confirmed':bool(not e._physics_invalid and whole_body_stopped(e.control)),'physics_invalid':bool(e._physics_invalid),'elapsed_s':float(e.data.time)-started,'trace':rows}
+   assert row['wheel_lift_still_latched'] and row['stopped_still_latched']
+   report['cases'].append(row);print(json.dumps(row),flush=True)
+  finally:env.close()
+ assert source_state(ROOT)==before
+ report['complete']=True;(out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
+if __name__=='__main__':main()

@@ -1,0 +1,842 @@
+{
+  "format": "mars-unloaded-primitive-admission-v1",
+  "producer_revision": "9cd439bf3c1d0f7d9af6362bf9c39e4f56f2d310",
+  "source_state_digest": "38cb3246b7a61db4c10966de70aa05240443cd04dfce37bb04d404a9e3762213",
+  "source_manifest_sha256": "6ce42a5db2bbbc47c8bbd41f0f0ffef2937c16113859408aaf6da9255f566691",
+  "suite_file_sha256": "f5ee6268282b560f5c5fcf1aa321bbba9274ad1b8b746c15a8204be0cfd35d32",
+  "cases": [
+    {
+      "id": "development:left:20g:0",
+      "layout": "left",
+      "seed": 34600000,
+      "mass_kg": 0.02,
+      "yaw_offset_rad": 0.6
+    },
+    {
+      "id": "development:right:50g:1",
+      "layout": "right",
+      "seed": 34600001,
+      "mass_kg": 0.05,
+      "yaw_offset_rad": -0.6
+    },
+    {
+      "id": "development:left:50g:2",
+      "layout": "left",
+      "seed": 34600002,
+      "mass_kg": 0.05,
+      "yaw_offset_rad": 0.6
+    },
+    {
+      "id": "development:right:20g:3",
+      "layout": "right",
+      "seed": 34600003,
+      "mass_kg": 0.02,
+      "yaw_offset_rad": -0.6
+    },
+    {
+      "id": "audit:left:20g:0",
+      "layout": "left",
+      "seed": 34610000,
+      "mass_kg": 0.02,
+      "yaw_offset_rad": 0.6
+    },
+    {
+      "id": "audit:right:50g:1",
+      "layout": "right",
+      "seed": 34610001,
+      "mass_kg": 0.05,
+      "yaw_offset_rad": -0.6
+    }
+  ],
+  "wheel_feedback_current_velocity": true,
+  "initial_settle_s": 0.0,
+  "arrival_contract": "original_unmodified_stage_contracts",
+  "expected_exceptions": {},
+  "new_ppo_steps": 0,
+  "hardware_used": false,
+  "full_pick_place_qualified": false,
+  "ready_for_training": false,
+  "complete": true,
+  "stages": {
+    "pregrasp": {
+      "attempts": 6,
+      "successes": 5,
+      "stops_confirmed": 6,
+      "stage_teacher_ready": false,
+      "rows_file_sha256": "c5ba125d8cfd7c889dcf1a6514c29a825dbe3b94da1ef630aa365c55e6ecf8a5",
+      "rows": [
+        {
+          "id": "development:left:20g:0",
+          "primitive": "pregrasp",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0011818267467115636,
+            "orientation_error_rad": 0.0013010301842679125,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 128,
+          "decisions": 74,
+          "returns": [
+            20.67191979289055,
+            -0.008393209166833504,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 74
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0003450180097476774,
+            0.00013724447862888817,
+            -2.885929833884582e-06
+          ],
+          "object_rotation_rad": 0.013719356115565708,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:50g:1",
+          "primitive": "pregrasp",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0011092279133742924,
+            "orientation_error_rad": 0.0010795311688982362,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 128,
+          "decisions": 74,
+          "returns": [
+            20.70495131611824,
+            -0.010273056103960565,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 74
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00025392852735794946,
+            4.450527646788355e-05,
+            -7.0424472667640625e-06
+          ],
+          "object_rotation_rad": 0.007059445959522411,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:left:50g:2",
+          "primitive": "pregrasp",
+          "boundary_reached": false,
+          "terminal_pose": null,
+          "terminal_pose_in_contract": false,
+          "gripper_open": true,
+          "success": false,
+          "code": "planning_failed",
+          "stop_confirmed": true,
+          "control_ticks": 54,
+          "decisions": 29,
+          "returns": [
+            -2.0673568099737167,
+            -0.016732406060327776,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 29
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.000578240096901661,
+            -0.00010867749783803615,
+            -1.4807684983547675e-05
+          ],
+          "object_rotation_rad": 0.017987061077315566,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "training_oracle",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 0,
+              "reference_controller_calls": 29,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 8,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:20g:3",
+          "primitive": "pregrasp",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0012955573248515087,
+            "orientation_error_rad": 0.0011490658936268102,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 170,
+          "decisions": 96,
+          "returns": [
+            26.744416117668152,
+            -0.020956148309789396,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 96
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0014605426420706835,
+            -0.0002124218698787081,
+            -5.330070683040589e-06
+          ],
+          "object_rotation_rad": 0.08953198445014064,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:left:20g:0",
+          "primitive": "pregrasp",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0012398051435073328,
+            "orientation_error_rad": 0.0014494326621214456,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 129,
+          "decisions": 75,
+          "returns": [
+            20.778059750795364,
+            -0.008728795907520848,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 75
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0008474579998323795,
+            0.00027016329064074446,
+            -7.894259118623737e-08
+          ],
+          "object_rotation_rad": 0.043930631791695304,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:right:50g:1",
+          "primitive": "pregrasp",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0010070299268957882,
+            "orientation_error_rad": 0.00041498607283616516,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 130,
+          "decisions": 76,
+          "returns": [
+            21.008418679237366,
+            -0.01331412059995829,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 76
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0002209291057371221,
+            -2.2299450153841216e-05,
+            -5.2025743224826115e-05
+          ],
+          "object_rotation_rad": 0.005062511410797846,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        }
+      ]
+    },
+    "grasp_pose": {
+      "attempts": 6,
+      "successes": 5,
+      "stops_confirmed": 6,
+      "stage_teacher_ready": false,
+      "rows_file_sha256": "b721dd718bf8c3b07eb5eaf1379505c9d81c406b51a9cd023786baa1186d1572",
+      "rows": [
+        {
+          "id": "development:left:20g:0",
+          "primitive": "grasp_pose",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.001437734555526606,
+            "orientation_error_rad": 0.001228404777567906,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 189,
+          "decisions": 127,
+          "returns": [
+            29.611994802951813,
+            -0.013946675659708863,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 127
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00032737116190451054,
+            0.00013547485314197028,
+            -7.589684439479605e-06
+          ],
+          "object_rotation_rad": 0.01314168003558963,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:50g:1",
+          "primitive": "grasp_pose",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0013286611254391752,
+            "orientation_error_rad": 0.00088943638335667,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 189,
+          "decisions": 127,
+          "returns": [
+            29.63884873688221,
+            -0.017120787143687588,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 127
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0002457766326898758,
+            6.898284549953365e-05,
+            -1.1435344081350829e-05
+          ],
+          "object_rotation_rad": 0.01009743541400284,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:left:50g:2",
+          "primitive": "grasp_pose",
+          "boundary_reached": false,
+          "terminal_pose": null,
+          "terminal_pose_in_contract": false,
+          "gripper_open": true,
+          "success": false,
+          "code": "planning_failed",
+          "stop_confirmed": true,
+          "control_ticks": 54,
+          "decisions": 29,
+          "returns": [
+            -2.0673568099737167,
+            -0.016732406060327776,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 29
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.000578240096901661,
+            -0.00010867749783803615,
+            -1.4807684983547675e-05
+          ],
+          "object_rotation_rad": 0.017987061077315566,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "training_oracle",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 0,
+              "reference_controller_calls": 29,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 8,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:20g:3",
+          "primitive": "grasp_pose",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0009836215890827974,
+            "orientation_error_rad": 0.0005653443945482021,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 235,
+          "decisions": 153,
+          "returns": [
+            36.398294523358345,
+            -0.024436597605637628,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 153
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0015227772783423799,
+            -0.00022983771453424784,
+            -3.862422213091188e-06
+          ],
+          "object_rotation_rad": 0.0909900048158209,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:left:20g:0",
+          "primitive": "grasp_pose",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0015094461562165614,
+            "orientation_error_rad": 0.0014227406280982713,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 193,
+          "decisions": 131,
+          "returns": [
+            30.139781281352043,
+            -0.014973651555646228,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 131
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0008474780779003654,
+            0.0002701385849458657,
+            -7.894259151930427e-08
+          ],
+          "object_rotation_rad": 0.043931958671422834,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:right:50g:1",
+          "primitive": "grasp_pose",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0007999391175588702,
+            "orientation_error_rad": 0.00029489186676374425,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 193,
+          "decisions": 131,
+          "returns": [
+            30.340532705187798,
+            -0.019269254089046672,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 131
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00025128735108298494,
+            0.00010269372959932632,
+            -4.271275733225277e-05
+          ],
+          "object_rotation_rad": 0.011905161001233198,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        }
+      ]
+    }
+  },
+  "elapsed_wall_s": 105.03362690703943,
+  "raw_results_sha256": "5e85fddf28ee4bdc35fcefcde49ea821b70edcd8969bbef69f2b2611bbea0224",
+  "archived_baseline_sha256": "3b65be06eac6ffcddb24ea1b308cf8c28fd5107c44dd6a01a1486a5a56987f2e",
+  "readout_script_sha256": "0d64584d2c1d11e9d91f6ea3ae63c8c3b36ddc9c8fe46aea8575f39fa1ff2735",
+  "parity_fields": [
+    "success",
+    "stop_confirmed",
+    "control_ticks",
+    "decisions",
+    "returns",
+    "commands",
+    "inference_counts",
+    "object_translation_m",
+    "object_rotation_rad",
+    "initial_state_sha256",
+    "model_fingerprint",
+    "compiled_robot_identity",
+    "initialization_failed",
+    "safety_flags"
+  ],
+  "baseline_physical_parity": [
+    {
+      "case_id": "development:left:20g:0",
+      "changed_physical_fields": [],
+      "archived_code": "pregrasp_complete",
+      "current_code": "pregrasp_complete"
+    },
+    {
+      "case_id": "development:right:50g:1",
+      "changed_physical_fields": [],
+      "archived_code": "pregrasp_complete",
+      "current_code": "pregrasp_complete"
+    },
+    {
+      "case_id": "development:left:50g:2",
+      "changed_physical_fields": [],
+      "archived_code": "operation_failed",
+      "current_code": "planning_failed"
+    },
+    {
+      "case_id": "development:right:20g:3",
+      "changed_physical_fields": [],
+      "archived_code": "pregrasp_complete",
+      "current_code": "pregrasp_complete"
+    },
+    {
+      "case_id": "audit:left:20g:0",
+      "changed_physical_fields": [],
+      "archived_code": "pregrasp_complete",
+      "current_code": "pregrasp_complete"
+    },
+    {
+      "case_id": "audit:right:50g:1",
+      "changed_physical_fields": [],
+      "archived_code": "pregrasp_complete",
+      "current_code": "pregrasp_complete"
+    }
+  ],
+  "paired_prefixes": [
+    {
+      "case_id": "development:left:20g:0",
+      "handoff_sim_time": 5.399999999999627,
+      "compared_ticks": 88,
+      "prefix_equal": true,
+      "pregrasp_prefix_sha256": "da1bfbb859f84d7000c099a03b8f16d8afc80bdb1fb1dc1e47ce57ea947d8394",
+      "grasp_prefix_sha256": "da1bfbb859f84d7000c099a03b8f16d8afc80bdb1fb1dc1e47ce57ea947d8394",
+      "trace_sha256": {
+        "pregrasp": "204cbf7a9bc2aa60c6a24d4a2eed24e368eac4a4adbc0a247656e769ae0fe514",
+        "grasp_pose": "82ca8ea2996777941a4c7a04c89972dd26a298379037f7b3813481ea40ca098a"
+      },
+      "grasp_stop_confirmed": true,
+      "closure_commands": 0,
+      "loaded_commands": 0
+    },
+    {
+      "case_id": "development:right:50g:1",
+      "handoff_sim_time": 5.399999999999627,
+      "compared_ticks": 88,
+      "prefix_equal": true,
+      "pregrasp_prefix_sha256": "4c3115e05ce5e6b8670ebe8eaa16197050d8b84f6895319708a64da6fd18aad6",
+      "grasp_prefix_sha256": "4c3115e05ce5e6b8670ebe8eaa16197050d8b84f6895319708a64da6fd18aad6",
+      "trace_sha256": {
+        "pregrasp": "0f9c157bbcc14891a2d5c23b50baa15f4a4007425336127386a873396bdfa1a2",
+        "grasp_pose": "d34561886fdec006dd4cf3b368707b42d6abeefdb4a07575cafe266c7149d82e"
+      },
+      "grasp_stop_confirmed": true,
+      "closure_commands": 0,
+      "loaded_commands": 0
+    },
+    {
+      "case_id": "development:left:50g:2",
+      "handoff_sim_time": null,
+      "compared_ticks": 54,
+      "prefix_equal": true,
+      "pregrasp_prefix_sha256": "86917679f11367514984e23c162ea5549d50e921b3ea112874b1e617f299988c",
+      "grasp_prefix_sha256": "86917679f11367514984e23c162ea5549d50e921b3ea112874b1e617f299988c",
+      "trace_sha256": {
+        "pregrasp": "476796b288e4615b1ac270db8b8b9283db89e36c21683a90d38332e283d1cbe1",
+        "grasp_pose": "9ec80bdb7db43411d0717b23274fd306600e603f518d575fbafca0be7d4363ad"
+      },
+      "grasp_stop_confirmed": true,
+      "closure_commands": 0,
+      "loaded_commands": 0
+    },
+    {
+      "case_id": "development:right:20g:3",
+      "handoff_sim_time": 7.499999999999396,
+      "compared_ticks": 130,
+      "prefix_equal": true,
+      "pregrasp_prefix_sha256": "13b48a38f4bd3a0cfe86ae7d30e71566f54bc7611c54215f4dabe02a5ae6f97a",
+      "grasp_prefix_sha256": "13b48a38f4bd3a0cfe86ae7d30e71566f54bc7611c54215f4dabe02a5ae6f97a",
+      "trace_sha256": {
+        "pregrasp": "3af5080b94e1b98b4b843da7ced1ee8867ffa6e2b5be724a83a901a2d1183f86",
+        "grasp_pose": "956a332f069fc08c48258b9d96d928ab7455bb22d56d7105fc445fc788728476"
+      },
+      "grasp_stop_confirmed": true,
+      "closure_commands": 0,
+      "loaded_commands": 0
+    },
+    {
+      "case_id": "audit:left:20g:0",
+      "handoff_sim_time": 5.449999999999622,
+      "compared_ticks": 89,
+      "prefix_equal": true,
+      "pregrasp_prefix_sha256": "dcd5e4eb6b2f12f9a99bafaa840a560b84cf8f005f83d86abde7f4bae8f3af70",
+      "grasp_prefix_sha256": "dcd5e4eb6b2f12f9a99bafaa840a560b84cf8f005f83d86abde7f4bae8f3af70",
+      "trace_sha256": {
+        "pregrasp": "125800607fdb28686d8bf5b469221101bbfd028d46dcb72bb187fef59d443477",
+        "grasp_pose": "93fb82bf2f0ff28fcec2213e3463a2287a877fc7e4fc7e8a9b54449140c49151"
+      },
+      "grasp_stop_confirmed": true,
+      "closure_commands": 0,
+      "loaded_commands": 0
+    },
+    {
+      "case_id": "audit:right:50g:1",
+      "handoff_sim_time": 5.499999999999616,
+      "compared_ticks": 90,
+      "prefix_equal": true,
+      "pregrasp_prefix_sha256": "2104245809beddcf1933f7622612ac99d43c50448d5bc1f8fb5100ea17d74cbe",
+      "grasp_prefix_sha256": "2104245809beddcf1933f7622612ac99d43c50448d5bc1f8fb5100ea17d74cbe",
+      "trace_sha256": {
+        "pregrasp": "60ec030413a1ff603c63d26a2a652147636a0936f0c0f657d0ca392675e6eacd",
+        "grasp_pose": "e7cf45cf7079a8cfff4a603c4e1b12d50db59e035a24f2efacb54fcaf07ef26a"
+      },
+      "grasp_stop_confirmed": true,
+      "closure_commands": 0,
+      "loaded_commands": 0
+    }
+  ],
+  "all_pregrasp_physical_fields_unchanged": true,
+  "all_paired_prefixes_equal": true
+}

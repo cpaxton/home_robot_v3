@@ -1,0 +1,72 @@
+{
+  "format": "herman-console-browser-v1",
+  "live_robot_subscriptions_only": true,
+  "hardware_motion_commands_sent": 0,
+  "checks": [
+    "live head stereo and telemetry",
+    "hand keyboard preview",
+    "base turn keyboard preview",
+    "focus loss clears held input",
+    "base-free mask",
+    "no motion/stop endpoint",
+    "no desktop/mobile horizontal overflow",
+    "touch orientation preview",
+    "reset preview to measured without motor command"
+  ],
+  "before": {
+    "base": [
+      0,
+      0,
+      -0.05
+    ],
+    "hand": [
+      0.08536349920468571,
+      0.021163130835080476,
+      0.033230688314747694
+    ],
+    "measured": [
+      0,
+      0,
+      0
+    ],
+    "commands": 0
+  },
+  "hand_after": [
+    0.10536349920468573,
+    0.021163130835080476,
+    0.033230688314747694
+  ],
+  "base_after": [
+    0,
+    0,
+    0.025
+  ],
+  "overview": {
+    "title": "Herman \u00b7 Operator console",
+    "connected": true,
+    "motion_enabled": false,
+    "commands_sent": 0,
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "held_keys": 0,
+    "pointer_action": null,
+    "head_loaded": 640,
+    "wrist_available": false,
+    "stop_disabled": true,
+    "horizontal_overflow": false,
+    "measured_base": [
+      0,
+      0,
+      0
+    ]
+  },
+  "source_sha256": {
+    "src/emet/visualization/operator_console.py": "4035470d8e19b7c28d8961b94356f17eaf23832fed1169c2b0480f4993ffa866",
+    "src/emet/visualization/operator_console.html": "067df8fe7dc11da9b21e68390ef77fc3475611c21722b6540484304312fa9e42",
+    "src/emet/robots/innate_mars/passive_relay.py": "d32682ef26b7f3c0ee807f4905d8cc47bbfd4a234834b4de6ee698f2d0ae0354",
+    "src/emet/robots/innate_mars/passive_ssh.py": "59b59c8c09e20657453af60ce1ffd48d34b09759a7b4c76e5b745a307112da00"
+  }
+}

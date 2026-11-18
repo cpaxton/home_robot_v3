@@ -403,3 +403,187 @@ def test_preview_policy_contract_survives_simulation_replacement_and_feedback_sw
         sim.close()
         if replacement is not None:
             replacement.close()
+
+
+def navigation_policy(sim, tmp_path, **execution):
+    from dataclasses import replace
+
+    from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
+    from emet.rl.manipulation.whole_body_actor import WholeBodyActor
+    from emet.rl.manipulation.whole_body_bundle import export_actor
+
+    cfg = replace(
+        sim.env.config, action_mode="direct_velocity", retention_context=True,
+        trajectory_preview=True, tracking_reward=True, physical_wheel_slew=True,
+        wheel_feedback_gain=0.5, wheel_feedback_current_velocity=True,
+        tracking_precision=4, terminal_hold_seconds=2,
+        base_xy_tolerance=0.05, base_heading_tolerance=np.deg2rad(5), **execution,
+    )
+    return export_actor(
+        WholeBodyActor(sim.env.profile.robot, hidden=16, base_rate_feedback=False,
+                       base_navigation_feedback=BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)),
+        tmp_path / "actor", cfg, sim.env.fingerprint, steps=0,
+    )
+
+
+def test_navigation_ui_replans_preserve_physics_and_show_endpoint_not_intermediate_reference(tmp_path, monkeypatch):
+    sim = Simulation("mars-arm", "reach", seed=610001)
+    try:
+        sim.use_policy(navigation_policy(sim, tmp_path), "navigation-test")
+        assert sim.env.control.base_velocity_feedback_current
+        assert sim.env.control.physical_wheel_slew_enabled
+        assert sim.env.tracking_precision == 4
+        assert sim.env.config.terminal_hold_seconds == 2
+        sim.select_target_mode(1)
+        target = sim.env.control.base_pose() + [0.08, 0, 0]
+        sim.goal(target)
+        np.testing.assert_allclose(sim.state()["goal"], target)
+        assert sim.state()["metrics"]["base_endpoint_xy_error_m"] == pytest.approx(0.08)
+        assert np.linalg.norm(sim.env.control.base_goal[:2] - target[:2]) > 0.07
+        sim.nudge_goal([0.01, 0, 0])
+        target[0] += 0.01
+        np.testing.assert_allclose(sim.state()["goal"], target)
+        for _ in range(10):
+            sim.step()
+        c, d = sim.env.control, sim.env.data
+        previous = c.task_trajectory
+        boundary = previous.state(c.trajectory_elapsed())
+        qpos, qvel, ctrl, history, stamp = d.qpos.copy(), d.qvel.copy(), d.ctrl.copy(), c.history.copy(), d.time
+        target = c.base_pose() + [0.02, 0.06, 0.1]
+        sim.goal(target)
+        assert c.task_trajectory is not previous
+        for index in (0, 2, 3):
+            np.testing.assert_allclose(c.task_trajectory.state(0)[index], boundary[index], atol=1e-9)
+        for measured, before in ((d.qpos, qpos), (d.qvel, qvel), (d.ctrl, ctrl), (c.history[:-1], history[:-1])):
+            np.testing.assert_array_equal(measured, before)
+        assert d.time == stamp
+        np.testing.assert_allclose(sim.state()["goal"], target)
+        installed = c.task_trajectory
+        monkeypatch.setattr("emet.rl.manipulation.coupled_tracking.admit_reference", lambda *args: {"accepted": False, "reason": "test_collision"})
+        with pytest.raises(ValueError, match="test_collision"):
+            sim.goal(target + [0.01, 0, 0])
+        assert c.task_trajectory is installed
+        np.testing.assert_allclose(sim.state()["goal"], target)
+        sim.select_target_mode(3)
+        assert c.task_trajectory is None
+        sim.goal(c.ee_pose())
+        sim.step()
+        assert c.task_trajectory is None
+        c.stop()
+        sim.select_target_mode(1)
+        with pytest.raises(ValueError, match="nonfaulted"):
+            sim.goal(target)
+        assert c.stopped
+    finally:
+        sim.close()
+
+
+def test_adjacent_drag_updates_are_coalesced_without_dropping_pause_or_mode_commands():
+    import queue
+
+    from emet.rl.test_drive import _drain_goal_updates
+
+    pending = queue.Queue()
+    edits = [{"op": "nudge", "translation": [0.01, 0, 0]}, {"op": "goal", "values": [0, 0.1, 0]}]
+    pause, later = {"op": "pause"}, {"op": "target_mode", "mode": 3}
+    for item in [*edits[1:], pause, later]:
+        pending.put(item)
+    updates, deferred = _drain_goal_updates(pending, edits[0])
+    assert updates == edits
+    assert deferred == pause
+    assert pending.get_nowait() == later
+
+
+def test_batched_base_nudges_accumulate_with_one_admission_and_invalid_batches_are_atomic(tmp_path, monkeypatch):
+    sim = Simulation("mars-arm", "reach", seed=610001)
+    try:
+        sim.use_policy(navigation_policy(sim, tmp_path), "navigation-test")
+        sim.select_target_mode(1)
+        start = sim.base_endpoint()
+        from emet.rl.manipulation import coupled_tracking
+        original = coupled_tracking.admit_reference
+        calls = []
+        def admit(*args):
+            calls.append(1)
+            return original(*args)
+        monkeypatch.setattr(coupled_tracking, "admit_reference", admit)
+        sim.update_base_goals([
+            {"op": "nudge", "translation": [0.01, 0, 0]},
+            {"op": "nudge", "translation": [0.02, 0, 0], "rotation_z": 0.03},
+        ])
+        np.testing.assert_allclose(sim.base_endpoint(), start + [0.03, 0, 0.03])
+        assert len(calls) == 1
+        installed = sim.env.control.task_trajectory
+        with pytest.raises(ValueError, match="target movement"):
+            sim.update_base_goals([
+                {"op": "nudge", "translation": [0.01, 0, 0]},
+                {"op": "nudge", "translation": [1, 0, 0]},
+            ])
+        assert len(calls) == 1 and sim.env.control.task_trajectory is installed
+    finally:
+        sim.close()
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2, 3, 4, 5])
+def test_initial_navigation_reference_requires_all_six_base_velocities_to_be_quiet(tmp_path, axis):
+    sim = Simulation("mars-arm", "reach", seed=610001)
+    try:
+        sim.use_policy(navigation_policy(sim, tmp_path), "navigation-test")
+        sim.select_target_mode(1)
+        c = sim.env.control
+        sim.env.data.qvel[c.base_dof + axis] = 0.1
+        with pytest.raises(ValueError, match="measured rest"):
+            sim.goal(c.base_pose() + [0.05, 0, 0])
+        assert c.task_trajectory is None
+    finally:
+        sim.close()
+
+
+def test_live_viewer_goal_command_resumes_paused_simulation_without_run_button():
+    import time
+
+    from emet.rl.test_drive import TestDrive
+
+    app = TestDrive([], "mars-arm")
+    def wait_for(predicate):
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            with app.lock:
+                state = dict(app.snapshot)
+            assert state.get("status") != "error", state
+            if predicate(state):
+                return state
+            time.sleep(0.02)
+        raise AssertionError(f"viewer command did not complete: {state}")
+    try:
+        wait_for(lambda state: state.get("status") == "running")
+        app.commands.put({"op": "target_mode", "mode": 1})
+        wait_for(lambda state: state.get("control_mode") == 1)
+        app.commands.put({"op": "pause"})
+        paused = wait_for(lambda state: state.get("status") == "paused")
+        target = np.array(paused["current"]) + [0.02, 0, 0]
+        app.commands.put({"op": "goal", "values": target.tolist()})
+        resumed = wait_for(lambda state: state.get("status") == "running" and state.get("metrics", {}).get("time", 0) > paused["metrics"]["time"])
+        np.testing.assert_allclose(resumed["goal"], target)
+        assert app.frame and resumed["simulation_only"]
+    finally:
+        app.closed.set()
+        app.thread.join(timeout=10)
+        assert not app.thread.is_alive()
+
+
+def test_scoped_execution_survives_viewer_selection_and_mode_changes(tmp_path):
+    sim=Simulation("mars-arm", "reach", seed=35874001)
+    try:
+        bundle=navigation_policy(sim,tmp_path,wheel_feedback_base_only_gains=(0.,.5))
+        assert bundle.manifest["format"] == "emet-whole-body-v4"
+        sim.use_policy(bundle,"scoped candidate")
+        sim.select_target_mode(1)
+        np.testing.assert_array_equal(sim.env.control.wheel_feedback_gains(),[0,.5])
+        sim.select_target_mode(2)
+        assert sim.env.control.wheel_feedback_gains()==.5
+        sim.use_policy(None,"Feedback controller")
+        assert sim.env.control.base_only_velocity_feedback_gains is None
+        assert sim.env.control.wheel_feedback_gains()==2.
+    finally:
+        sim.close()

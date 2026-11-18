@@ -1,0 +1,13 @@
+{
+  "format": "quiet-reference-status-v1",
+  "phase": "complete",
+  "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "full_regression_tests": 1585,
+  "full_gate_seconds": 1025.7983684539795,
+  "full_xml_sha256": "e0239f772395f88f2f631128908e85ce81baa9b84f3772795d46c7c5d2641bcb",
+  "ppo_started": true,
+  "complete": true,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "decision": "reject reduced-noise candidate: new contacts and accuracy regression"
+}

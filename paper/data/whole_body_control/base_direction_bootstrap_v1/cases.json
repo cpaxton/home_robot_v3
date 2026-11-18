@@ -1,0 +1,7 @@
+{
+  "format": "base-direction-train-v1",
+  "scope": "Eight new train-only base references. No audit labels. Full measured admission before fitting.",
+  "robot": "innate_mars",
+  "seed_start": 35820000,
+  "motions": [[0.15, 0.0], [-0.15, 0.0], [0.0, 0.24], [0.0, -0.24], [0.15, 0.24], [0.15, -0.24], [-0.15, 0.24], [-0.15, -0.24]]
+}

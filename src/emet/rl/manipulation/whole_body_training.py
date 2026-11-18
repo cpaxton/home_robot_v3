@@ -16,6 +16,7 @@ import torch
 
 from emet.rl.manipulation.carry_benchmark import source_hashes
 from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, discount_tick_rewards, grouped_gae
+from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
 from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
 
 DEFAULT_SUITE = Path("configs/benchmarks/mars_whole_body_v2_development.json")
@@ -75,6 +76,11 @@ def primitive_rollout(
     initial_settle_s=0.0,
     wheel_feedback_current_velocity=False,
     trace_dir=None,
+    primitive="pregrasp",
+    planning_scope="full_task",
+    wheel_feedback_gain=0.5,
+    wheel_feedback_base_only_gains=None,
+    reward_config=None,
 ):
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
 
@@ -85,6 +91,11 @@ def primitive_rollout(
         initial_settle_s=initial_settle_s,
         wheel_feedback_current_velocity=wheel_feedback_current_velocity,
         trace_dir=trace_dir,
+        primitive=primitive,
+        planning_scope=planning_scope,
+        wheel_feedback_gain=wheel_feedback_gain,
+        wheel_feedback_base_only_gains=wheel_feedback_base_only_gains,
+        reward_config=reward_config,
     )
     rows = []
     try:
@@ -116,12 +127,19 @@ def primitive_rollout(
                 rows.append(
                     {
                         "id": case["id"],
+                        "primitive": primitive,
+                        "planning_scope": planning_scope,
+                        "boundary_reached": info["boundary_reached"],
+                        "terminal_pose": info["terminal_pose"],
+                        "terminal_pose_in_contract": info["terminal_pose_in_contract"],
+                        "gripper_open": info["gripper_open"],
                         "success": info["primitive_success"],
                         "code": info["code"],
                         "stop_confirmed": info["stop_confirmed"],
                         "control_ticks": ticks,
                         "decisions": count,
                         "returns": returns.tolist(),
+                        "reward_contract": info.get("reward_contract"),
                         "commands": info["commands"],
                         "inference_counts": info["policy_calls"],
                         "full_pick_place_success": False,
@@ -130,6 +148,8 @@ def primitive_rollout(
                         "executor_result": info["executor_result"],
                         "initial_settle_s": info["initial_settle_s"],
                         "wheel_feedback_current_velocity": info["wheel_feedback_current_velocity"],
+                        "wheel_feedback_gain": info["wheel_feedback_gain"],
+                        "wheel_feedback_base_only_gains": info["wheel_feedback_base_only_gains"],
                         "initial_state_sha256": info["initial_state_sha256"],
                         "model_fingerprint": info["model_fingerprint"],
                         "compiled_robot_identity": info["compiled_robot_identity"],
@@ -143,6 +163,8 @@ def primitive_rollout(
                 rows.append(
                     {
                         "id": case["id"],
+                        "primitive": primitive,
+                        "planning_scope": planning_scope,
                         "success": False,
                         "code": str(exc),
                         "control_ticks": ticks,
@@ -171,7 +193,8 @@ def tamp_training_readiness(rows, suite):
         return False
     for row in rows:
         if (
-            row.get("stop_confirmed") is not True
+            row.get("primitive", "pregrasp") != "pregrasp"
+            or row.get("stop_confirmed") is not True
             or row.get("initialization_failed") is not False
             or set(row.get("safety_flags", {})) != {"wheel_lift", "invalid_physics", "unsafe_contact", "retention_lost"}
             or any(row["safety_flags"].values())
@@ -252,7 +275,7 @@ def require_preflight(path, suite_path):
     return report
 
 
-def make_environment(suite_path, *, basic_cases=None):
+def make_environment(suite_path, *, basic_cases=None, reward_config=None):
     from emet.rl.manipulation.mastery import MasteryEnv
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
     from emet.rl.manipulation.whole_body_env import ControlStepMixture, GeneralTrackingEnv
@@ -270,7 +293,7 @@ def make_environment(suite_path, *, basic_cases=None):
             training_stage_weights=spec["training_stage_weights"],
         )
         try:
-            return ControlStepMixture({"general": GeneralTrackingEnv(native)}, [1.0])
+            return ControlStepMixture({"general": GeneralTrackingEnv(native, reward_config=reward_config)}, [1.0])
         except BaseException:
             native.close()
             raise
@@ -284,8 +307,10 @@ def make_environment(suite_path, *, basic_cases=None):
     try:
         return ControlStepMixture(
             {
-                "general": GeneralTrackingEnv(native),
-                "tamp": TampPrimitiveEnv(suite["train_cases"], arm_reference=suite["arm_reference"]),
+                "general": GeneralTrackingEnv(native, reward_config=reward_config),
+                "tamp": TampPrimitiveEnv(
+                    suite["train_cases"], arm_reference=suite["arm_reference"], reward_config=reward_config
+                ),
             },
             suite["family_control_tick_weights"],
         )
@@ -313,6 +338,8 @@ def policy_state_digest(policy):
 
 def verify_initial_pair(reference, current, *, recovery_proof=None, reference_sha256=None):
     """Reject an unpaired candidate before its first optimizer update."""
+    if reference.get("reward_configuration") != current.get("reward_configuration"):
+        raise ValueError("paired reward configurations differ")
     keys = (
         "source_hashes",
         "seed",
@@ -334,8 +361,9 @@ def verify_initial_pair(reference, current, *, recovery_proof=None, reference_sh
         keys = tuple(key for key in keys if key not in {"source_hashes", "preflight_sha256"})
     if any(key not in reference or key not in current or reference[key] != current[key] for key in keys):
         raise ValueError("paired initial state or first pre-update rollout differs")
-    if reference.get("stationary_base_std_scale", 1.0) != current.get("stationary_base_std_scale", 1.0):
-        raise ValueError("normalization pair cannot change the exploration distribution")
+    for key in ("stationary_base_std_scale", "quiet_reference_std_scale"):
+        if reference.get(key, 1.0) != current.get(key, 1.0):
+            raise ValueError("normalization pair cannot change the exploration distribution")
     first = {k: v for k, v in reference["ppo"].items() if k != "advantage_normalization"}
     second = {k: v for k, v in current["ppo"].items() if k != "advantage_normalization"}
     # The reference came from run.json; current still contains dataclass tuples.
@@ -349,6 +377,8 @@ def verify_exploration_pair(reference, current):
 
     This does not relax C1's full first-rollout comparison or reuse old sources.
     """
+    if reference.get("reward_configuration") != current.get("reward_configuration"):
+        raise ValueError("paired reward configurations differ")
     keys = (
         "source_hashes",
         "suite_sha256",
@@ -373,6 +403,7 @@ def verify_exploration_pair(reference, current):
             or current.get("training_family_scope") != "basic_general_only"
             or reference.get("stationary_base_std_scale") != 1.0
             or not 0 < current.get("stationary_base_std_scale", 1.0) < 1
+            or reference.get("quiet_reference_std_scale", 1.0) != current.get("quiet_reference_std_scale", 1.0)
             or any(k not in reference or k not in current for k in keys)
             or json.loads(json.dumps({k: reference[k] for k in keys}, allow_nan=False))
             != json.loads(json.dumps({k: current[k] for k in keys}, allow_nan=False))
@@ -464,6 +495,10 @@ def train(args):
     from emet.rl.manipulation.whole_body_bundle import export_actor
     from emet.rl.regression_gate import verify_regressions
 
+    reward_path = getattr(args, "reward_config", None)
+    reward_config = WholeBodyRewardConfig.from_record(
+        json.loads(Path(reward_path).read_text()) if reward_path else None
+    )
     receipt = verify_regressions(args.regression_receipt)
     require_preflight(args.preflight, args.suite)
     sources = source_hashes()
@@ -474,6 +509,7 @@ def train(args):
     output.mkdir(parents=True, exist_ok=False)
     config = PPOConfig(
         learning_rate=args.learning_rate,
+        critic_epochs=getattr(args, "critic_epochs", 0),
         epochs=args.epochs,
         batch_size=args.batch_size,
         advantage_normalization=args.advantage_normalization,
@@ -481,6 +517,7 @@ def train(args):
     policy = MultiCriticPolicy(
         privileged=not args.no_privileged_critic,
         stationary_base_std_scale=getattr(args, "stationary_base_std_scale", 1.0),
+        quiet_reference_std_scale=getattr(args, "quiet_reference_std_scale", 1.0),
     )
     learner = MultiCriticPPO(policy, config)
     metadata = {
@@ -497,8 +534,11 @@ def train(args):
         "safety_promoted": False,
         "teacher_actions_in_loss": False,
         "reward_timing": "per_control_tick_discounted_within_decision",
+        "episode_contract": "finite_tracking_deadline_v1",
+        "reward_configuration": reward_config.record(),
         "privileged_critic": not args.no_privileged_critic,
         "stationary_base_std_scale": policy.stationary_base_std_scale,
+        "quiet_reference_std_scale": policy.quiet_reference_std_scale,
         "actor_inputs": ["history", "preview", "motion"],
         "full_pick_place_qualified": False,
         "basic_cases_sha256": digest(args.basic_cases) if args.basic_cases else None,
@@ -519,7 +559,7 @@ def train(args):
                 config=metadata,
                 settings=wandb.Settings(disable_git=True, save_code=False),
             )
-        env = make_environment(args.suite, basic_cases=args.basic_cases)
+        env = make_environment(args.suite, basic_cases=args.basic_cases, reward_config=reward_config)
         native = env.environments["general"].unwrapped
         initial_bundle = export_actor(
             policy.actor,
@@ -527,7 +567,13 @@ def train(args):
             native.config,
             native.fingerprint,
             steps=0,
-            training={"scope": "initial_before_ppo", "seed": args.seed},
+            training={
+                "scope": "initial_before_ppo",
+                "seed": args.seed,
+                "reward_configuration": reward_config.record(),
+                "episode_contract": "finite_tracking_deadline_v1",
+                "critic_epochs": config.critic_epochs,
+            },
         )
         metadata.update(
             initial_actor_weights_sha256=initial_bundle.manifest["weights_sha256"],
@@ -673,6 +719,13 @@ def train(args):
                 int(condition.sum()) if policy.stationary_base_std_scale < 1 else 0
             )
             row["action_log_std"] = policy.log_std.detach().numpy().tolist()
+            hold_condition = policy.quiet_reference_condition(
+                {k: torch.from_numpy(v) for k, v in rollout["observations"].items()}
+            )
+            row["quiet_reference_condition_decisions"] = int(hold_condition.sum())
+            row["quiet_reference_reduced_decisions"] = (
+                int(hold_condition.sum()) if policy.quiet_reference_std_scale < 1 else 0
+            )
             with (output / "updates.jsonl").open("a") as stream:
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
             if run is not None:
@@ -708,8 +761,12 @@ def train(args):
         verify_regressions(args.regression_receipt)
         training = {
             "algorithm": "direct_multi_critic_ppo_v2",
+            "episode_contract": "finite_tracking_deadline_v1",
+            "critic_epochs": config.critic_epochs,
+            "reward_configuration": reward_config.record(),
             "advantage_normalization": config.advantage_normalization,
             "stationary_base_std_scale": policy.stationary_base_std_scale,
+            "quiet_reference_std_scale": policy.quiet_reference_std_scale,
             "basic_cases_sha256": metadata["basic_cases_sha256"],
             "training_family_scope": metadata["training_family_scope"],
             "initial_actor_weights_sha256": metadata["initial_actor_weights_sha256"],
@@ -744,6 +801,9 @@ def main():
     parser.add_argument("command", choices=("preflight", "train"))
     parser.add_argument("--suite", type=Path, default=DEFAULT_SUITE)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--reward-config", type=Path, help="explicit versioned wrapper reward JSON; omitted preserves legacy reward"
+    )
     parser.add_argument("--preflight", type=Path)
     parser.add_argument("--regression-receipt", type=Path)
     parser.add_argument("--steps", type=int, default=8192)
@@ -751,10 +811,19 @@ def main():
     parser.add_argument("--seed", type=int, default=90)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument(
+        "--critic-epochs", type=int, default=0, help="independent critic epoch budget; 0 retains joint KL stopping"
+    )
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--no-privileged-critic", action="store_true")
     parser.add_argument("--advantage-normalization", choices=("shared", "per_head"), default="shared")
     parser.add_argument("--stationary-base-std-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--quiet-reference-std-scale",
+        type=float,
+        default=1.0,
+        help="training-only motion noise scale for constant current/future targets; gripper noise is unchanged",
+    )
     parser.add_argument("--exploration-reference-run", type=Path)
     parser.add_argument("--basic-cases", type=Path, help="explicit small general-only diagnostic case manifest")
     parser.add_argument(
@@ -767,8 +836,12 @@ def main():
     )
     parser.add_argument("--wandb-mode", choices=("offline", "disabled"), default="offline")
     args = parser.parse_args()
+    if args.critic_epochs < 0:
+        parser.error("critic epochs must be nonnegative")
     if not 0 < args.stationary_base_std_scale <= 1:
         parser.error("stationary base exploration scale must be finite and in (0,1]")
+    if not 0 < args.quiet_reference_std_scale <= 1:
+        parser.error("quiet reference exploration scale must be finite and in (0,1]")
     if args.exploration_reference_run and (
         not args.basic_cases
         or args.stationary_base_std_scale == 1.0
@@ -778,6 +851,13 @@ def main():
         parser.error("exploration pairing requires basic cases, reduced noise and no normalization/recovery pairing")
     if args.pair_recovery_proof and not (args.basic_cases and args.pair_reference_run):
         parser.error("C1 recovery proof requires the basic manifest and original paired control")
+    if args.reward_config is not None:
+        try:
+            WholeBodyRewardConfig.from_record(json.loads(args.reward_config.read_text()))
+        except (OSError, ValueError, TypeError) as exc:
+            parser.error(str(exc))
+        if args.command != "train":
+            parser.error("reward configuration applies to training, not teacher admission")
     if args.command == "preflight":
         report = preflight(args.suite, args.output)
         if not report["ready_for_experimental_training"]:

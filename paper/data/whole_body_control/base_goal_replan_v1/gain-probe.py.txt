@@ -1,0 +1,38 @@
+"""Paired deterministic replays: are reverse unloading events caused by retargeting?"""
+import gzip,hashlib,json,runpy
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.base_goal_reference import install_base_goal
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.manipulation.policy import load_control_policy
+from emet.rl.regression_gate import ROOT,source_state
+
+def main():
+ torch.set_num_threads(1);out=ROOT/'logs/eval/base-goal-feedback-ablation-v1';out.mkdir(parents=True,exist_ok=False)
+ helpers=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'));protocol=json.loads((ROOT/'logs/eval/base-goal-replan-native-v1/moving-protocol.json').read_text());specs=[c for c in protocol['cases'] if c['id'].endswith(':5') or c['id'].endswith(':7')];bundle=load_control_policy(ROOT/'logs/eval/base-goal-replan-native-v1/actor',robot='innate_mars');source=source_state(ROOT)
+ report={'format':'base-goal-feedback-ablation-v1','source_state_digest':digest(source),'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'scope':'post-failure control-loop diagnostics on reused cases; no held-out improvement or promotion claim','new_training_steps':0,'hardware_used':False,'cases':[],'complete':False}
+ for mode in ('unchanged_gain025','retarget_gain025','unchanged_gain0','retarget_gain0'):
+  for spec in specs:
+   case={**helpers['new_base_cases']()[0],'id':spec['id'],'seed':spec['seed']};env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped;physics=[];trace=[]
+   try:
+    env.reset();gain=.25 if mode.endswith('gain025') else 0.;e.control.base_velocity_feedback_gain=gain;origin=e.control.base_pose().copy();path,admission=install_base_goal(e,origin+spec['initial']);row={'mode':mode,'feedback_gain':gain,'runtime_override_only':True,'id':spec['id'],'seed':spec['seed'],'initial_admission':admission,'reference_duration_s':path.end,'updates':[]}
+    joint_ids=e.model.actuator_trnid[e.control.wheel_act,0];wheel_dof=e.model.jnt_dofadr[joint_ids]
+    def sample(state):
+     c,d=state.control,state.data
+     physics.append({'time':float(d.time),'qvel_base':d.qvel[c.base_dof:c.base_dof+6].copy().tolist(),'wheel_qvel':d.qvel[wheel_dof].copy().tolist(),'wheel_ctrl':d.ctrl[c.wheel_act].copy().tolist(),'wheel_actuator_force':d.actuator_force[c.wheel_act].copy().tolist(),'base_command':c.base_command.copy().tolist(),'applied_base_velocity':c.applied_base_velocity.copy().tolist(),'ncon':int(d.ncon)})
+    e.physics_observer=sample;obs=env.observe(e.control.observe());updates=dict(spec['updates'])
+    for tick in range(500):
+     if mode.startswith('retarget') and tick in updates:
+      path,admission=install_base_goal(e,origin+updates[tick]);row['updates'].append({'tick':tick,'admission':admission,'boundary':path.boundary});obs=env.observe(e.control.observe())
+     action=helpers['predict'](bundle.actor,obs);obs,_,done,truncated,info=env.step(action);c=e.control
+     trace.append({'tick':tick,'base':c.base_pose().tolist(),'action':action.tolist(),'command':c.base_command.tolist(),'applied':c.applied_base_velocity.tolist(),'measured':c._base_feedback_velocity().tolist(),'caster_gap_m':float(e.monitor.max_wheel_gap[-1])})
+     if done or truncated:break
+    row.update(success=bool(info.get('is_success')),code=info['code'],metrics=e._info(),stop_confirmed=helpers['stop'](e),trace=trace,wheel_gear=e.control.wheel_gear.tolist())
+   finally:e.physics_observer=None;env.close()
+   p=out/f'{mode}-{spec["seed"]}-physics.json.gz';raw=json.dumps({'timing':'qvel post-integration; ctrl/actuator_force from preceding solve; no extra forward pass','actuator_force_units':'native actuator-space force, not universally newtons','samples':physics},allow_nan=False).encode()
+   with gzip.open(p,'wb') as stream:stream.write(raw)
+   row['physics_trace']={'path':str(p),'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'samples':len(physics)};report['cases'].append(row);(out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n');print(mode,spec['id'],row['success'],row['code'],row['metrics']['max_wheel_gap'],flush=True)
+ assert source_state(ROOT)==source;report['complete']=True;(out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
+if __name__=='__main__':main()

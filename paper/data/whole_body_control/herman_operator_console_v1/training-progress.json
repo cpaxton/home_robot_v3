@@ -1,0 +1,42 @@
+{
+  "phase": "training",
+  "decisions": 44544,
+  "control_ticks": 53521,
+  "complete": false,
+  "source_decisions": 65536,
+  "source_cumulative_decisions": 81920,
+  "mixture": {
+    "general": {
+      "control_ticks": 26948,
+      "episodes": 55,
+      "requested_fraction": 0.5
+    },
+    "tamp": {
+      "control_ticks": 26573,
+      "episodes": 141,
+      "requested_fraction": 0.5
+    }
+  },
+  "general_mixture": {
+    "hand": {
+      "control_ticks": 15918,
+      "episodes": 32,
+      "requested_fraction": 0.6
+    },
+    "base": {
+      "control_ticks": 5500,
+      "episodes": 11,
+      "requested_fraction": 0.2
+    },
+    "goal_changes": {
+      "control_ticks": 5530,
+      "episodes": 12,
+      "requested_fraction": 0.2
+    }
+  },
+  "wandb_id": "4przjfk9",
+  "source_state_digest": "541d7d8b23d1870e2fce46001d1c9edebcf97932558ddc2f006b92af9cebd252",
+  "regression_tests": 1604,
+  "captured_unix": 1794934016.2472596,
+  "run_json_sha256": "0d847e97fd14bb22626ecf613c38a85d025da9fe6ccb18c57e775e692adde55e"
+}

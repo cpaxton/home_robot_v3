@@ -1,0 +1,13 @@
+{
+  "README.md": "78fb75618a26fff27c5c2ecd5e4715c501fb784e1ddafa76f488efe0f298bf84",
+  "audit.py": "32680b9e68fa40059b9e05ab474b30ae242fbc32542c567baeaac50c5ec2dc1b",
+  "copy_audited_source.py": "fcd2cbf4881ed531702b7614dd6530aa97da5770b31b4b768c9eaa137acda9ed",
+  "graph-summary.json": "234e061e2bd4c4adac2fe8c001796861ef6eaafca3190c9ed34ecb2257a94496",
+  "graph.py": "a5bee6b51efccf6e2a3c67cdd33efc757af7b29e45c390bf25d9bb827cbba4b2",
+  "patch-validation.json": "833932d9ad404009f5b70a959686482bac4730c40d334f6e2fd9929b8f20ba96",
+  "source-audit.json": "f5533c9636563b45ac8a25e5eacc733ff722d2dfedb465a00269d55fb2ddb95d",
+  "source-hashes.json": "e5d9965b8e0fe11f2492216aa7a77d3e4f1c3be09692d10f289baba82595ca1a",
+  "telemetry.json": "fb86ec4fa21274712f4496e6ea0c01012c65fffa2d1d5f9fc1f36fb26085a9d0",
+  "telemetry.py": "6049ca1b01dedc89223983d132fd7963f4c540adabc3677d871c7058597682c6",
+  "validate_current_patch.py": "f26780db448a3e971f7b283415f723a1972e9d0540a6d8834c288d4033368115"
+}

@@ -1,0 +1,199 @@
+{
+  "files": {
+    "maurice_arm/arm_control.cpp": {
+      "present": true,
+      "sha256": "033a96d672474ecf847cc625c6ee98c00fbf13bbe6e4988691e64e23974ce7f3",
+      "selected_lines": [
+        {
+          "line": 1,
+          "text": "// arm_control.cpp \u2014 Control loop, gain scheduling, timing, limit/encoder conversion"
+        },
+        {
+          "line": 40,
+          "text": "positions_rad.push_back(((pos - 2048) * 2 * M_PI) / 4096.0);"
+        },
+        {
+          "line": 45,
+          "text": "velocities_rad.push_back((vel * 2 * M_PI) / 4096.0);"
+        },
+        {
+          "line": 255,
+          "text": "double rad = ((full_command[i] - 2048) * 2 * M_PI) / 4096.0;"
+        },
+        {
+          "line": 363,
+          "text": "command_encoder.push_back(static_cast<int>((pos / (2 * M_PI)) * 4096 + 2048));"
+        }
+      ]
+    },
+    "maurice_arm/arm.cpp": {
+      "present": false
+    },
+    "maurice_arm/robot.cpp": {
+      "present": true,
+      "sha256": "784978d36fce72c1492a1128333a78a419f7989fb665ab47c7b6dca09916cae0",
+      "selected_lines": [
+        {
+          "line": 72,
+          "text": "if (result != COMM_SUCCESS) {"
+        },
+        {
+          "line": 77,
+          "text": "return std::vector<int>(servo_ids_.size(), 0);"
+        },
+        {
+          "line": 121,
+          "text": "if (result != COMM_SUCCESS) {"
+        },
+        {
+          "line": 126,
+          "text": "auto z = std::vector<int>(servo_ids_.size(), 0);"
+        },
+        {
+          "line": 127,
+          "text": "return {z, z, z};"
+        }
+      ]
+    },
+    "include/maurice_arm/feedback_units.hpp": {
+      "present": false
+    },
+    "CMakeLists.txt": {
+      "present": true,
+      "sha256": "03e1505ae9841dd9651db93e479a2dc4215f158b7549649eed2e90272ece0d9a",
+      "selected_lines": [
+        {
+          "line": 31,
+          "text": "add_executable(arm"
+        },
+        {
+          "line": 36,
+          "text": "maurice_arm/arm_control.cpp"
+        }
+      ]
+    }
+  },
+  "ros_process_domains": [
+    {
+      "name": "robot_state_pub",
+      "pid": 3828,
+      "ros_domain_id": "0",
+      "rmw": "rmw_zenoh_cpp",
+      "ros_localhost_only": "0"
+    },
+    {
+      "name": "controller_serv",
+      "pid": 5695,
+      "ros_domain_id": "0",
+      "rmw": "rmw_zenoh_cpp",
+      "ros_localhost_only": "0"
+    }
+  ],
+  "configuration_lines": [
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 62,
+      "text": "control_mode: 3"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 63,
+      "text": "profile_velocity: 250"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 64,
+      "text": "profile_acceleration: 120"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 74,
+      "text": "control_mode: 3"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 75,
+      "text": "profile_velocity: 150"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 76,
+      "text": "profile_acceleration: 50"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 86,
+      "text": "control_mode: 3"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 87,
+      "text": "profile_velocity: 200"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 88,
+      "text": "profile_acceleration: 50"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 98,
+      "text": "control_mode: 3"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 99,
+      "text": "profile_velocity: 100"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 100,
+      "text": "profile_acceleration: 50"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 110,
+      "text": "control_mode: 3"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 111,
+      "text": "profile_velocity: 100"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 112,
+      "text": "profile_acceleration: 50"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 121,
+      "text": "current_limit: 100"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 122,
+      "text": "control_mode: 4"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 131,
+      "text": "current_limit: 500"
+    },
+    {
+      "path": "ros2_ws/src/maurice_bot/maurice_arm/config/arm_config.yaml",
+      "line": 132,
+      "text": "control_mode: 3"
+    }
+  ],
+  "installed_arm_files": [
+    "arm_utils.py",
+    "pid_hot_reload.py",
+    "__init__.py",
+    "ik.py",
+    "arm"
+  ],
+  "motion_commands_sent": false,
+  "drivers_started": false,
+  "software_deployed": false
+}

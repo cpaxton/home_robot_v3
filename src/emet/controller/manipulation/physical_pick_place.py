@@ -545,11 +545,17 @@ class PhysicalPickPlaceExecutor:
             return PhysicalMotionResult(False, reason, method)
         return None
 
-    def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None):
+    def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None, stop_after=None):
+        """Execute only the admitted prefix; prefixes never close or lift."""
+        if stop_after not in (None, "pregrasp", "grasp_pose"):
+            return PhysicalMotionResult(False, "invalid_execution_scope", "grasp")
+        phases = ("pregrasp", "grasp", "lift") if stop_after is None else (
+            ("pregrasp",) if stop_after == "pregrasp" else ("pregrasp", "grasp")
+        )
+        if len(self.grasp_paths) != len(phases) or len(self.grasp_targets) != len(phases) or object_gt_body is None:
+            return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
         if self.input_mode == "observed" and self.visual_verifier is None:
             return PhysicalMotionResult(False, "visual_verification_unavailable", "preflight")
-        if len(self.grasp_paths) != 3 or len(self.grasp_targets) != 3 or object_gt_body is None:
-            return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
         if self.gripper_open_configuration:
             self.synchronize(self.data)
             before = self.data.qpos.copy()
@@ -563,8 +569,9 @@ class PhysicalPickPlaceExecutor:
 
         def replan(phase, *, open_geometry):
             for option, targets in enumerate(self.grasp_target_options or [self.grasp_targets]):
+                targets = targets[:len(phases)]
                 paths, error = self._replan_at_measured_pose(
-                    ("pregrasp", "grasp", "lift"),
+                    phases,
                     targets,
                     object_body=object_gt_body,
                     grasp=True,
@@ -593,10 +600,12 @@ class PhysicalPickPlaceExecutor:
         if error is not None:
             return error
         self.grasp_paths = paths
-        for phase, path in zip(("pregrasp", "grasp"), self.grasp_paths[:2], strict=True):
+        for phase, path in zip(phases[:2], self.grasp_paths[:2], strict=True):
             result = self._execute_path(phase, path)
             if not result.success:
                 return result
+        if stop_after is not None:
+            return PhysicalMotionResult(True, stop_after + "_complete", phases[-1])
         if self.input_mode == "observed":
             error = self._visual_check("begin_grasp")
             if error is not None:

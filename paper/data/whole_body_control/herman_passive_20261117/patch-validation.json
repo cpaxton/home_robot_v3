@@ -1,0 +1,12 @@
+{
+  "format": "herman-feedback-offline-validation-v1",
+  "upstream_revision": "0d4c350d83ff1838be5db291dded4b412af9dff5",
+  "patch_sha256": "5e800803568693fbace6d862994205ae217e58e66eb19a1f6e2117e3a451000e",
+  "validator_sha256": "52cdb76ef4c74e4010ec13230348cbea4cb4adbc7922ba20beaaa07f83c6db7b",
+  "validation_output": "conversion, valid-state, communication-failure and missing-data checks passed\nUpstream checkout unchanged; ROS build and hardware validation remain required.\n",
+  "mode": "compile actual patched reader with SDK test double in temporary local copies",
+  "robot_source_modified": false,
+  "ros_package_built": false,
+  "deployed": false,
+  "motion_commands_sent": false
+}

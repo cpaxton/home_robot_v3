@@ -17,7 +17,7 @@ from emet.rl.manipulation.whole_body_reward import RewardMeter
 class GeneralTrackingEnv(gym.Wrapper):
     """Keep the native goals, reset admission, horizon and hard stop guards."""
 
-    def __init__(self, env):
+    def __init__(self, env, *, reward_config=None):
         super().__init__(env)
         p = env.unwrapped.profile
         if not env.unwrapped.config.retention_context or not env.unwrapped.config.trajectory_preview:
@@ -31,6 +31,9 @@ class GeneralTrackingEnv(gym.Wrapper):
                 "critic": spaces.Box(-np.inf, np.inf, (PRIVILEGED_WIDTH,), np.float32),
             }
         )
+        from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
+
+        self.reward_config = WholeBodyRewardConfig.from_record(reward_config)
         self.meter = None
 
     def observation(self, raw):
@@ -43,14 +46,20 @@ class GeneralTrackingEnv(gym.Wrapper):
         raw, info = self.env.reset(**kwargs)
         if info.get("initialization_failed"):
             raise ValueError("general development reset rejected: " + str(info.get("initialization_failure_reason")))
-        self.meter = RewardMeter(self.env.unwrapped)
-        return self.observation(raw), info
+        self.meter = RewardMeter(self.env.unwrapped, config=self.reward_config)
+        return self.observation(raw), {**info, "reward_contract": self.meter.record()}
 
     def step(self, action):
+        """Finite task deadlines terminate; native timeout flags remain in info.
+
+        ``truncated=False`` is intentional: this task's stopped deadline is a
+        terminal outcome, not Gym TimeLimit censoring of a continuing task.
+        """
         from emet.rl.manipulation.mastery_objective import mastery_metrics, tracking_contract_passes
 
         e = self.env.unwrapped
         motion = reference_velocity(e.control)
+        self.meter.before_step()
         raw, _, done, truncated, info = self.env.step(action)
         rewards = self.meter.tick(action, motion)
         success = False
@@ -58,16 +67,23 @@ class GeneralTrackingEnv(gym.Wrapper):
             success = bool(
                 tracking_contract_passes(info, mastery_metrics(e, info), e.suite["gate"], path_failed=e.path_failed)
             )
-            rewards[0] += 2.0 if success else -2.0
+            rewards[0] += self.meter.terminal_bonus(success)
         info = {
             **info,
+            # These wrappers score a finite tracking contract, including its
+            # deadline bonus/penalty. The native timeout has already stopped
+            # the plant; its observation is not a continuing-MDP bootstrap.
+            "native_terminated": bool(done),
+            "native_truncated": bool(truncated),
+            "episode_contract": "finite_tracking_deadline_v1",
             "reward_groups": rewards,
             "reward_terms": self.meter.last_terms.copy(),
+            "reward_contract": self.meter.record(),
             "elapsed_control_ticks": 1,
             "primitive_success": success,
             "full_pick_place_success": False,
         }
-        return self.observation(raw), float(rewards.sum()), done, truncated, info
+        return self.observation(raw), float(rewards.sum()), bool(done or truncated), False, info
 
 
 class ControlStepMixture(gym.Env):
@@ -89,6 +105,8 @@ class ControlStepMixture(gym.Env):
         self.weights = w / w.sum()
         self.ticks = np.zeros(len(w), dtype=np.int64)
         self.episodes = np.zeros(len(w), dtype=np.int64)
+        self.reference_motion_ticks = np.zeros(len(w), dtype=np.int64)
+        self.reference_unknown_ticks = np.zeros(len(w), dtype=np.int64)
         self.active = None
         self.finished = True
         first = next(iter(self.environments.values()))
@@ -105,6 +123,11 @@ class ControlStepMixture(gym.Env):
                 "control_ticks": int(self.ticks[i]),
                 "episodes": int(self.episodes[i]),
                 "requested_fraction": float(self.weights[i]),
+                "reference_motion_ticks": int(self.reference_motion_ticks[i]),
+                "reference_quiet_ticks": int(
+                    self.ticks[i] - self.reference_motion_ticks[i] - self.reference_unknown_ticks[i]
+                ),
+                "reference_unknown_ticks": int(self.reference_unknown_ticks[i]),
             }
             for i, name in enumerate(self.names)
         }
@@ -126,7 +149,18 @@ class ControlStepMixture(gym.Env):
         ticks = info.get("elapsed_control_ticks", 1)
         if isinstance(ticks, bool) or int(ticks) != ticks or ticks <= 0:
             raise ValueError("positive integer physical control ticks required")
+        moving = info.get("reference_motion_ticks")
+        if moving is not None and (
+            isinstance(moving, (bool, np.bool_))
+            or not isinstance(moving, (int, np.integer))
+            or not 0 <= moving <= ticks
+        ):
+            raise ValueError("reference motion ticks must be an integer within elapsed ticks")
         self.ticks[self.active] += int(ticks)
+        if moving is None:
+            self.reference_unknown_ticks[self.active] += int(ticks)
+        else:
+            self.reference_motion_ticks[self.active] += int(moving)
         self.finished = terminated or truncated
         return (
             obs,

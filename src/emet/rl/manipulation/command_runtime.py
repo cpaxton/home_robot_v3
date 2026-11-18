@@ -31,9 +31,14 @@ class TaskPoseTeacherConfig:
     position_gain_per_s: float = 4.0
     orientation_gain_per_s: float = 4.0
     rotation_length_m_per_rad: float = 1.0
+    coupled_base_tracking: bool = False
 
     def __post_init__(self):
+        if type(self.coupled_base_tracking) is not bool:
+            raise ValueError("coupled base tracking must be a boolean")
         for name, value in asdict(self).items():
+            if name == "coupled_base_tracking":
+                continue
             if isinstance(value, bool) or not isinstance(value, Real) or not np.isfinite(value) or value <= 0:
                 raise ValueError("teacher gains and rotation length must be positive and finite")
             object.__setattr__(self, name, float(value))
@@ -133,7 +138,10 @@ def task_pose_teacher_action(control, *, config=None):
             nominal_motion = np.linalg.norm(planar) > 1e-6 or abs(yaw_rate) > 1e-6
             planar *= c.task_progress_rate
             yaw_rate *= c.task_progress_rate
-            if p.wheel_bodies and nominal_motion:
+            # Only a fully constrained base admits this complete timed path.
+            # Partial targets use mask-aware pose feedback; inactive nominal
+            # coordinates must not become hidden teacher commands.
+            if p.wheel_bodies and nominal_motion and c.base_mask.all():
                 # Track a timed nonholonomic path, rather than repeatedly
                 # treating each sample as a new point-navigation goal. During
                 # a turn a small lateral caster error cannot be corrected by
@@ -153,11 +161,12 @@ def task_pose_teacher_action(control, *, config=None):
                     ]
                 )
     twist = feedforward + feedback - external_twist
-    if p.wheel_bodies and not c.base_mask.any() and c.hand_mask:
-        # With an unspecified base, a five-DOF arm cannot independently track
-        # every hand pose. Include feasible differential-drive forward/yaw
-        # motion in the same instantaneous solve. No inactive base target is
-        # consulted, and this remains a teacher, never an actor constraint.
+    if p.wheel_bodies and c.hand_mask and (not c.base_mask.all() or config.coupled_base_tracking):
+        # A partially or wholly unspecified base can supply task directions
+        # missing from a five-DOF arm. The opt-in coupled baseline also keeps
+        # this authority for full base goals: freezing a coarsely settled base
+        # can leave a hand residual the arm cannot correct by itself. All active
+        # base coordinates remain lower-weight objectives in the solve below.
         yaw = c.base_pose()[2]
         heading = np.array([np.cos(yaw), np.sin(yaw), 0.0])
         pivot = c.data.xpos[c.base] + c.data.xmat[c.base].reshape(3, 3) @ c.axle_offset
@@ -177,8 +186,29 @@ def task_pose_teacher_action(control, *, config=None):
         # task directions. Shared speed/slew/stop guards still bound commands.
         scales = np.r_[0.5 * p.base_speed, 0.5 * p.base_yaw_speed, p.speed]
         whole_body = np.column_stack([base_jacobian, arm]) * scales * metric[:, None]
+        desired = twist * metric
+        if c.base_mask.any():
+            # Partial base goals leave useful coordination freedom. Solve their
+            # active components with the hand, rather than stranding a five-DOF
+            # arm while an unconstrained yaw/translation could close its error.
+            # Base rows have lower weight: these are region-scale objectives,
+            # while hand accuracy remains the tighter contract.
+            base_jac = np.zeros((3, p.action_size - 1))
+            base_jac[:2, 0] = heading[:2]
+            base_jac[:2, 1] = np.cross(yaw_axis, c.data.xpos[c.base] - pivot)[:2]
+            base_jac[2, 1] = 1
+            error = c.base_goal - c.base_pose()
+            error[2] = np.arctan2(np.sin(error[2]), np.cos(error[2]))
+            target_velocity = np.array([2.0, 2.0, 2.5]) * error
+            if c.task_trajectory is not None and after > before:
+                delta = base_b - base_a
+                delta[2] = np.arctan2(np.sin(delta[2]), np.cos(delta[2]))
+                target_velocity += delta / (after - before) * c.task_progress_rate
+            active = c.base_mask
+            whole_body = np.vstack([whole_body, 0.15 * base_jac[active] * scales])
+            desired = np.r_[desired, 0.15 * target_velocity[active]]
         velocity = scales * (
-            whole_body.T @ np.linalg.solve(whole_body @ whole_body.T + 1e-4 * np.eye(6), twist * metric)
+            whole_body.T @ np.linalg.solve(whole_body @ whole_body.T + 1e-4 * np.eye(len(desired)), desired)
         )
         return np.clip(np.r_[velocity / np.r_[p.base_speed, p.base_yaw_speed, p.speed], 0.0], -1, 1)
     weighted_arm = arm * metric[:, None]

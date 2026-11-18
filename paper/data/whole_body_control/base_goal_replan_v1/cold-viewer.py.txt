@@ -1,0 +1,31 @@
+"""Fresh process: actual cold renderer worker, public checkpoint and batched edits."""
+import json,time
+from pathlib import Path
+import numpy as np
+from emet.rl.test_drive import TestDrive
+from emet.rl.regression_gate import ROOT
+out=(ROOT/'logs/eval/base-goal-replan-feedback0-v1').resolve();app=TestDrive([out],'mars-arm')
+def wait(predicate):
+ deadline=time.monotonic()+30
+ while time.monotonic()<deadline:
+  with app.lock:state=dict(app.snapshot)
+  if state.get('status')=='error' or state.get('error'):raise RuntimeError(state.get('error'))
+  if predicate(state):return state
+  time.sleep(.025)
+ raise RuntimeError('viewer transition timed out:'+str(state.get('status')))
+try:
+ initial=wait(lambda s:s.get('status')=='running')
+ app.commands.put({'op':'policy','id':str(out/'actor')});wait(lambda s:s.get('policy')==str(out/'actor'))
+ app.commands.put({'op':'target_mode','mode':1});wait(lambda s:s.get('control_mode')==1)
+ time.sleep(.75)
+ app.commands.put({'op':'pause'});paused=wait(lambda s:s.get('status')=='paused');target=np.array(paused['current'])+[.05,0,0]
+ app.commands.put({'op':'goal','values':target.tolist()});resumed=wait(lambda s:s.get('status')=='running' and np.allclose(s.get('goal',[0,0,0]),target) and s.get('metrics',{}).get('time',0)>paused['metrics']['time'])
+ for _ in range(5):app.commands.put({'op':'nudge','translation':[.002,0,0]})
+ app.commands.put({'op':'pause'});final=wait(lambda s:s.get('status')=='paused' and np.allclose(s.get('goal',[0,0,0]),target+[.01,0,0]))
+ with app.lock:frame=app.frame
+ assert frame; (out/'cold-viewer.jpg').write_bytes(frame)
+ report={'success':True,'cold_start':True,'public_checkpoint':True,'goal_resumes_pause':True,'batched_relative_edits':5,'following_pause_preserved':True,'endpoint':final['goal'],'simulation_only':final['simulation_only'],'hardware_used':False}
+ (out/'cold-viewer.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report),flush=True)
+finally:
+ app.closed.set();app.thread.join(timeout=10)
+ if app.thread.is_alive():raise RuntimeError('viewer thread did not close')

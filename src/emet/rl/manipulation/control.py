@@ -3,6 +3,7 @@
 import mujoco
 import numpy as np
 
+from emet.rl.manipulation.observation_layout import GRIP_PHASES, PHASE_NAMES
 from emet.rl.manipulation.profiles import require_finite
 
 
@@ -46,6 +47,7 @@ class ManipulationControl:
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
         self.base_velocity_feedback_gain = 2.0
+        self.base_only_velocity_feedback_gains = None
         self.base_velocity_feedback_current = False
         self.base_velocity_integral_gain = 1.0
         self.base_feedback_at_rest = True
@@ -275,7 +277,7 @@ class ManipulationControl:
         reference = require_finite(reference, (self.profile.arm_size,))
         if np.any(reference < self.limits[:, 0]) or np.any(reference > self.limits[:, 1]):
             raise ValueError("trajectory outside joint limits")
-        if phase not in {"reach", "pregrasp", "close", "carry", "place", "release", "disturbance"}:
+        if phase not in PHASE_NAMES:
             raise ValueError("unknown manipulation phase")
         if phase == "release" and not release:
             raise ValueError("release requires executor authorization")
@@ -424,7 +426,7 @@ class ManipulationControl:
         grip_span = float(np.ptp(self.grip_limits))
         correction = action[-1] * p.grip_fraction * grip_span
         # Corrections are only permitted during closed-grip phases.
-        if self.phase not in {"carry", "place", "disturbance"}:
+        if self.phase not in GRIP_PHASES:
             correction = 0
         goal = self.grip_reference + correction
         if self.release_authorized:
@@ -542,6 +544,16 @@ class ManipulationControl:
         self.release_authorized = False
         self.apply()
 
+    def wheel_feedback_gains(self):
+        """Select at the physics boundary so a mask change never lags one action.
+
+        Partial-base and active-hand commands retain the original scalar law.
+        Selection does not rebase targets, clear PI state or re-arm a stop.
+        """
+        if self.base_only_velocity_feedback_gains is not None and self.base_mask.all() and not self.hand_mask:
+            return np.asarray(self.base_only_velocity_feedback_gains)
+        return self.base_velocity_feedback_gain
+
     def apply(self):
         now = float(self.data.time)
         if self.turn_progress_guard_enabled and not self.stopped and len(self.wheel_act):
@@ -601,7 +613,7 @@ class ManipulationControl:
                     self.base_velocity_integral[:] = 0
                     self._base_velocity_time = now
                 drive = np.clip(
-                    drive + self.base_velocity_feedback_gain * velocity_error + self.base_velocity_integral,
+                    drive + self.wheel_feedback_gains() * velocity_error + self.base_velocity_integral,
                     -limits,
                     limits,
                 )
@@ -676,7 +688,7 @@ class ManipulationControl:
 
         # No object pose, solver contact, or wheel-force ground truth in actor input.
         phase = np.zeros(7)
-        phase[("reach", "pregrasp", "close", "carry", "place", "release", "disturbance").index(self.phase)] = 1
+        phase[PHASE_NAMES.index(self.phase)] = 1
         target_tokens, target_mask = PoseTargets(
             self.base_goal,
             self.base_mask,

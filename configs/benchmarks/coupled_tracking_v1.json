@@ -1,0 +1,422 @@
+{
+  "format": "coupled-tracking-v1",
+  "scope": "Prepared coupled Mars/Stretch geometry and training interface; native admission/teacher results required, not hardware qualification.",
+  "robots": {
+    "innate_mars": [
+      {
+        "id": "innate_mars:train:base_only:0",
+        "seed": 35600000,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.03,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "innate_mars:train:hand_free_base:1",
+        "seed": 35600001,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.04,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      {
+        "id": "innate_mars:train:hand_free_base:2",
+        "seed": 35600002,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.02,
+        "turn_rad": 0.06,
+        "arm_delta": [
+          0,
+          0.005,
+          -0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      {
+        "id": "innate_mars:train:coupled:3",
+        "seed": 35600003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.025,
+        "turn_rad": -0.04,
+        "arm_delta": [
+          0,
+          -0.005,
+          0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "innate_mars:train:coupled:4",
+        "seed": 35600004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.02,
+        "turn_rad": 0.04,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0.01
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ]
+      },
+      {
+        "id": "innate_mars:train:fixed_world_hand:5",
+        "seed": 35600005,
+        "split": "train",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": 1.0
+      },
+      {
+        "id": "innate_mars:audit:hand_free_base:6",
+        "seed": 35600006,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.03,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          -0.01
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      {
+        "id": "innate_mars:audit:coupled:7",
+        "seed": 35600007,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.02,
+        "turn_rad": -0.06,
+        "arm_delta": [
+          0,
+          0.007,
+          -0.007,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "innate_mars:audit:fixed_world_hand:8",
+        "seed": 35600008,
+        "split": "audit",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": -0.75
+      },
+      {
+        "id": "innate_mars:audit:hand_free_base:9",
+        "seed": 35600009,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.03,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "retarget": {
+          "at_fraction": 0.5,
+          "travel_m": -0.02
+        }
+      }
+    ],
+    "stretch": [
+      {
+        "id": "stretch:train:base_only:0",
+        "seed": 35610000,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.03,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "stretch:train:hand_free_base:1",
+        "seed": 35610001,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.04,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      {
+        "id": "stretch:train:hand_free_base:2",
+        "seed": 35610002,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.02,
+        "turn_rad": 0.06,
+        "arm_delta": [
+          0,
+          0.005,
+          -0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      {
+        "id": "stretch:train:coupled:3",
+        "seed": 35610003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.025,
+        "turn_rad": -0.04,
+        "arm_delta": [
+          0,
+          -0.005,
+          0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "stretch:train:coupled:4",
+        "seed": 35610004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.02,
+        "turn_rad": 0.04,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0.01
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ]
+      },
+      {
+        "id": "stretch:train:fixed_world_hand:5",
+        "seed": 35610005,
+        "split": "train",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": 1.0
+      },
+      {
+        "id": "stretch:audit:hand_free_base:6",
+        "seed": 35610006,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.03,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          -0.01
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      {
+        "id": "stretch:audit:coupled:7",
+        "seed": 35610007,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.02,
+        "turn_rad": -0.06,
+        "arm_delta": [
+          0,
+          0.007,
+          -0.007,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "stretch:audit:fixed_world_hand:8",
+        "seed": 35610008,
+        "split": "audit",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": -0.75
+      },
+      {
+        "id": "stretch:audit:hand_free_base:9",
+        "seed": 35610009,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.03,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "retarget": {
+          "at_fraction": 0.5,
+          "travel_m": -0.02
+        }
+      }
+    ]
+  }
+}

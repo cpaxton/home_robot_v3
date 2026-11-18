@@ -1,0 +1,93 @@
+"""Same eight static endpoints, now with continuous nonholonomic references."""
+import hashlib,json,runpy
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE,admit_reference
+from emet.rl.manipulation.jerk_reference import compile_joint_path
+from emet.rl.manipulation.tracking import TaskFrameFK,TaskPoseTrajectory
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+from emet.rl.regression_gate import ROOT,source_state
+
+def wrap(x):return float(np.arctan2(np.sin(x),np.cos(x)))
+def rot(y):return np.array([[np.cos(y),-np.sin(y)],[np.sin(y),np.cos(y)]])
+class BaseGoalReference(TaskPoseTrajectory):
+ def __init__(self,c,target,governed=False):
+  self.fk=TaskFrameFK(c.model,c.data,c);self.joints=c.positions().copy();self.fixed_hand=None;self.offset=c.axle_offset[:2].copy()
+  start=c.base_pose().copy();end=np.asarray(target).copy();axle0=start[:2]+rot(start[2])@self.offset;axle1=end[:2]+rot(end[2])@self.offset
+  delta=axle1-axle0;distance=float(np.linalg.norm(delta));bearing=np.arctan2(delta[1],delta[0]) if distance>1e-8 else start[2]
+  first=wrap(bearing-start[2]);alternative=wrap(first+np.pi)
+  if abs(alternative)<abs(first):first=alternative
+  direction=1 if np.array([np.cos(start[2]+first),np.sin(start[2]+first)])@delta>=0 else -1
+  heading=start[2]+first;last=wrap(end[2]-heading);self.parts=[];time=0.;certs=[]
+  for kind,magnitude,axle,yaw in (('turn',first,axle0,start[2]),('drive',direction*distance,axle0,heading),('turn',last,axle1,heading)):
+   if abs(magnitude)<1e-8:continue
+   speed=c.profile.base_speed if kind=='drive' else c.profile.base_yaw_speed
+   accel=c.profile.base_acceleration if kind=='drive' else c.profile.base_yaw_acceleration
+   path,cert=compile_joint_path([[0.],[magnitude]],[speed],[accel],[4*accel],profile='s_curve',phase_acceleration=1. if governed else 0.,phase_jerk=2. if governed else 0.)
+   self.parts.append((time,kind,path,axle.copy(),float(yaw)));certs.append(cert);time+=path.end
+  if not self.parts:
+   path,cert=compile_joint_path([[0.],[0.]],[c.profile.base_speed],[c.profile.base_acceleration],[4*c.profile.base_acceleration],profile='s_curve',phase_acceleration=1. if governed else 0.,phase_jerk=2. if governed else 0.)
+   self.parts=[(0.,'drive',path,axle0,start[2])];certs=[cert];time=path.end
+  self.certificate={'segments':certs,'dynamic_feasibility_verified':False};self.duration=time
+  times=np.r_[np.arange(0,time,c.profile.dt),time];base=[];hand=[]
+  for t in times:
+   b,q=self.coordinates(t);base.append(b);hand.append(self.fk(b,q))
+  super().__init__(times,base,hand,np.full(len(times),c.grip_reference),base_mask=[True]*3,hand_mask=False)
+ def coordinates(self,t):
+  start,kind,path,axle,yaw=self.parts[0]
+  for part in self.parts[1:]:
+   if t>=part[0]:start,kind,path,axle,yaw=part
+  s=float(path.sample(t-start)[0][0]);a=axle.copy()
+  if kind=='turn':yaw+=s
+  else:a+=s*np.array([np.cos(yaw),np.sin(yaw)])
+  return np.r_[a-rot(yaw)@self.offset,wrap(yaw)],self.joints.copy()
+ def sample(self,t):
+  b,q=self.coordinates(float(np.clip(t,0,self.duration)));return b,self.fk(b,q),float(self.gripper[0])
+ def record(self):
+  return {**super().record(),'format':'base_goal_reference_probe_v1','segments':[{'start':t,'kind':k,'axle':a.tolist(),'yaw':y,'path':p.record()} for t,k,p,a,y in self.parts],'certificate':self.certificate}
+
+def main():
+ from emet.rl.manipulation.jerk_reference import SmoothPhase
+ from emet.controller.task.tamp.mars_pose_executor import lag_scaled_rate
+ torch.set_num_threads(1);out=ROOT/'logs/eval/base-point-reference-probe-v2';out.mkdir(parents=True,exist_ok=False)
+ prior=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'))
+ report={'format':'base-point-reference-probe-v2','source_state_digest':digest(source_state(ROOT)),'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'horizon_s':25,'hardware_used':False,'new_training_steps':0,'cases':[],'complete':False}
+ base=prior['new_base_cases']()[0]
+ for mode in ('governed','fixed_ff','governed_ff'):
+  bundle=WholeBodyBundle(ROOT/'logs/eval/base-navigation-native-v2/actor');actor=bundle.actor;cache={};hooks=[]
+  if mode.endswith('_ff'):
+   def encoder_hook(_,args,result):cache['motion']=result[2];cache['obs']=args[0]
+   def gain_hook(_,args,result):
+    gain=result.reshape(-1,7,actor.feedback_width).clone();gain[:,:2,35:]=0;return gain.reshape_as(result)
+   def output_hook(_,args,result):
+    output=result.clone();output[:,:2]=(output[:,:2]+cache['motion'][:,[0,2]]).clamp(-1,1);return output
+   hooks=[actor.encoder.register_forward_hook(encoder_hook),actor.gain.register_forward_hook(gain_hook),actor.register_forward_hook(output_hook)]
+  for i,(dx,dy,yaw) in enumerate(((0.,.15,0.),(0.,-.15,0.),(.1,.1,0.),(.1,-.1,0.),(-.1,.1,0.),(-.1,-.1,0.),(.1,0.,.3),(-.1,0.,-.3))):
+   case={**base,'id':f'innate_mars:static-base-goal-v1:{i}','seed':35850000+i};env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+   try:
+    env.reset();target=e.control.base_pose()+np.array([dx,dy,yaw]);governed=mode.startswith('governed');path=BaseGoalReference(e.control,target,governed=governed);admission=admit_reference(e,path)
+    row={'mode':mode,'id':case['id'],'seed':case['seed'],'target':target.tolist(),'admission':admission,'duration_s':path.end}
+    if not admission['accepted'] or path.end+2>25:
+     row.update(success=False,code='geometry_or_reference_duration_rejected');report['cases'].append(row);continue
+    e.set_task_trajectory(path);gov=None
+    if governed:
+     gov=SmoothPhase(path.end,tau=1.);e.control.set_trajectory_progress(0.,rate=0.)
+     e.control.preview_sampler=lambda stamp:path.sample(gov.preview_progress(stamp-float(e.data.time)))
+    obs=env.observe(e.control.observe());trace=[]
+    for tick in range(500):
+     if gov is not None:
+      delta=e.control.base_goal-e.control.base_pose();delta[2]=wrap(delta[2])
+      rate=lag_scaled_rate(float(np.linalg.norm(delta[:2])),abs(float(delta[2])),position_scale_m=.02,orientation_scale_rad=.08)
+      gov.advance(rate,e.profile.dt);e.control.set_trajectory_progress(gov.progress,rate=gov.rate)
+      obs=env.observe(e.control.observe())
+     action=prior['predict'](actor,obs);obs,_,done,truncated,info=env.step(action)
+     trace.append({'tick':tick,'base':e.control.base_pose().tolist(),'goal':e.control.base_goal.tolist(),'action':action[:2].tolist(),'progress':e.control.trajectory_elapsed(),'rate':e.control.task_progress_rate})
+     if done or truncated:break
+    metrics=e._info();stopped=prior['stop'](e);row.update(reference=path.record(),success=bool(info.get('is_success')),code=info['code'],metrics=metrics,stop_confirmed=stopped,trace=trace);report['cases'].append(row)
+    (out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n');print(mode,i,path.end,row['success'],row['code'],metrics['base_goal_error'],metrics['base_heading_error_rad'],flush=True)
+   finally:env.close()
+  for hook in hooks:hook.remove()
+ report['complete']=True;(out/'results.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
+if __name__=='__main__':main()

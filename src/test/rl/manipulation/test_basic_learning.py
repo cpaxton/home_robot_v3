@@ -54,7 +54,11 @@ def test_fresh_exploration_pair_binds_initial_state_without_claiming_same_rollou
         del changed[key]
         with pytest.raises(ValueError, match="identical fresh initial"):
             verify_exploration_pair(first, changed)
-    for change in ({"stationary_base_std_scale": 1.0}, {"basic_cases_sha256": None}):
+    for change in (
+        {"stationary_base_std_scale": 1.0},
+        {"basic_cases_sha256": None},
+        {"quiet_reference_std_scale": 0.125},
+    ):
         with pytest.raises(ValueError, match="identical fresh initial"):
             verify_exploration_pair(first, second | change)
     for value in (float("nan"), float("inf"), -float("inf")):
@@ -126,7 +130,8 @@ def test_basic_environment_has_no_tamp_and_one_tick_per_decision(monkeypatch):
         env.close()
 
 
-def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monkeypatch):
+@pytest.mark.parametrize("reward_profile", [None, Path("configs/benchmarks/whole_body_reward_contract_v1.json")])
+def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monkeypatch, reward_profile):
     from types import SimpleNamespace
 
     import torch
@@ -180,7 +185,17 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
         def close(self):
             pass
 
-    monkeypatch.setattr(training, "make_environment", lambda *args, **kwargs: Env())
+    from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
+
+    expected_reward = WholeBodyRewardConfig.from_record(
+        json.loads(reward_profile.read_text()) if reward_profile else None
+    )
+
+    def make_environment(*args, **kwargs):
+        assert kwargs["reward_config"] == expected_reward
+        return Env()
+
+    monkeypatch.setattr(training, "make_environment", make_environment)
     monkeypatch.setattr(training, "require_preflight", lambda *args: None)
     monkeypatch.setattr(gate, "verify_regressions", lambda *args: {"test_ids": ["fixture"]})
     receipt, preflight = tmp_path / "receipt.json", tmp_path / "preflight.json"
@@ -190,6 +205,7 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
     for mode in ("per_head", "shared"):
         target = tmp_path / mode
         args = SimpleNamespace(
+            reward_config=reward_profile,
             regression_receipt=receipt,
             preflight=preflight,
             suite=Path("configs/benchmarks/mars_whole_body_v2_development.json"),
@@ -208,6 +224,17 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
         )
         training.train(args)
         record = json.loads((target / "run.json").read_text())
+        assert record["episode_contract"] == "finite_tracking_deadline_v1"
+        assert record["reward_configuration"] == expected_reward.record()
+        assert json.loads((target / "summary.json").read_text())["reward_configuration"] == expected_reward.record()
+        for bundle in ("initial", "last"):
+            saved_training = json.loads((target / bundle / "actor/manifest.json").read_text())["training"]
+            assert saved_training["episode_contract"] == "finite_tracking_deadline_v1"
+            assert saved_training["critic_epochs"] == 0
+            assert (
+                json.loads((target / bundle / "actor/manifest.json").read_text())["training"]["reward_configuration"]
+                == expected_reward.record()
+            )
         assert record["ppo"]["advantage_normalization"] == mode
         if mode == "shared":
             assert record["initial_pair_verified_before_update"] is True
@@ -268,6 +295,6 @@ def test_pair_verification_rejects_state_data_or_optimizer_changes_before_update
         if key == "advantage_normalization":
             continue
         changed = copy.deepcopy(second)
-        changed["ppo"][key] = (1.0, 2.0, 1.0) if key == "advantage_weights" else value * 2
+        changed["ppo"][key] = (1.0, 2.0, 1.0) if key == "advantage_weights" else value * 2 if value != 0 else 1
         with pytest.raises(ValueError, match="PPO settings"):
             verify_initial_pair(first, changed)

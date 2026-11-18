@@ -1,0 +1,49 @@
+"""Fixed-final feedback ablation; no new training or automatic promotion."""
+import hashlib,json
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_evaluation import json_value
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,SUITE,COARSE_SUITE
+from emet.rl.manipulation.safety import whole_body_stopped
+from emet.rl.manipulation.whole_body_actor import WholeBodyActor
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle,export_actor
+from emet.rl.manipulation.whole_body_training import load_development,primitive_rollout
+from emet.rl.regression_gate import ROOT,source_state
+
+torch.set_num_threads(1)
+out=ROOT/'logs/eval/coupled-base-feedback-v1';out.mkdir(parents=True,exist_ok=False)
+source=ROOT/'logs/manipulation/coupled-bootstrap-v1/final/actor'
+original=WholeBodyBundle(source)
+actor=WholeBodyActor(base_rate_feedback=False);actor.load_state_dict(original.actor.state_dict());actor.eval()
+env=CoupledTrackingEnv('innate_mars')
+try:bundle=export_actor(actor,out/'actor',env.unwrapped.config,env.unwrapped.fingerprint,steps=0,training={'scope':'fixed_weights_base_rate_feedback_ablation','source_weights_sha256':original.manifest['weights_sha256'],'new_ppo_steps':0,'supervised_updates':0})
+finally:env.close()
+before=source_state(ROOT)
+report={'format':'coupled-base-feedback-ablation-v1','runtime_revision':'57e8e73b','source_state_digest':digest(before),'source_weights_sha256':original.manifest['weights_sha256'],'candidate_weights_sha256':bundle.manifest['weights_sha256'],'base_rate_feedback':False,'new_ppo_steps':0,'hardware_used':False,'safety_promoted':False,'general':[],'tamp':[],'complete':False}
+def save():(out/'results.json').write_text(json.dumps(report,indent=2,default=json_value,allow_nan=False)+'\n')
+save()
+for suite_path in (SUITE,COARSE_SUITE):
+ env=CoupledTrackingEnv('innate_mars',suite_path=suite_path);e=env.unwrapped
+ try:
+  for case in env.cases:
+   obs,init=env.reset(options={'case_id':case['id']});trace=[]
+   for tick in range(500):
+    action=bundle({k:obs[k] for k in ('history','preview','motion')})
+    obs,_,done,truncated,info=env.step(action)
+    trace.append({'tick':tick,'action':action.tolist(),'base':e.control.base_pose().tolist(),'hand':e.control.ee_pose().tolist(),'quiet':info.get('whole_body_quiet')})
+    if done or truncated:break
+   pre=e._info();e.control.stop()
+   for _ in range(16):
+    if whole_body_stopped(e.control) or e._physics_invalid:break
+    e._tick(np.zeros(e.profile.action_size))
+   row={'suite':env.suite_format,'case':case,'tracking_success':bool(info.get('is_success')),'code':info['code'],'control_ticks':tick+1,'metrics':pre,'stop_confirmed':bool(whole_body_stopped(e.control) and not e._physics_invalid),'post_stop_metrics':e._info(),'reference_sha256':init['reference_sha256'],'trace':trace}
+   report['general'].append(row);save();print(env.suite_format,case['id'],row['tracking_success'],row['code'],flush=True)
+ finally:env.close()
+development,_=load_development()
+for case in development['train_cases']+development['audit_cases']:
+ row=primitive_rollout(case,oracle=False,policy=bundle,primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True)
+ report['tamp'].append(row);save();print('TAMP',case['id'],row.get('success'),row.get('code'),flush=True)
+if source_state(ROOT)!=before:raise RuntimeError('Source changed during feedback readout')
+report['complete']=True;save()

@@ -1,0 +1,16 @@
+{
+  "job_id": "20261117_111259_6729bc",
+  "pid": 384143,
+  "command": [
+    "taskset",
+    "-c",
+    "14",
+    "timeout",
+    "19800",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/.venv/bin/python",
+    "-u",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/logs/recovery/goal-change-curriculum-v1/supervise_training.py",
+    "--manifest-sha256",
+    "aa3caf201fc86c048cf243ed0b44bcfdaf97b9eae4cc57808b561274528863f4"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "README.md": "bdd1a18d735a1051fd6db291bb1237145d34ac3c3436a23cf5f72d265c0d41b9",
+  "cases.json": "a9e839abc3d2fed11b0ac58b943e571614d41f2c233d24697cbf2a983a7d49db",
+  "generate.py": "1039deac3c2416ac5ea6702c002196f135c8a82c83cc2d39db9b2864cde43966",
+  "plot_targets.py": "8a1ef54248c05afc57b653350b65cdf755e49ee89b67c57ddb28c1b3e1490f0a",
+  "precheck.json": "9dc34db94c378a26d2057783bdb0803e715d623ab8c19fed628c0940e8ba08b5",
+  "precheck.py": "2aa051f067b1e3df5f218d556829fcd64729b978d6e9f339db40c6ac2d556667",
+  "protocol.json": "d74cbcbd518cf5687ff6beee370d0310a2bc713a0bfdf999f10a9e8522facc78",
+  "record_results.py": "10eece43edc92f7eba66ab648e13b64fe52d9d8e0056147ab400343b05fdc765",
+  "results.json": "2a1030face788e01f7dc8a20ef28afd07f11a3e6c0f8be31f695c448ae35cc72",
+  "run.py": "6ce649ddc8bbe8ba726a2c3884f7bce10162cedf9a0349c6837a92b77f2c0ed4",
+  "runner-sha256.json": "de194289873b2a8abd91cc4ef933b08b4cc871938665beb21db9efa40455dc58",
+  "suite.json": "876eed77f99fa577dec31ca69618c5fc3b4d5770dfc97255049be73f7d35846f",
+  "supervise_readout.py": "4ed41cbfb3115f90ac33e506caef83b83a0a62a8cb47f702c51de8398bf7d515",
+  "target-gallery.svg": "9c10b6c38f6ab411d1749d92bb537192ee16fbb6a51c8fc92ee06388819886f4"
+}

@@ -544,6 +544,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     for name, handler in build_tamp_handlers(context).items():
         tools.append(_bind(name, func=handler))
 
+
     # -- current-view object geometry ----------------------------------------
     def ground_object(query: str) -> dict:
         """Ground the decision RGB-D snapshot without moving; return geometry or explicit abstention."""

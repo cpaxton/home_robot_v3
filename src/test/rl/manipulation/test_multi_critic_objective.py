@@ -92,13 +92,20 @@ class ToyPolicy(nn.Module):
         return distribution.log_prob(actions).sum(-1), distribution.entropy().sum(-1), values
 
 
-def test_shared_objective_ppo_learns_tracking_with_small_motion_cost():
+@pytest.mark.parametrize("critic_epochs", [0, 4])
+def test_shared_objective_ppo_learns_tracking_with_small_motion_cost(critic_epochs):
     torch.manual_seed(90)
     policy = ToyPolicy()
     learner = MultiCriticPPO(
         policy,
         PPOConfig(
-            learning_rate=0.01, critic_learning_rate=0.01, epochs=4, batch_size=64, entropy_weight=0.0, target_kl=0.1
+            learning_rate=0.01,
+            critic_learning_rate=0.01,
+            epochs=4,
+            critic_epochs=critic_epochs,
+            batch_size=64,
+            entropy_weight=0.0,
+            target_kl=0.1,
         ),
     )
     obs = {"x": torch.ones(128, 1)}

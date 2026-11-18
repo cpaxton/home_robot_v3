@@ -1,4 +1,4 @@
-"""Step actual public-tool TAMP pregrasp execution in a single-owner child process.
+"""Step public-tool TAMP through an explicit unloaded pose boundary.
 
 The planner/executor owns task logic, closure and stop confirmation. The actor
 gets only copied proprioception, targets and reference twist. Planning failures
@@ -26,19 +26,52 @@ class _Closed(BaseException):
     pass
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path):
+PRIMITIVE_PHASE = {"pregrasp": "pregrasp", "grasp_pose": "grasp"}
+
+
+def _bounded_path(execute, primitive):
+    """Unwind the executor before its closure, including on a failed endpoint."""
+    phase_boundary = PRIMITIVE_PHASE[primitive]
+
+    def bounded(phase, path):
+        result = execute(phase, path)
+        if phase == phase_boundary:
+            raise _Boundary(result)
+        return result
+
+    return bounded
+
+
+def _worker(
+    connection,
+    case,
+    oracle,
+    arm_reference,
+    initial_settle_s,
+    wheel_feedback_current_velocity,
+    trace_path,
+    primitive,
+    planning_scope,
+    wheel_feedback_gain=0.5,
+    wheel_feedback_base_only_gains=None,
+    reward_config=None,
+):
     import hashlib
     import json
+    from dataclasses import replace
 
     from emet.agent.tools import get_tools
+    from emet.controller.task.tamp.mars_pose_executor import pose_error
     from emet.controller.task.tamp.mars_sim_robot import MarsSimRobot
     from emet.controller.task.tamp.native_adapter import adapter_for
     from emet.eval.mars_tamp_control import fixture
     from emet.rl.manipulation.command_runtime import TaskPoseRuntimeTiming, task_pose_teacher_action
+    from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
     from emet.rl.manipulation.tamp_policy import robot_identity
     from emet.rl.manipulation.whole_body_observation import actor_observation, privileged_state
     from emet.rl.manipulation.whole_body_reward import RewardMeter
 
+    reward_config = WholeBodyRewardConfig.from_record(reward_config)
     env = robot = None
     decisions, outcome = [], {"status": "incomplete"}
     try:
@@ -51,7 +84,17 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         compiled_robot_identity = robot_identity(env.model)
         env.control.retention_context_enabled = True
         env.control.history = None
-        env.control.base_velocity_feedback_gain = 0.5
+        from emet.rl.manipulation.wheel_feedback import configure_wheel_feedback
+
+        env.config = replace(
+            env.config,
+            wheel_feedback_gain=wheel_feedback_gain,
+            wheel_feedback_base_only_gains=wheel_feedback_base_only_gains,
+            physical_wheel_slew=env.config.physical_wheel_slew or wheel_feedback_base_only_gains is not None,
+        )
+        if wheel_feedback_base_only_gains is not None:
+            env.control.set_physical_wheel_slew(True)
+        configure_wheel_feedback(env.control, env.config)
         env.control.turn_progress_guard_enabled = True
 
         class Bridge:
@@ -62,7 +105,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 self.pending, self.ticks = False, 0
                 self.reward = np.zeros(3, dtype=np.float32)
                 self.tick_rewards = []
-                self.meter = RewardMeter(env)
+                self.motion_ticks = 0
+                self.meter = RewardMeter(env, config=reward_config)
                 self.start = float(env.data.time)
                 self.motion = np.zeros(9, dtype=np.float32)
 
@@ -78,15 +122,18 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                     "critic": privileged_state(env, float(env.data.time) - self.start, 30.0)
                 }
                 if not self.pending:
-                    self.meter = RewardMeter(env)
+                    self.meter = RewardMeter(env, config=reward_config)
                 info = {
                     "case_id": case["id"],
                     "model_fingerprint": env.fingerprint,
                     "compiled_robot_identity": compiled_robot_identity,
                     "reward_terms": self.meter.last_terms.copy(),
+                    "reward_contract": self.meter.record(),
                     "elapsed_control_ticks": max(1, self.ticks),
+                    "reference_motion_ticks": self.motion_ticks,
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
-                    "primitive": "pregrasp",
+                    "primitive": primitive,
+                    "planning_scope": planning_scope,
                     "simulation_only": True,
                     "actor_action_applied": self.pending,
                 }
@@ -106,6 +153,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 self.reward[:] = 0
                 self.tick_rewards.clear()
                 self.ticks = 0
+                self.motion_ticks = 0
                 self.pending = True
                 self.motion = reference_velocity(env.control)
                 if trace_path is not None:
@@ -118,15 +166,24 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                             "action": action.tolist(),
                         }
                     )
+                self.meter.before_step()
                 return action
 
             def after_step(self):
                 if self.pending:
+                    from emet.rl.manipulation.trajectory_metrics import reference_is_moving
+                    from emet.rl.manipulation.whole_body_observation import reference_velocity
+
                     motion = np.zeros(9) if env.control.holding or env.control.stopped else self.motion
+                    current = (
+                        np.zeros(9) if env.control.holding or env.control.stopped else reference_velocity(env.control)
+                    )
+                    self.motion_ticks += int(reference_is_moving(current))
                     reward = self.meter.tick(env.control.last_action.copy(), motion)
                     self.reward += reward
                     self.tick_rewards.append(reward.copy())
                     self.ticks += 1
+                    self.meter.before_step()
 
         bridge = Bridge()
         # External PPO updates pause this simulator. These explicit wall budgets
@@ -159,7 +216,11 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
             t for t in discovery.get("data", {}).get("tasks", []) if t["receptacle_name"] == "destination support"
         )
         planned = json.loads(
-            tools["plan_pick_place"].func(task_ref=task["task_ref"], placement_region=admission["placement_region"])
+            tools["plan_pick_place"].func(
+                task_ref=task["task_ref"],
+                placement_region=admission["placement_region"],
+                **({"execution_scope": primitive} if planning_scope == "unloaded_prefix" else {}),
+            )
         )
         if planned["status"] != "ok":
             raise ValueError("public_plan:" + str(planned.get("code")))
@@ -180,13 +241,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
 
         adapter._approach = record_approach
 
-        def primitive(phase, path):
-            result = original(phase, path)
-            if phase == "pregrasp":
-                raise _Boundary(result)
-            return result
-
-        plan.executor._execute_path = primitive
+        plan.executor._execute_path = _bounded_path(original, primitive)
+        boundary_reached = False
         success, reason, executor_result = False, "primitive_not_reached", None
         with robot.stepped_clock():
             try:
@@ -194,13 +250,37 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 executor_result = result
                 reason = approach_failure or robot.failure or result.get("code", reason)
             except _Boundary as boundary:
+                boundary_reached = True
                 success, reason = bool(boundary.result.success), boundary.result.message
                 if success:
                     success = robot._verify_quiet_hold(2.0, 3.5)
-                    reason = "pregrasp_complete" if success else "terminal_motion_unsettled"
+                    reason = primitive + "_complete" if success else "terminal_motion_unsettled"
         robot.stop_and_confirm("training_primitive_complete" if success else reason)
         success &= robot.stop_confirmed is True
-        bonus = 2.0 if success else -10.0
+        # Quiet velocity alone cannot certify arrival after the extra hold/stop.
+        # Preserve the historical pregrasp outcome, but independently report its
+        # residual too. The new grasp-pose boundary requires both pose and open
+        # jaws at the final measured state, before awarding completion credit.
+        terminal_pose, terminal_pose_in_contract = None, False
+        gripper_open = bool(env.control.gripper_is_open())
+        if boundary_reached:
+            index = 0 if primitive == "pregrasp" else 1
+            position, rotation = plan.executor.grasp_targets[index]
+            target = np.r_[position, np.asarray(rotation)[:, :2].ravel()]
+            distance, angle = pose_error(env.control.ee_pose(), target)
+            terminal_pose_in_contract = bool(
+                distance <= plan.executor.position_tolerance_m and angle <= plan.executor.orientation_tolerance_rad
+            )
+            terminal_pose = {
+                "position_error_m": distance if np.isfinite(distance) else None,
+                "orientation_error_rad": angle if np.isfinite(angle) else None,
+                "position_tolerance_m": plan.executor.position_tolerance_m,
+                "orientation_tolerance_rad": plan.executor.orientation_tolerance_rad,
+            }
+        if primitive == "grasp_pose" and success and not (terminal_pose_in_contract and gripper_open):
+            success = False
+            reason = "terminal_pose_outside_contract" if not terminal_pose_in_contract else "terminal_gripper_not_open"
+        bonus = reward_config.success_bonus if success else -reward_config.tamp_failure_penalty
         bridge.reward[0] += bonus
         if not bridge.tick_rewards:
             # A rejected initialization has the existing one-tick transition
@@ -211,13 +291,21 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         bridge.tick_rewards[-1][0] += bonus
         info = {
             "case_id": case["id"],
+            "primitive": primitive,
+            "planning_scope": planning_scope,
+            "boundary_reached": boundary_reached,
+            "terminal_pose": terminal_pose,
+            "terminal_pose_in_contract": terminal_pose_in_contract,
+            "gripper_open": gripper_open,
             "primitive_success": bool(success),
             "code": reason,
             "stop_confirmed": robot.stop_confirmed,
             "elapsed_control_ticks": max(1, bridge.ticks),
+            "reference_motion_ticks": bridge.motion_ticks,
             "reward_group_ticks": np.asarray(bridge.tick_rewards, dtype=np.float32),
             "actor_action_applied": bridge.pending,
             "reward_terms": bridge.meter.last_terms.copy(),
+            "reward_contract": bridge.meter.record(),
             "initialization_failed": not bridge.pending,
             "full_pick_place_success": False,
             "policy_calls": robot.inference_counts,
@@ -230,6 +318,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
             "executor_result": executor_result,
             "initial_settle_s": initial_settle_s,
             "wheel_feedback_current_velocity": env.control.base_velocity_feedback_current,
+            "wheel_feedback_gain": env.control.base_velocity_feedback_gain,
+            "wheel_feedback_base_only_gains": env.control.base_only_velocity_feedback_gains,
             "initial_state_sha256": initial_state_sha256,
             "model_fingerprint": env.fingerprint,
             "compiled_robot_identity": compiled_robot_identity,
@@ -248,6 +338,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 k: info[k]
                 for k in (
                     "code",
+                    "primitive",
+                    "boundary_reached",
                     "primitive_success",
                     "stop_confirmed",
                     "executor_result",
@@ -281,8 +373,13 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                         "format": "mars-tamp-primitive-trace-v1",
                         "case": case,
                         "oracle": bool(oracle),
+                        "primitive": primitive,
+                        "planning_scope": planning_scope,
                         "initial_settle_s": initial_settle_s,
                         "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
+                        "wheel_feedback_gain": wheel_feedback_gain,
+                        "wheel_feedback_base_only_gains": wheel_feedback_base_only_gains,
+                        "reward_configuration": reward_config.record(),
                         "outcome": outcome,
                         "stop_confirmed": robot.stop_confirmed if robot is not None else None,
                         "commands": robot.commands if robot is not None else [],
@@ -307,7 +404,21 @@ class TampPrimitiveEnv(gym.Env):
         initial_settle_s=0.0,
         wheel_feedback_current_velocity=False,
         trace_dir=None,
+        primitive="pregrasp",
+        planning_scope="full_task",
+        wheel_feedback_gain=0.5,
+        wheel_feedback_base_only_gains=None,
+        reward_config=None,
     ):
+        if type(primitive) is not str or primitive not in PRIMITIVE_PHASE:
+            raise ValueError("primitive must be pregrasp or grasp_pose; loaded stages are not supported")
+        if type(planning_scope) is not str or planning_scope not in {"full_task", "unloaded_prefix"}:
+            raise ValueError("planning_scope must be full_task or unloaded_prefix")
+        from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
+
+        self.reward_config = WholeBodyRewardConfig.from_record(reward_config)
+        self.primitive = primitive
+        self.planning_scope = planning_scope
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
             raise ValueError("nonempty cases and a bounded simulator training configuration required")
         if not np.isfinite(initial_settle_s) or not 0 <= initial_settle_s <= 2.0:
@@ -315,6 +426,12 @@ class TampPrimitiveEnv(gym.Env):
         if type(wheel_feedback_current_velocity) is not bool:
             raise ValueError("current wheel feedback velocity must be boolean")
         self.wheel_feedback_current_velocity = wheel_feedback_current_velocity
+        from emet.rl.manipulation.wheel_feedback import validate_base_only_gains, validate_gain
+
+        self.wheel_feedback_gain = validate_gain(wheel_feedback_gain)
+        self.wheel_feedback_base_only_gains = validate_base_only_gains(wheel_feedback_base_only_gains)
+        if self.wheel_feedback_base_only_gains is not None and not wheel_feedback_current_velocity:
+            raise ValueError("base-only wheel feedback requires current velocity")
         self.cases, self.oracle, self.arm_reference, self.timeout = list(cases), bool(oracle), arm_reference, timeout
         self.initial_settle_s = float(initial_settle_s)
         self.trace_dir = Path(trace_dir).resolve() if trace_dir is not None else None
@@ -369,6 +486,11 @@ class TampPrimitiveEnv(gym.Env):
                 self.initial_settle_s,
                 self.wheel_feedback_current_velocity,
                 self.trace_path,
+                self.primitive,
+                self.planning_scope,
+                self.wheel_feedback_gain,
+                self.wheel_feedback_base_only_gains,
+                self.reward_config.record(),
             ),
             daemon=True,
         )

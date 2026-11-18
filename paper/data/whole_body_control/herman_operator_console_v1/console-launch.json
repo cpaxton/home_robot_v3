@@ -1,0 +1,7 @@
+{
+  "pid": 458427,
+  "port": 8770,
+  "hardware_motion_enabled": false,
+  "source_at_launch_has_uncommitted_changes": true,
+  "reason": "load final snapshot-copy protection; passive view only"
+}

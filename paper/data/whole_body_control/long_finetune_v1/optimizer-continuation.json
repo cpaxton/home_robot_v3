@@ -1,0 +1,15 @@
+{
+  "format": "optimizer-continuation-check-v1",
+  "new_decisions": 7936,
+  "source_decisions": 16384,
+  "new_actor_steps": 364,
+  "new_critic_steps": 372,
+  "optimizer_states_checked": 31,
+  "all_clocks_include_source_history": true,
+  "source_step_range": [
+    624.0,
+    768.0
+  ],
+  "source_checkpoint_sha256": "39f1b73d265c36daec42511285399a3fdb4d84cde26aa557d21f9448a6c3922e",
+  "scope": "actual saved optimizer clocks, not exact simulator/RNG continuation"
+}

@@ -1,0 +1,17 @@
+"""Offline matched execution evaluation, no upload or policy training."""
+import json
+from pathlib import Path
+import wandb
+root=Path.cwd();out=root/'logs/eval/scoped-wheel-feedback-v2'
+reports={role:json.loads((out/role/('run.completed.json' if role=='baseline' else 'run.json')).read_text()) for role in ('baseline','candidate')}
+assert all(r['complete'] for r in reports.values())
+run=wandb.init(project='emet-control',name='mars-scoped-wheel-feedback-paired',mode='offline',dir=str(root/'logs'),config={'source':reports['candidate']['runtime_revision'],'source_state_digest':reports['candidate']['source_state_digest'],'new_training_steps':0,'hardware_used':False,'qualification':False,'scope':'same-source fixed-weight paired execution contracts'})
+values={}
+table=wandb.Table(columns=['contract','cohort','id','success','code','stop_confirmed'])
+for role,report in reports.items():
+ for cohort,summary in report['summary'].items():
+  for key,value in summary.items():values[f'{role}/{cohort}/{key}']=value
+  values[f'{role}/{cohort}/success_rate']=summary['successes']/summary['attempts']
+ for cohort in ('moving-goals','ui-moving','general-v1','general-v2','tamp','handoffs','mask-handoffs','reverse-audit/moving-goals'):
+  for case in json.loads((out/role/(cohort+'.json')).read_text()):table.add_data(role,cohort,case['id'],case['success'],case['code'],case.get('stop_confirmed'))
+run.log(values|{'paired_cases':table});record={'id':run.id,'name':run.name,'mode':'offline','directory':run.dir,'new_training_steps':0};run.finish();(out/'wandb-evaluation.json').write_text(json.dumps(record,indent=2)+'\n')

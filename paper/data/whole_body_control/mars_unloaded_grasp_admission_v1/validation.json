@@ -1,0 +1,32 @@
+{
+  "format": "mars-unloaded-grasp-software-validation-v1",
+  "runtime_producer_revision": "9cd439bf3c1d0f7d9af6362bf9c39e4f56f2d310",
+  "verification_revision": "49914b19c4713b316ff7af7b1d465e124091630d",
+  "source_state_digest": "38cb3246b7a61db4c10966de70aa05240443cd04dfce37bb04d404a9e3762213",
+  "source_matches_teacher_and_regression_receipt": true,
+  "regressions": {
+    "tests": 1367,
+    "returncode": 0,
+    "elapsed_wall_s": 760.5247046947479,
+    "job": "20261116_010523_f3750c",
+    "receipt_sha256": "d541dfc18fe5efada1e85118472078d7b591ea70e1e1d9b9fab846a1f81bf76b",
+    "xml_sha256": "2a2f253609b2d77bbdb8888e54c5c210cdba1e6f3f9efd51591560c380948659"
+  },
+  "offline_readout_tests": {
+    "tests": 4,
+    "job": "20261116_011315_aa8bfe",
+    "xml_sha256": "e584cbf60e2905e28c1b58cb5e78df3696eca70197de2222e2962e383686c286"
+  },
+  "paper": {
+    "pages": 58,
+    "undefined_citations": false
+  },
+  "teacher_results_sha256": "308cbc55851a37487edc92933d975311277611a5201badf41e7284bb0bbb7743",
+  "stage_admissions": {
+    "pregrasp": false,
+    "grasp_pose": false
+  },
+  "ready_for_training": false,
+  "new_ppo_steps": 0,
+  "hardware_used": false
+}

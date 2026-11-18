@@ -1,0 +1,35 @@
+"""New train-only base directions and unchanged TAMP teacher admission."""
+import hashlib,json
+from pathlib import Path
+import torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.manipulation.coupled_evaluation import teacher_episode,json_value
+from emet.rl.manipulation.whole_body_training import load_development,primitive_rollout
+from emet.rl.regression_gate import ROOT,source_state,verify_regressions
+
+def cases():
+ spec=json.loads((ROOT/'logs/recovery/base-direction-bootstrap-v1/cases.json').read_text())
+ return [{'id':f'innate_mars:base-direction-train-v1:{i}','seed':spec['seed_start']+i,'split':'train','mode':'base_only','travel_m':d,'turn_rad':y,'arm_delta':[0.0]*5,'base_mask':[True]*3} for i,(d,y) in enumerate(spec['motions'])]
+
+def main():
+ torch.set_num_threads(1);receipt=verify_regressions(ROOT/'logs/eval/coupled-coarse-regressions-v1/full.receipt.json')
+ out=ROOT/'logs/eval/base-direction-admission-v1';out.mkdir(parents=True,exist_ok=False)
+ sources=source_state(ROOT)
+ report={'format':'base-direction-admission-v1','source_state_digest':digest(sources),'regression_tests':len(receipt['test_ids']),'cases_manifest_sha256':hashlib.sha256((ROOT/'logs/recovery/base-direction-bootstrap-v1/cases.json').read_bytes()).hexdigest(),'general':[],'tamp':[],'complete':False,'ready':False,'hardware_used':False}
+ def save():(out/'results.json').write_text(json.dumps(report,indent=2,default=json_value,allow_nan=False)+'\n')
+ env=CoupledTrackingEnv('innate_mars',cases(),suite_path=COARSE_SUITE)
+ try:
+  for c in env.cases:
+   try:
+    env.reset(options={'case_id':c['id']});row={'case':c,'accepted':True,'admission':env.admission,'teacher':teacher_episode(env,c)}
+   except (ValueError,RuntimeError) as exc:row={'case':c,'accepted':False,'reason':str(exc)}
+   report['general'].append(row);save();print(c['id'],row['accepted'],row.get('teacher',{}).get('tracking_success'),flush=True)
+ finally:env.close()
+ development,_=load_development()
+ report['tamp']=primitive_rollout(development['train_cases']+development['audit_cases'],primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True)
+ report['complete']=True
+ report['ready']=bool(all(x['accepted'] and x['teacher']['tracking_success'] and x['teacher']['stop_confirmed'] and not any(x['teacher']['safety_flags'].values()) for x in report['general']) and all(x['success'] and x['stop_confirmed'] and not any(x['safety_flags'].values()) for x in report['tamp']))
+ assert digest(source_state(ROOT))==report['source_state_digest']
+ save();print('READY',report['ready'],flush=True)
+if __name__=='__main__':main()

@@ -43,6 +43,7 @@ from innate_mars_bridge.constants import (
     ODOM_FRAME,
     ODOM_TOPIC,
 )
+from innate_mars_bridge.feedback import FeedbackStore
 from innate_mars_bridge.joint_layout import pack_innate_mars_joint_positions, pack_innate_mars_joint_velocities
 from innate_mars_bridge.remote.modules.nav import MarsNavigationClient
 from innate_mars_bridge.ros.camera import RosCamera, RosCameraNoInfo
@@ -67,6 +68,7 @@ class InnateMarsRosInterface(Node):
 
         self._odom_pose = None
         self._odom_lock = threading.Lock()
+        self._feedback = FeedbackStore()
 
         self._head_lock = threading.Lock()
         self._head_joint_rad = 0.0
@@ -120,6 +122,13 @@ class InnateMarsRosInterface(Node):
             self.nav = MarsNavigationClient(self)
 
     def _joint_callback(self, msg: JointState):
+        self._feedback.arm(
+            list(msg.name),
+            list(msg.position),
+            list(msg.velocity),
+            list(msg.effort),
+            msg.header.stamp.sec * 10**9 + msg.header.stamp.nanosec,
+        )
         with self._js_lock:
             name_to_pos = dict(zip(msg.name, msg.position, strict=False))
             name_to_vel = dict(zip(msg.name, msg.velocity, strict=False)) if msg.velocity else {}
@@ -130,6 +139,15 @@ class InnateMarsRosInterface(Node):
                     self._joint_velocities[i] = name_to_vel[name]
 
     def _odom_callback(self, msg: Odometry):
+        p, q, v = msg.pose.pose.position, msg.pose.pose.orientation, msg.twist.twist
+        self._feedback.odom(
+            [p.x, p.y, p.z],
+            [q.x, q.y, q.z, q.w],
+            [v.linear.x, v.linear.y, v.linear.z, v.angular.x, v.angular.y, v.angular.z],
+            msg.header.stamp.sec * 10**9 + msg.header.stamp.nanosec,
+            msg.header.frame_id,
+            msg.child_frame_id,
+        )
         with self._odom_lock:
             self._odom_pose = matrix_from_pose_msg(msg.pose.pose)
 
@@ -187,10 +205,20 @@ class InnateMarsRosInterface(Node):
         """Returns 10-DoF (positions, velocities) for Emet ``RobotSpec`` layout."""
         arm_q, arm_dq = self.get_arm_joint_state()
         base = self.get_base_pose_xyt()
+        odom = self.get_feedback_snapshot()["samples"].get("odom", {})
+        base_velocity = odom.get("base_velocity_world") if odom.get("fresh") else None
         return (
             pack_innate_mars_joint_positions(arm_q, base_xyt=base),
-            pack_innate_mars_joint_velocities(arm_dq),
+            pack_innate_mars_joint_velocities(arm_dq, base_xyt_vel=base_velocity),
         )
+
+    def get_feedback_snapshot(self):
+        """Keep source/arrival ages; never substitute bridge publication time.
+
+        Legacy joint vectors retain startup defaults; consumers that need stop
+        evidence must use the explicit validity/verification fields here.
+        """
+        return self._feedback.snapshot(self.get_clock().now().nanoseconds)
 
     def at_goal(self) -> bool:
         if self.nav is None:

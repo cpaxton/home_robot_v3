@@ -16,7 +16,16 @@ class Driver:
         self.writes, self.stops = [], 0
         self.confirmed = True
         self.measured_velocity = np.zeros(MARS.arm_size)
-        self.caps = {"whole_body_velocity": True, "measured_whole_body_stop": True, "robot_watchdog_s": 0.2}
+        self.base_velocity = np.zeros(6)
+        self.arm_age = 0.0
+        self.valid = True
+        self.caps = {
+            "whole_body_velocity": True,
+            "measured_whole_body_stop": True,
+            "robot_watchdog_s": 0.2,
+            "feedback_si_units_verified": True,
+            "motor_read_validity_verified": True,
+        }
 
     def capabilities(self):
         return self.caps
@@ -24,7 +33,10 @@ class Driver:
     def feedback(self):
         return {
             "base_pose": self.pose,
-            "captured_monotonic": time.monotonic() - self.age,
+            "arm_captured_monotonic": time.monotonic() - self.arm_age,
+            "odom_captured_monotonic": time.monotonic() - self.age,
+            "valid": self.valid,
+            "base_twist": self.base_velocity.copy(),
             "joint_velocity": self.measured_velocity.copy(),
         }
 
@@ -45,6 +57,26 @@ def test_disabled_or_incomplete_driver_never_writes():
     with pytest.raises(RuntimeError, match="capabilities"):
         GuardedControlSession(driver=d, profile=MARS, enabled=True).start()
     assert not d.writes
+
+
+@pytest.mark.parametrize("stage", ["feedback", "age"])
+def test_session_start_preserves_abort_before_guard_creation(monkeypatch, stage):
+    driver = Driver()
+    session = GuardedControlSession(driver=driver, profile=MARS, enabled=True)
+    original = SystemExit(2)
+
+    def abort(*args):
+        raise original
+
+    monkeypatch.setattr(
+        driver if stage == "feedback" else session, "feedback" if stage == "feedback" else "_age", abort
+    )
+    with pytest.raises(SystemExit) as raised:
+        session.start()
+    assert raised.value is original and session.guard is None
+    assert session.fault == "session start aborted" and not driver.writes
+    with pytest.raises(RuntimeError, match="restarted"):
+        session.start()
 
 
 def test_profile_acceleration_and_target_limits_apply_before_dispatch():
@@ -131,3 +163,44 @@ def test_in_range_feedback_is_accepted_without_rebasing_command_slew():
     session.command(np.ones(7) * 0.1, base_target=[0, 0, 0])
     assert len(d.writes) == 1 and d.stops == 0
     assert np.max(d.writes[0][0][2:]) < 0.1
+
+
+@pytest.mark.parametrize("component", range(6))
+def test_base_velocity_all_six_components_checked_before_start_and_dispatch(component):
+    d = Driver()
+    d.base_velocity[component] = 0.1
+    with pytest.raises(RuntimeError, match="base must be stationary"):
+        GuardedControlSession(driver=d, profile=MARS, enabled=True).start()
+    assert not d.writes and d.stops == 1
+    d = Driver()
+    session = GuardedControlSession(driver=d, profile=MARS, enabled=True)
+    session.start()
+    d.base_velocity[component] = 0.6
+    with pytest.raises(RuntimeError, match="measured base velocity"):
+        session.command(np.zeros(7), base_target=[0, 0, 0])
+    assert not d.writes and d.stops == 1
+
+
+@pytest.mark.parametrize("key", ["feedback_si_units_verified", "motor_read_validity_verified"])
+def test_unverified_feedback_cannot_activate_session(key):
+    d = Driver()
+    d.caps[key] = False
+    with pytest.raises(RuntimeError, match="capabilities required"):
+        GuardedControlSession(driver=d, profile=MARS, enabled=True).start()
+    assert not d.writes
+
+
+def test_fresh_odometry_cannot_hide_stale_arm_or_invalid_read():
+    d = Driver()
+    d.arm_age = 0.3
+    session = GuardedControlSession(driver=d, profile=MARS, enabled=True)
+    with pytest.raises(RuntimeError, match="stale arm"):
+        session.start()
+    assert session.fault and d.stops == 1 and not d.writes
+    d = Driver()
+    session = GuardedControlSession(driver=d, profile=MARS, enabled=True)
+    session.start()
+    d.valid = False
+    with pytest.raises(RuntimeError, match="valid motor"):
+        session.command(np.zeros(7), base_target=[0, 0, 0])
+    assert d.stops == 1 and not d.writes

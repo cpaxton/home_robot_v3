@@ -1,0 +1,6 @@
+"""Use the established C++ reader checks on the exact source copied from Herman."""
+import contextlib,hashlib,importlib.util,io,json
+from pathlib import Path
+ROOT=Path.cwd();spec=importlib.util.spec_from_file_location('feedback_validation',ROOT/'scripts/validate_mars_feedback_patch.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);module.PATCH=ROOT/'docs/patches/innate_os_feedback_units_herman_20261117.patch';module.META=module.PATCH.with_suffix('.meta.json');output=io.StringIO()
+with contextlib.redirect_stdout(output):module.validate(ROOT/'logs/recovery/herman-passive-20261117/source')
+record={'format':'herman-feedback-offline-validation-v1','upstream_revision':'0d4c350d83ff1838be5db291dded4b412af9dff5','patch_sha256':hashlib.sha256(module.PATCH.read_bytes()).hexdigest(),'validator_sha256':hashlib.sha256((ROOT/'scripts/validate_mars_feedback_patch.py').read_bytes()).hexdigest(),'validation_output':output.getvalue(),'mode':'compile actual patched reader with SDK test double in temporary local copies','robot_source_modified':False,'ros_package_built':False,'deployed':False,'motion_commands_sent':False};(ROOT/'logs/recovery/herman-passive-20261117/patch-validation.json').write_text(json.dumps(record,indent=2)+'\n');print(output.getvalue())

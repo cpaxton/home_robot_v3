@@ -43,6 +43,11 @@ from emet.cli_cmds.serve import register as register_serve
 # import time pulled MuJoCo via export-sim-gt / eval-dynagraph and SIGSEGV'd
 # ``emet jobs`` / ``emet eval`` right after a sim job released the GPU lock.
 _LAZY_APP_COMMANDS: dict[str, tuple[str, str, str]] = {
+    "controller-console": (
+        "emet.visualization.operator_console",
+        "main",
+        "Mars live cameras, telemetry and non-executing pose previews",
+    ),
     "comm": ("emet.comm", "comm_group", "Robot communication diagnostics and video"),
     "capture": (
         "emet.app.capture",

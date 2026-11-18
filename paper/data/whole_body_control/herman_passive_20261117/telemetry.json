@@ -1,0 +1,147 @@
+{
+  "scope": "passive subscription to existing publishers; values stationary or moving are observed, not commanded",
+  "motion_commands_sent": false,
+  "command_publishers_created": false,
+  "effort_units": "uncalibrated driver current/load proxies, not certified Nm",
+  "topics": {
+    "arm": {
+      "samples": 1203,
+      "interval_median_s": 0.0049715869999999995,
+      "interval_p95_s": 0.006242222999958358,
+      "maximum_interval_s": 0.021477107999999134,
+      "stamp_age_median_s": 0.0006482601165771484,
+      "stamp_age_max_s": 0.024927854537963867,
+      "zero_stamp_samples": 0,
+      "first": {
+        "names": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6"
+        ],
+        "position": [
+          1.5938060386131812,
+          -1.7456701366138596,
+          1.5631264228554684,
+          1.0906603401866908,
+          -0.019941750242513337,
+          0.08897088569736719
+        ],
+        "velocity": [
+          0.0,
+          -0.0,
+          -0.0,
+          -0.0,
+          0.0015339807878856412,
+          -0.0
+        ],
+        "effort": [
+          0.0,
+          0.1,
+          0.0,
+          -7.0,
+          -14.0,
+          17.0
+        ]
+      },
+      "last": {
+        "names": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6"
+        ],
+        "position": [
+          1.5938060386131812,
+          -1.7456701366138596,
+          1.5631264228554684,
+          1.0906603401866908,
+          -0.018407769454627694,
+          0.08897088569736719
+        ],
+        "velocity": [
+          0.0,
+          -0.0,
+          -0.0,
+          -0.0,
+          0.0015339807878856412,
+          -0.0
+        ],
+        "effort": [
+          0.0,
+          0.0,
+          0.0,
+          -6.0,
+          -17.0,
+          18.0
+        ]
+      }
+    },
+    "commanded_arm": {
+      "samples": 0,
+      "interval_median_s": null,
+      "interval_p95_s": null,
+      "maximum_interval_s": null,
+      "stamp_age_median_s": null,
+      "stamp_age_max_s": null,
+      "zero_stamp_samples": 0,
+      "first": null,
+      "last": null
+    },
+    "odom": {
+      "samples": 180,
+      "interval_median_s": 0.033374879999996665,
+      "interval_p95_s": 0.03606179400003384,
+      "maximum_interval_s": 0.038280989999975645,
+      "stamp_age_median_s": 0.0020647048950195312,
+      "stamp_age_max_s": 0.00783991813659668,
+      "zero_stamp_samples": 0,
+      "first": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "twist": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "last": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "twist": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+"""Actual exported-bundle tracking, point goals and live mask handoffs."""
+import hashlib,json,runpy
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,CoupledReference,SUITE,COARSE_SUITE,load_suite,admit_reference
+from emet.rl.manipulation.coupled_evaluation import json_value
+from emet.rl.manipulation.tracking import TaskPoseTrajectory
+from emet.rl.manipulation.whole_body_actor import WholeBodyActor
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle,export_actor
+from emet.rl.manipulation.whole_body_training import load_development,primitive_rollout
+from emet.rl.regression_gate import ROOT,source_state
+
+OUT=ROOT/'logs/eval/base-navigation-native-v2'
+def save(name,value):(OUT/name).write_text(json.dumps(value,indent=2,default=json_value,allow_nan=False)+'\n')
+def main():
+ torch.set_num_threads(1);OUT.mkdir(parents=True,exist_ok=False)
+ previous=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'))
+ original=WholeBodyBundle(ROOT/'logs/eval/coupled-base-feedback-v1/actor')
+ actor=WholeBodyActor(base_rate_feedback=False,base_navigation_feedback=BaseNavigationFeedback());actor.load_state_dict(original.actor.state_dict());actor.eval()
+ for k,v in actor.state_dict().items():torch.testing.assert_close(v,original.actor.state_dict()[k],rtol=0,atol=0)
+ env=CoupledTrackingEnv('innate_mars',suite_path=COARSE_SUITE)
+ try:bundle=export_actor(actor,OUT/'actor',env.unwrapped.config,env.unwrapped.fingerprint,steps=0,training={'scope':'fixed_weights_signed_navigation_formulation','new_training_steps':0,'learned_policy_improvement_claim':False,'source_weights_sha256':original.manifest['weights_sha256']})
+ finally:env.close()
+ from emet.rl.manipulation.policy import load_control_policy
+ bundle=load_control_policy(OUT/'actor',robot='innate_mars')
+ assert bundle.manifest['format']=='emet-whole-body-v3'
+ old=runpy.run_path('/tmp/emet-coupled-coarse-57e8e73b/src/emet/rl/manipulation/whole_body_bundle.py')
+ try:old['WholeBodyBundle'](OUT/'actor')
+ except ValueError:pass
+ else:raise RuntimeError('older v2 loader silently accepted configured feedback')
+ before=source_state(ROOT)
+ report={'format':'base-navigation-native-v2','runtime_revision':'823b3d1d','source_state_digest':digest(before),'source_weights_sha256':original.manifest['weights_sha256'],'candidate_weights_sha256':bundle.manifest['weights_sha256'],'older_v2_runtime_rejected':True,'public_policy_loader_used':True,'parameter_tensors_unchanged':True,'new_training_steps':0,'hardware_used':False,'safety_promoted':False,'complete':False,'summary':{}}
+ save('run.json',report)
+ evaluate=previous['evaluate_general'];evaluate.__globals__['OUT']=OUT
+ base=previous['new_base_cases']()+json.loads((ROOT/'logs/manipulation/base-direction-bootstrap-v1/audit-cases.json').read_text())
+ for cases,path,name in ((base,COARSE_SUITE,'base-directions'),(load_suite()['robots']['innate_mars'],SUITE,'general-v1'),(load_suite(COARSE_SUITE)['robots']['innate_mars'],COARSE_SUITE,'general-v2')):
+  rows=evaluate(bundle.actor,cases,path,name);report['summary'][name]={'attempts':len(rows),'successes':sum(x['success'] for x in rows)};save('run.json',report)
+ development,_=load_development();rows=primitive_rollout(development['train_cases']+development['audit_cases'],policy=bundle.actor,primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True)
+ save('tamp.json',rows);report['summary']['tamp']={'attempts':len(rows),'successes':sum(x['success'] for x in rows)};save('run.json',report)
+ point_rows=[]
+ # Static pose goals announce no velocity. These are endpoint goals, not claims
+ # that a side-step interpolation is a feasible differential-drive trajectory.
+ for i,(dx,dy,yaw) in enumerate(((0.,.15,0.),(0.,-.15,0.),(.1,.1,0.),(.1,-.1,0.),(-.1,.1,0.),(-.1,-.1,0.),(.1,0.,.3),(-.1,0.,-.3))):
+  case={**base[0],'id':f'innate_mars:static-base-goal-v1:{i}','seed':35850000+i}
+  env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+  try:
+   env.reset();start=e.control.base_pose().copy();target=start+np.array([dx,dy,yaw]);hand=e.control.ee_pose().copy()
+   path=TaskPoseTrajectory([0.,.05],[target,target],[hand,hand],[e.control.grip_reference]*2,base_mask=[True]*3,hand_mask=False)
+   e.set_task_trajectory(path);obs=env.observe(e.control.observe())
+   for tick in range(500):
+    action=previous['predict'](bundle.actor,obs);obs,_,done,truncated,info=env.step(action)
+    if done or truncated:break
+   m=e._info();confirmed=previous['stop'](e);point_rows.append({'id':case['id'],'goal_kind':'static_pose','start':start.tolist(),'target':target.tolist(),'success':bool(info.get('is_success')),'code':info['code'],'metrics':m,'stop_confirmed':confirmed,'reference_dynamic_feasibility_claim':False});save('point-goals.json',point_rows)
+   print('POINT',i,point_rows[-1]['success'],point_rows[-1]['code'],flush=True)
+  finally:env.close()
+ report['summary']['point-goals']={'attempts':len(point_rows),'successes':sum(x['success'] for x in point_rows)};save('run.json',report)
+ switches=[]
+ for i,index in enumerate((0,1,4,7)):
+  case=base[index];env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+  try:
+   obs,_=env.reset();switched=False;admission=None
+   for tick in range(500):
+    if tick==20:
+     history=e.control.history.copy()
+     next_case={**case,'mode':'coupled','travel_m':.025,'turn_rad':.04 if i%2==0 else -.04,'arm_delta':[0.,0.,0.,0.,.01]}
+     reference=CoupledReference(e.control,next_case);admission=admit_reference(e,reference)
+     if not admission['accepted']:raise ValueError('handoff geometry rejected')
+     e.set_task_trajectory(reference);assert np.array_equal(e.control.history,history)
+     obs=env.observe(e.control.observe());switched=True
+    action=previous['predict'](bundle.actor,obs);obs,_,done,truncated,info=env.step(action)
+    if done or truncated:break
+   m=e._info();confirmed=previous['stop'](e);switches.append({'id':f'base-to-hand:{i}','source_case':case,'switched':switched,'history_preserved':True,'admission':admission,'success':bool(info.get('is_success')),'code':info['code'],'metrics':m,'stop_confirmed':confirmed});save('handoffs.json',switches)
+   print('HANDOFF',i,switches[-1]['success'],switches[-1]['code'],flush=True)
+  finally:env.close()
+ report['summary']['handoffs']={'attempts':len(switches),'successes':sum(x['success'] for x in switches)}
+ assert source_state(ROOT)==before
+ report['complete']=True;save('run.json',report);print('SUMMARY',report['summary'],flush=True)
+if __name__=='__main__':main()

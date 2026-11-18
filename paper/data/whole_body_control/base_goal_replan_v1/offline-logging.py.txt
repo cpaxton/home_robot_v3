@@ -1,0 +1,15 @@
+"""Offline evaluation logging only: never upload or train."""
+import json
+from pathlib import Path
+import wandb
+root=Path.cwd();out=root/'logs/eval/base-goal-replan-feedback0-v1';r=json.loads((out/'run.json').read_text());assert r['complete']
+run=wandb.init(project='emet-control',name='mars-base-replans-feedback0-evaluation',mode='offline',dir=str(root/'logs'),config={'source':r['runtime_revision'],'source_state_digest':r['source_state_digest'],'new_training_steps':0,'native_body_proportional_gain':0,'hardware_used':False,'qualification':False})
+values={}
+for cohort,summary in r['summary'].items():
+ for k,v in summary.items():values[f'evaluation/{cohort}/{k}']=v
+ values[f'evaluation/{cohort}/success_rate']=summary['successes']/summary['attempts']
+table=wandb.Table(columns=['cohort','id','seed','success','code','xy_error_m','heading_error_rad','wheel_lift','yaw_jerk_rad_s3'])
+for label,path in [('moving',out/'moving-goals.json'),('fresh-reverse',out/'fresh-reverse/moving-goals.json'),('viewer',out/'ui-moving.json')]:
+ for c in json.loads(path.read_text()):
+  m=c.get('metrics',{});table.add_data(label,c['id'],c['seed'],c['success'],c['code'],c.get('endpoint_xy_error_m'),c.get('endpoint_heading_error_rad'),m.get('wheel_lift'),m.get('peak_base_yaw_jerk_rad_s3'))
+run.log(values|{'moving_cases':table});identity={'id':run.id,'name':run.name,'mode':'offline','directory':run.dir,'new_training_steps':0};run.finish();(out/'wandb-evaluation.json').write_text(json.dumps(identity,indent=2)+'\n')

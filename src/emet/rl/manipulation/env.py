@@ -145,6 +145,7 @@ class ManipulationConfig:
     feedback_orientation_error: str = "rotation6"
     feedback_reference_velocity: bool = False
     wheel_feedback_gain: float = 2.0
+    wheel_feedback_base_only_gains: tuple[float, float] | None = None
     wheel_feedback_current_velocity: bool = False
     physical_wheel_slew: bool = False
     wheel_jerk_limits: tuple[float, float] | None = None
@@ -178,8 +179,16 @@ class ManipulationConfig:
             raise ValueError("nearby pose curriculum requires pregrasp fixtures")
         if self.reach_local_translation_probability and not self.reach_local_probability:
             raise ValueError("translation share requires a local reach curriculum")
-        if not np.isfinite(self.wheel_feedback_gain) or not 0 <= self.wheel_feedback_gain <= 2:
-            raise ValueError("wheel feedback gain must be in [0, 2]")
+        from emet.rl.manipulation.wheel_feedback import validate_base_only_gains, validate_gain
+
+        object.__setattr__(self, "wheel_feedback_gain", validate_gain(self.wheel_feedback_gain))
+        object.__setattr__(
+            self, "wheel_feedback_base_only_gains", validate_base_only_gains(self.wheel_feedback_base_only_gains)
+        )
+        if self.wheel_feedback_base_only_gains is not None and (
+            self.robot != "innate_mars" or not self.wheel_feedback_current_velocity or not self.physical_wheel_slew
+        ):
+            raise ValueError("base-only wheel feedback requires Mars current velocity and physical wheel slew")
         if type(self.wheel_feedback_current_velocity) is not bool:
             raise ValueError("current wheel feedback velocity must be boolean")
         if self.wheel_feedback_current_velocity and self.robot != "innate_mars":
@@ -411,7 +420,7 @@ class ManipulationConfig:
 class ManipulationEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, *, mesh_storage="inline", model_factory=None):
         self.config = config if isinstance(config, ManipulationConfig) else ManipulationConfig(**(config or {}))
         self.profile = PROFILES[self.config.robot]
         self.reach_hold_trial = self.fixed_base_trial = False
@@ -424,13 +433,17 @@ class ManipulationEnv(gym.Env):
         self.grasp_lift_reset_attempts = []
         self.fixed_base_distance_m = self.fixed_base_rotation_rad = 0.0
         self.fixed_base_contract_violation = False
-        self.model, self.fingerprint = build_manipulation_model(
+        # Offline scene rehearsals may provide an explicit, fingerprinted model
+        # factory. Training reset options still cannot inject arbitrary physics.
+        factory = build_manipulation_model if model_factory is None else model_factory
+        self.model, self.fingerprint = factory(
             self.config.robot,
             diagnostics=self.config.diagnostics,
             payload_asset_set=self.config.payload_asset_set,
             two_supports=self.config.two_supports,
             contact_cone=self.config.contact_cone,
             contact_impratio=self.config.contact_impratio,
+            mesh_storage=mesh_storage,
         )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
@@ -464,8 +477,9 @@ class ManipulationEnv(gym.Env):
 
     def _configure_preview(self):
         self.control.turn_progress_guard_enabled = self.config.base_turn_progress_guard
-        self.control.base_velocity_feedback_gain = self.config.wheel_feedback_gain
-        self.control.base_velocity_feedback_current = self.config.wheel_feedback_current_velocity
+        from emet.rl.manipulation.wheel_feedback import configure_wheel_feedback
+
+        configure_wheel_feedback(self.control, self.config)
         # The old teacher's 0.015-rad deadband exceeds this task's 0.01-rad
         # heading success condition. Correct the new task's comparator without
         # changing historical reset/teacher behavior for other distributions.
@@ -603,6 +617,10 @@ class ManipulationEnv(gym.Env):
         """Procedural reset hook; runtime goals never set joint configurations."""
         return sampled
 
+    def _initial_gripper_posture(self, sampled):
+        """Reset-only scene adapter hook; runtime release remains executor-owned."""
+        return sampled
+
     def _initialize(self):
         grasp_fixture = self.scenario != "reach" or (
             (self.reach_hold_trial or self.reach_local_trial) and self.config.hold_pregrasp_fixture
@@ -665,7 +683,7 @@ class ManipulationEnv(gym.Env):
             if grasp_fixture:
                 q[0] = q[4] = 0
                 q[3] = -q[1] - q[2] + self.config.grasp_pitch_rad
-        self.control.initialize(self._initial_arm_posture(q), p.gripper_open)
+        self.control.initialize(self._initial_arm_posture(q), self._initial_gripper_posture(p.gripper_open))
         if self.scenario == "reach" and self.config.initial_heading_range:
             base_joint = int(m.body_jntadr[self.control.base])
             if base_joint < 0 or m.jnt_type[base_joint] != mujoco.mjtJoint.mjJNT_FREE:

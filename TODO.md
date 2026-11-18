@@ -1,5 +1,86 @@
 # Living TODOs (small / near-term)
 
+- [x] Run a bounded wrapper-reward comparison for hand precision and quiet false
+      equilibria, with independent coupled/mask cases and disjoint audit seeds;
+      then restore the 50/50 general/TAMP physical-tick mix. Preserve force, jerk,
+      wheel-lift and confirmed-stop reporting. Profile and baseline:
+      [reward specification](docs/experiments/wrapper_reward_20261116.md).
+      Completed: 20/24 retained → 18/24 new reward and 19/24 legacy PPO;
+      existing coupled 6/10 → 6/10 and 7/10; all preserve 6/6 TAMP prefixes.
+      Neither candidate is promoted. [Paired report](docs/experiments/wrapper_reward_training_20261116.md).
+- [x] Audit reward/critic/actor architecture, fix finite stopped-deadline targets,
+      and compare independent critic fitting: 1,574 tests; 20/24 new cases,
+      7/10 existing coupled, but yaw jerk worsens. No candidate promotion.
+      [Architecture review](docs/rl/WHOLE_BODY_ARCHITECTURE_REVIEW.md).
+- [x] Train the stationary-reference exploration ablation with unchanged mean
+      controller, gripper authority, rewards and safety limits. Compare fixed
+      final checkpoints on identical cases; 0/8 → 3/8 frozen stochastic probe
+      is not evidence of improved deterministic policy.
+      Completed: 20/24 → 19/24, 7/10 → 6/10, two extra contacts; rejected.
+- [x] Isolate hand-pose reward priority (1 → 4) with ordinary exploration and
+      a matched completed control; preserve every accuracy/jerk/contact failure.
+      Completed 20/24 → 19/24, coupled 7/10 unchanged; no promotion.
+- [x] Complete 65,536 additional ordinary-reward decisions at lower actor LR,
+      restoring actor/critics/Adam with explicit fresh physical reset. Compare
+      final outcomes; then expand reachable posture/reset coverage and fresh
+      confirmation cases rather than claiming general mastery from reused audits.
+      Completed fresh 12/24 → 16/24, flagged episodes 4 → 1, but jerk remains.
+- [ ] Add nominally anchored goal transitions at 10% overall training ticks,
+      retaining 30% regular hand-active / 10% base-only / 50% unloaded TAMP.
+      Keep the [mixture ledger](docs/rl/TRAINING_MIXTURE.md) current; validate
+      driver/feedback/stop readiness separately before Mars motion tests.
+      Implemented at `2a2ce5c1`; full frozen-source gate passes 1,604 tests.
+      Teacher/source admission is 13/16 vs 9/16, all 32 stops confirm. Job
+      `20261117_111259_6729bc` completes 131,072 decisions: regular 22/24, TAMP
+      6/6, but goal changes regress 9/16 → 6/16. No promotion. Inspect three
+      lost successes and the four stochastic episodes per training case before
+      extending training. [Protocol](docs/experiments/goal_change_curriculum_20261117.md).
+- [x] Repeat passive Herman audit after power-on: Zenoh discovery, ~200/30 Hz
+      arm/odom timing, active driver source fingerprint and exact-revision offline
+      reader/unit patch checks. No robot commands, service starts or deployment.
+      [Current audit](docs/experiments/herman_feedback_audit_20261117.md).
+- [x] Document planner/reference/tracker/driver/operator responsibilities and add
+      a live passive operator console with head stereo, telemetry and bounded
+      base/6DoF-hand previews. No motor authority; wrist currently unavailable.
+      [Division and deployment sequence](docs/rl/CONTROLLER_DEPLOYMENT.md).
+- [x] Implement local source-timed bridge feedback and strengthen the guarded
+      session: separate capture ages, verified SI/read validity, complete base
+      twist and all-six-axis velocity checks. Hardware deployment remains below.
+- [x] Build the exact-revision reader/unit fix against Herman's native ROS stack
+      in an isolated temporary copy (107 s, one compiler thread). Original package
+      unchanged; no active deployment, binary execution or motor commands.
+- [ ] Review/install and live-verify the feedback fix, validate joint/model mapping
+      and real velocity/stop/watchdog integration before a scoped motion test.
+- [x] Build a passive captured-scene Herman rehearsal: paired head/depth/arm/TF,
+      explicit geometry/limit admission, matched teacher/actor cases and offline
+      real/sim replay viewer on 8771. [Report](docs/experiments/herman_rehearsal_20261117.md).
+- [x] Restore refused 8771/8770 viewers as transient user services and build a
+      matched tiny-wave preflight. Teacher 1/1, both actors 0/1 with translation
+      faults by 4.5 s, all simulator stops confirmed; 50 focused tests pass.
+      No hardware motion. [Report](docs/experiments/herman_wave_20261117.md).
+- [ ] Reconcile Herman's reported stow pose with joint1/joint2 declared limits and
+      link3/chassis proxy geometry; validate an actual staging path. Preserve
+      blocked exact capture separately from any synthetic start.
+- [x] Implement admitted random smooth arm-spline postures, reversals and holds,
+      with 32 train / 16 audit identities per level and a 20% overall tick share.
+      [Distribution and validation protocol](docs/experiments/mars_arm_splines_20261117.md).
+- [x] Render seven checked 4×4 teacher curriculum videos and full 208-path
+      coverage (all 144 spline identities), with interactive 3D filters/orbit.
+      [Viewer, results and scope](docs/experiments/mars_curriculum_visualization_20261117.md).
+- [x] Finish the v1 teacher preflight and bounded spline PPO: 48/48 teacher,
+      but both source/final actors 0/48. Preserve failures and reject promotion.
+- [ ] Validate the wider v2 hand/spline/handoff distribution and corrected
+      coupled teacher before another PPO pilot. Track per-episode local hand
+      spread and moving/quiet physical ticks; preserve the frozen wave and
+      fine TAMP cases. [Current decision](docs/rl/ACTIVE_WORK.md).
+- [ ] Add admitted Herman-like posture/hold/handoff cases to a bounded training
+      distribution with separate held-out poses. Current staged teacher is 6/6,
+      both actors 0/6; improve quiet holds and prevent base wandering before
+      hardware. Keep the general-purpose mixture and real driver gates separate.
+- [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
+      changes; measure critic calibration and late-hold exploration before
+      extending the reward PPO budget. Keep jerk/force protections active.
+
 - [x] Reconcile #247 with main #246 and address the posted review. Preserve
       public TAMP receipts and measured settling; throttle capability retries,
       reject missing snapshot RGB and protect recorded credential fields.
@@ -476,7 +557,7 @@ Strike through or move to a PR when done.
 
 Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
 
-### Current WBC follow-through (2026-11-15)
+### Current WBC follow-through (2026-11-16)
 
 Use the [complete setup/status](docs/rl/status_20261114.md) and
 [WBC philosophy](docs/rl/whole_body_control.md) alongside the ordered work below.
@@ -524,6 +605,28 @@ merges, measured policy improvement and hardware readiness are separate decision
       exactly reproduces earlier C1 metrics, rollout hashes and final weights.
       [Complete report](docs/experiments/mars_reference_base_exploration_20261115.md).
       Keep default scale 1.0 and the retained production source; no promotion.
+- [x] **Consolidate controller threads and development.** Use the single
+      [active-work index](docs/rl/ACTIVE_WORK.md), canonical controller thread
+      and linear #239 → #240 → #241 stack. Preserve archived handoffs and old
+      evidence. No PPO or hardware launch is implied by consolidation.
+- [x] **Make coupled control the common embodiment requirement.** Mars and
+      Stretch hand SE(3) goals may require base motion. Preserve optional masked
+      SE(2) base constraints and per-hand native gripper coordinates; distinguish
+      arm-only diagnostics from full-robot feasibility. Record this in the
+      [control philosophy](docs/rl/whole_body_control.md#coupled-control-across-embodiments).
+- [x] **Implement coupled simulator references and training interface.** Add
+      both-robot native geometry admission, compatible fixed-hand self-motion,
+      masked targets, reset/retarget cases and target/teacher trace exports.
+      Physical admission and policy training remain separate work below.
+- [ ] **Validate general coupled coverage, then optionally compare MABEL.**
+      Generate/admit full-robot paths; test free-base hand goals, fixed-world-hand
+      base motion, jointly feasible constraints, retargeting and settling on
+      Mars and Stretch. Investigate model/reference/learning failures before
+      declaring hardware limitations. If useful, pin and validate the published
+      [MABEL](https://robotmabel.github.io/website/) MuJoCo model as a separate
+      redundant-robot diagnostic, with native actions and per-hand coordinates.
+      [Comparison scope and model admission](docs/plans/general_whole_body_tracking.md#optional-mabel-diagnostic).
+      MABEL is not integrated or trained; Mars remains the first hardware target.
 - [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
       [ordered next-steps plan](docs/plans/mars_wbc_next_steps.md): isolate the
       low-level base feedback/oscillation first, validate current-velocity
@@ -557,12 +660,74 @@ merges, measured policy improvement and hardware readiness are separate decision
       now completes grasp pose and executor closure; lift planning rejects
       insufficient support reserve. Keep the original precision failures and
       all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
-- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
-      pregrasp-only primitive boundary, obtain fresh stage-specific teacher
-      admission, and mix these reachable references with general tracking.
-      Do not increase timeouts or accept the actor's 2.15 mm advance as a
-      completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
-      repair separate, with original force/support/retention thresholds.
+- [x] **Admit unloaded prefixes and both-robot coupled v1 references.** Explicit
+      native scope gives teacher 6/6 pregrasp and 6/6 open-jaw grasp-pose; coupled
+      Mars and Stretch each pass 10/10. Exact runtime `db6b6964` passes 1,421
+      source-bound tests. Preserve historical full-task-scope 5/6 results and
+      original force/support/retention thresholds. See the
+      [complete readout](docs/experiments/coupled_tracking_20261116.md).
+- [x] **Run bounded mixed-policy diagnostics.** Direct PPO (4,096 decisions)
+      stays 0/10 general and 0/6 TAMP. A separate 1,024-update teacher-action
+      bootstrap reaches 5/6 TAMP but raw general remains 0/10. Fixed-weight
+      base-rate-path ablation reaches 9/10 full-horizon general, while base-only
+      worsens. Keep all producers, modes, failures and original scores distinct.
+- [x] **Diagnose the base-only gain failure and test a structured correction.**
+      Output-only imitation regresses; 32,768-decision joint PPO preserves the
+      retained controller but leaves fresh base audits 0/16. A fixed-weight
+      sign/symmetry and declared-region intervention passes 24/24 base trajectory
+      cases, small general 10/10, larger general 6/10 and original TAMP 6/6.
+      Implement it opt-in with a v3 bundle format that old runtimes reject;
+      fresh v3-source verification passes 1,451 tests and all 62 native readouts are recorded (including failures). See the
+      [direction/formulation report](docs/experiments/base_direction_bootstrap_20261116.md).
+- [ ] **Support static lateral base goals with feasible local references.**
+      Preserve raw point-goal 2/8 as the baseline. A continuous axle-aware
+      rest-to-rest compiler, exact announced-twist feedforward, continuous XY
+      region and explicit base-only heading calibration reach 8/8 development
+      endpoints, 16/16 fresh endpoint audits and 1,480 source-bound tests. Keep
+      measured jerk and all failed reference/governor ablations visible. Still
+      validate the now-implemented moving replans and opt-in UI dragging against
+      physical support/jerk failures. Do not call timed-path tracking
+      universal endpoint navigation. See the
+      [endpoint report](docs/experiments/base_goal_reference_20261116.md).
+- [ ] **Validate continuous replans and native servo response together.**
+      Moving replans and batched UI edits are implemented. The v4 scoped law
+      improves the paired moving audit 10/12 → 12/12, preserving coupled/TAMP
+      scores and all 226 stop confirmations. Fresh regressions pass 1,538/1,538.
+      Keep it experimental: moving linear jerk increases despite improved yaw
+      jerk; larger coupled remains 6/10 and new mask handoffs 2/4. Diagnose
+      physics-rate motion and train analogous transitions without reusing audit
+      seeds; preserve outer 50/50 general/TAMP ticks and precise hand targets.
+      [Complete scoped readout](docs/experiments/scoped_wheel_feedback_20261116.md).
+- [x] **Diagnose hand accuracy with matched state/command evidence.** A fixed
+      24-episode audit finds learned base/hand feedback cancellation, not native
+      saturation, in four quiet failures. All stops confirm. Teacher and actor
+      share two modeled self-contact failures. Stronger hand terms improve final
+      error but can worsen overshoot/jerk; do not promote the diagnostic probes.
+      [Deep dive and full cases](docs/experiments/hand_tracking_accuracy_20261116.md).
+- [ ] **Align the wrapper reward and break coupled-feedback correlations.**
+      General/coupled/TAMP mixed wrappers use RewardMeter, discarding the native
+      scalar reward; tracking_precision and native endpoint shaping do not tune
+      that objective. Add explicit contract-scale coarse/fine hand tracking,
+      same-active-reference progress and pose-gated quiet credit, with force and
+      smoothness curriculum preserved. Generate analogous reachable mask and
+      independent coupled corrections outside the audit seeds. Keep regular
+      tracking and outer 50/50 general/TAMP physical ticks; compare bounded PPO
+      against teacher on full trajectories before scaling.
+- [ ] **Bind future actor exports to their actual training plants.** General
+      and TAMP currently use different contact solver settings. Use explicit
+      per-plant export/admission evidence or align the configurations before
+      claiming checkpointed agent integration; preserve source/model gates. Bind
+      shared wheel-feedback helper hashes for legacy admissions as well; the new
+      v4 admission already requires its helper.
+- [ ] **Fix base-only stability, final approach and coverage.** Preserve fine
+      reactive arm feedback, native servo limits and the outer general/task mix.
+      Current v2 starts general base acceptance at 5 cm / 5° with 15 cm required
+      travel and unchanged precise hand targets. Preserve frozen task contracts;
+      independently test commanded versus measured rates and quiet settling.
+      Its sampled geometry passes, but new physical/readout gates remain open.
+      Small nullspace motions are hand-hold diagnostics, not required-base progress.
+      Do not accept the prior actor's 2.15 mm advance as a completed 20 mm
+      support-preparation goal. Loaded retention/grasp fit remain separate.
 - [x] Prepare the exact [17-case directional curriculum and 24-case audit](docs/plans/mars_directional_curriculum.md)
       with a strict separate loader, source/control hashes, unchanged contracts
       and disjoint audit resets/motions. This is case preparation only: no
@@ -580,6 +745,11 @@ merges, measured policy improvement and hardware readiness are separate decision
       force, wheel-support and measured-stop checks. Supported open-jaw
       tracking and pregrasp do not qualify loaded manipulation. Evaluate
       complete public-tool programs and fresh audit cases before broader claims.
+- [ ] **Test SuperMimic-style reset/phase coverage** within each side of the
+      existing 50/50 general/TAMP mix: 50% uniform, 40% current low-return and
+      10% historical hard regions. Implement physically valid checkpoint resets
+      before sampling later phases; preserve audit separation and full-reset
+      evaluation. See the [research handoff](docs/plans/supermimic_controller_training.md).
 - [ ] **Evaluate a bounded differentiable world-model backend.** Use
       SuperMimic as a method reference, not a claimed Mars result. First capture
       per-tick physical, actuator/servo and executor state, executed actions,

@@ -1,0 +1,39 @@
+{
+  "format": "coupled-unloaded-ppo-protocol-v1",
+  "runtime": "db6b6964",
+  "requested_decisions": 4096,
+  "seed": 91,
+  "runner_sha256": "d6960538212a6e5834a9d637ec36f08e9da3eb80a2fc0e34f9d81f5e17c0b425",
+  "regression_receipt": "logs/eval/coupled-prefix-regressions-v3/full.receipt.json",
+  "general_admission": "logs/eval/coupled-mars-teacher-v3/references.json",
+  "tamp_admission": "logs/eval/unloaded-prefix-admission-v4/results.json",
+  "admission": "all declared cases, matching frozen source, no exceptions; source-bound full tests before PPO",
+  "initializer": "prior C1 GRU candidate actor only; fresh critic/optimizer, not continuation",
+  "initial_final_evaluations": "same ten general and six TAMP cases; train only six general and four TAMP train IDs",
+  "outer_mix": "50/50 general/task by physical ticks with episode-boundary deficits",
+  "learning_rate": "linear 3e-5 to 1e-5",
+  "epochs": 3,
+  "batch_size": 64,
+  "rollout_decisions": 256,
+  "randomization_scale": 0,
+  "wandb": "offline local run, no credentials printed",
+  "automatic_extensions": 0,
+  "checkpoint_selection": "initial and declared final only",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "regression_job": "20261116_090302_b0b597",
+  "native_job": "20261116_090302_00e921",
+  "setup_attempts": [
+    {
+      "job": "20261116_091011_8ddeca",
+      "new_ppo_steps": 0,
+      "reason": "preflight read compact rows rather than bound full command rows; failed closed"
+    },
+    {
+      "job": "20261116_092148_cb1313",
+      "new_ppo_steps": 0,
+      "reason": "mixture constructor requires ordered weight vector; caught before reset or inference"
+    }
+  ],
+  "runner": "run-v1c.py"
+}

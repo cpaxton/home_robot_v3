@@ -1,0 +1,42 @@
+{
+  "format": "coupled-direction-ppo-protocol-v2",
+  "runtime_revision": "57e8e73b",
+  "seed": 95,
+  "initializer": "logs/eval/coupled-base-feedback-v1/actor",
+  "rejected_initializer": "base-direction-bootstrap-v1/final/actor",
+  "decisions": 32768,
+  "rollout_steps": 256,
+  "critic_only_initial_decisions": 512,
+  "actor_learning_rate": [
+    2e-05,
+    5e-06
+  ],
+  "critic_learning_rate": 0.001,
+  "initial_action_std": 0.02,
+  "epochs": 3,
+  "batch_size": 64,
+  "clip": 0.05,
+  "target_kl": 0.01,
+  "entropy_weight": 0.0001,
+  "mixture": "50/50 general/TAMP by physical ticks; general 50/50 eight directional-base/six existing coupled cases",
+  "training_horizon_s": 12,
+  "evaluation_horizon_s": 25,
+  "teacher_actions_in_loss": false,
+  "history": "unchanged full measured window",
+  "reward": "existing grouped tracking/stability/contact reward, including coarse v2 base region for new base cases; no new reward coefficients",
+  "admission": "fresh native teacher must pass all fourteen general training references at 12s plus six unchanged TAMP references; same 1433-test source receipt",
+  "evaluation": "exact initializer anchor reused by checksum; fixed final on v1/v2 general, 16 frozen base audits, original six TAMP cases",
+  "intermediate_checkpoint_selection": false,
+  "audit_training": false,
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "trigger": "base-output-only imitation failed; retain stronger 9/10 general and 6/6 TAMP initializer, optimize coupled control jointly",
+  "runner_sha256": "2b1f6931738f0f015ed215ada86f8aaed09f23ed5e60ae726f004aa202fc69a6",
+  "previous_preflight": {
+    "job": "20261116_113507_314365",
+    "training_horizon_s": 10,
+    "ppo_decisions": 0,
+    "reason": "one teacher training case needs >10s; preserve failed horizon admission"
+  }
+}

@@ -738,3 +738,273 @@ planning and grasp-wrench validation, with unchanged physical limits. Complete
 provenance and stage metrics are in \texttt{mars\_task\_arrival\_v1/results.json}.
 The corresponding runtime passes 1,330/1,330 fresh source-bound software
 regressions; those checks do not establish successful loaded control.
+
+A subsequent unloaded-stage extension stops public-tool execution after the
+grasp pose, before closure. Twelve fixed teacher attempts give 5/6 pregrasp and
+5/6 grasp-pose completions, with all stops confirmed and no close or loaded
+motion commands. The five successful grasp endpoints remain within the original
+3\,mm/0.02\,rad contract after quiet hold and stopping. All six default pregrasp
+readouts reproduce fourteen archived physical/outcome fields exactly; paired
+traces match up to the first grasp command. The remaining case is rejected by
+prospective loaded-lift planning before either selected boundary. Thus execution
+stage separation alone does not establish independently admitted unloaded
+references; both full-cohort stage readouts remain closed, with no PPO update.
+Compact outcomes and parity hashes are in
+\texttt{mars\_unloaded\_grasp\_admission\_v1/results.json}.
+
+
+\paragraph{Coupled reference and learning diagnosis.}
+Explicit unloaded-prefix planning subsequently removes the unrequested lift
+prerequisite while preserving geometry/support checks for requested motion.
+At revision \texttt{db6b6964}, the original six cases complete 6/6 pregrasp and
+6/6 open-jaw grasp-pose teacher operations, with all twelve stops confirmed.
+These are terminal pose operations requiring simulator reset, not grasp/lift
+handoffs. Independently, ten coupled FK-generated references per robot give
+10/10 teacher completions for both Mars and Stretch. Worst final active-hand
+position errors are 0.125\,mm and 1.55\,mm, respectively. Source-bound software
+regressions pass 1,421 tests. Stretch's static support polygon includes its
+caster; dynamic unloading metrics currently cover its drive wheels.
+
+A 4,096-decision direct PPO pilot remains at 0/10 general and 0/6 unloaded
+TAMP success. Its approximately 53/47 general/task physical-tick mixture reaches
+only five of six general training cases. A separate 1,024-update, train-label-only
+teacher-action bootstrap reaches 5/6 TAMP grasp-pose completions, but 0/10 raw
+general completions because of settling and self-contact failures. Late yaw
+commands reverse on every 50\,ms tick. On the same full-horizon ten-case cohort,
+removing only the learned base output rows' instantaneous joint/base-rate path
+raises success to 9/10 without changing arm rate feedback or weights. The
+base-only case worsens; this is an experimental ablation, not a promoted actor.
+A separate explicit executor-hold diagnostic yields 10/10 and is not counted as
+raw actor stability. Complete cases and provenance are retained in
+\texttt{coupled\_tracking\_v1/results.json}.
+
+A versioned general benchmark starts with a 5\,cm/$5^\circ$ base region while
+retaining 3\,mm/0.02\,rad hand accuracy. Required base paths travel 15\,cm;
+small nullspace cases are separately labeled hand-hold diagnostics. Historical
+benchmarks and task-specific base contracts remain unchanged. This operating
+region prioritizes reactive arm precision without claiming that finer wheeled
+base control is impossible. Physically valid phase/reset coverage, inspired by
+SuperMimic's reset sampling, remains a proposed experiment rather than an
+implemented dynamics-model training backend.
+
+The serialized ablation at \texttt{57e8e73b} reproduces 9/10 on the original
+small cohort, completes 5/10 on the larger v2 cohort, and completes 6/6 original
+open-jaw TAMP grasp-pose operations with all stops confirmed. On v2, the teacher
+completes 8/10 Mars and 9/10 Stretch cases; geometric admission alone does not
+establish dynamic tracking. These fixed deterministic cohorts are not pooled
+into reliability or hardware claims. Complete failures and setup-attempt
+provenance are retained in \texttt{coupled\_tracking\_v2/results.json}.
+
+\paragraph{Base-only feedback structure.}
+A separate 1,024-update base-output-only imitation fit regresses despite
+bitwise frozen arm/gripper/context parameters; changed base motion alters the
+physical hand trajectory. A subsequent 32,768-decision joint PPO run preserves
+9/10 small general, 5/10 larger general and 6/6 unloaded TAMP completions, but
+leaves sixteen base-only audit cases at 0/16. A local derivative diagnostic
+finds that the base-only yaw-error response remains negative. These outcomes
+are retained rather than treated as evidence that more identical PPO is enough.
+
+An opt-in feedback parameterization retains learned magnitudes while imposing
+base-only restoring signs, forward/reverse lateral symmetry and an explicit
+coarse hold region. Active-hand and partial-base commands retain the original
+coupled mapping. No teacher action, private joint witness or output filter is
+added. With unchanged parameter tensors, the source-bound candidate completes
+24/24 base trajectory cases, 10/10 small general, 6/10 larger general, 6/6
+open-jaw TAMP operations and 4/4 base-to-hand handoffs during motion. These
+are architectural/control results, not a learned-policy improvement estimate
+or a global stability certificate. Static endpoint commands pass only 2/8:
+position reaches the accepted region but lateral/diagonal goals fail final
+heading convergence. The configured actor format is versioned so older runtimes
+reject unsupported feedback semantics. Complete cases and source provenance
+are in \texttt{base\_direction\_bootstrap\_v1/} and
+\texttt{base\_navigation\_feedback\_v1/}. No loaded-task or hardware qualification
+follows from this development result.
+
+\paragraph{Feasible base endpoint references.}
+A lateral endpoint is not an executable sideways differential-drive reference.
+We therefore test continuous axle-aware turn--drive--turn references, using
+forward/reverse selection, wrapped final turns and rest-to-rest jerk-limited
+S-curves under the robot-profile speed and acceleration limits. The explicit
+experimental reference jerk bound is not a hardware damage rating. A reference
+alone remains at 2/8 development endpoint completions; explicit announced-twist
+feedforward reaches 4/8. Keeping the coarse XY region active during motion
+reaches 6/8, and a development-calibrated two-times heading correction reaches
+8/8 under unchanged 25-second, 5\,cm, 5-degree and measured-hold contracts.
+A separate sixteen-endpoint audit completes 16/16, with worst final error
+25.01\,mm / 0.05051\,rad and worst recorded hold drift 0.209\,mm. Measured
+yaw jerk nevertheless reaches 70.51\,rad/s$^3$ during a turn; reference C2
+bounds do not certify measured smoothness or hardware safety.
+All variants use unchanged learned parameter tensors; this is a control
+formulation/calibration result, not a PPO learning gain. Active-hand mappings
+are preserved. These rest-to-rest experiments do not establish moving-start
+retarget continuity, force/jerk qualification, loaded manipulation or hardware
+readiness. Complete producer-separated cases are retained in
+\texttt{base\_goal\_reference\_v1/}.
+
+\paragraph{Moving goals and native feedback diagnosis.}
+Moving base-only replans match the announced pose, velocity and acceleration,
+brake with bounded reference jerk, and join a new feasible reference at rest.
+A bounded past-reference tail preserves the negative preview and derivative
+sample at the replacement boundary. Geometry rejection retains the old
+schedule; no physics, history or fault reset occurs. The initial fixed audit
+completes 10/12 moving-goal cases and three direct viewer/checkpoint cases.
+Both failures unload the caster during reverse motion. Matched unchanged-plan
+replays reproduce the same gaps, separating an existing servo/plant failure
+from reference retargeting. Removing extra body-velocity proportional feedback
+resolves the reused reverse cases but regresses coupled hand accuracy; it is
+rejected as a global replacement. Native wheel servos, support/force guards,
+velocity limits and learned tensors are unchanged. An unsupported axis/mask
+override passes fifteen diagnostic cases (two reverse replays, three viewer
+cases and ten small-general cases); larger coupled cases and mask transitions
+remain untested under that override. Fresh source-bound regressions pass
+1,520 tests. This work does not establish loaded-task or hardware qualification.
+Complete producer-separated outcomes are retained in
+\texttt{base\_goal\_replan\_v1/}.
+
+
+\paragraph{Versioned mask-scoped native execution.}
+An opt-in Mars execution setting selects separate forward/yaw proportional
+gains only while every base constraint is active and the hand target is
+inactive. Active-hand and partial-base commands retain the declared fallback
+gain. Selection occurs at the physics boundary and leaves the native speed,
+slew, force and stop guards in place. Actor-only v4 bundles bind the scope,
+gains, feedback measurement and physical slew settings in both the manifest
+and weights; unsupported older runtimes reject the format. This is an
+execution-law change with fixed learned tensors, not an RL training result.
+
+A matched 113-case-per-contract readout improves moving-goal success from
+10/12 to 12/12 while preserving 24/24 base paths, 24/24 compiled endpoints,
+10/10 small coupled cases, 6/10 larger coupled cases, 6/6 unloaded TAMP prefixes
+and 4/4 original base-to-hand handoffs. All 226 stops confirm. New repeated
+mask handoffs remain 2/4. Moving-audit yaw jerk decreases from 150.09 to
+109.63 rad/s$^3$, but linear jerk increases from 20.68 to 28.10 m/s$^3$.
+Fresh source-bound regressions pass 1,538 tests. The setting remains experimental;
+loaded-task and hardware qualification are not established. Complete outcomes
+and separated producer identities are in \texttt{scoped\_wheel\_feedback\_v1/}.
+
+
+\paragraph{Hand-accuracy failure attribution.}
+A fixed 24-episode diagnostic replays nine selected actor/teacher cases and six
+feedback interventions without learning or changing physics. Nine actor replays
+exactly preserve the preceding primary metrics, and all 24 stops confirm. Four
+quiet misses exhibit nearly opposite learned base/hand feedback vectors; their
+small net commands preserve 4.61--11.78 mm hand errors despite available joint
+range and actuator authority. Whole-body local Jacobians have rank six versus
+arm-only rank five. Doubling hand-error terms reduces three final errors from
+6.26/11.78/10.09 mm to 1.56/3.88/3.14 mm, but increases some transient error and
+jerk; removing base terms creates a new contact stop. These are diagnostic
+interventions, not replacement policies. Two free-base cases also self-contact
+under both actor and teacher while admitted nominal witnesses remain separated.
+The original mixed-training wrapper replaces the native scalar objective with
+fixed-scale pose/velocity terms, motivating the paired reward study below. Complete producer-separated evidence is in
+\texttt{hand\_tracking\_deep\_dive\_v1/}.
+
+
+\paragraph{Paired wrapper-reward PPO pilot.}
+A versioned, opt-in reward combines coarse/fine hand pose credit, pose-gated
+velocity credit and measured progress against the same active goal. Both this
+profile and a legacy-reward control start from identical retained actor and
+fresh critic states, with matched first observations/actions. Each trains for
+16,384 decisions, including 1,024 critic-only decisions, using a 50/50
+general/TAMP physical-tick mixture; the training seed and final checkpoint
+budget are fixed. Fresh source-bound regressions pass 1,563 tests. On twelve
+training and twelve disjoint audit cases, retained/new/legacy scores are
+20/24, 18/24 and 19/24; existing larger coupled scores are 6/10, 6/10 and 7/10.
+All three retain 6/6 unloaded TAMP prefixes, and all 120 actor evaluation stops
+confirm. The legacy run resolves one old 10.09 mm reverse-motion miss to
+0.0154 mm but loses accuracy elsewhere. Each controller retains the same three
+contact-failure identities; the new reward increases the existing-coupled peak
+contact load from 34.65 to 38.22 N and peak yaw jerk from 19.57 to
+31.60 rad/s$^3$. Neither candidate is promoted. This one-seed comparison supports
+further objective/optimizer ablations, not a policy-performance or hardware
+qualification claim. Compact cases and exact producers are in
+\texttt{wrapper\_reward\_training\_v2/}.
+
+
+\paragraph{Finite contract and critic audit.}
+The tracking wrappers previously scored and physically stopped finite deadlines
+while bootstrapping their final observations. They now terminate those contracts;
+genuine collection truncations still bootstrap. An optional independent value
+budget separates critic fitting from actor KL stopping. Fresh source-bound tests
+pass 1,574 cases. With original rewards, matched initial states and 16,384
+decisions per arm, corrected joint/independent PPO scores are 19/24 and 20/24
+new cases (retained 20/24), 6/10 and 7/10 existing coupled (retained 6/10),
+and 6/6 unloaded TAMP prefixes each. All 120 actor stops confirm. Independent
+fitting receives all 720 planned critic updates and reduces worst active-hand
+endpoint error from 18.19 to 13.10 mm, but worst yaw jerk rises from 27.80 to
+53.36 rad/s$^3$. Neither candidate is promoted. A separate frozen-actor
+stationary-reference noise probe yields 0/8 to 3/8 stochastic successes without
+changing mean commands; it motivates a training ablation, not a deterministic
+policy improvement claim. Compact producers and complete case outcomes are in
+\texttt{finite\_critic\_pilot\_v2/} and
+\texttt{critic\_architecture\_audit\_v1/}.
+
+
+\paragraph{Stationary-reference exploration ablation.}
+A matched-source pair isolates a 0.125 motion-noise scale for constant
+current/future references. Both complete 16,384 decisions under unchanged
+reward and guards; fresh source-bound regressions pass 1,585 tests. The ordinary
+arm exactly reproduces the preceding independent-critic weights. Reduced noise
+increases stochastic general-episode completions from 0/20 to 13/20, but mean
+policy scores fall from 20/24 to 19/24 new cases and 7/10 to 6/10 existing
+coupled, while both preserve 6/6 unloaded TAMP prefixes. Contact failures
+increase from three to five across the two tracking cohorts, despite all 120
+actor stops confirming. Worst active-hand endpoint error rises from 13.10 to
+19.59 mm and base linear jerk from 5.89 to 22.26 m/s$^3$. The candidate is
+rejected and conditioned exploration remains disabled by default. These audits
+have been inspected repeatedly for development; fresh confirmatory cases are
+required before qualification. Complete identities and producers are in
+\texttt{quiet\_reference\_pilot\_v1/}.
+
+
+\paragraph{Isolated hand-pose priority.}
+A single-factor weight increase from one to four uses ordinary exploration and
+unchanged remaining rewards/guards. Exact initial policy/observations/first
+actions match the explicitly reused control. Both final checkpoints have 16,384
+decisions; new-case success changes 20/24 to 19/24, existing coupled remains
+7/10 and unloaded TAMP 6/6. The same three contact failures persist. Active-hand
+median endpoint error changes 0.957 to 1.107 mm, 90th percentile 9.342 to
+7.002 mm, worst 13.10 to 19.83 mm. Worst base linear jerk increases 5.89 to
+7.68 m/s$^3$ and contact load 34.96 to 35.92 N despite lower yaw jerk.
+The candidate is not promoted. Only two complete episodes per hand trajectory
+occur in the short control run, motivating longer lower-rate checkpoint
+fine-tuning without further reward changes. Complete identities, paired plot
+and exact producers are in \texttt{hand\_priority\_pilot\_v1/}.
+
+
+\paragraph{Longer fine-tuning and fresh confirmation.}
+Restoring actor, critics and Adam state, 65,536 additional decisions use actor
+LR $10^{-5}$ to $10^{-6}$ with unchanged reward/exploration and explicit fresh
+physics/RNG reset. All 31 saved optimizer clocks preserve source history.
+The actual physical-tick mixture is 40.02\% hand-active general, 9.93\% base-only
+and 50.04\% unloaded TAMP prefixes. Reused development changes 20/24 to 19/24,
+existing coupled remains 7/10 and TAMP 6/6; stress force/jerk tradeoffs persist.
+A separately frozen 24-case confirmation set gives 12/24 source versus 16/24
+continued successes (teacher 17/24), safety-flagged episodes four versus one,
+and wheel-lift episodes two versus zero. All 72 stops confirm and initial-state,
+configuration and reference hashes match. Single-stage coupled is only 4/8 and
+nominally anchored two-stage goal changes 0/4, versus teacher 6/8 and 2/4.
+Peak linear/yaw jerk increases from 14.88/65.57 to 28.68/78.54 in respective SI
+units. These are scoped generalization gains, not promotion or hardware safety
+qualification. Complete cases and targets are in
+\texttt{fresh\_tracking\_confirmation\_v1/}; current and planned task shares are
+maintained in \texttt{docs/rl/TRAINING\_MIXTURE.md}.
+
+\paragraph{Generic goal handoffs and hardware separation.}
+A versioned goal-change curriculum allocates 30/10/10/50 percent of physical
+control ticks to regular hand tracking, base tracking, nominal two-stage goal
+changes and unloaded TAMP prefixes. Eight training and eight separate audit
+cases retain continuous nominal pose/velocity/acceleration joins, measured
+history and fault latches. Teacher/source baseline is 13/16 versus 9/16, all
+32 stops confirm, and the teacher has one safety-flagged episode. Frozen-source
+regressions pass 1,604 tests before a fixed 131,072-decision continuation;
+final policy outcomes are pending. Task selection and grasp/release prerequisites
+remain planner-owned, reference feasibility/timing compiler-owned, tracking
+policy-owned and watchdog/stop/servo semantics executor-owned.
+A passive Herman console verifies live head stereo and telemetry with local
+masked pose previews but no motor command endpoint. Source-timed feedback and
+complete base-velocity checks are implemented locally; verified physical SI
+units, motor-read validity, servo transfer and robot-side stopping remain
+prerequisites for deployment. Live video and simulated success do not qualify
+a hardware controller. The responsibility and deployment ledger is
+\texttt{docs/rl/CONTROLLER\_DEPLOYMENT.md}.

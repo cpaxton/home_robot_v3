@@ -1,0 +1,13 @@
+{
+  "channels": [
+    "arm",
+    "odom",
+    "hand"
+  ],
+  "camera_channels": [
+    "head_right",
+    "head_left"
+  ],
+  "hardware_motion_commands_sent": 0,
+  "scope": "15s subscriber-only SSH probe; no driver starts or robot file changes"
+}

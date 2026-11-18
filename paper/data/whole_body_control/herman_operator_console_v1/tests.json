@@ -1,0 +1,25 @@
+{
+  "format": "herman-console-targeted-tests-v1",
+  "tests": 116,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "junit_sha256": "7dcda5036713d60391b9015fe603df13c193be6ba493f9395dc219c653bd6a5a",
+  "sources": {
+    "src/emet/cli.py": "b3488b02074548dd497cfc9124f0adc3ee4f5e4ca0429c520fa2f368bc72839c",
+    "src/emet/visualization/operator_console.py": "4035470d8e19b7c28d8961b94356f17eaf23832fed1169c2b0480f4993ffa866",
+    "src/emet/visualization/operator_console.html": "067df8fe7dc11da9b21e68390ef77fc3475611c21722b6540484304312fa9e42",
+    "src/emet/robots/innate_mars/passive_relay.py": "d32682ef26b7f3c0ee807f4905d8cc47bbfd4a234834b4de6ee698f2d0ae0354",
+    "src/emet/robots/innate_mars/passive_ssh.py": "59b59c8c09e20657453af60ce1ffd48d34b09759a7b4c76e5b745a307112da00",
+    "src/emet/robots/innate_mars/control_session.py": "e4426e2cc9dfb8d2caf7e7342130e86e61a1a7448120e943b471eaf92b8af24c",
+    "src/innate_mars_bridge/innate_mars_bridge/feedback.py": "23c4732e4368630d428965d8f244dc90ecbaf3c2a392b2534b70b9f16f5f6181",
+    "src/innate_mars_bridge/innate_mars_bridge/remote/ros.py": "186b6f2240d5174a5b88fd3d604f76d70883bef7c0a4e8309f66c496336000ab",
+    "src/innate_mars_bridge/innate_mars_bridge/remote/server.py": "369ec026d42fc9fd9784b01fccbb1a2cfe92de327475d816fde63de88f4fd3d3",
+    "src/test/robots/test_mars_control_session.py": "ffbc10244b4d3d35ca6377935787bed0123899a55a5f9dc9d112498baf185e9c",
+    "src/test/bridge/test_innate_mars_feedback.py": "16bfff8f77245379b0bf3c971d94f063ae22b8f766a48eeed02cca77944e70ed",
+    "src/test/visualization/test_operator_console.py": "2e247d73b5793a176fd4fff344e74037c6eb8a0adec01967b935953dfc3682a4",
+    "src/test/cli/test_cli.py": "430685bbaa340f4a5b8478f6704822054548cab70ada4db153437b6a41f96205"
+  },
+  "hardware_motion_commands_sent": 0,
+  "scope": "targeted HTTP/feedback/session/motion-boundary/CLI regressions; not the full frozen simulator gate or real stop validation"
+}

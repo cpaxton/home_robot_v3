@@ -1,0 +1,33 @@
+"""Read-only nominal clearance and reconstructed actual-pose checks; no rollouts."""
+import gzip,hashlib,json
+from pathlib import Path
+import mujoco,numpy as np
+from scipy.spatial.transform import Rotation
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.manipulation.whole_body_observation import pose_rotation
+from emet.rl.regression_gate import ROOT
+
+out=ROOT/'logs/eval/hand-tracking-deep-dive-v1';report={'scope':'static private-data geometry queries; no additional episodes','pairs':['rl_link3','rl_base_link'],'source_script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cases':[]}
+for index in (6,8,15,17):
+ with gzip.open(out/f'episode-{index:02d}.json.gz','rt') as stream:raw=json.load(stream)
+ row=raw['case'];case=row['case'];env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+ try:
+  env.reset();c,m,d=e.control,e.model,e.data;path=c.task_trajectory;ids=[m.geom(name).id for name in report['pairs']]
+  nominal=[]
+  for time in np.r_[np.arange(0,path.end,.01),path.end]:
+   base,joints=path.coordinates(time);path.fk(base,joints);distance=mujoco.mj_geomDistance(m,path.fk.data,*ids,1.,None)
+   nominal.append({'time_s':float(time),'distance_m':float(distance)})
+  scratch=mujoco.MjData(m);address=int(m.jnt_qposadr[m.body_jntadr[c.base]]);actual=[];max_orientation_error=0.
+  for state in raw['trace'][::5]+raw['trace'][-5:]:
+   scratch.qpos[:]=d.qpos.copy()
+   for group,value in zip(c.q,state['joint_position'],strict=True):scratch.qpos[group]=value/len(group)
+   rotation=Rotation.from_euler('xyz',state['body_tilt_rad']);xyzw=rotation.as_quat();scratch.qpos[address:address+3]=0;scratch.qpos[address+3:address+7]=xyzw[[3,0,1,2]]
+   mujoco.mj_kinematics(m,scratch)
+   scratch.qpos[address:address+3]=np.array(state['hand'][:3])-scratch.xpos[c.ee].copy();mujoco.mj_kinematics(m,scratch)
+   np.testing.assert_allclose(scratch.xpos[c.ee],state['hand'][:3],atol=1e-10)
+   difference=Rotation.from_matrix(pose_rotation(state['hand'])@scratch.xmat[c.ee].reshape(3,3).T).magnitude();max_orientation_error=max(max_orientation_error,float(difference));assert difference<1e-8
+   actual.append({'tick':state['tick'],'time_s':state['physics_time_s'],'distance_m':float(mujoco.mj_geomDistance(m,scratch,*ids,1.,None))})
+  entry={'episode':index,'id':case['id'],'controller':row['controller'],'nominal_minimum':min(nominal,key=lambda r:r['distance_m']),'actual_sampled_minimum':min(actual,key=lambda r:r['distance_m']),'reconstructed_hand_rotation_max_error_rad':max_orientation_error,'nominal':nominal,'actual':actual,'original_contact_peak':row['peak_contact']}
+  report['cases'].append(entry);print(json.dumps({k:v for k,v in entry.items() if k not in ('nominal','actual','original_contact_peak')}),flush=True)
+ finally:env.close()
+(out/'geometry.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')

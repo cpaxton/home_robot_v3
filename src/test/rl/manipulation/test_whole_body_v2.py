@@ -1,5 +1,6 @@
 """Test actual isolation, derivative bounds, PPO returns and tick scheduling."""
 
+import json
 from dataclasses import replace
 
 import gymnasium as gym
@@ -8,6 +9,7 @@ import pytest
 import torch
 from gymnasium import spaces
 
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
 from emet.rl.manipulation.env import ManipulationConfig
 from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
 from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, combine_advantages, grouped_gae
@@ -119,9 +121,10 @@ def test_separate_advantage_normalization_removes_reward_unit_scaling():
 
 
 @pytest.mark.parametrize("base_scale", [1.0, 0.1])
-def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale):
+@pytest.mark.parametrize("hold_scale", [1.0, 0.125])
+def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale, hold_scale):
     torch.manual_seed(21)
-    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=base_scale)
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=base_scale, quiet_reference_std_scale=hold_scale)
     obs = observation(count=16)
     obs["preview"][:, :, 7] = 0.01
     with torch.no_grad():
@@ -149,6 +152,69 @@ def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale):
 def test_base_exploration_rejects_invalid_scales(value):
     with pytest.raises(ValueError, match="exploration scale"):
         MultiCriticPolicy(stationary_base_std_scale=value)
+
+
+@pytest.mark.parametrize("value", [0, -0.1, 1.01, float("nan"), float("inf"), True])
+def test_hold_exploration_rejects_invalid_scales(value):
+    with pytest.raises(ValueError, match="exploration scale"):
+        MultiCriticPolicy(quiet_reference_std_scale=value)
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_hold_noise_uses_reference_and_preserves_correction_gripper_and_likelihood(robot):
+    torch.manual_seed(52)
+    model = MultiCriticPolicy(robot=robot, hidden=16, quiet_reference_std_scale=0.125)
+    with torch.no_grad():
+        model.actor.gain.weight.normal_(0, 0.1)
+    obs = observation(robot, count=11)
+    f, pf = model.actor.encoder.fields, model.actor.encoder.preview_fields
+    obs["preview"][:, :, pf["hand_error"]][..., 0] = 0.01
+    obs["motion"][1, 8] = 1e-12  # even tiny announced hand rotation is motion
+    obs["preview"][2, -1, pf["hand_error"].start + 1] = 1e-12
+    obs["preview"][3, -1, pf["base_error"].start] = 1e-12
+    obs["preview"][4, -1, pf["hand_mask"]] = 0  # upcoming activity change
+    obs["preview"][5, -1, pf["base_mask"]] = 0
+    obs["preview"][6, :, pf["hand_mask"]] = 0  # current token/preview disagree
+    for name in ("hand_mask", "base_mask"):
+        obs["history"][7, :, f[name]] = 0
+        obs["preview"][7, :, pf[name]] = 0  # no active motion goal
+    obs["history"][8, :, f["base_mask"]] = 0
+    obs["preview"][8, :, pf["base_mask"]] = 0  # free base still assists hand
+    obs["history"][9, :, f["base_velocity"]] = 0.1
+    obs["preview"][9, :, pf["hand_error"]][..., 0] = 0.2  # far/moving is still correctable
+    obs["history"][10, :, f["hand_mask"]] = 0
+    obs["preview"][10, :, pf["hand_mask"]] = 0  # base-only hold
+    obs["preview"][0, 0, pf["hand_error"]] = 0.2  # past motion is not future motion
+    expected_condition = [True, False, False, False, False, False, False, False, True, True, True]
+    assert model.quiet_reference_condition(obs).tolist() == expected_condition
+    mean = model.actor(obs).detach().clone()
+    expected_std = model.log_std.clamp(-6, 0).exp().expand_as(mean).clone()
+    expected_std[torch.tensor(expected_condition), :-1] *= 0.125
+    dist = model.distribution(obs)
+    torch.testing.assert_close(dist.mean, mean, rtol=0, atol=0)
+    torch.testing.assert_close(dist.scale, expected_std, rtol=0, atol=0)
+    assert torch.count_nonzero(mean[9, :-1]) > 0  # no motion cutoff or pose-error deadband
+    action = dist.sample() * model.actor.action_mask(obs)
+    log, entropy, _ = model.evaluate(obs, action)
+    expected = torch.distributions.Normal(mean, expected_std)
+    mask = model.actor.action_mask(obs)
+    torch.testing.assert_close(log, (expected.log_prob(action) * mask).sum(-1), rtol=0, atol=0)
+    torch.testing.assert_close(entropy, (expected.entropy() * mask).sum(-1), rtol=0, atol=0)
+    (-log.mean()).backward()
+    assert model.log_std.grad is not None and torch.isfinite(model.log_std.grad).all()
+
+
+def test_hold_and_base_noise_options_use_minimum_and_do_not_change_exported_actor():
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=0.1, quiet_reference_std_scale=0.125)
+    control = MultiCriticPolicy(hidden=16)
+    control.load_state_dict(model.state_dict(), strict=True)
+    obs = observation(count=1)
+    obs["preview"][:, :, 7] = 0.01
+    torch.testing.assert_close(control.actor(obs), model.actor(obs), rtol=0, atol=0)
+    expected = model.log_std.clamp(-6, 0).exp()[None].clone()
+    expected[:, :2] *= 0.1
+    expected[:, 2:-1] *= 0.125
+    torch.testing.assert_close(model.distribution(obs).scale, expected, rtol=0, atol=0)
 
 
 def test_default_exploration_keeps_identical_seeded_samples_and_probabilities():
@@ -237,6 +303,61 @@ def test_actor_only_bundle_roundtrip_and_rejects_privileged_inputs(tmp_path):
     np.testing.assert_array_equal(bundle(obs), np.zeros(8))
     bundle.bind_reference(lambda: obs["motion"])
     np.testing.assert_array_equal(bundle({k: v for k, v in obs.items() if k != "motion"}), np.zeros(8))
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_base_rate_ablation_preserves_arm_feedback_and_reference_authority(robot):
+    legacy = WholeBodyActor(robot)
+    candidate = WholeBodyActor(robot, base_rate_feedback=False)
+    with torch.no_grad():
+        gains = legacy.gain.bias.reshape(-1, legacy.feedback_width)
+        gains[:, 24 : 24 + legacy.encoder.profile.arm_size + 6] = 1
+        gains[:, -9:] = 1
+        candidate.load_state_dict(legacy.state_dict())
+    obs = observation(robot)
+    obs["history"][..., legacy.encoder.fields["proprio/velocities"]] = 0.01
+    obs["history"][..., legacy.encoder.fields["base_velocity"]] = 0.01
+    original, changed = legacy(obs), candidate(obs)
+    assert torch.count_nonzero(original[:, :2]) == original.shape[0] * 2
+    torch.testing.assert_close(changed[:, :2], torch.zeros_like(changed[:, :2]), rtol=0, atol=0)
+    torch.testing.assert_close(changed[:, 2:], original[:, 2:], rtol=0, atol=0)
+    assert torch.count_nonzero(changed[:, 2:-1]) > 0
+    # Removing the direct rate path does not remove announced-motion authority.
+    obs["motion"][:, 0] = 0.1
+    assert torch.count_nonzero(candidate(obs)[:, :2]) == original.shape[0] * 2
+
+
+@pytest.mark.parametrize("rate_feedback", [True, False])
+def test_bundle_pins_base_feedback_behavior_and_rejects_manifest_only_change(tmp_path, rate_feedback):
+    cfg = replace(ManipulationConfig(), retention_context=True, trajectory_preview=True, action_mode="direct_velocity")
+    actor = WholeBodyActor(base_rate_feedback=rate_feedback)
+    destination = tmp_path / "actor"
+    export_actor(actor, destination, cfg, "test-model", steps=0)
+    assert WholeBodyBundle(destination).actor.base_rate_feedback is rate_feedback
+    path = destination / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["base_rate_feedback"] = not rate_feedback
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="base feedback contract"):
+        WholeBodyBundle(destination)
+
+
+def test_legacy_bundle_without_feedback_metadata_preserves_original_actor(tmp_path):
+    import hashlib
+
+    cfg = replace(ManipulationConfig(), retention_context=True, trajectory_preview=True, action_mode="direct_velocity")
+    destination = tmp_path / "legacy"
+    export_actor(WholeBodyActor(), destination, cfg, "test-model", steps=0)
+    path = destination / "policy.zip"
+    weights = torch.load(path, weights_only=True)
+    weights.pop("base_rate_feedback")
+    torch.save(weights, path)
+    manifest_path = destination / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.pop("base_rate_feedback")
+    manifest["weights_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+    assert WholeBodyBundle(destination).actor.base_rate_feedback is True
 
 
 class TickEnv(gym.Env):
@@ -489,3 +610,259 @@ def test_exported_v2_actor_loads_through_source_bound_tamp_backend(tmp_path):
         assert policy.calls == 1 and policy.admission["simulation_only"]
     finally:
         env.close()
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+@pytest.mark.parametrize("mode", ["active_hand", "partial_base"])
+@pytest.mark.parametrize(
+    "config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)]
+)
+def test_navigation_structure_preserves_coupled_and_partial_mask_actions(robot, mode, config):
+    torch.manual_seed(82)
+    original = WholeBodyActor(robot, base_rate_feedback=False)
+    structured = WholeBodyActor(robot, base_rate_feedback=False, base_navigation_feedback=config)
+    with torch.no_grad():
+        original.gain.weight.normal_(0, 0.1)
+        original.gain.bias.normal_(0, 0.2)
+        structured.load_state_dict(original.state_dict())
+    obs = observation(robot)
+    pf, f = original.encoder.preview_fields, original.encoder.fields
+    obs["preview"][..., pf["base_error"]] = torch.tensor([0.1, 0.03, -0.2])
+    obs["preview"][..., pf["hand_error"]][..., 0] = 0.01
+    if mode == "partial_base":
+        obs["history"][..., f["hand_mask"]] = 0
+        obs["preview"][..., pf["hand_mask"]] = 0
+        obs["history"][..., f["base_mask"]][..., 2] = 0
+    torch.testing.assert_close(structured(obs), original(obs), rtol=0, atol=0)
+
+
+def navigation_observation(actor):
+    obs = observation(actor.robot, count=1)
+    obs["history"][..., actor.encoder.fields["hand_mask"]] = 0
+    obs["preview"][..., actor.encoder.preview_fields["hand_mask"]] = 0
+    obs["preview"][..., actor.encoder.preview_fields["hand_error"]] = 0
+    return obs
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_navigation_structure_corrects_heading_sign_and_holds_inside_declared_region(robot):
+    actor = WholeBodyActor(robot, base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        for offset in (0, 12):
+            gain[0, offset] = -3
+            gain[1, offset] = -20  # longitudinal-to-yaw leakage must disappear
+            gain[1, offset + 1] = -4
+            gain[1, offset + 2] = -2
+    obs = navigation_observation(actor)
+    error = actor.encoder.preview_fields["base_error"]
+    obs["preview"][..., error] = torch.tensor([0.01, 0.001, 0.01])
+    torch.testing.assert_close(actor(obs), torch.zeros(1, 8), rtol=0, atol=0)
+    for sign in (-1, 1):
+        obs["preview"][..., error] = torch.tensor([0.0, 0.0, sign * 0.2])
+        assert actor(obs)[0, 1] * sign > 0
+        assert actor(obs)[0, 0] == 0
+        obs["preview"][..., error] = torch.tensor([sign * 0.1, 0.0, 0.0])
+        assert actor(obs)[0, 0] * sign > 0
+        assert actor(obs)[0, 1] == 0
+
+
+def test_navigation_structure_retains_signed_lateral_correction_during_announced_motion():
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        gain[1, 1] = gain[1, 13] = -4
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.0, 0.01, 0.0])
+    for sign in (-1, 1):
+        obs["motion"][0, 0] = sign * 0.1
+        assert actor(obs)[0, 1] * sign > 0
+
+
+def test_navigation_zero_initialized_gains_can_learn_and_state_derivatives_are_finite():
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.1, 0.001, 0.2])
+    actor(obs)[:, :2].sum().backward()
+    gain_grad = actor.gain.bias.grad.reshape(-1, actor.feedback_width)
+    assert gain_grad[0, 0] > 0 and gain_grad[1, 2] > 0
+    with torch.no_grad():
+        actor.gain.bias.normal_(0, 0.1)
+    obs["preview"].requires_grad_(True)
+    actor.zero_grad()
+    actor(obs)[:, :2].sum().backward()
+    assert torch.isfinite(obs["preview"].grad).all()
+    assert torch.count_nonzero(obs["preview"].grad) > 0
+
+
+@pytest.mark.parametrize("xy,yaw", [(0.0, 0.1), (True, 0.1), (float("nan"), 0.1), (0.05, float("inf")), (0.05, 4.0)])
+def test_navigation_contract_rejects_invalid_units(xy, yaw):
+    with pytest.raises(ValueError):
+        BaseNavigationFeedback(xy, yaw)
+
+
+@pytest.mark.parametrize(
+    "config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)]
+)
+def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_tolerance(tmp_path, config):
+    cfg = replace(
+        ManipulationConfig(),
+        retention_context=True,
+        trajectory_preview=True,
+        action_mode="direct_velocity",
+        base_xy_tolerance=0.05,
+        base_heading_tolerance=np.deg2rad(5),
+    )
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=config)
+    destination = tmp_path / "actor"
+    export_actor(actor, destination, cfg, "test-model", steps=0)
+    bundle = WholeBodyBundle(destination)
+    assert bundle.actor.base_navigation_feedback == actor.base_navigation_feedback
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.1, 0.0, 0.2])
+    expected = actor(obs)[0].detach().numpy()
+    sensor = {k: v[0].numpy() for k, v in obs.items() if k != "critic"}
+    np.testing.assert_array_equal(bundle(sensor), expected)
+    path = destination / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["base_navigation_feedback"]["xy_region_m"] = 0.06
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="navigation contract"):
+        WholeBodyBundle(destination)
+    with pytest.raises(ValueError, match="inner hold region"):
+        export_actor(actor, tmp_path / "incompatible", replace(cfg, base_xy_tolerance=0.005), "test-model", steps=0)
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_reference_tracking_feedforward_uses_body_units_without_learned_rescaling(robot):
+    actor = WholeBodyActor(robot, base_navigation_feedback=BaseNavigationFeedback(reference_tracking=True))
+    obs = navigation_observation(actor)
+    obs["history"][..., actor.encoder.fields["base_pose"]][..., 2] = np.pi / 2
+    p = actor.encoder.profile
+    obs["motion"][0, :3] = torch.tensor([0, 0.5 * p.base_speed, -0.2 * p.base_yaw_speed])
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        gain[:2, -9:] = 100  # would double-count the known velocity mapping
+    torch.testing.assert_close(actor(obs)[0, :2], torch.tensor([0.5, -0.2]))
+    obs["motion"][0, :3] *= 10
+    torch.testing.assert_close(actor(obs)[0, :2], torch.tensor([1.0, -1.0]))
+    obs["history"][..., actor.encoder.fields["hand_mask"]] = 1
+    # The opt-in mapping is absent when the hand is active (the legacy map is
+    # allowed to use its learned motion gains instead).
+    actor.base_navigation_feedback = None
+    expected = actor(obs)
+    actor.base_navigation_feedback = BaseNavigationFeedback(reference_tracking=True)
+    torch.testing.assert_close(actor(obs), expected, rtol=0, atol=0)
+
+
+def test_reference_tracking_does_not_chase_inner_xy_error_during_a_turn():
+    actor = WholeBodyActor(base_navigation_feedback=BaseNavigationFeedback(reference_tracking=True))
+    obs = navigation_observation(actor)
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        gain[0, 0] = gain[0, 12] = gain[1, 1] = gain[1, 13] = 20
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.01, 0.01, 0.0])
+    obs["motion"][0, 2] = 0.1
+    torch.testing.assert_close(actor(obs)[0, :2], torch.tensor([0.0, 0.2]))
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.1, 0.0, 0.0])
+    assert actor(obs)[0, 0] > 0
+
+
+def test_heading_gain_calibration_is_explicit_and_does_not_change_other_rows():
+    actor = WholeBodyActor(base_navigation_feedback=BaseNavigationFeedback())
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.0, 0.0, 0.2])
+    with torch.no_grad():
+        actor.gain.bias.reshape(-1, actor.feedback_width)[1, 2] = 1
+    expected = actor(obs)
+    actor.base_navigation_feedback = BaseNavigationFeedback(heading_gain_scale=2)
+    torch.testing.assert_close(torch.atanh(actor(obs)[0, 1]), 2 * torch.atanh(expected[0, 1]))
+    torch.testing.assert_close(actor(obs)[0, 2:], expected[0, 2:], rtol=0, atol=0)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"reference_tracking": 1},
+        {"heading_gain_scale": True},
+        {"heading_gain_scale": 0},
+        {"heading_gain_scale": float("nan")},
+    ],
+)
+def test_reference_tracking_rejects_invalid_configuration(kwargs):
+    with pytest.raises(ValueError):
+        BaseNavigationFeedback(**kwargs)
+
+
+def test_reference_tracking_contract_is_versioned_and_fail_closed():
+    legacy = BaseNavigationFeedback().record()
+    assert legacy["format"] == "signed_base_navigation_v1" and len(legacy) == 3
+    config = BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)
+    record = config.record()
+    assert record["format"] == "signed_base_navigation_v2"
+    assert BaseNavigationFeedback.from_record(record) == config
+    for broken in (
+        {**record, "format": "signed_base_navigation_v1"},
+        {k: v for k, v in record.items() if k != "heading_gain_scale"},
+        {**record, "unknown": True},
+    ):
+        with pytest.raises(ValueError, match="feedback contract"):
+            BaseNavigationFeedback.from_record(broken)
+
+
+@pytest.mark.parametrize("navigation", [None, BaseNavigationFeedback()])
+def test_configured_bundles_require_versioned_format_and_explicit_metadata(tmp_path, navigation):
+    import hashlib
+
+    cfg = replace(
+        ManipulationConfig(),
+        retention_context=True,
+        trajectory_preview=True,
+        action_mode="direct_velocity",
+        base_xy_tolerance=0.05,
+        base_heading_tolerance=np.deg2rad(5),
+    )
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=navigation)
+    path = tmp_path / "configured"
+    export_actor(actor, path, cfg, "test-model", steps=0)
+    manifest = json.loads((path / "manifest.json").read_text())
+    assert manifest["format"] == "emet-whole-body-v3"  # v2-only runtimes reject it
+    from emet.rl.manipulation.policy import load_control_policy
+
+    assert load_control_policy(path).actor.base_navigation_feedback == navigation
+    weights = torch.load(path / "policy.zip", weights_only=True)
+    weights.pop("base_navigation_feedback")
+    torch.save(weights, path / "policy.zip")
+    manifest["weights_sha256"] = hashlib.sha256((path / "policy.zip").read_bytes()).hexdigest()
+    (path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="explicit feedback options"):
+        WholeBodyBundle(path)
+
+
+def test_navigation_feedback_cannot_be_silently_downgraded_to_legacy_format(tmp_path):
+    import hashlib
+
+    cfg = replace(
+        ManipulationConfig(),
+        retention_context=True,
+        trajectory_preview=True,
+        action_mode="direct_velocity",
+        base_xy_tolerance=0.05,
+        base_heading_tolerance=np.deg2rad(5),
+    )
+    path = tmp_path / "actor"
+    export_actor(
+        WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback()),
+        path,
+        cfg,
+        "model",
+        steps=0,
+    )
+    manifest = json.loads((path / "manifest.json").read_text())
+    weights = torch.load(path / "policy.zip", weights_only=True)
+    manifest["format"] = weights["format"] = "emet-whole-body-v2"
+    torch.save(weights, path / "policy.zip")
+    manifest["weights_sha256"] = hashlib.sha256((path / "policy.zip").read_bytes()).hexdigest()
+    (path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="requires the configured v3 format"):
+        WholeBodyBundle(path)

@@ -1,0 +1,136 @@
+{
+  "format": "fresh-tracking-confirmation-v1",
+  "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "generator_seed": 2026111707,
+  "cases": 24,
+  "source_training_namespace_disjoint": true,
+  "settings": {
+    "innate_mars:confirmation-v1:audit:coupled:0": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:1": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:2": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:3": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:4": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:5": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:6": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:coupled:7": {
+      "initial_heading_range_rad": 3.141592653589793
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:8": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:9": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:10": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:11": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:12": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:13": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:14": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:hand_free_base:15": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:base_only:16": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:base_only:17": {
+      "initial_heading_range_rad": 1.0
+    },
+    "innate_mars:confirmation-v1:audit:base_only:18": {
+      "initial_heading_range_rad": 0.0
+    },
+    "innate_mars:confirmation-v1:audit:base_only:19": {
+      "initial_heading_range_rad": 3.141592653589793
+    },
+    "innate_mars:confirmation-v1:audit:coupled:20": {
+      "initial_heading_range_rad": 0.0,
+      "second_stage": {
+        "travel_m": -0.15562416130807324,
+        "turn_rad": -0.40266029508798906,
+        "arm_delta": [
+          0.003948171664613864,
+          0.005510739389424424,
+          0.014384591963229276,
+          -0.02768661559240341,
+          0.006278919112827651
+        ],
+        "after_nominal_end_s": 0.25
+      }
+    },
+    "innate_mars:confirmation-v1:audit:coupled:21": {
+      "initial_heading_range_rad": 1.0,
+      "second_stage": {
+        "travel_m": 0.15306776137613684,
+        "turn_rad": -0.20512097117855055,
+        "arm_delta": [
+          0.013469028765852702,
+          -0.024810696004490436,
+          -0.00698304904329957,
+          0.03597897422478389,
+          -0.014677718033457465
+        ],
+        "after_nominal_end_s": 0.25
+      }
+    },
+    "innate_mars:confirmation-v1:audit:coupled:22": {
+      "initial_heading_range_rad": 0.0,
+      "second_stage": {
+        "travel_m": -0.15348370343702117,
+        "turn_rad": 0.3417367925865741,
+        "arm_delta": [
+          0.01758670045295574,
+          -0.0036506660650637984,
+          -0.0377588244182522,
+          -0.002792855829222479,
+          -0.012207789034617458
+        ],
+        "after_nominal_end_s": 0.25
+      }
+    },
+    "innate_mars:confirmation-v1:audit:coupled:23": {
+      "initial_heading_range_rad": 1.0,
+      "second_stage": {
+        "travel_m": 0.12478234623719203,
+        "turn_rad": 0.1944304141594679,
+        "arm_delta": [
+          -0.004761508595941703,
+          0.034332433594676706,
+          0.0021215528950841583,
+          0.013618642230435317,
+          0.02951140265190423
+        ],
+        "after_nominal_end_s": 0.25
+      }
+    }
+  },
+  "case_sha256": "a9e839abc3d2fed11b0ac58b943e571614d41f2c233d24697cbf2a983a7d49db",
+  "selection": "all generated cases retained, including geometry rejections and teacher failures; never enter PPO",
+  "scope": "nearby FK references with existing bounded posture resets, varied initial headings, full/XY-only/free-base masks and four nominally anchored two-stage goal changes; unloaded",
+  "two_stage_contract": "second reference compiled in reset-only scratch data at first nominal endpoint; pose/velocity/acceleration continuous at announced switch; targets independent of controller state",
+  "new_actor_evaluation": "fixed final continued checkpoint only, after training completes; no interim checkpoint selection",
+  "hardware_used": false,
+  "safety_promoted": false
+}

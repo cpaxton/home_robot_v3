@@ -270,12 +270,12 @@ class MarsNativeTableAdapter(NativeTableAdapter):
                 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
 
                 targets = {
-                    "pregrasp": executor.grasp_targets[0] if executor.grasp_targets else None,
-                    "grasp": executor.grasp_targets[1] if executor.grasp_targets else None,
-                    "lift": executor.grasp_targets[2] if executor.grasp_targets else None,
-                    "preplace": executor.place_targets[0] if executor.place_targets else None,
-                    "place": executor.place_targets[1] if executor.place_targets else None,
-                    "retreat": executor.place_targets[2] if executor.place_targets else None,
+                    "pregrasp": executor.grasp_targets[0] if len(executor.grasp_targets) > 0 else None,
+                    "grasp": executor.grasp_targets[1] if len(executor.grasp_targets) > 1 else None,
+                    "lift": executor.grasp_targets[2] if len(executor.grasp_targets) > 2 else None,
+                    "preplace": executor.place_targets[0] if len(executor.place_targets) > 0 else None,
+                    "place": executor.place_targets[1] if len(executor.place_targets) > 1 else None,
+                    "retreat": executor.place_targets[2] if len(executor.place_targets) > 2 else None,
                 }
                 target = targets.get(phase)
                 if target is not None:
@@ -590,6 +590,24 @@ class MarsNativeTableAdapter(NativeTableAdapter):
             plan = self.plans.get(plan_ref)
             if plan is None:
                 raise ValueError("unknown_plan")
+            if plan.execution_scope != "full_task":
+                base = plan.approach["base_goal"]
+                return {
+                    "execution_scope": plan.execution_scope,
+                    "full_task_admitted": False,
+                    "transport": None,
+                    "approach_base": plan.approach["base_trajectory"].record(),
+                    "arm_targets": [
+                        {"stage": phase, "base": list(base),
+                         "hand": np.r_[point, orientation[:, :2].ravel()].tolist(),
+                         "gripper": MARS.gripper_open, "base_mask": [True] * 3, "hand_mask": True,
+                         "kind": "nominal_planning_endpoint; execution_recertifies_measured_state"}
+                        for phase, (point, orientation) in zip(
+                            ("pregrasp", "grasp")[:len(plan.executor.grasp_targets)],
+                            plan.executor.grasp_targets, strict=True,
+                        )
+                    ],
+                }
             return {
                 "transport": plan.transport["trajectory"].record(),
                 "approach_base": plan.approach["base_trajectory"].record(),

@@ -1,0 +1,232 @@
+"""Fixed-budget actor representation/initialization diagnostic; no runtime teacher.
+
+Round 0: teacher and original-actor states on the six general/four TAMP train
+cases. Round 1: candidate-actor states on those same train cases. Fit only
+sensor/pose observations -> bounded analytic actions. Audit cases are never
+used for labels or fitting. Final evaluation calls only the exported actor.
+"""
+
+import hashlib
+import json
+import runpy
+from pathlib import Path
+
+import numpy as np
+import torch
+
+from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv
+from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle, export_actor
+from emet.rl.regression_gate import ROOT, source_state
+
+PREVIOUS = runpy.run_path(str(ROOT / "logs/recovery/coupled-ppo-pilot-v1/run-v1c.py"))
+OUT = ROOT / "logs/manipulation/coupled-bootstrap-v1"
+SEED, UPDATES_PER_ROUND = 92, 512
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def save(path, value):
+    temp = path.with_suffix(".partial")
+    temp.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    temp.replace(path)
+
+
+def collect(actor, suite, development, *, drive, round_index):
+    data = {"general": [], "tamp": []}
+    rows = []
+    general = [c for c in suite["robots"]["innate_mars"] if c["split"] == "train"]
+    env = CoupledTrackingEnv("innate_mars", general)
+    try:
+        for case in general:
+            observation, _ = env.reset(options={"case_id": case["id"]})
+            info = {}
+            for _tick in range(500):
+                label = task_pose_teacher_action(env.unwrapped.control).astype(np.float32)
+                sensor = {k: observation[k].copy() for k in ("history", "preview", "motion")}
+                data["general"].append((sensor, label.copy()))
+                if drive == "teacher":
+                    action = label
+                else:
+                    with torch.no_grad():
+                        action = actor({k: torch.from_numpy(v)[None] for k, v in sensor.items()})[0].numpy()
+                observation, _, done, truncated, info = env.step(action)
+                if done or truncated:
+                    break
+            env.unwrapped.control.stop()
+            rows.append(
+                {
+                    "family": "general",
+                    "id": case["id"],
+                    "drive": drive,
+                    "labels": _tick + 1,
+                    "code": info.get("code"),
+                    "success": bool(info.get("primitive_success")),
+                }
+            )
+    finally:
+        env.close()
+    # oracle=True exposes a label in this research sampler. Supplied actions
+    # still drive physics. Its inference counters are not policy benchmarks;
+    # proper actor-only evaluation below uses oracle=False via primitive_rollout.
+    env = TampPrimitiveEnv(
+        development["train_cases"],
+        oracle=True,
+        primitive="grasp_pose",
+        planning_scope="unloaded_prefix",
+        wheel_feedback_current_velocity=True,
+    )
+    try:
+        for case in development["train_cases"]:
+            observation, info = env.reset(options={"case_id": case["id"]})
+            count = 0
+            for _ in range(2000):
+                if "oracle_action" not in info:
+                    break
+                sensor = {k: observation[k].copy() for k in ("history", "preview", "motion")}
+                label = np.asarray(info["oracle_action"], dtype=np.float32).copy()
+                data["tamp"].append((sensor, label))
+                count += 1
+                if drive == "teacher":
+                    action = label
+                else:
+                    with torch.no_grad():
+                        action = actor({k: torch.from_numpy(v)[None] for k, v in sensor.items()})[0].numpy()
+                observation, _, done, truncated, info = env.step(action)
+                if done or truncated:
+                    break
+            rows.append(
+                {
+                    "family": "tamp",
+                    "id": case["id"],
+                    "drive": drive,
+                    "labels": count,
+                    "code": info.get("code"),
+                    "success": bool(info.get("primitive_success")),
+                }
+            )
+    finally:
+        env.close()
+    save(OUT / f"collection-{round_index}-{drive}.json", rows)
+    print("COLLECT", round_index, drive, {k: len(v) for k, v in data.items()}, flush=True)
+    return data
+
+
+def fit(actor, data, rng, optimizer, updates, run, start):
+    tensor = {}
+    for family, rows in data.items():
+        if not rows:
+            raise ValueError("both families require real action labels")
+        tensor[family] = {
+            k: torch.from_numpy(np.array([o[k] for o, _ in rows])) for k in ("history", "preview", "motion")
+        }
+        tensor[family]["labels"] = torch.from_numpy(np.array([a for _, a in rows]))
+    for step in range(updates):
+        batch = {k: [] for k in ("history", "preview", "motion", "labels")}
+        for family in ("general", "tamp"):
+            indices = torch.from_numpy(rng.integers(0, len(data[family]), 32))
+            for k in batch:
+                batch[k].append(tensor[family][k][indices])
+        batch = {k: torch.cat(v) for k, v in batch.items()}
+        mask = actor.action_mask(batch)
+        prediction = actor(batch)
+        loss = (((prediction - batch["labels"]) * mask) ** 2).sum() / mask.sum().clamp_min(1)
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(actor.parameters(), 1.0)
+        optimizer.step()
+        if (step + 1) % 64 == 0:
+            record = {"supervised_update": start + step + 1, "action_mse": float(loss.detach())}
+            with (OUT / "updates.jsonl").open("a") as stream:
+                stream.write(json.dumps(record) + "\n")
+            run.log(record, step=record["supervised_update"])
+            print("FIT", record, flush=True)
+
+
+def main():
+    receipt, suite, development, sources = PREVIOUS["validate_admission"]()
+    OUT.mkdir(parents=True, exist_ok=False)
+    torch.set_num_threads(1)
+    torch.manual_seed(SEED)
+    rng = np.random.default_rng(SEED)
+    source = WholeBodyBundle(PREVIOUS["INITIALIZER"], robot="innate_mars")
+    actor = source.actor
+    optimizer = torch.optim.Adam(actor.parameters(), lr=2e-4)
+    metadata = {
+        "format": "coupled-bootstrap-diagnostic-v1",
+        "seed": SEED,
+        "source_state_digest": PREVIOUS["digest"](sources),
+        "runner_sha256": sha(__file__),
+        "regression_tests": len(receipt["test_ids"]),
+        "initializer_weights_sha256": sha(PREVIOUS["INITIALIZER"] / "policy.zip"),
+        "rounds": 2,
+        "updates_per_round": UPDATES_PER_ROUND,
+        "batch_size": 64,
+        "learning_rate": 2e-4,
+        "labels": "analytic control actions, not joint witnesses or task answers",
+        "dataset_sampling": "50/50 general/TAMP rows; all added rows retained within each family",
+        "new_ppo_steps": 0,
+        "teacher_at_deployment": False,
+        "hardware_used": False,
+        "safety_promoted": False,
+        "audit_labels_used": False,
+        "phase": "collect_round_0",
+    }
+    save(OUT / "run.json", metadata)
+    teacher = collect(actor, suite, development, drive="teacher", round_index=0)
+    student = collect(actor, suite, development, drive="actor", round_index=0)
+    data = {k: teacher[k] + student[k] for k in teacher}
+    import wandb
+
+    run = wandb.init(
+        project="emet-whole-body-v2",
+        name=OUT.name,
+        mode="offline",
+        dir=str(OUT),
+        config=metadata,
+        settings=wandb.Settings(disable_git=True, save_code=False),
+    )
+    try:
+        fit(actor, data, rng, optimizer, UPDATES_PER_ROUND, run, 0)
+        metadata["phase"] = "collect_round_1"
+        save(OUT / "run.json", metadata)
+        added = collect(actor, suite, development, drive="actor", round_index=1)
+        for k in data:
+            data[k].extend(added[k])
+        fit(actor, data, rng, optimizer, UPDATES_PER_ROUND, run, UPDATES_PER_ROUND)
+        env = CoupledTrackingEnv("innate_mars", [c for c in suite["robots"]["innate_mars"] if c["split"] == "train"])
+        try:
+            native = env.unwrapped
+            export_actor(
+                actor,
+                OUT / "final/actor",
+                native.config,
+                native.fingerprint,
+                steps=0,
+                training={**metadata, "supervised_updates": 2 * UPDATES_PER_ROUND},
+            )
+        finally:
+            env.close()
+        # Reuse the exact evaluation implementation, with a fresh output root.
+        PREVIOUS["evaluate"].__globals__["OUT"] = OUT
+        metadata["phase"] = "final_evaluation"
+        save(OUT / "run.json", metadata)
+        metadata["final_evaluation"] = PREVIOUS["evaluate"](actor, suite, development, "final")
+        assert source_state(ROOT) == sources
+        metadata.update(
+            phase="complete",
+            complete=True,
+            supervised_updates=2 * UPDATES_PER_ROUND,
+            dataset_rows={k: len(v) for k, v in data.items()},
+        )
+        save(OUT / "run.json", metadata)
+    finally:
+        run.finish()
+    print(json.dumps(metadata["final_evaluation"]), flush=True)
+
+
+if __name__ == "__main__":
+    main()

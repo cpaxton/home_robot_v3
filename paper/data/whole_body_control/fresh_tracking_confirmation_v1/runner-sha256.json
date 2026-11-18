@@ -1,0 +1,8 @@
+{
+  "generate.py": "1039deac3c2416ac5ea6702c002196f135c8a82c83cc2d39db9b2864cde43966",
+  "run.py": "6ce649ddc8bbe8ba726a2c3884f7bce10162cedf9a0349c6837a92b77f2c0ed4",
+  "supervise_readout.py": "4ed41cbfb3115f90ac33e506caef83b83a0a62a8cb47f702c51de8398bf7d515",
+  "protocol.json": "d74cbcbd518cf5687ff6beee370d0310a2bc713a0bfdf999f10a9e8522facc78",
+  "cases.json": "a9e839abc3d2fed11b0ac58b943e571614d41f2c233d24697cbf2a983a7d49db",
+  "suite.json": "876eed77f99fa577dec31ca69618c5fc3b4d5770dfc97255049be73f7d35846f"
+}

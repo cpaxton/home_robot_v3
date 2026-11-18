@@ -32,20 +32,34 @@ class GuardedControlSession:
         if (
             caps.get("whole_body_velocity") is not True
             or caps.get("measured_whole_body_stop") is not True
+            or caps.get("feedback_si_units_verified") is not True
+            or caps.get("motor_read_validity_verified") is not True
             or not isinstance(caps.get("robot_watchdog_s"), (int, float))
             or isinstance(caps.get("robot_watchdog_s"), bool)
             or not math.isfinite(caps["robot_watchdog_s"])
             or not 0 < caps["robot_watchdog_s"] <= 0.2
         ):
-            raise RuntimeError("verified velocity, measured-stop and robot watchdog capabilities required")
-        feedback = self.driver.feedback()
-        age = self._age(feedback)
-        # Initial feedback must be fresh before capturing the immutable origin.
-        self.guard = MotionBoundary(feedback["base_pose"], translation_limit_m=0, translation_tolerance_m=0.05)
-        self.guard.enforce(feedback["base_pose"], state_age_s=age, stop=self._stop)
+            raise RuntimeError(
+                "verified velocity, SI/read validity, measured-stop and robot watchdog capabilities required"
+            )
         try:
+            feedback = self.driver.feedback()
+            age = self._age(feedback)
+            if not 0 <= age <= 0.2:
+                raise ValueError("missing or stale arm/odometry capture")
+            # Capture the immutable origin only after validating both sources.
+            self.guard = MotionBoundary(feedback["base_pose"], translation_limit_m=0, translation_tolerance_m=0.05)
+            self.guard.enforce(feedback["base_pose"], state_age_s=age, stop=self._stop)
             if np.any(abs(self._arm_velocity(feedback)) >= np.minimum(0.03, self.profile.speed)):
                 raise ValueError("arm must be stationary before starting a session")
+            twist = self._base_velocity(feedback)
+            if np.linalg.norm(twist[:3]) >= 0.03 or np.linalg.norm(twist[3:]) >= 0.05:
+                raise ValueError("base must be stationary before starting a session")
+        except SystemExit:
+            # Feedback/age validation can abort before the boundary exists.
+            # Preserve that original termination and latch a nonempty fault.
+            self.fault = getattr(self.guard, "fault", None) or "session start aborted"
+            raise
         except Exception as exc:
             self.fault = str(exc)
             confirmed = self._stop()
@@ -54,8 +68,22 @@ class GuardedControlSession:
 
     @staticmethod
     def _age(feedback):
-        timestamp = float(feedback.get("captured_monotonic", float("nan")))
-        return time.monotonic() - timestamp
+        if feedback.get("valid") is not True:
+            raise ValueError("valid motor/odometry acquisition required")
+        now = time.monotonic()
+        ages = [
+            now - float(feedback.get(k, float("nan"))) for k in ("arm_captured_monotonic", "odom_captured_monotonic")
+        ]
+        if any(not math.isfinite(age) or age < 0 for age in ages):
+            raise ValueError("invalid arm/odometry capture time in driver monotonic clock")
+        return max(ages)
+
+    @staticmethod
+    def _base_velocity(feedback):
+        measured = np.asarray(feedback.get("base_twist"), dtype=float).copy()
+        if measured.shape != (6,) or not np.isfinite(measured).all():
+            raise ValueError("complete finite six-component base twist required")
+        return measured
 
     def _arm_velocity(self, feedback):
         measured = np.asarray(feedback["joint_velocity"], dtype=float).copy()
@@ -86,6 +114,12 @@ class GuardedControlSession:
             measured = self._arm_velocity(feedback)
             if np.any(abs(measured) > self.profile.speed):
                 raise ValueError("measured arm velocity exceeds robot profile limits")
+            twist = self._base_velocity(feedback)
+            if (
+                np.linalg.norm(twist[:3]) > self.profile.base_speed
+                or np.linalg.norm(twist[3:]) > self.profile.base_yaw_speed
+            ):
+                raise ValueError("measured base velocity exceeds robot profile limits")
             if not target_visible:
                 self.fault = "target lost"
                 return self._stop()

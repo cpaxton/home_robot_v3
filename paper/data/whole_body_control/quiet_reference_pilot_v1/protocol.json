@@ -1,0 +1,57 @@
+{
+  "format": "quiet-reference-pilot-v1",
+  "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "initializer": "logs/eval/scoped-wheel-feedback-v2/candidate/actor",
+  "seed": 107,
+  "decisions_per_arm": 16384,
+  "critic_only_decisions": 1024,
+  "rollout_steps": 256,
+  "actor_learning_rate": [
+    5e-05,
+    1e-05
+  ],
+  "critic_learning_rate": 0.001,
+  "initial_action_std": 0.02,
+  "epochs": 3,
+  "batch_size": 64,
+  "clip": 0.05,
+  "target_kl": 0.01,
+  "entropy_weight": 0.0001,
+  "family_control_tick_weights": [
+    0.5,
+    0.5
+  ],
+  "general_hand_base_tick_weights": [
+    0.8,
+    0.2
+  ],
+  "training_horizon_s": 25,
+  "evaluation_horizon_s": 25,
+  "randomization_scale": 0,
+  "case_manifest": "cases.json",
+  "training_cases": 12,
+  "fresh_audit_cases": 12,
+  "reward_arms": [
+    "ordinary_noise",
+    "quiet_reference_noise"
+  ],
+  "intermediate_checkpoint_selection": false,
+  "teacher_actions_in_loss": false,
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "distribution": "FK-witness nonholonomic coupled trajectories with full/XY-only/free base masks, forward/reverse/base-yaw cases; separate audit motions/seeds; 50% TAMP grasp-pose unloaded prefix by physical ticks",
+  "checkpoint_admission": "raw actor is trained/evaluated on separately fingerprinted general and TAMP plants; export is scoped to its declared general plant, not qualified TAMP checkpoint deployment",
+  "preceding_attempt": {
+    "report": "docs/experiments/finite_critic_pilot_20261117.md",
+    "runtime": "2acc3b52",
+    "case_manifest_unchanged": true,
+    "reason": "independent critic fitting gains one old coupled case but worsens yaw jerk; frozen stochastic probe identifies hold-noise interruption"
+  },
+  "independent_critic_epochs": 3,
+  "episode_contract": "finite_tracking_deadline_v1",
+  "reward": "unchanged legacy wrapper reward in both arms",
+  "comparison": "both corrected finite targets and three independent critic epochs; change motion exploration only during constant current/future pose references with exact zero announced twist; gripper noise and mean controller unchanged",
+  "previous_preflight": null,
+  "quiet_reference_std_scale": 0.125
+}

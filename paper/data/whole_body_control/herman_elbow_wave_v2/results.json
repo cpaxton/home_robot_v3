@@ -1,0 +1,1857 @@
+{
+  "format": "herman-rehearsal-v1",
+  "capture_sha256": "0a1ce7909e179c2d7121453afaf907d523e5a3b9a01b54093bb6336b2662826b",
+  "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+  "audit": {
+    "format": "herman-rehearsal-audit-v1",
+    "captured_arm_rad": {
+      "joint1": 1.5938060386131812,
+      "joint2": -1.7456701366138596,
+      "joint3": 1.5631264228554684,
+      "joint4": 1.0906603401866908,
+      "joint5": -0.019941750242513337,
+      "joint6": 0.08897088569736719
+    },
+    "head_rad": -0.0,
+    "published_joint_limits": {
+      "joint1": [
+        -1.5708,
+        1.5708
+      ],
+      "joint2": [
+        -1.5708,
+        1.22
+      ],
+      "joint3": [
+        -1.5708,
+        1.7453
+      ],
+      "joint4": [
+        -1.9199,
+        1.7453
+      ],
+      "joint5": [
+        -1.5708,
+        1.5708
+      ],
+      "joint6": [
+        -0.8727,
+        0.3491
+      ],
+      "joint6M": [
+        -0.8727,
+        0.3491
+      ],
+      "joint_head": [
+        -0.1745,
+        0.5236
+      ]
+    },
+    "limit_violations": [
+      {
+        "joint": "joint1",
+        "reported_rad": 1.5938060386131812,
+        "limits_rad": [
+          -1.5708,
+          1.5708
+        ],
+        "outside_rad": 0.02300603861318118,
+        "outside_degrees": 1.318148915850287
+      },
+      {
+        "joint": "joint2",
+        "reported_rad": -1.7456701366138596,
+        "limits_rad": [
+          -1.5708,
+          1.22
+        ],
+        "outside_rad": 0.17487013661385964,
+        "outside_degrees": 10.019320790850285
+      }
+    ],
+    "live_urdf_vs_tf": {
+      "ee_link": {
+        "available": true,
+        "position_m": 4.2349997174859565e-17,
+        "rotation_rad": 3.777118874168811e-16
+      },
+      "head": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 0.0
+      },
+      "camera_optical_frame": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 3.5217744074312443e-16
+      },
+      "right_camera_optical_frame": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 3.5217744074312443e-16
+      }
+    },
+    "position_span_rad": [
+      0.0,
+      0.0015339807878855805,
+      0.0,
+      0.0,
+      0.001533980787885643,
+      0.0
+    ],
+    "captured_physics_admitted": false,
+    "physics_blockers": [
+      "published_joint_limit:joint1",
+      "published_joint_limit:joint2",
+      "captured_link3_chassis_proxy_penetration"
+    ],
+    "velocity_initialization": "zero-motion simulator hypothesis; published velocity units are unverified",
+    "wrist_image_available": false,
+    "wrist_optical_tf_available": false,
+    "hardware_ready": false,
+    "hardware_motion_commands_sent": 0,
+    "geometry_diagnostic": {
+      "proxy_signed_distance_m": -0.012920447422502833,
+      "cad_hull_signed_distance_m": 0.00011214722899435341
+    },
+    "mujoco_vs_live_tf": {
+      "ee_link": {
+        "position_m": 5.96906223549092e-17,
+        "rotation_rad": 4.566311521735014e-16
+      },
+      "head": {
+        "position_m": 0.0,
+        "rotation_rad": 0.0
+      },
+      "camera_optical_frame": {
+        "position_m": 0.0,
+        "rotation_rad": 8.210092466372717e-17
+      },
+      "right_camera_optical_frame": {
+        "position_m": 0.0,
+        "rotation_rad": 8.210092466372717e-17
+      }
+    }
+  },
+  "environment": {
+    "robot": "innate_mars",
+    "scenario": "reach",
+    "horizon": 35.0,
+    "initialization_attempts": 20,
+    "diagnostics": false,
+    "disturbance_curriculum": false,
+    "randomization_scale": 0,
+    "payload_mass_kg": null,
+    "payload_asset_set": "training",
+    "two_supports": false,
+    "contact_cone": "pyramidal",
+    "contact_impratio": 1.0,
+    "balanced_grasp_setup": false,
+    "grasp_setup_prefer_nominal": true,
+    "tamp_carry_trajectories": false,
+    "carry_target_mode": "combined",
+    "carry_push_scale": 0.0,
+    "carry_push_probability": 1.0,
+    "payload_object": null,
+    "initial_heading_range": 0.0,
+    "target_scale": 1.0,
+    "retarget_probability": 0,
+    "reach_push_probability": 0,
+    "certify_reach_paths": false,
+    "dynamic_references": false,
+    "action_mode": "direct_velocity",
+    "base_xy_tolerance": 0.05,
+    "base_heading_tolerance": 0.08726646259971647,
+    "base_only_min_distance": 0.0,
+    "base_only_max_distance": 0.0,
+    "reach_target_mode": "mixed",
+    "differential_base_reward": false,
+    "grasp_lift_height": 0.06,
+    "support_half_width": 0.012,
+    "grasp_depth": 0.03,
+    "grasp_pitch_rad": 0.0,
+    "hand_position_tolerance": 0.003,
+    "hand_orientation_tolerance": 0.02,
+    "trajectory_preview": true,
+    "tracking_reward": true,
+    "tracking_precision": 4,
+    "endpoint_motion_weight": 0.0,
+    "goal_gated_settling": false,
+    "hand_gated_base_reward": false,
+    "motion_penalty_scale": 1.0,
+    "smoothness_curriculum": false,
+    "jerk_limited_lift_reference": false,
+    "grasp_lift_phase_weights": null,
+    "scenario_weights": null,
+    "retention_context": true,
+    "empty_grasp_probability": 0.0,
+    "carry_hold_probability": 0.0,
+    "grasp_lift_probability": 0.0,
+    "grasp_lift_payload_object": null,
+    "payload_mass_range_kg": null,
+    "payload_com_randomization_m": 0.0,
+    "reach_hold_probability": 1,
+    "hold_pregrasp_fixture": false,
+    "fixed_base_probability": 0.0,
+    "fixed_base_xy_tolerance": 0.005,
+    "categorical_features_unscaled": false,
+    "body_motion_weight": 0.0,
+    "feedback_policy": false,
+    "restoring_yaw_feedback": false,
+    "feedback_orientation_scale": 1.0,
+    "feedback_orientation_error": "rotation6",
+    "feedback_reference_velocity": false,
+    "wheel_feedback_gain": 0.5,
+    "wheel_feedback_base_only_gains": [
+      0.0,
+      0.5
+    ],
+    "wheel_feedback_current_velocity": true,
+    "physical_wheel_slew": true,
+    "wheel_jerk_limits": null,
+    "precision_tracking_reward": false,
+    "terminal_hold_seconds": 2,
+    "normalized_jerk_weight": 0.0,
+    "command_smoothness_weight": 0.0,
+    "base_turn_progress_guard": false,
+    "whole_body_settling": true,
+    "reach_local_probability": 0.0,
+    "reach_local_translation_probability": 0.0,
+    "fixed_base_contract": false,
+    "pose_progress_weight": 0.0
+  },
+  "proposals": [
+    {
+      "id": "herman-wave-v2:elbow_wrist_wave",
+      "seed": 430020000,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.0,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "gesture": "elbow_wrist_wave",
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    }
+  ],
+  "proposed_start": {
+    "joint_positions_rad": [
+      1.5308,
+      -1.5308,
+      1.0631264228554684,
+      1.0906603401866908,
+      -0.019941750242513337
+    ],
+    "delta_from_capture_rad": [
+      -0.06300603861318121,
+      0.21487013661385967,
+      -0.5,
+      0.0,
+      0.0
+    ],
+    "kind": "synthetic_geometry_admitted_staging_proposal",
+    "executed_on_robot": false,
+    "requires_reposition_validation": true
+  },
+  "policy_sources": {
+    "policy_0": {
+      "path": "logs/manipulation/long-finetune-v1/continued/checkpoint-65536/actor",
+      "weights_sha256": "e21dafc156967cf5f098b555da5606724127576b3eb3f79b9cb7dd910d64df0a"
+    },
+    "policy_1": {
+      "path": "logs/manipulation/goal-change-curriculum-v1/curriculum/checkpoint-131072/actor",
+      "weights_sha256": "7971c16dfac4b4ba35eb1da413a2d5d1a30990ebd0e2ff027ed324c443830393"
+    }
+  },
+  "results": {
+    "teacher": [
+      {
+        "id": "herman-wave-v2:elbow_wrist_wave",
+        "seed": 430020000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028017177654296458,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "wave_tracking": {
+          "complete_wave_observed": true,
+          "peak_position_error_m": 0.0016081850425822349,
+          "peak_orientation_error_rad": 0.01164184395062756,
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "passed": true
+        },
+        "reference_certificate": {
+          "input_vertices": 7,
+          "retained_vertices": 7,
+          "geometry": "original_polyline_without_redundant_collinear_vertices",
+          "interpolation": "rest_to_rest_quintic_c2",
+          "speed": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "acceleration": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "jerk": [
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0
+          ],
+          "jerk_limit_source": "explicit_experimental_reference_limit_not_a_hardware_rating",
+          "phase_rate_bound": 1,
+          "phase_acceleration_bound": 0,
+          "phase_jerk_bound": 0,
+          "segments": [
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ]
+            }
+          ],
+          "duration_s": 20.25,
+          "dynamic_feasibility_verified": false,
+          "gesture": "elbow_wrist_wave",
+          "joint_names": [
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5"
+          ],
+          "joint_waypoints_rad": [
+            [
+              1.5308012401111322,
+              -1.5311033517939843,
+              1.0644121888764373,
+              1.0908900692364043,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.6144121888764373,
+              1.4208900692364044,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.8144121888764373,
+              1.3008900692364045,
+              0.280057827841527
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.4144121888764373,
+              1.5408900692364043,
+              -0.319942172158473
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.8144121888764373,
+              1.3008900692364045,
+              0.280057827841527
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.6144121888764373,
+              1.4208900692364044,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.5311033517939843,
+              1.0644121888764373,
+              1.0908900692364043,
+              -0.01994217215847297
+            ]
+          ],
+          "joint_span_rad": [
+            0.0,
+            0.11999999999999988,
+            0.6499999999999999,
+            0.44999999999999996,
+            0.6
+          ],
+          "test_speed_limit_rad_s": 0.25,
+          "test_acceleration_limit_rad_s2": 0.5,
+          "test_jerk_limit_rad_s3": 2.0,
+          "base_pose_fixed": true,
+          "gripper_target_fixed": true,
+          "initial_hold_s": 2.0,
+          "hardware_executable": false
+        },
+        "joint_motion": {
+          "names": [
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5"
+          ],
+          "reference_span_deg": [
+            0.0,
+            6.875493541569885,
+            37.242217712738345,
+            25.783077398427924,
+            34.37735079555393
+          ],
+          "measured_span_deg": [
+            1.1649564883774617,
+            9.022840071832897,
+            37.20934260916393,
+            29.64614690966634,
+            35.04499760735701
+          ],
+          "peak_measured_speed_rad_s": [
+            0.019057548446095234,
+            0.053036648683592584,
+            0.20622507547783034,
+            0.17696729318396845,
+            0.21175921084039484
+          ]
+        },
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "f200b0632e150a894577f3839a52627259c4ea0566daeb4675a7a71fc36b8709",
+        "second_reference_sha256": null,
+        "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+        "replay": "elbow_wrist_wave-teacher-replay.npz",
+        "trace": "elbow_wrist_wave-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 0.00016702646028138643,
+          "ee_orientation_error": 2.0043297068717317e-05,
+          "base_goal_error": 0.00614285899497521,
+          "base_heading_error_rad": 0.014900712472119807,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.34382839039127117,
+          "peak_base_yaw_jerk_rad_s3": 25.3773166189992,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 12.750000000000046
+        },
+        "simulation_only": true,
+        "last_active_time_s": 34.94999999999797,
+        "last_reference_time_s": 34.94999999999797
+      }
+    ],
+    "policy_0": [
+      {
+        "id": "herman-wave-v2:elbow_wrist_wave",
+        "seed": 430020000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028017177654296458,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "wave_tracking": {
+          "complete_wave_observed": false,
+          "peak_position_error_m": 0.1074522309747668,
+          "peak_orientation_error_rad": 0.35800947660112514,
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "passed": false
+        },
+        "reference_certificate": {
+          "input_vertices": 7,
+          "retained_vertices": 7,
+          "geometry": "original_polyline_without_redundant_collinear_vertices",
+          "interpolation": "rest_to_rest_quintic_c2",
+          "speed": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "acceleration": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "jerk": [
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0
+          ],
+          "jerk_limit_source": "explicit_experimental_reference_limit_not_a_hardware_rating",
+          "phase_rate_bound": 1,
+          "phase_acceleration_bound": 0,
+          "phase_jerk_bound": 0,
+          "segments": [
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ]
+            }
+          ],
+          "duration_s": 20.25,
+          "dynamic_feasibility_verified": false,
+          "gesture": "elbow_wrist_wave",
+          "joint_names": [
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5"
+          ],
+          "joint_waypoints_rad": [
+            [
+              1.5308012401111322,
+              -1.5311033517939843,
+              1.0644121888764373,
+              1.0908900692364043,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.6144121888764373,
+              1.4208900692364044,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.8144121888764373,
+              1.3008900692364045,
+              0.280057827841527
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.4144121888764373,
+              1.5408900692364043,
+              -0.319942172158473
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.8144121888764373,
+              1.3008900692364045,
+              0.280057827841527
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.6144121888764373,
+              1.4208900692364044,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.5311033517939843,
+              1.0644121888764373,
+              1.0908900692364043,
+              -0.01994217215847297
+            ]
+          ],
+          "joint_span_rad": [
+            0.0,
+            0.11999999999999988,
+            0.6499999999999999,
+            0.44999999999999996,
+            0.6
+          ],
+          "test_speed_limit_rad_s": 0.25,
+          "test_acceleration_limit_rad_s2": 0.5,
+          "test_jerk_limit_rad_s3": 2.0,
+          "base_pose_fixed": true,
+          "gripper_target_fixed": true,
+          "initial_hold_s": 2.0,
+          "hardware_executable": false
+        },
+        "joint_motion": {
+          "names": [
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5"
+          ],
+          "reference_span_deg": [
+            0.0,
+            6.875493541569872,
+            25.7829971484298,
+            18.907531242181864,
+            17.188675397776844
+          ],
+          "measured_span_deg": [
+            10.743756780500128,
+            22.564547377348664,
+            43.83131541505747,
+            35.816271951600314,
+            8.627906865702109
+          ],
+          "peak_measured_speed_rad_s": [
+            0.2354986306114015,
+            0.40694431312773927,
+            0.43320130020272785,
+            0.4055747479484736,
+            0.17550718587447087
+          ]
+        },
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "f200b0632e150a894577f3839a52627259c4ea0566daeb4675a7a71fc36b8709",
+        "second_reference_sha256": null,
+        "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+        "replay": "elbow_wrist_wave-policy_0-replay.npz",
+        "trace": "elbow_wrist_wave-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.11193201973448909,
+          "ee_orientation_error": 0.3399545973385185,
+          "base_goal_error": 0.054700784274357594,
+          "base_heading_error_rad": 0.4408129402405454,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 9.530457044911294,
+          "peak_base_yaw_jerk_rad_s3": 83.62482176352383,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "last_active_time_s": 8.099999999999708,
+        "last_reference_time_s": 8.099999999999708
+      }
+    ],
+    "policy_1": [
+      {
+        "id": "herman-wave-v2:elbow_wrist_wave",
+        "seed": 430020000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028017177654296458,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "wave_tracking": {
+          "complete_wave_observed": false,
+          "peak_position_error_m": 0.06229897742284983,
+          "peak_orientation_error_rad": 0.2520726806822299,
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "passed": false
+        },
+        "reference_certificate": {
+          "input_vertices": 7,
+          "retained_vertices": 7,
+          "geometry": "original_polyline_without_redundant_collinear_vertices",
+          "interpolation": "rest_to_rest_quintic_c2",
+          "speed": [
+            0.25,
+            0.25,
+            0.25,
+            0.25,
+            0.25
+          ],
+          "acceleration": [
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "jerk": [
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0
+          ],
+          "jerk_limit_source": "explicit_experimental_reference_limit_not_a_hardware_rating",
+          "phase_rate_bound": 1,
+          "phase_acceleration_bound": 0,
+          "phase_jerk_bound": 0,
+          "segments": [
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.1666666666666666,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.11404449761770387,
+                  0.06842669857062225,
+                  0.17106674642655584
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.2633744855967078,
+                  0.15802469135802455,
+                  0.39506172839506176
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.0,
+                  0.16666666666666657,
+                  0.09999999999999991,
+                  0.25000000000000006
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.22808899523540827,
+                  0.1368533971412445,
+                  0.3421334928531117
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.053497942386831,
+                  0.6320987654320982,
+                  1.580246913580247
+                ]
+              ]
+            },
+            {
+              "nominal_peaks": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ],
+              "governed_bounds": [
+                [
+                  0.0,
+                  0.06666666666666661,
+                  0.2500000000000001,
+                  0.18333333333333338,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.060823732062775346,
+                  0.22808899523540777,
+                  0.1672652631726324,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.18728852309099212,
+                  0.7023319615912211,
+                  0.5150434385002289,
+                  0.0
+                ]
+              ]
+            }
+          ],
+          "duration_s": 20.25,
+          "dynamic_feasibility_verified": false,
+          "gesture": "elbow_wrist_wave",
+          "joint_names": [
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5"
+          ],
+          "joint_waypoints_rad": [
+            [
+              1.5308012401111322,
+              -1.5311033517939843,
+              1.0644121888764373,
+              1.0908900692364043,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.6144121888764373,
+              1.4208900692364044,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.8144121888764373,
+              1.3008900692364045,
+              0.280057827841527
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.4144121888764373,
+              1.5408900692364043,
+              -0.319942172158473
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.8144121888764373,
+              1.3008900692364045,
+              0.280057827841527
+            ],
+            [
+              1.5308012401111322,
+              -1.4111033517939844,
+              0.6144121888764373,
+              1.4208900692364044,
+              -0.01994217215847297
+            ],
+            [
+              1.5308012401111322,
+              -1.5311033517939843,
+              1.0644121888764373,
+              1.0908900692364043,
+              -0.01994217215847297
+            ]
+          ],
+          "joint_span_rad": [
+            0.0,
+            0.11999999999999988,
+            0.6499999999999999,
+            0.44999999999999996,
+            0.6
+          ],
+          "test_speed_limit_rad_s": 0.25,
+          "test_acceleration_limit_rad_s2": 0.5,
+          "test_jerk_limit_rad_s3": 2.0,
+          "base_pose_fixed": true,
+          "gripper_target_fixed": true,
+          "initial_hold_s": 2.0,
+          "hardware_executable": false
+        },
+        "joint_motion": {
+          "names": [
+            "joint1",
+            "joint2",
+            "joint3",
+            "joint4",
+            "joint5"
+          ],
+          "reference_span_deg": [
+            0.0,
+            6.875493541569872,
+            25.7829971484298,
+            18.907531242181864,
+            12.05920715238617
+          ],
+          "measured_span_deg": [
+            10.164006920605948,
+            16.569139300969226,
+            34.741914059226126,
+            25.349281325217678,
+            11.321916944587363
+          ],
+          "peak_measured_speed_rad_s": [
+            0.39643753377043994,
+            0.33101196460804905,
+            0.4295602956853562,
+            0.40547370197827215,
+            0.3292344188740409
+          ]
+        },
+        "code": "unsafe_contact",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "f200b0632e150a894577f3839a52627259c4ea0566daeb4675a7a71fc36b8709",
+        "second_reference_sha256": null,
+        "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+        "replay": "elbow_wrist_wave-policy_1-replay.npz",
+        "trace": "elbow_wrist_wave-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.06201266185441309,
+          "ee_orientation_error": 0.2519075741194289,
+          "base_goal_error": 0.025248669775918407,
+          "base_heading_error_rad": 0.1408741572705888,
+          "peak_contact_force": 33.95743634355418,
+          "peak_base_linear_jerk_m_s3": 4.297751113527443,
+          "peak_base_yaw_jerk_rad_s3": 70.72882605495384,
+          "wheel_lift": false,
+          "unsafe_contact": true,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "last_active_time_s": 6.749999999999368,
+        "last_reference_time_s": 6.749999999999368
+      }
+    ]
+  },
+  "summary": {
+    "teacher": {
+      "attempts": 1,
+      "admitted": 1,
+      "successes": 1,
+      "confirmed_stops": 1
+    },
+    "policy_0": {
+      "attempts": 1,
+      "admitted": 1,
+      "successes": 0,
+      "confirmed_stops": 1
+    },
+    "policy_1": {
+      "attempts": 1,
+      "admitted": 1,
+      "successes": 0,
+      "confirmed_stops": 1
+    }
+  },
+  "complete": true,
+  "hardware_ready": false,
+  "hardware_motion_commands_sent": 0,
+  "source_manifest_sha256": "b09af639b252f2358a1a70d4af68a8edc62cf95b033453ec6071fc7d779e1ce3",
+  "source_changes_from_wrist_v1": {
+    "rl/manipulation/herman_gestures.py": "c86b65d3381cc46ed6fcc0759f48eafeda156dfefe48570fa816f6b4d1374502",
+    "@rehearsal_runner": "edb292c65dfa9021e336f7e0e1ed476b9d80a6ebcfffc192c3fec4473ccc24e2"
+  },
+  "private_report_sha256": "28b725a6f7001b3ea309ef54bd9abf0ed79548cfbde7eaf2036af5b1453c7692",
+  "private_artifacts_sha256": "79b5415f190f66d0c668319c00260288083ddf8ab8c557a51aca7565e245ead1",
+  "video": {
+    "format": "herman-replay-video-v1",
+    "video": "herman-elbow-wave-v1-comparison.mp4",
+    "fps": 10,
+    "frames": 350,
+    "duration_s": 35.0,
+    "resolution": [
+      1536,
+      768
+    ],
+    "hardware_motion_commands_sent": 0,
+    "simulation_steps": 0,
+    "motion_magnified": false,
+    "ended_recordings": "last active frame frozen; not simulated stopping",
+    "source_report_sha256": "28b725a6f7001b3ea309ef54bd9abf0ed79548cfbde7eaf2036af5b1453c7692",
+    "source_artifacts_sha256": "79b5415f190f66d0c668319c00260288083ddf8ab8c557a51aca7565e245ead1",
+    "sha256": "28d1a6cef4126d8726e936023edd298d6417216b35cd1836507d0cc02e714a6e",
+    "source_files": {
+      "herman_video.py": "8caf7ef9116f8603c6236bcbdc3afc24955418d4b0b0683c2c3f613e2b039da0",
+      "herman_rehearsal.py": "8ed7cba59c6ce6b07ddd7cbbf96683886936fec148467ec75a678b67026ae241"
+    }
+  },
+  "webm_sha256": "b27b2710140958f209b0fc1bd586eb315451a850adbb856116fbd78e47d05757",
+  "decoded_video_check": {
+    "decoded_frames": [
+      {
+        "time_s": 0,
+        "orange_robot_pixels": 4175,
+        "changed_robot_pixels_vs_start": 0
+      },
+      {
+        "time_s": 6,
+        "orange_robot_pixels": 4715,
+        "changed_robot_pixels_vs_start": 5200
+      },
+      {
+        "time_s": 10,
+        "orange_robot_pixels": 4819,
+        "changed_robot_pixels_vs_start": 5576
+      },
+      {
+        "time_s": 15,
+        "orange_robot_pixels": 4404,
+        "changed_robot_pixels_vs_start": 4995
+      },
+      {
+        "time_s": 22,
+        "orange_robot_pixels": 4157,
+        "changed_robot_pixels_vs_start": 986
+      },
+      {
+        "time_s": 30,
+        "orange_robot_pixels": 4125,
+        "changed_robot_pixels_vs_start": 952
+      }
+    ],
+    "mesh_motion_visible": true,
+    "inset_excluded": true
+  },
+  "browser_check": {
+    "format": "herman-playback-browser-v2",
+    "hardware_motion_enabled": false,
+    "checks": [
+      "moving teacher and orbit selected by default",
+      "decoded image pixels change during Play",
+      "400ms network latency preserves wall-clock playback",
+      "ended recording restarts on Play",
+      "static capture clearly disables playback",
+      "hand closeup and target axes render",
+      "browser-selected video decodes, plays and seeks in Chromium",
+      "mobile layout without overflow"
+    ],
+    "joint_readout": {
+      "text": "Joint travel from start (degrees):   measured | FK witness | actuator target\nElbow joint3            -25.5 |    -25.4 |    -25.3\nWrist pitch joint4       18.9 |     18.7 |     18.7\nWrist roll joint5         0.4 |      0.6 |      0.7",
+      "elbow_delta": -25.46203439513048,
+      "wrist_pitch_delta": 18.86580256726969
+    },
+    "defaults": {
+      "index": 1,
+      "camera": "orbit",
+      "enabled": true,
+      "video": true
+    },
+    "slow_network": {
+      "desired": 2.349999999999852,
+      "displayed": 1.7999999999999126,
+      "playing": true
+    },
+    "video": {
+      "duration": 35,
+      "width": 1536,
+      "height": 768,
+      "error": null
+    },
+    "native_video_url": "http://localhost:8771/video.webm?recording=28b725a6f7001b3e",
+    "pixel_sha256": [
+      "6daeda776537c9e372ee27c1e5d54bbf79ac43005e04d39e43e5b8f400ac4474",
+      "aa804ffcdb6293586e36dd26e0c00c657a4972deb294ec3b610de5a0e5990a8c"
+    ]
+  },
+  "visual_inspection": {
+    "decoded_times_s": [
+      0,
+      6,
+      10,
+      15,
+      22,
+      30
+    ],
+    "observed": "forearm raises; elbow and wrist wave; returns to stowed hand pose",
+    "simulation_only": true,
+    "post_stop_motion_fabricated": false
+  },
+  "tests": {
+    "tests": "24",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "junit_sha256": "9406f6e0f5a0775324dc558097f36abd8825e1ab192f5c7e02db809f010e5cb0"
+  }
+}

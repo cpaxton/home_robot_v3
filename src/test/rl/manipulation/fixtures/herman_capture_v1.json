@@ -1,0 +1,271 @@
+{
+  "format": "herman-rehearsal-capture-v1",
+  "counts": {
+    "arm": 1598,
+    "odom": 240,
+    "robot_description": 1,
+    "head_left_info": 115,
+    "head_right_info": 115,
+    "head_right": 115,
+    "head_left": 64,
+    "depth": 64,
+    "scan": 31
+  },
+  "samples": {
+    "arm": {
+      "stamp_ns": 1794946659014881971,
+      "frame_id": "",
+      "names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6"
+      ],
+      "position": [
+        1.5938060386131812,
+        -1.7456701366138596,
+        1.5631264228554684,
+        1.0906603401866908,
+        -0.019941750242513337,
+        0.08897088569736719
+      ],
+      "velocity": [
+        0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        0.0015339807878856412,
+        -0.0
+      ],
+      "effort_proxy": [
+        0.0,
+        0.0,
+        0.0,
+        -5.0,
+        -5.0,
+        18.0
+      ]
+    },
+    "head_left_info": {
+      "stamp_ns": 1794946659158998206,
+      "frame_id": "camera_optical_frame",
+      "width": 320,
+      "height": 240,
+      "K": [
+        133.49129855540565,
+        0.0,
+        155.73841246712314,
+        0.0,
+        133.34219005429318,
+        124.53254950551204,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "P": [
+        165.01117808528065,
+        0.0,
+        189.41971969604492,
+        0.0,
+        0.0,
+        165.01117808528065,
+        123.46171283721924,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "R": [
+        0.9999830940590679,
+        -0.0025044872811762564,
+        0.00524777471997094,
+        0.0024843044436912826,
+        0.999989506754123,
+        0.0038489755879696956,
+        -0.0052573593641861245,
+        -0.003835873447359443,
+        0.999978822899471
+      ],
+      "D": [
+        -0.005433424252775489,
+        -0.00240654871343959,
+        -0.00014376950352771372,
+        -0.0007758654583274457,
+        -0.006905510827424102
+      ],
+      "distortion_model": "plumb_bob",
+      "binning_x": 0,
+      "binning_y": 0,
+      "roi": {
+        "x_offset": 0,
+        "y_offset": 0,
+        "width": 0,
+        "height": 0,
+        "do_rectify": false
+      }
+    }
+  },
+  "transforms": {
+    "ee_link": {
+      "parent": "base_link",
+      "child": "ee_link",
+      "query_stamp_ns": 1794946659014881971,
+      "stamp_ns": 1794946659014881971,
+      "frame_id": "base_link",
+      "position": [
+        0.08419910136060131,
+        0.025403079208597766,
+        0.03323068831474769
+      ],
+      "quaternion_xyzw": [
+        -0.31994319602208326,
+        0.30013616795036135,
+        0.645752124983647,
+        0.6249470578267823
+      ]
+    },
+    "head": {
+      "parent": "base_link",
+      "child": "head",
+      "query_stamp_ns": 1794946659014881971,
+      "stamp_ns": 1794946659014881971,
+      "frame_id": "base_link",
+      "position": [
+        -0.040751,
+        -0.0002,
+        0.25882
+      ],
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "camera_optical_frame": {
+      "parent": "base_link",
+      "child": "camera_optical_frame",
+      "query_stamp_ns": 1794946659014881971,
+      "stamp_ns": 1794946659014881971,
+      "frame_id": "base_link",
+      "position": [
+        0.0025190000000000004,
+        0.029500000000000002,
+        0.25854499999999997
+      ],
+      "quaternion_xyzw": [
+        -0.49999999999662686,
+        0.5000018366025517,
+        -0.49999999999662686,
+        0.49999816339744824
+      ]
+    },
+    "right_camera_optical_frame": {
+      "parent": "base_link",
+      "child": "right_camera_optical_frame",
+      "query_stamp_ns": 1794946659014881971,
+      "stamp_ns": 1794946659014881971,
+      "frame_id": "base_link",
+      "position": [
+        0.0025190000000000004,
+        -0.0305,
+        0.25854499999999997
+      ],
+      "quaternion_xyzw": [
+        -0.49999999999662686,
+        0.5000018366025517,
+        -0.49999999999662686,
+        0.49999816339744824
+      ]
+    },
+    "arm_camera_optical_frame": {
+      "error": "\"arm_camera_optical_frame\" passed to lookupTransform argument source_frame does not exist. ",
+      "parent": "base_link",
+      "child": "arm_camera_optical_frame",
+      "query_stamp_ns": 1794946659014881971
+    },
+    "base_laser": {
+      "parent": "base_link",
+      "child": "base_laser",
+      "query_stamp_ns": 1794946659014881971,
+      "stamp_ns": 1794946659014881971,
+      "frame_id": "base_link",
+      "position": [
+        -0.0764,
+        0.0,
+        0.17165
+      ],
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "arm_position_history": [
+    {
+      "stamp_ns": 1794946651158971708,
+      "names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6"
+      ],
+      "position": [
+        1.5938060386131812,
+        -1.7456701366138596,
+        1.5631264228554684,
+        1.0906603401866908,
+        -0.019941750242513337,
+        0.08897088569736719
+      ]
+    },
+    {
+      "stamp_ns": 1794946651255989340,
+      "names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6"
+      ],
+      "position": [
+        1.5938060386131812,
+        -1.7456701366138596,
+        1.5631264228554684,
+        1.0906603401866908,
+        -0.019941750242513337,
+        0.08897088569736719
+      ]
+    },
+    {
+      "stamp_ns": 1794946651354558627,
+      "names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6"
+      ],
+      "position": [
+        1.5938060386131812,
+        -1.7456701366138596,
+        1.5631264228554684,
+        1.0906603401866908,
+        -0.019941750242513337,
+        0.08897088569736719
+      ]
+    }
+  ],
+  "actuator_publishers_created": false,
+  "hardware_motion_commands_sent": 0,
+  "scope": "sanitized numeric robot geometry fixture; no home imagery or depth pixels"
+}

@@ -1,0 +1,120 @@
+"""Fixed-budget joint PPO from the retained controller, not the regressed fit."""
+import hashlib,json,runpy
+from dataclasses import replace
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_evaluation import teacher_episode,json_value
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,SUITE,COARSE_SUITE,load_suite
+from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO,PPOConfig,grouped_gae
+from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
+from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle,export_actor
+from emet.rl.manipulation.whole_body_env import ControlStepMixture
+from emet.rl.manipulation.whole_body_training import load_development,collect_rollout,primitive_rollout
+from emet.rl.regression_gate import ROOT,source_state,verify_regressions
+
+REC=ROOT/'logs/recovery/coupled-direction-ppo-v2';OUT=ROOT/'logs/manipulation/coupled-direction-ppo-v2'
+PRIOR=ROOT/'logs/manipulation/base-direction-bootstrap-v1'
+def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def save(p,value):
+ tmp=p.with_suffix('.partial');tmp.write_text(json.dumps(value,indent=2,default=json_value,allow_nan=False)+'\n');tmp.replace(p)
+def make_general(cases,path,horizon):
+ env=CoupledTrackingEnv('innate_mars',cases,suite_path=path)
+ env.unwrapped.config=replace(env.unwrapped.config,horizon=horizon)
+ return env
+
+def warm_critics(learner,rollout):
+ cfg=learner.config;p=learner.policy
+ _,targets=grouped_gae(rollout['rewards'],rollout['values'],rollout['next_values'],rollout['terminated'],rollout['episode_end'],rollout['ticks'],gamma=cfg.gamma,lam=cfg.gae_lambda)
+ obs={k:torch.as_tensor(v,dtype=torch.float32) for k,v in rollout['observations'].items()};targets=torch.from_numpy(targets)
+ for _ in range(cfg.epochs):
+  for indices in torch.randperm(len(targets)).split(cfg.batch_size):
+   loss=.5*((p.values({k:v[indices] for k,v in obs.items()})-targets[indices])**2).mean(0).sum()
+   learner.optimizer.zero_grad();loss.backward()
+   for critic in p.critics:torch.nn.utils.clip_grad_norm_(critic.parameters(),cfg.max_grad_norm)
+   learner.optimizer.step()
+ return {'critic_only':True,'value_loss':float(loss.detach())}
+
+def main():
+ torch.set_num_threads(1);protocol=json.loads((REC/'protocol.json').read_text());receipt=verify_regressions(ROOT/'logs/eval/coupled-coarse-regressions-v1/full.receipt.json')
+ sources=source_state(ROOT);previous=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'))
+ base_cases=previous['new_base_cases']();general_cases=[c for c in load_suite()['robots']['innate_mars'] if c['split']=='train'];development,_=load_development()
+ admission=json.loads((ROOT/'logs/eval/base-direction-admission-v1/results.json').read_text())
+ assert admission['ready'] and admission['source_state_digest']==digest(sources)
+ assert [r['id'] for r in admission['tamp']]==[c['id'] for c in development['train_cases']+development['audit_cases']]
+ assert all(r['success'] and r['stop_confirmed'] and not any(r['safety_flags'].values()) for r in admission['tamp'])
+ initializer=WholeBodyBundle(ROOT/protocol['initializer']);assert initializer.actor.base_rate_feedback is False
+ anchor=json.loads((ROOT/'logs/eval/coupled-base-feedback-v1/results-final.json').read_text())
+ assert anchor['complete'] and anchor['candidate_weights_sha256']==initializer.manifest['weights_sha256'] and anchor['source_state_digest']==digest(sources)
+ prior=json.loads((PRIOR/'run.json').read_text());assert prior['initializer_weights_sha256']==initializer.manifest['weights_sha256']
+ OUT.mkdir(parents=True,exist_ok=False)
+ meta={'format':'coupled-direction-ppo-v2','protocol':protocol,'protocol_sha256':sha(REC/'protocol.json'),'runner_sha256':sha(__file__),'source_state_digest':digest(sources),'regression_tests':len(receipt['test_ids']),'regression_receipt_sha256':sha(ROOT/'logs/eval/coupled-coarse-regressions-v1/full.receipt.json'),'initializer_weights_sha256':initializer.manifest['weights_sha256'],'initial_general_tamp_report_sha256':sha(ROOT/'logs/eval/coupled-base-feedback-v1/results-final.json'),'initial_base_audit_report_sha256':sha(PRIOR/'initial-base-audit.json'),'phase':'training_horizon_admission','complete':False,'decisions':0,'new_ppo_actor_decisions':0,'hardware_used':False,'safety_promoted':False,'teacher_actions_in_loss':False};save(OUT/'run.json',meta)
+ teacher=[]
+ for cases,path in ((base_cases,COARSE_SUITE),(general_cases,SUITE)):
+  env=make_general(cases,path,protocol['training_horizon_s'])
+  try:
+   for case in cases:
+    env.reset(options={'case_id':case['id']});r=teacher_episode(env,case);teacher.append({'case':case,'teacher':r});save(OUT/'training-teacher.json',teacher)
+    if not(r['tracking_success'] and r['stop_confirmed'] and not any(r['safety_flags'].values())):raise RuntimeError('Training-horizon admission failed:'+case['id'])
+  finally:env.close()
+ assert digest(source_state(ROOT))==meta['source_state_digest']
+ np.random.seed(protocol['seed']);torch.manual_seed(protocol['seed'])
+ policy=MultiCriticPolicy(base_rate_feedback=False);policy.actor.load_state_dict(initializer.actor.state_dict())
+ with torch.no_grad():policy.log_std.fill_(np.log(protocol['initial_action_std']))
+ config=PPOConfig(learning_rate=protocol['actor_learning_rate'][0],critic_learning_rate=protocol['critic_learning_rate'],epochs=protocol['epochs'],batch_size=protocol['batch_size'],clip=protocol['clip'],target_kl=protocol['target_kl'],entropy_weight=protocol['entropy_weight'])
+ learner=MultiCriticPPO(policy,config)
+ general=ControlStepMixture({'base':make_general(base_cases,COARSE_SUITE,protocol['training_horizon_s']),'coupled':make_general(general_cases,SUITE,protocol['training_horizon_s'])},[.5,.5])
+ env=ControlStepMixture({'general':general,'tamp':TampPrimitiveEnv(development['train_cases'],primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True)},[.5,.5])
+ import wandb
+ run=wandb.init(project='emet-mars-control',name='coupled-direction-ppo-v2',mode='offline',dir=str(OUT),config={**protocol,'source_state_digest':meta['source_state_digest']})
+ native=general.environments['base'].unwrapped
+ decisions=ticks=0;episodes=[];initial_actor={k:v.clone() for k,v in policy.actor.state_dict().items()}
+ def episode(info):
+  m=info.get('metrics',info)
+  row={'case_id':info.get('case_id'),'family':info.get('training_family'),'code':info.get('code'),'success':bool(info.get('primitive_success',False)),'stop_confirmed':info.get('stop_confirmed'),'wheel_lift':bool(info.get('wheel_lift',False)),'unsafe_contact':bool(info.get('unsafe_contact',False)),'invalid_physics':bool(info.get('invalid_physics',False)),'decisions_so_far':decisions}
+  episodes.append(row)
+  with (OUT/'episodes.jsonl').open('a') as f:f.write(json.dumps(row,allow_nan=False)+'\n')
+ try:
+  observation,_=env.reset(seed=protocol['seed']);meta['phase']='training';save(OUT/'run.json',meta)
+  while decisions<protocol['decisions']:
+   rollout,observation=collect_rollout(env,policy,observation,min(protocol['rollout_steps'],protocol['decisions']-decisions),episode_callback=episode,gamma=config.gamma)
+   if decisions==0:
+    arrays={'obs/'+k:v for k,v in rollout['observations'].items()}
+    arrays.update({k:v for k,v in rollout.items() if k not in ('observations','reward_discount')})
+    np.savez_compressed(OUT/'first-rollout.npz',**arrays)
+    meta['first_rollout_sha256']=sha(OUT/'first-rollout.npz')
+   physical=int(np.sum(rollout['ticks']));warm=decisions<protocol['critic_only_initial_decisions']
+   if warm:
+    stats=warm_critics(learner,rollout)
+    for k,v in policy.actor.state_dict().items():torch.testing.assert_close(v,initial_actor[k],rtol=0,atol=0)
+   else:
+    fraction=(decisions-protocol['critic_only_initial_decisions'])/(protocol['decisions']-protocol['critic_only_initial_decisions'])
+    learner.optimizer.param_groups[0]['lr']=protocol['actor_learning_rate'][0]*(1-fraction)+protocol['actor_learning_rate'][1]*fraction
+    stats=learner.update(rollout)
+   decisions+=len(rollout['actions']);ticks+=physical
+   record={'decisions':decisions,'control_ticks':ticks,'critic_only':warm,'actor_lr':learner.optimizer.param_groups[0]['lr'],'mixture':env.ledger(),'general_mixture':general.ledger(),'case_ids':sorted(set(rollout['case_ids'].tolist())),**stats}
+   with (OUT/'updates.jsonl').open('a') as f:f.write(json.dumps(record,allow_nan=False)+'\n')
+   run.log({'decisions':decisions,'control_ticks':ticks,'actor_lr':record['actor_lr'],'tracking_reward':float(np.mean(rollout['rewards'][:,0])),'stability_reward':float(np.mean(rollout['rewards'][:,1])),'contact_reward':float(np.mean(rollout['rewards'][:,2]))},step=decisions)
+   meta.update(decisions=decisions,control_ticks=ticks,new_ppo_actor_decisions=max(0,decisions-protocol['critic_only_initial_decisions']),mixture=env.ledger(),general_mixture=general.ledger(),episodes=len(episodes));save(OUT/'run.json',meta)
+   if decisions%2048==0:print('PPO',decisions,'/',protocol['decisions'],'ticks',ticks,'episodes',len(episodes),flush=True)
+   if decisions%8192==0 or decisions==protocol['decisions']:
+    directory=OUT/f'checkpoint-{decisions}';directory.mkdir()
+    torch.save({'policy':policy.state_dict(),'optimizer':learner.optimizer.state_dict(),'torch_rng':torch.get_rng_state(),'decisions':decisions,'environment_state_serialized':False},directory/'training.pt')
+    export_actor(policy.actor,directory/'actor',native.config,native.fingerprint,steps=decisions,training={'scope':'coupled_direction_ppo_v1','teacher_actions_in_loss':False,'source_weights_sha256':initializer.manifest['weights_sha256']})
+  final=WholeBodyBundle(OUT/f'checkpoint-{decisions}/actor');meta['phase']='final_evaluation';save(OUT/'run.json',meta)
+ finally:
+  env.close();run.finish()
+ summary={}
+ # Reuse the tested evaluator without collecting any new audit labels.
+ evaluate=previous['evaluate_general'];old_out=evaluate.__globals__['OUT'];evaluate.__globals__['OUT']=OUT
+ try:
+  for path,name in ((SUITE,'final-v1-general'),(COARSE_SUITE,'final-v2-general')):
+   rows=evaluate(final.actor,load_suite(path)['robots']['innate_mars'],path,name);summary[name]={'attempts':len(rows),'successes':sum(x['success'] for x in rows)}
+  audits=json.loads((PRIOR/'audit-cases.json').read_text());rows=evaluate(final.actor,audits,COARSE_SUITE,'final-base-audit');summary['final-base-audit']={'attempts':len(rows),'successes':sum(x['success'] for x in rows)}
+ finally:evaluate.__globals__['OUT']=old_out
+ rows=primitive_rollout(development['train_cases']+development['audit_cases'],policy=final.actor,primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True);save(OUT/'final-tamp.json',rows);summary['final-tamp']={'attempts':len(rows),'successes':sum(x['success'] for x in rows)}
+ assert digest(source_state(ROOT))==meta['source_state_digest']
+ meta.update(complete=True,phase='complete',summary=summary);save(OUT/'run.json',meta);print('SUMMARY',summary,flush=True)
+if __name__=='__main__':main()

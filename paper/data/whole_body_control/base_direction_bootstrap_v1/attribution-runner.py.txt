@@ -1,0 +1,49 @@
+"""Train-case-only decomposition of the fixed candidate's base requests."""
+import json, math
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,SUITE,COARSE_SUITE
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+from emet.rl.manipulation.safety import whole_body_stopped
+
+def main():
+ torch.set_num_threads(1)
+ out=Path('logs/eval/base-attribution-v1');out.mkdir(parents=True,exist_ok=False)
+ bundle=WholeBodyBundle('logs/eval/coupled-base-feedback-v1/actor');a=bundle.actor
+ results=[]
+ for suite in (SUITE,COARSE_SUITE):
+  env=CoupledTrackingEnv('innate_mars',suite_path=suite);e=env.unwrapped
+  case=env.cases[0]
+  try:
+   obs,_=env.reset(options={'case_id':case['id']});trace=[]
+   for tick in range(500):
+    sensor={k:torch.from_numpy(obs[k])[None] for k in ('history','preview','motion')}
+    with torch.no_grad():
+     history,preview,motion=a.encoder(sensor)
+     context=a.context(torch.cat([a.gru(history)[0][:,-1],preview.flatten(1),motion],dim=-1))
+     gain=a.gain(context).reshape(-1,7,a.feedback_width)[0,:2].numpy().copy()
+     gain[:,24:35]=0
+     f,pf=a.encoder.fields,a.encoder.preview_fields
+     blocks=[]
+     for i in (1,4):
+      hand=preview[:,i,pf['hand_error']].clone();hand[:,3:]-=hand.new_tensor([1,0,0,1,0,0])*preview[:,i,pf['hand_mask']]
+      blocks.extend([preview[:,i,pf['base_error']],hand])
+     velocities=sensor['history'][:,-1,f['proprio/velocities']]/history.new_tensor(e.profile.speed)
+     vector=torch.cat([*blocks,velocities,history[:,-1,-9:-3],motion],dim=-1)[0].numpy()
+     contributions=gain*vector[None]/math.sqrt(a.feedback_width)
+     action=a(sensor)[0].numpy().copy()
+    teacher=task_pose_teacher_action(e.control)
+    trace.append({'tick':tick,'elapsed':e.control.trajectory_elapsed(),'base':e.control.base_pose().tolist(),'goal':e.control.base_goal.tolist(),'actor':action[:2].tolist(),'teacher':teacher[:2].tolist(),'current_base_error':vector[:3].tolist(),'future_base_error':vector[12:15].tolist(),'contributions':{'current_base':contributions[:,:3].tolist(),'future_base':contributions[:,12:15].tolist(),'motion':contributions[:,35:].tolist(),'rate':contributions[:,24:35].tolist()},'base_error_gains':gain[:,[0,1,2,12,13,14]].tolist()})
+    obs,_,done,truncated,info=env.step(action)
+    if done or truncated:break
+   e.control.stop()
+   for _ in range(16):
+    if whole_body_stopped(e.control) or e._physics_invalid:break
+    e._tick(np.zeros(e.profile.action_size))
+   results.append({'case':case,'success':bool(info.get('is_success')),'code':info['code'],'trace':trace,'stop_confirmed':whole_body_stopped(e.control)})
+   (out/'results.json').write_text(json.dumps(results,indent=2)+'\n')
+   print(case['id'],info['code'],flush=True)
+  finally:env.close()
+if __name__=='__main__':main()

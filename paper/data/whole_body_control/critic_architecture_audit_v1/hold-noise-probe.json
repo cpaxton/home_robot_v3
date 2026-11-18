@@ -1,0 +1,733 @@
+{
+  "format": "hold-exploration-probe-v1",
+  "source_state_digest": "3dfd3a7b8b72158a0238bb28adc1abf876108bdfdd8838c030fd3d0a055e0a14",
+  "runner_sha256": "bbbb7662d17585a336a87da4d5e0b1df40f7898ca667b855b5a660da45750e2f",
+  "actor_weights_sha256": "46291c71ea4dccd93feaf94d4b0e88f3deb1ee5945667964300f3c9f1c165813",
+  "noise_seed": 108,
+  "hold_scale": 0.125,
+  "scope": "same frozen actor, same noise stream, original Gaussian std .02; only a constant active-target preview with zero announced twist lowers motion-action exploration; mean authority and native guards remain unchanged",
+  "actor_updated": false,
+  "results": [
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:0",
+        "seed": 35900000,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.09,
+        "turn_rad": -0.16,
+        "arm_delta": [
+          0.0,
+          -0.004,
+          0.004,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "dd3f2bc04c0c409ab64725532ddd4b18fd83fa1f5bb55b4a6bb16859e11a0118",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0009550218420971447,
+        "ee_orientation_error": 0.0029323896123780494,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 10.33825004267855,
+        "peak_base_yaw_jerk_rad_s3": 29.139961095192568,
+        "peak_contact_force": 0.1962000000000012
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:1",
+        "seed": 35900001,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": -0.09,
+        "turn_rad": -0.18,
+        "arm_delta": [
+          0.0,
+          0.006,
+          -0.006,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "ebed0aa76f7ec08e17acc5a1fe0c60071abfd5e76613c975093035bdd31cac84",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.004350473748996141,
+        "ee_orientation_error": 0.014912653521522674,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 10.49276564849019,
+        "peak_base_yaw_jerk_rad_s3": 49.50447842307104,
+        "peak_contact_force": 0.19620000000391993
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:3",
+        "seed": 35900003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": -0.12,
+        "turn_rad": 0.16,
+        "arm_delta": [
+          0.0,
+          -0.003,
+          0.003,
+          0.0,
+          0.006
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "a235e516f75a98f0314f4e0b7cba07444240db526f089f7ffb68f2f90961f962",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.001750688655099264,
+        "ee_orientation_error": 0.007567322331716583,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 10.255670382358755,
+        "peak_base_yaw_jerk_rad_s3": 35.31471100425053,
+        "peak_contact_force": 0.1962000000000006
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:4",
+        "seed": 35900004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.1,
+        "turn_rad": 0.14,
+        "arm_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.006
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "a33f4d8130cefb8d19b724f09387479cfb35fc2ae3aa0b8f279920f38e2f5f82",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0020439619610830044,
+        "ee_orientation_error": 0.004686302085678815,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 10.068474056316319,
+        "peak_base_yaw_jerk_rad_s3": 26.193662757364233,
+        "peak_contact_force": 0.1962000000000011
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:base:2",
+        "seed": 35900022,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.0,
+        "turn_rad": 0.18,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "198d6e9ccb15b0c48e77d98461ed920f32511d56283a42eb85c8fb2089690b92",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.021809546933566404,
+        "ee_orientation_error": 0.002834172797856904,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 24.801378888582903,
+        "peak_base_yaw_jerk_rad_s3": 74.43952515038575,
+        "peak_contact_force": 0.19620000000000118
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:audit:hand:1",
+        "seed": 35901001,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.09720000000000001,
+        "turn_rad": -0.19440000000000002,
+        "arm_delta": [
+          0.0,
+          0.0064800000000000005,
+          -0.0064800000000000005,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "e3b39f3332c06f051830d57e02beab22a55fa100bdba8e60f3356c9f3b684e24",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.004963549098310762,
+        "ee_orientation_error": 0.019868330520544278,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 11.860660537662175,
+        "peak_base_yaw_jerk_rad_s3": 69.51873370842776,
+        "peak_contact_force": 0.1962000000000006
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:audit:hand:2",
+        "seed": 35901002,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": 0.1296,
+        "turn_rad": 0.20520000000000002,
+        "arm_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.00864
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "03d71b374f77be872a410a59e7d55dcbc330e095b08fa5c383b77c937f26b06a",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.003206050333519216,
+        "ee_orientation_error": 0.011293843477456975,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 10.473369540785322,
+        "peak_base_yaw_jerk_rad_s3": 31.690899351725086,
+        "peak_contact_force": 0.1962000000000011
+      }
+    },
+    {
+      "mode": "original_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:audit:hand:7",
+        "seed": 35901007,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.0648,
+        "turn_rad": 0.10800000000000001,
+        "arm_delta": [
+          0.0,
+          0.0032400000000000003,
+          -0.0032400000000000003,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      "success": false,
+      "code": "unsafe_contact",
+      "ticks": 48,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "6c57ce2116f40d29609991ab5c64961a0fc11f7575f049c6492451f28097c145",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": true,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0038822462766280445,
+        "ee_orientation_error": 0.022773077401099316,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 9.350975944484532,
+        "peak_base_yaw_jerk_rad_s3": 46.776411667724176,
+        "peak_contact_force": 31.522554676504765
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:0",
+        "seed": 35900000,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.09,
+        "turn_rad": -0.16,
+        "arm_delta": [
+          0.0,
+          -0.004,
+          0.004,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": true,
+      "code": "ok",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "7b576004eae00438c3f680660c494f2b3f3324636187f50e7071b3b22e3e42fe",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.00034675926582358784,
+        "ee_orientation_error": 0.0009109791522012003,
+        "settled_seconds": 21.100000000000165,
+        "time_to_first_settle": 5.899999999999461,
+        "peak_hold_base_drift_m": 0.00018368708345061296,
+        "peak_base_linear_jerk_m_s3": 10.33825004267855,
+        "peak_base_yaw_jerk_rad_s3": 24.689799144025244,
+        "peak_contact_force": 0.19620000000000112
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:1",
+        "seed": 35900001,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": -0.09,
+        "turn_rad": -0.18,
+        "arm_delta": [
+          0.0,
+          0.006,
+          -0.006,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "bf299321029fd24f746b4ae6e66eed68f47006de0fbff1cf993946bd895b5cf6",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.004553679372421039,
+        "ee_orientation_error": 0.012467377282367891,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 10.49276564849019,
+        "peak_base_yaw_jerk_rad_s3": 49.50447842307104,
+        "peak_contact_force": 0.19620000000000112
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:3",
+        "seed": 35900003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": -0.12,
+        "turn_rad": 0.16,
+        "arm_delta": [
+          0.0,
+          -0.003,
+          0.003,
+          0.0,
+          0.006
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": true,
+      "code": "ok",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "9664896e09f05aa69844820571df7c350ba8861c451ca0f0211262c33e536c81",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0016288459102079304,
+        "ee_orientation_error": 0.0045254366537025486,
+        "settled_seconds": 20.250000000000153,
+        "time_to_first_settle": 6.749999999999368,
+        "peak_hold_base_drift_m": 0.00019106589045981857,
+        "peak_base_linear_jerk_m_s3": 10.060879265474894,
+        "peak_base_yaw_jerk_rad_s3": 35.31471100425053,
+        "peak_contact_force": 0.1962000000000006
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:hand:4",
+        "seed": 35900004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.1,
+        "turn_rad": 0.14,
+        "arm_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.006
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ]
+      },
+      "success": true,
+      "code": "ok",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "507d81d688a4638c9bd28fa67d678dd1cdf6a4177fc97b965852315ac1f3e003",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0017554766278469142,
+        "ee_orientation_error": 0.003989149759908054,
+        "settled_seconds": 20.85000000000016,
+        "time_to_first_settle": 6.149999999999434,
+        "peak_hold_base_drift_m": 0.0005111622709600828,
+        "peak_base_linear_jerk_m_s3": 10.068474056316319,
+        "peak_base_yaw_jerk_rad_s3": 22.59187640795801,
+        "peak_contact_force": 0.19620000000000115
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:train:base:2",
+        "seed": 35900022,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.0,
+        "turn_rad": 0.18,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "67bcee76226cda5a6d31a8f49f7076d193296034da533f9dae17d271d9f20765",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.013238956218914773,
+        "ee_orientation_error": 0.04331576936299543,
+        "settled_seconds": 0.9500000000000003,
+        "time_to_first_settle": 6.749999999999368,
+        "peak_hold_base_drift_m": 0.0012085207095412502,
+        "peak_base_linear_jerk_m_s3": 18.226770461997457,
+        "peak_base_yaw_jerk_rad_s3": 56.6798537407097,
+        "peak_contact_force": 0.19620000000000115
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:audit:hand:1",
+        "seed": 35901001,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.09720000000000001,
+        "turn_rad": -0.19440000000000002,
+        "arm_delta": [
+          0.0,
+          0.0064800000000000005,
+          -0.0064800000000000005,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "a04d9453141f76439f9392c91eabf8434416c9bd0bd337f806e92930406cb3f4",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.005281809933878938,
+        "ee_orientation_error": 0.015364531671520536,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 11.860660537662175,
+        "peak_base_yaw_jerk_rad_s3": 69.51873370842776,
+        "peak_contact_force": 0.19620000000000057
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:audit:hand:2",
+        "seed": 35901002,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": 0.1296,
+        "turn_rad": 0.20520000000000002,
+        "arm_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.00864
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ]
+      },
+      "success": false,
+      "code": "tracking_timeout",
+      "ticks": 500,
+      "reduced_noise_ticks": 421,
+      "state_trace_sha256": "f7d0bb68a8bb4067a80a9a0e8460efbfd84df407c4edc451ba820cadc46cc62e",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0029620252671242893,
+        "ee_orientation_error": 0.008279858847157723,
+        "settled_seconds": 0.5499999999999999,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 9.86461134312464,
+        "peak_base_yaw_jerk_rad_s3": 24.26014187939418,
+        "peak_contact_force": 0.19620000000000112
+      }
+    },
+    {
+      "mode": "quiet_reference_noise",
+      "case": {
+        "id": "mars:wrapper-reward-v2:audit:hand:7",
+        "seed": 35901007,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.0648,
+        "turn_rad": 0.10800000000000001,
+        "arm_delta": [
+          0.0,
+          0.0032400000000000003,
+          -0.0032400000000000003,
+          0.0,
+          0.0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ]
+      },
+      "success": false,
+      "code": "unsafe_contact",
+      "ticks": 48,
+      "reduced_noise_ticks": 0,
+      "state_trace_sha256": "6c57ce2116f40d29609991ab5c64961a0fc11f7575f049c6492451f28097c145",
+      "stop_confirmed": true,
+      "safety_flags": {
+        "wheel_lift": false,
+        "unsafe_contact": true,
+        "retention_lost": false,
+        "invalid_physics": false
+      },
+      "metrics": {
+        "ee_position_error": 0.0038822462766280445,
+        "ee_orientation_error": 0.022773077401099316,
+        "settled_seconds": 0,
+        "time_to_first_settle": null,
+        "peak_hold_base_drift_m": 0.0,
+        "peak_base_linear_jerk_m_s3": 9.350975944484532,
+        "peak_base_yaw_jerk_rad_s3": 46.776411667724176,
+        "peak_contact_force": 31.522554676504765
+      }
+    }
+  ],
+  "complete": true
+}

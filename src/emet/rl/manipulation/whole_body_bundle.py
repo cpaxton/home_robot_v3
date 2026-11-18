@@ -10,15 +10,31 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
 from emet.rl.manipulation.profiles import PROFILES
+from emet.rl.manipulation.wheel_feedback import execution_record
 from emet.rl.manipulation.whole_body_actor import WholeBodyActor
 from emet.rl.manipulation.whole_body_observation import ACTOR_KEYS
 
 FORMAT = "emet-whole-body-v2"
+CONFIGURED_FORMAT = "emet-whole-body-v3"
+EXECUTION_FORMAT = "emet-whole-body-v4"
+WHOLE_BODY_FORMATS = {FORMAT, CONFIGURED_FORMAT, EXECUTION_FORMAT}
 MOTION_CONTRACT = "world_base_xy_yaw_and_hand_linear_angular_velocity_v1"
 
 
 def export_actor(actor, destination, environment, fingerprint, *, steps, training=None):
+    navigation = actor.base_navigation_feedback
+    if navigation is not None:
+        navigation.validate_tolerances(environment.base_xy_tolerance, environment.base_heading_tolerance)
+    navigation_record = None if navigation is None else navigation.record()
+    # Older v2 runtimes ignore unknown option fields. A changed feedback law
+    # therefore needs a new format they reject, even with identical tensors.
+    bundle_format = CONFIGURED_FORMAT if navigation is not None or not actor.base_rate_feedback else FORMAT
+    wheel_feedback = execution_record(environment)
+    if wheel_feedback is not None:
+        bundle_format = EXECUTION_FORMAT
+    execution_metadata = {"wheel_feedback": wheel_feedback} if wheel_feedback is not None else {}
     destination = Path(destination)
     if destination.exists():
         raise FileExistsError(destination)
@@ -26,11 +42,19 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
     with tempfile.TemporaryDirectory(prefix=f".{destination.name}-", dir=destination.parent) as temp:
         directory = Path(temp)
         torch.save(
-            {"format": FORMAT, "robot": actor.robot, "hidden": actor.hidden, "state_dict": actor.state_dict()},
+            {
+                "format": bundle_format,
+                "robot": actor.robot,
+                "hidden": actor.hidden,
+                "base_rate_feedback": actor.base_rate_feedback,
+                "base_navigation_feedback": navigation_record,
+                **execution_metadata,
+                "state_dict": actor.state_dict(),
+            },
             directory / "policy.zip",
         )
         manifest = {
-            "format": FORMAT,
+            "format": bundle_format,
             "robot": actor.robot,
             "steps": steps,
             "environment": asdict(environment),
@@ -41,6 +65,9 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
             "actor_inputs": list(ACTOR_KEYS),
             "history_steps": PROFILES[actor.robot].history_steps,
             "motion_contract": MOTION_CONTRACT,
+            "base_rate_feedback": actor.base_rate_feedback,
+            "base_navigation_feedback": navigation_record,
+            **execution_metadata,
             "critic_exported": False,
             "hardware_used": False,
             "safety_promoted": False,
@@ -58,7 +85,11 @@ class WholeBodyBundle:
         self.manifest = json.loads((directory / "manifest.json").read_text())
         m = self.manifest
         self.robot = m.get("robot")
-        if m.get("format") != FORMAT or self.robot not in PROFILES or m.get("critic_exported") is not False:
+        if (
+            m.get("format") not in WHOLE_BODY_FORMATS
+            or self.robot not in PROFILES
+            or m.get("critic_exported") is not False
+        ):
             raise ValueError("invalid actor-only whole-body bundle")
         if robot is not None and robot != self.robot or fingerprint is not None and fingerprint != m["fingerprint"]:
             raise ValueError("whole-body robot/model mismatch")
@@ -78,11 +109,49 @@ class WholeBodyBundle:
         if hashlib.sha256(raw).hexdigest() != m["weights_sha256"]:
             raise ValueError("whole-body policy checksum mismatch")
         data = torch.load(directory / "policy.zip", map_location="cpu", weights_only=True)
-        if data.get("format") != FORMAT or data.get("robot") != self.robot:
+        if data.get("format") != m["format"] or data.get("robot") != self.robot:
             raise ValueError("whole-body weights metadata mismatch")
+        if m["format"] in {CONFIGURED_FORMAT, EXECUTION_FORMAT} and any(
+            key not in record for record in (m, data) for key in ("base_rate_feedback", "base_navigation_feedback")
+        ):
+            raise ValueError("configured whole-body format requires explicit feedback options")
         if type(data.get("hidden")) is not int or not 1 <= data["hidden"] <= 1024:
             raise ValueError("invalid whole-body hidden width")
-        self.actor = WholeBodyActor(self.robot, data["hidden"])
+        # Missing fields are legacy bundles with the original rate path. Both
+        # files must agree so an edited manifest cannot change actor behavior.
+        rate = data.get("base_rate_feedback", True)
+        declared_rate = m.get("base_rate_feedback", True)
+        if type(rate) is not bool or type(declared_rate) is not bool or rate != declared_rate:
+            raise ValueError("whole-body base feedback contract mismatch")
+        navigation = BaseNavigationFeedback.from_record(data.get("base_navigation_feedback"))
+        declared_navigation = BaseNavigationFeedback.from_record(m.get("base_navigation_feedback"))
+        if navigation != declared_navigation:
+            raise ValueError("whole-body base navigation contract mismatch")
+        if navigation is not None and m["format"] not in {CONFIGURED_FORMAT, EXECUTION_FORMAT}:
+            raise ValueError("base navigation feedback requires the configured v3 format")
+        scoped = m["environment"].get("wheel_feedback_base_only_gains") is not None
+        if scoped or m["format"] == EXECUTION_FORMAT or "wheel_feedback" in m or "wheel_feedback" in data:
+            from emet.rl.manipulation.env import ManipulationConfig
+
+            execution = ManipulationConfig(**m["environment"])
+            if execution.robot != self.robot:
+                raise ValueError("wheel execution robot mismatch")
+            expected = execution_record(execution)
+            if m["format"] != EXECUTION_FORMAT or expected is None:
+                raise ValueError("scoped wheel feedback requires the v4 execution contract")
+            expected = json.dumps(expected, sort_keys=True, allow_nan=False)
+            if any(
+                json.dumps(record.get("wheel_feedback"), sort_keys=True, allow_nan=False) != expected
+                for record in (m, data)
+            ):
+                raise ValueError("whole-body wheel execution contract mismatch")
+        if navigation is not None:
+            navigation.validate_tolerances(
+                m["environment"].get("base_xy_tolerance"), m["environment"].get("base_heading_tolerance")
+            )
+        self.actor = WholeBodyActor(
+            self.robot, data["hidden"], base_rate_feedback=rate, base_navigation_feedback=navigation
+        )
         self.actor.load_state_dict(data["state_dict"], strict=True)
         if any(not torch.isfinite(value).all() for value in self.actor.state_dict().values()):
             raise ValueError("nonfinite whole-body weights")

@@ -1,11 +1,79 @@
 # Mars WBC: stabilize the base, define smoothness, then train
 
+Current 2026-11-17 task allocation and measured exposure are maintained in
+[TRAINING_MIXTURE](../rl/TRAINING_MIXTURE.md). Longer training improves genuinely
+fresh cases 12/24 → 16/24 and flagged episodes 4 → 1; goal transitions remain
+0/4. The next planned 30/10/10/50 hand/base/transition/TAMP allocation is not yet
+running. [Hardware readiness](../rl/MARS_HARDWARE_READINESS.md) is independent
+of these policy scores. Older milestones below retain their original scope.
+
+Implementation is consolidated into the canonical thread and #241 development
+branch. Parents #239 and #240 are merged into main and incorporated locally. [Active work](../rl/ACTIVE_WORK.md) owns current
+ownership, receipts and launch status; this page owns the technical sequence.
+The unloaded-prefix scope and coupled v1 teacher readouts are complete. Current
+work isolates base hunting, coarse base acceptance and phase/reset coverage; see
+the [2026-11-16 report](../experiments/coupled_tracking_20261116.md).
+Older conditional experiments below remain historical/optional proposals,
+not competing automatic training launches.
+
 This is the ordered continuation after [PR #238](https://github.com/cpaxton/home_robot_v3/pull/238).
 The goal is one reactive actor that follows base/hand references, settles and
 satisfies physical smoothness, support, force and retention contracts. A better
 hand endpoint is useful progress; it is not the full objective.
 
-## Latest decision after actual-reset validation
+## Current decision: scoped native feedback, then matched tracking
+
+Source `4b3c4059` implements an explicit opt-in base-only linear/yaw feedback
+pair, bound in an actor-only v4 checkpoint execution contract. Fallback feedback
+is preserved for active-hand and partial-base commands; native wheel slew and
+stop guards remain authoritative. The preceding unsupported 15-case override
+is now historical diagnostic evidence, not the deployable implementation.
+
+The completed comparison uses the same source, learned tensors, cases and seeds
+for scalar gain 0.5 and scoped gains `(0, 0.5)`. Its 113 cases per contract cover
+moving goals, static/compiled endpoints, both coupled distributions, unloaded
+TAMP, new reverse audits and repeated base/hand mask handoffs. Publish every
+failure, measured jerk/contact/support peak and confirmed-stop count. Keep the
+older 10/12 moving and 6/10 larger-general results in their original producers.
+[Current protocol and report](../experiments/scoped_wheel_feedback_20261116.md).
+
+Decide from those results whether the option preserves hand precision and
+settling while improving reverse support. The readout improves moving goals 10/12 → 12/12 and preserves coupled/TAMP
+scores, but linear jerk worsens and repeated mask handoffs remain 2/4. Retain
+the option experimentally; diagnose motion and train analogous transitions
+without qualifying the whole controller.
+A new mask-transition fault or lost hand/TAMP performance needs diagnosis
+before training on that plant. If the execution setting is retained, expose it
+consistently to the mixed general/TAMP training factory, then run a bounded PPO
+comparison with unchanged physical contracts and separate teacher readouts.
+Loaded retention, per-plant agent admission and Herman remain separate gates.
+
+## Hand accuracy: evidence before the next PPO run
+
+The [24-episode hand audit](../experiments/hand_tracking_accuracy_20261116.md)
+identifies a false equilibrium in four quiet misses: learned base/hand error
+terms cancel, producing near-zero commands with residual hand error. Native
+tracking is close to its joint targets and actuators/limits have substantial
+headroom. Whole-body local rank is six; arm-only rank is five. Related failures
+need coordinated whole-body correction, without tightening the external base
+region. A global hand-gain boost improves final pose but worsens some transient
+error/jerk; simply removing base feedback adds a contact stop. Neither is promoted.
+
+Before further mixed PPO, give its actual RewardMeter an explicit serialized
+configuration and contract-scale coarse/fine/progress shaping. Test active-goal
+changes, velocity/quiet credit and 3/5/10/20 mm errors. Native environment reward
+flags alone do not affect this wrapper objective. Generate analogous non-audit
+cases with independent coupled corrections and mask transitions; retain ordinary
+tracking and outer 50/50 general/TAMP physical ticks. Then run bounded mastery
+PPO and compare full trajectories, safety and settling before increasing scale.
+
+Free-base cases also need safe allocation: actor and teacher fold link3 into the
+base collision proxy while the nominal witness remains separated. Preserve the
+force guard and model geometry; add self-clearance/posture coverage and an
+optional collision-aware teacher/reference comparison. The controller remains
+a task-agnostic trajectory tracker. Loaded carry and Herman remain separate.
+
+## Historical decision after actual-reset validation
 
 The [completed reset/baseline study](../experiments/mars_current_feedback_reset_validation_20261115.md)
 passes all 24 loop stop checks and 1,299 fresh software regressions. Current-COM
@@ -45,12 +113,19 @@ an actual fixed-world-hand/base preparation let the teacher pass that bottleneck
 but retention still fails. The actor also under-tracks the fixed-hand 20 mm
 base shift, confirming a concrete coupled-motion curriculum gap.
 
-Keep the repaired handoff and all guards. Before new training, extend the real
-TAMP primitive boundary through the unloaded grasp pose, admit it independently,
-and include reachable fixed-world-hand/base references alongside general
-tracking. Keep the outer general/task balance; do not train only TAMP or require
-a broken loaded grasp to supervise unloaded tracking. Loaded progression needs
-support-reserved planning and independently stable grasp/wrench evidence.
+Keep the repaired handoff and all guards. The
+[unloaded-grasp extension and teacher readout](../experiments/mars_unloaded_grasp_admission_20261116.md)
+now execute through grasp pose before closure: 5/6 successes at each of the
+pregrasp/grasp-pose boundaries, all twelve stops confirmed, and 1,367 passing
+source-bound regressions. Stage admission remains closed because the full-task
+executor still replans the prospective loaded lift before executing either
+unloaded boundary. Next, explicitly admit the requested unloaded planning prefix
+while preserving its own collision/support checks and full loaded validation
+when lift is requested. Then include reachable fixed-world-hand/base references
+alongside general tracking. Keep the outer general/task balance; do not train
+only TAMP or require a broken loaded grasp to supervise unloaded tracking.
+Loaded progression needs support-reserved planning and independently stable
+grasp/wrench evidence. No PPO follows from the current failed stage admission.
 
 ## Why this order
 

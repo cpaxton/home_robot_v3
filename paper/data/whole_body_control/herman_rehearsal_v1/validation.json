@@ -1,0 +1,96 @@
+{
+  "format": "herman-rehearsal-validation-v1",
+  "checks": {
+    "targeted": {
+      "tests": "71",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "15.923",
+      "xml_sha256": "558484d158fc0afa46549ec8997c534659471382bff9612d44406443de0e68e9"
+    },
+    "integration": {
+      "tests": "86",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "44.806",
+      "xml_sha256": "bec924c8248ea915ba09ea03b322bf45d80ada28e335563abd9e301f2e22d19b"
+    },
+    "gate": {
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.927",
+      "xml_sha256": "d0802fee2e5e2f72af70d1b327e85075669350cfb890ac97b5d9f987b29b86f9"
+    },
+    "viewer_recheck": {
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "3.640",
+      "xml_sha256": "bf08af451527c22621aebd83b2d07a5616f7baaa7e7956420c5748cf65407ae5"
+    }
+  },
+  "unique_test_count": 169,
+  "viewer_recheck_included_in_targeted": true,
+  "browser": {
+    "format": "herman-rehearsal-browser-v1",
+    "hardware_motion_enabled": false,
+    "checks": [
+      "real and simulated camera images load",
+      "captured posture blocks playback",
+      "recorded case selection",
+      "pointer orbit",
+      "play/pause",
+      "timeline scrub",
+      "head and model-only wrist renders",
+      "mobile layout without overflow"
+    ],
+    "entries": 19,
+    "summary": {
+      "teacher": {
+        "attempts": 6,
+        "admitted": 6,
+        "successes": 6,
+        "confirmed_stops": 6
+      },
+      "policy_0": {
+        "attempts": 6,
+        "admitted": 6,
+        "successes": 0,
+        "confirmed_stops": 6
+      },
+      "policy_1": {
+        "attempts": 6,
+        "admitted": 6,
+        "successes": 0,
+        "confirmed_stops": 6
+      }
+    }
+  },
+  "sources": {
+    "scripts/capture_herman_rehearsal.py": "455e857a72c9e29e59048a93ab284aa2a8d0dc43c349947cedd9921f644d88f9",
+    "scripts/rehearse_herman.py": "7a183170a4df5b7b011e136801b3cf15c4251b46c3a2d02952585b2a9371cadb",
+    "scripts/pack_mars_training_snapshot.py": "5325559a789d81c06c30b983032f746b5a6ed820b4f72c78ee6e08fac8b8e913",
+    "src/emet/rl/manipulation/env.py": "e5b20b975dd0fa1b400594885b8f1dff6447f99ed2b981b4f865a21054209db6",
+    "src/emet/rl/manipulation/models.py": "603f96944dd51fd38675fcb4ee511f63ed103782a76090be83d733a398d53220",
+    "src/emet/rl/manipulation/herman_rehearsal.py": "09f860319eecf384090db379985d3fb5ca1bec27ec39d97bb28786c18f110861",
+    "src/emet/rl/manipulation/herman_rehearsal_env.py": "a718a11ab259d49d8e8a86d4187a527706441f51a405f487fdaa68c4acb0db7f",
+    "src/emet/rl/regression_gate.py": "eea5456855948195434788444c0cef64023d1676294decc2de03cae244855895",
+    "src/emet/robots/innate_mars/passive_ssh.py": "d7c5ba83049466684c67bc990fa50181e00db012bf25ebec9af0f2abb225022b",
+    "src/emet/robots/innate_mars/rehearsal_capture_ros.py": "44061c834f4fcc5a3868ab2a9fa07a9bcda8e423b694f2496eab7dc524c1f3c7",
+    "src/emet/visualization/herman_rehearsal.py": "ff9c9d6b470c4b2c6134c0b84f6a528e9d3343f8e1193d87e415f4f463fd31c6",
+    "src/emet/visualization/herman_rehearsal.html": "ee2b0b1b067baee1368ef7744695368116efb642fccf1817d258af14dcf64976",
+    "src/test/rl/manipulation/test_herman_rehearsal.py": "f6eb0880d028d8e3e12facd27888a83a465bca9ba2efd37987d53aecdae1c382",
+    "src/test/visualization/test_herman_rehearsal.py": "6da0857a002d9330359846a49c88e4b2942b631a5d136d09244766f8c3b6f518",
+    "src/test/rl/manipulation/fixtures/herman_capture_v1.json": "92c1803c152af652c1ff0bdad96ae5d44e292d103a0d4bb6ccf67670cb561f37"
+  },
+  "runtime_parity_check_passed": true,
+  "ruff_passed": true,
+  "canonical_mars_fingerprint_unchanged": true,
+  "full_training_regression_gate_rerun": false,
+  "hardware_motion_commands_sent": 0
+}

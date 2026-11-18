@@ -1,0 +1,95 @@
+{
+  "format": "wrapper-reward-training-pilot-v2",
+  "runtime_revision": "5f0eb3c28eef6ed07d87087cdfffdf024e103841",
+  "initializer": "logs/eval/scoped-wheel-feedback-v2/candidate/actor",
+  "seed": 107,
+  "decisions_per_arm": 16384,
+  "critic_only_decisions": 1024,
+  "rollout_steps": 256,
+  "actor_learning_rate": [
+    5e-05,
+    1e-05
+  ],
+  "critic_learning_rate": 0.001,
+  "initial_action_std": 0.02,
+  "epochs": 3,
+  "batch_size": 64,
+  "clip": 0.05,
+  "target_kl": 0.01,
+  "entropy_weight": 0.0001,
+  "family_control_tick_weights": [
+    0.5,
+    0.5
+  ],
+  "general_hand_base_tick_weights": [
+    0.8,
+    0.2
+  ],
+  "training_horizon_s": 25,
+  "evaluation_horizon_s": 25,
+  "randomization_scale": 0,
+  "case_manifest": "cases.json",
+  "training_cases": 12,
+  "fresh_audit_cases": 12,
+  "reward_arms": [
+    "contract",
+    "legacy"
+  ],
+  "intermediate_checkpoint_selection": false,
+  "teacher_actions_in_loss": false,
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "distribution": "FK-witness nonholonomic coupled trajectories with full/XY-only/free base masks, forward/reverse/base-yaw cases; separate audit motions/seeds; 50% TAMP grasp-pose unloaded prefix by physical ticks",
+  "checkpoint_admission": "raw actor is trained/evaluated on separately fingerprinted general and TAMP plants; export is scoped to its declared general plant, not qualified TAMP checkpoint deployment",
+  "preceding_attempt": {
+    "directory": "logs/manipulation/wrapper-reward-training-v1",
+    "training_started": false,
+    "reason": "one new reverse free-base training case trips teacher unsafe-contact guard",
+    "changes": [
+      {
+        "before": {
+          "id": "mars:wrapper-reward-v1:train:hand:7",
+          "seed": 35900007,
+          "split": "train",
+          "mode": "hand_free_base",
+          "travel_m": -0.06,
+          "turn_rad": 0.1,
+          "arm_delta": [
+            0.0,
+            0.003,
+            -0.003,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            false,
+            false,
+            false
+          ]
+        },
+        "after": {
+          "id": "mars:wrapper-reward-v1:train:hand:7",
+          "seed": 35900007,
+          "split": "train",
+          "mode": "coupled",
+          "travel_m": -0.06,
+          "turn_rad": 0.1,
+          "arm_delta": [
+            0.0,
+            0.003,
+            -0.003,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            false
+          ]
+        },
+        "reason": "v1 reverse free-base teacher reaches unsafe self-contact; bounded-base pilot does not alter force thresholds; original free-base failure remains in audit and v1 report"
+      }
+    ]
+  }
+}

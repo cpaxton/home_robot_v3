@@ -1,0 +1,16 @@
+{
+  "README.md": "4ed48e83030d79d8e7c0d9b14380088c45f71691edcd62e0349896676bba4a98",
+  "admission.json": "b6a3c4f053021fe9c3a2cf6788a499b00676660430c04569ca6ab1d6205972fc",
+  "cases.json": "5702612ff67c1e0a02ed5e352aa31f052ae4bb5cf9683531f8b285643123c10e",
+  "check_optimizer_continuation.py": "4c2165b4cc615fa1f983163a90e35f8653f0396262652439f8f9549265cb8753",
+  "finalize.py": "ed5d57fe88779aea05f7aafdac024e1c4b9b6bd73c91378f5fc208dd9e79587e",
+  "mixture.json": "2d12f81db509eb6fcd31efcfc991bfd380403c525bc0a8154b2a0463c6b4a5bb",
+  "optimizer-continuation.json": "fad3b3ed12ccd6573929173076c681743b640a16e875a6dfa696f8e289fb62d3",
+  "protocol.json": "9c0296735c46ebb48983b4177f37b4c8dc237885aa90f4f53e63474e48192922",
+  "record_results.py": "797ed4721edc22d3776e74aa867ed5534786f3b83f3d969a85d7f3bf54d3c40c",
+  "results.json": "67203d79902ff43ec1da8cc5c0879e94a4b1d20db2b515a3573a3efdd3f6c277",
+  "run.py": "6c754710dd2cddb16c1a0e69cb43d3e256bad93e901587131ebf942faec454fc",
+  "runner-sha256.json": "96c0c641ab0489555e94635babc6a07579b030b5e8234a83fcbd5830b33303ef",
+  "status.json": "f7a4e0123d813e9f8b901cfbacd3614bfac131e4fb9cdec4b478aa5f05e979fb",
+  "supervise_training.py": "a1cd8b8b5cf22206ec7b0cee22d6f10a858d8d012a4e71c7de4fd609e82493a2"
+}

@@ -216,9 +216,11 @@ its receipt was independently verified before cleanup of its duplicate runtime.
 Seven focused native hold/guard tests and six failure-category tests pass after
 the hold fix; six script tests verify scoped-contract restoration and nominal
 stance-reference bounds. Frozen **`2cbf70d8` passes 1,330/1,330** full canonical
-regressions in **842.79 s**; its receipt verifies against the current runtime
-and canonical test sources. Later changes are diagnostic scripts, separate
+regressions in **842.79 s**; its receipt binds that frozen #239 runtime
+and canonical test sources. Later changes on that branch are diagnostic scripts, separate
 script tests and documentation/evidence, not a different controller runtime.
 The completed full job is `20261115_161217_cf2956`; the receipt and XML are
 under `logs/eval/mars-hold-reacquire-regressions/full.*`.
 This establishes software regression evidence, not actor or hardware qualification.
+Later unloaded-boundary and curriculum work has separate source receipts; see
+[Active work](../rl/ACTIVE_WORK.md) for the consolidated development source.

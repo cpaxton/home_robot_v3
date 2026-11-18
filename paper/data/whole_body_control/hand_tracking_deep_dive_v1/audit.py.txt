@@ -1,0 +1,399 @@
+"""Fixed 24-episode hand audit. No learning, hardware, resets during a path or gate relaxation."""
+
+import gzip, hashlib, json, math, runpy
+from dataclasses import replace
+from pathlib import Path
+import mujoco, numpy as np, torch
+from scipy.optimize import lsq_linear
+from scipy.spatial.transform import Rotation
+from emet.rl.manipulation.base_navigation_feedback import navigation_feedback_gain
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv, COARSE_SUITE, admit_reference, load_suite
+from emet.rl.manipulation.policy import load_control_policy
+from emet.rl.manipulation.safety import whole_body_stopped
+from emet.rl.manipulation.whole_body_observation import reference_velocity, pose_rotation
+from emet.rl.regression_gate import ROOT, source_state
+
+OUT = ROOT / "logs/eval/hand-tracking-deep-dive-v1"
+GROUPS = {
+    "base_current": slice(0, 3),
+    "hand_current": slice(3, 12),
+    "base_future": slice(12, 15),
+    "hand_future": slice(15, 24),
+    "arm_rate": slice(24, 29),
+    "base_rate": slice(29, 35),
+    "reference_motion": slice(35, 44),
+}
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def save(path, value):
+    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def sensor(obs):
+    return {
+        k: torch.from_numpy(np.asarray(obs[k], dtype=np.float32).copy())[None] for k in ("history", "preview", "motion")
+    }
+
+
+def attribution(actor, obs, intervention):
+    tensors = sensor(obs)
+    capture = []
+    hook = actor.gain.register_forward_hook(lambda module, args, output: capture.append(output.detach().clone()))
+    try:
+        with torch.no_grad():
+            original = actor(tensors)[0].numpy().copy()
+    finally:
+        hook.remove()
+    with torch.no_grad():
+        h, preview, motion = actor.encoder(tensors)
+        f, pf = actor.encoder.fields, actor.encoder.preview_fields
+        blocks = []
+        for index in (1, 4):
+            row = preview[:, index]
+            hand = row[:, pf["hand_error"]].clone()
+            hand[:, 3:] -= hand.new_tensor([1, 0, 0, 1, 0, 0]) * row[:, pf["hand_mask"]]
+            blocks.extend([row[:, pf["base_error"]], hand])
+        vel = tensors["history"][:, -1, f["proprio/velocities"]] / h.new_tensor(actor.encoder.profile.speed)
+        features = torch.cat([*blocks, vel, h[:, -1, -9:-3], motion], dim=-1)
+        gain = capture[0].reshape(1, 7, 44)
+        eligible = (tensors["history"][:, -1, f["hand_mask"]].squeeze(-1) < 0.5) & (
+            tensors["history"][:, -1, f["base_mask"]] > 0.5
+        ).all(-1)
+        if actor.base_navigation_feedback is not None:
+            gain = navigation_feedback_gain(gain, preview, motion, eligible, pf, actor.base_navigation_feedback)
+        if not actor.base_rate_feedback:
+            gain = gain.clone()
+            gain[:, :2, 24:35] = 0
+        groups = {
+            name: (gain[:, :, s] * features[:, None, s]).sum(-1)[0].numpy().copy() / math.sqrt(44)
+            for name, s in GROUPS.items()
+        }
+        pre = sum(groups.values())
+        reconstructed = np.tanh(pre)
+        if bool(eligible[0]) and actor.base_navigation_feedback.reference_tracking:
+            reconstructed[:2] = np.clip(reconstructed[:2] + motion[0, [0, 2]].numpy(), -1, 1)
+        mask = actor.action_mask(tensors)[0].numpy()
+        np.testing.assert_allclose(reconstructed * mask[:-1], original[:-1], atol=3e-7, rtol=1e-5)
+        modified = original.copy()
+        active = bool(tensors["history"][0, -1, f["hand_mask"]].item() > 0.5)
+        if active and intervention == "hand_gain2":
+            pre += groups["hand_current"] + groups["hand_future"]
+        elif active and intervention == "base_error_zero":
+            base_error = np.asarray(obs["history"][-1, f["base_goal"]] - obs["history"][-1, f["base_pose"]], float)
+            base_error[2] = math.atan2(math.sin(base_error[2]), math.cos(base_error[2]))
+            base_error *= obs["history"][-1, f["base_mask"]]
+            if np.linalg.norm(base_error[:2]) <= 0.05 and abs(base_error[2]) <= np.deg2rad(5):
+                pre -= groups["base_current"] + groups["base_future"]
+        if active and intervention in {"hand_gain2", "base_error_zero"}:
+            modified[:-1] = np.tanh(pre) * mask[:-1]
+    return modified, {
+        "original_action": original.tolist(),
+        "feedback_groups_preactivation": {k: v.tolist() for k, v in groups.items()},
+        "effective_preactivation": pre.tolist(),
+    }
+
+
+def kinematics(e, action, extended=False):
+    c, d, m, p = e.control, e.data, e.model, e.profile
+    jp, jr = np.zeros((3, m.nv)), np.zeros((3, m.nv))
+    mujoco.mj_jacBody(m, d, jp, jr, c.ee)
+    jac = np.vstack([jp, jr])
+    arm = np.column_stack([jac[:, v].mean(axis=1) for v in c.v])
+    hand = c.ee_pose().copy()
+    error = np.r_[
+        c.hand_goal[:3] - hand[:3], Rotation.from_matrix(pose_rotation(c.hand_goal) @ pose_rotation(hand).T).as_rotvec()
+    ]
+    yaw = c.base_pose()[2]
+    heading = np.array([math.cos(yaw), math.sin(yaw), 0])
+    pivot = d.xpos[c.base].copy() + d.xmat[c.base].reshape(3, 3) @ c.axle_offset
+    base = np.column_stack([np.r_[heading, np.zeros(3)], np.r_[np.cross([0, 0, 1], hand[:3] - pivot), [0, 0, 1]]])
+    scales = np.r_[p.base_speed, p.base_yaw_speed, p.speed]
+    whole = np.column_stack([base, arm])
+    J = whole * scales
+    measured = jac @ d.qvel.copy()
+    arm_measured = arm @ c.velocities()
+    requested = J @ action[:-1]
+    base_delta = c.base_goal - c.base_pose()
+    base_delta[2] = math.atan2(math.sin(base_delta[2]), math.cos(base_delta[2]))
+    base_delta *= c.base_mask
+    force = d.actuator_force[c.act].copy()
+    ranges = m.actuator_forcerange[c.act].copy()
+    limits = np.maximum(abs(ranges).max(axis=1), 1e-9)
+    row = {
+        "physics_time_s": float(d.time),
+        "reference_progress_s": c.trajectory_elapsed(),
+        "reference_end_s": c.task_trajectory.end,
+        "hand_active": bool(c.hand_mask),
+        "base_mask": c.base_mask.tolist(),
+        "hand": hand.tolist(),
+        "hand_goal": c.hand_goal.tolist(),
+        "error_world": error.tolist(),
+        "position_error_m": float(np.linalg.norm(error[:3])),
+        "orientation_error_rad": float(np.linalg.norm(error[3:])),
+        "base_error": base_delta.tolist(),
+        "announced_motion": reference_velocity(c).tolist(),
+        "measured_ee_twist": measured.tolist(),
+        "measured_arm_ee_twist": arm_measured.tolist(),
+        "measured_nonarm_ee_twist": (measured - arm_measured).tolist(),
+        "requested_ee_twist_linearized": requested.tolist(),
+        "requested_base_ee_twist": (J[:, :2] @ action[:2]).tolist(),
+        "requested_arm_ee_twist": (J[:, 2:] @ action[2:-1]).tolist(),
+        "command_action": action.tolist(),
+        "last_applied_action": c.last_action.copy().tolist(),
+        "joint_position": c.positions().tolist(),
+        "joint_velocity": c.velocities().tolist(),
+        "joint_velocity_command": c.velocity.copy().tolist(),
+        "joint_target": c.target.copy().tolist(),
+        "joint_actuator_ctrl": d.ctrl[c.act].copy().tolist(),
+        "joint_tracking_error": (c.target - c.positions()).tolist(),
+        "tracking_trim": (p.tracking_trim_gain * c.tracking_integral).copy().tolist(),
+        "joint_limit_margin": np.minimum(c.positions() - c.limits[:, 0], c.limits[:, 1] - c.positions()).tolist(),
+        "joint_force_fraction": np.where(m.actuator_forcelimited[c.act], abs(force) / limits, 0).tolist(),
+        "base_command": c.base_command.copy().tolist(),
+        "applied_base_velocity": c.applied_base_velocity.copy().tolist(),
+        "base_qvel": d.qvel[c.base_dof : c.base_dof + 6].copy().tolist(),
+        "holding": bool(c.holding),
+        "arm_holding": bool(c.arm_holding),
+        "stopped": bool(c.stopped),
+        "body_tilt_rad": Rotation.from_matrix(d.xmat[c.base].reshape(3, 3).copy()).as_euler("xyz").tolist(),
+        "joint_tracking_predicted_pose_delta": (arm @ (c.target - c.positions())).tolist(),
+    }
+    if extended:
+        # Explicit diagnostic metric: angular rows scaled by .2 m/rad. No commands
+        # from this bounded local solve are executed.
+        metric = np.array([1, 1, 1, 0.2, 0.2, 0.2])
+        weighted = metric[:, None] * J
+        desired = metric * (4 * error)
+        sv = np.linalg.svd(weighted, compute_uv=False)
+        arm_only = metric[:, None] * arm
+        residual = desired - arm_only @ np.linalg.lstsq(arm_only, desired, rcond=1e-8)[0]
+        local = lsq_linear(weighted, desired, bounds=(-1, 1), tol=1e-10)
+        row["local_kinematics"] = {
+            "rotation_length_m_per_rad": 0.2,
+            "normalized_action_singular_values": sv.tolist(),
+            "whole_body_rank": int(np.linalg.matrix_rank(weighted, tol=1e-8)),
+            "arm_rank": int(np.linalg.matrix_rank(arm_only, tol=1e-8)),
+            "arm_only_corrective_residual": (residual / metric).tolist(),
+            "bounded_local_action": local.x.tolist(),
+            "bounded_local_residual": ((weighted @ local.x - desired) / metric).tolist(),
+            "not_executed": True,
+        }
+    return row
+
+
+def stop(e):
+    e.control.stop()
+    start = float(e.data.time)
+    while not e._physics_invalid and not whole_body_stopped(e.control) and float(e.data.time) - start < 0.75 - 1e-9:
+        e._tick(np.zeros(e.action_space.shape), score=False)
+    return bool(not e._physics_invalid and whole_body_stopped(e.control))
+
+
+def main():
+    torch.set_num_threads(1)
+    OUT.mkdir(parents=True, exist_ok=False)
+    before = source_state(ROOT)
+    bundle = load_control_policy(ROOT / "logs/eval/scoped-wheel-feedback-v2/candidate/actor", robot="innate_mars")
+    weights = {k: v.clone() for k, v in bundle.actor.state_dict().items()}
+    helpers = runpy.run_path(str(ROOT / "logs/recovery/base-direction-bootstrap-v1/train.py"))
+    base = helpers["new_base_cases"]() + json.loads(
+        (ROOT / "logs/manipulation/base-direction-bootstrap-v1/audit-cases.json").read_text()
+    )
+    masks = runpy.run_path(str(ROOT / "logs/recovery/scoped-wheel-feedback-v2/mask_handoffs.py"))
+    selected = []
+    for i, index in enumerate((0, 1, 4, 7)):
+        selected.append(
+            {
+                "case": {**base[index], "id": f"mars:mask-handoff-audit-v1:{i}", "seed": 35876000 + i},
+                "cohort": "mask-handoffs",
+                "mask_index": i,
+            }
+        )
+    for case in load_suite(COARSE_SUITE)["robots"]["innate_mars"]:
+        if case["id"].split(":")[-1] in {"3", "4", "6", "7", "9"}:
+            selected.append({"case": case, "cohort": "larger-coupled"})
+    tasks = [(spec, controller) for controller in ("actor", "teacher") for spec in selected]
+    probes = [
+        selected[1],
+        selected[3],
+        next(s for s in selected if s["case"]["id"].endswith(":7") and s["cohort"] == "larger-coupled"),
+    ]
+    tasks += [(spec, mode) for mode in ("base_error_zero", "hand_gain2") for spec in probes]
+    assert len(tasks) == 24
+    protocol = {
+        "format": "hand-tracking-deep-dive-v1",
+        "source_state_digest": digest(before),
+        "runtime_revision": json.loads((ROOT / "snapshot-manifest.json").read_text())["revision"],
+        "runner_sha256": sha(Path(__file__)),
+        "mask_producer_sha256": sha(ROOT / "logs/recovery/scoped-wheel-feedback-v2/mask_handoffs.py"),
+        "weights_sha256": bundle.manifest["weights_sha256"],
+        "tasks": [{"case": s, "controller": c} for s, c in tasks],
+        "new_training_steps": 0,
+        "hardware_used": False,
+        "safety_promoted": False,
+        "fixed_before_launch": True,
+    }
+    save(OUT / "protocol.json", protocol)
+    report = {"protocol": protocol, "cases": [], "complete": False}
+    save(OUT / "results.json", report)
+    for number, (spec, controller) in enumerate(tasks):
+        case = spec["case"]
+        env = CoupledTrackingEnv("innate_mars", [case], suite_path=COARSE_SUITE)
+        e = env.unwrapped
+        e.config = replace(e.config, wheel_feedback_base_only_gains=(0.0, 0.5))
+        trace = []
+        events = []
+        snapshots = []
+        peak_contact = {"peak_N": 0.0}
+        try:
+            obs, init = env.reset()
+            initial_sha = hashlib.sha256(
+                np.r_[e.data.qpos.copy(), e.data.qvel.copy(), float(e.data.time)].tobytes()
+            ).hexdigest()
+            end = e.control.task_trajectory.end
+            witness = e.control.task_trajectory
+            terminal_base, terminal_q = witness.coordinates(end)
+            terminal_hand = witness.sample(end)[1]
+            fk = witness.fk(terminal_base, terminal_q)
+            np.testing.assert_allclose(terminal_hand, fk, atol=1e-10)
+
+            def contact_peak(state):
+                value = float(state.monitor.peak_force)
+                if value <= peak_contact["peak_N"] + 1e-9:
+                    return
+                pairs = []
+                body_ids = state.model.geom_bodyid.copy()
+                from emet.rl.contact import solved_contact_force
+
+                for i in range(state.data.ncon):
+                    geoms = state.data.contact[i].geom.copy()
+                    a, b = map(int, geoms)
+                    if a < 0 or b < 0:
+                        continue
+                    if (a in state.monitor.support_geoms and b in state.monitor.floor) or (
+                        b in state.monitor.support_geoms and a in state.monitor.floor
+                    ):
+                        continue
+                    normal, bound = solved_contact_force(state.model, state.data, i)
+                    pairs.append(
+                        {
+                            "geoms": [state.model.geom(a).name, state.model.geom(b).name],
+                            "bodies": [
+                                state.model.body(int(body_ids[a])).name,
+                                state.model.body(int(body_ids[b])).name,
+                            ],
+                            "normal_N": normal,
+                            "linear_force_bound_N": bound,
+                            "distance_m": float(state.data.contact[i].dist),
+                        }
+                    )
+                peak_contact.update(
+                    peak_N=value,
+                    time_s=float(state.data.time),
+                    contacts=sorted(pairs, key=lambda r: r["linear_force_bound_N"], reverse=True)[:8],
+                )
+
+            e.physics_observer = contact_peak
+            for tick in range(500):
+                if spec["cohort"] == "mask-handoffs" and tick in (20, 40, 60, 80):
+                    c = e.control
+                    old = c.task_trajectory
+                    offset = c.trajectory_elapsed()
+                    reference = masks["RemainingReference"](old, offset, [True, True, tick != 40], tick != 60)
+                    admission = admit_reference(e, reference)
+                    if not admission["accepted"]:
+                        raise RuntimeError("mask geometry:" + str(admission))
+                    e.set_task_trajectory(reference)
+                    obs = env.observe(c.observe())
+                    events.append({"tick": tick, "admission": admission})
+                # Teacher mutates only its own normal controller reference; actor attribution
+                # and Jacobian observer must leave every measured/control state unchanged.
+                physical = [
+                    e.data.qpos.copy(),
+                    e.data.qvel.copy(),
+                    e.data.ctrl.copy(),
+                    e.control.target.copy(),
+                    e.control.history.copy(),
+                ]
+                if controller == "teacher":
+                    action = task_pose_teacher_action(e.control)
+                    details = {}
+                else:
+                    action, details = attribution(bundle.actor, obs, controller)
+                row = kinematics(e, action, extended=(tick % 20 == 0 or tick >= 480))
+                row.update(tick=tick, **details)
+                trace.append(row)
+                if controller != "teacher":
+                    for actual, old in zip(
+                        (e.data.qpos, e.data.qvel, e.data.ctrl, e.control.target, e.control.history),
+                        physical,
+                        strict=True,
+                    ):
+                        np.testing.assert_array_equal(actual, old)
+                if tick in (100, 200, 300, 400, 480, 499):
+                    snapshots.append(
+                        {
+                            "tick": tick,
+                            "observation": {k: obs[k].copy().tolist() for k in ("history", "preview", "motion")},
+                            "qpos": e.data.qpos.copy().tolist(),
+                            "qvel": e.data.qvel.copy().tolist(),
+                        }
+                    )
+                obs, _, done, truncated, info = env.step(action)
+                if done or truncated:
+                    break
+            metrics = e._info()
+            row = {
+                "case": case,
+                "cohort": spec["cohort"],
+                "controller": controller,
+                "success": bool(info.get("is_success")),
+                "code": info["code"],
+                "initial_state_sha256": initial_sha,
+                "initial_admission": getattr(env, "admission", None),
+                "terminal_reference_fk_error": float(np.linalg.norm(terminal_hand - fk)),
+                "terminal_reference_joint_margin": np.minimum(
+                    terminal_q - e.control.limits[:, 0], e.control.limits[:, 1] - terminal_q
+                ).tolist(),
+                "command_delay_ticks": e.command_delay,
+                "events": events,
+                "metrics": metrics,
+                "peak_contact": peak_contact,
+                "stop_confirmed": stop(e),
+            }
+        finally:
+            e.physics_observer = None
+            env.close()
+        path = OUT / f"episode-{number:02d}.json.gz"
+        with gzip.open(path, "wt") as stream:
+            json.dump({"case": row, "trace": trace, "snapshots": snapshots}, stream, allow_nan=False)
+        row["raw_trace"] = {"path": str(path), "sha256": sha(path), "control_samples": len(trace)}
+        report["cases"].append(row)
+        save(OUT / "results.json", report)
+        print(
+            "HAND_AUDIT",
+            number,
+            controller,
+            case["id"],
+            row["success"],
+            row["code"],
+            metrics["ee_position_error"],
+            metrics["ee_orientation_error"],
+            flush=True,
+        )
+    assert source_state(ROOT) == before
+    for k, v in weights.items():
+        torch.testing.assert_close(bundle.actor.state_dict()[k], v, rtol=0, atol=0)
+    report["complete"] = True
+    save(OUT / "results.json", report)
+    print("HAND_AUDIT_COMPLETE", flush=True)
+
+
+if __name__ == "__main__":
+    main()

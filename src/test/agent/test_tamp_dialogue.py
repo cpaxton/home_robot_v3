@@ -71,5 +71,3 @@ def test_context_is_bounded_and_drops_whole_records_instead_of_goal_constraints(
     context.record_turn('new task', [line(partial())])
     context.record_turn('unrelated question', ['[describe_scene] a room'])
     assert context.prompt('retry') == 'retry'
-
-

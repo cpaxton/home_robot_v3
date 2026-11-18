@@ -1,0 +1,28 @@
+{
+  "middleware": "rmw_zenoh_cpp",
+  "domain": "0",
+  "copied_setting_names": [
+    "RMW_IMPLEMENTATION",
+    "ROS_DOMAIN_ID",
+    "ROS_LOCALHOST_ONLY",
+    "ZENOH_CONFIG_OVERRIDE"
+  ],
+  "selected_nodes": [
+    "/controller_server",
+    "/maurice_arm",
+    "/robot_state_publisher",
+    "/velocity_smoother"
+  ],
+  "selected_topics": [
+    "/cmd_vel [geometry_msgs/msg/Twist]",
+    "/joint_states [sensor_msgs/msg/JointState]",
+    "/mars/arm/command_state [sensor_msgs/msg/JointState]",
+    "/mars/arm/commands [std_msgs/msg/Float64MultiArray]",
+    "/mars/arm/image_raw [sensor_msgs/msg/Image]",
+    "/mars/arm/state [sensor_msgs/msg/JointState]",
+    "/mars/arm/status [maurice_msgs/msg/ArmStatus]",
+    "/odom [nav_msgs/msg/Odometry]"
+  ],
+  "full_graph_sha256": "67bd7f85a3f7e49a73bac9115de2da8eee1b982d82d57c845f99c7def246d246",
+  "motion_commands_sent": false
+}

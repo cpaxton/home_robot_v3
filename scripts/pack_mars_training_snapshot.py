@@ -23,8 +23,24 @@ REQUIRED = (
     "src/innate_mars_bridge/innate_mars_bridge/ros/camera.py",
     "src/emet/perception/matterport_category_mappings.tsv",
     "src/test/core/test_image_timing.py",
+    "src/emet/rl/test_drive.html",
+    "configs/benchmarks/mars_goal_changes_v1.json",
+    "configs/benchmarks/mars_arm_splines_v1.json",
+    "configs/benchmarks/mars_arm_splines_v2.json",
+    "scripts/audit_wbc_trajectory_spread.py",
+    "src/emet/rl/manipulation/arm_spline_gallery.html",
+    "src/emet/visualization/curriculum_gallery.html",
+    "src/emet/visualization/curriculum_coverage.html",
+    "scripts/render_wbc_curriculum.py",
+    "src/test/visualization/test_curriculum.py",
+    "paper/data/whole_body_control/long_finetune_v1/cases.json",
+    "scripts/generate_wbc_goal_changes.py",
+    "scripts/capture_herman_rehearsal.py",
+    "scripts/rehearse_herman.py",
+    "src/test/rl/manipulation/fixtures/herman_capture_v1.json",
+    "paper/data/whole_body_control/fresh_tracking_confirmation_v1/cases.json",
 )
-TEXT = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".tsv", ".txt", ".xml", ".urdf", ".srdf", ".md", ".svg"}
+TEXT = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".tsv", ".txt", ".xml", ".urdf", ".srdf", ".md", ".svg", ".html"}
 
 
 def build_snapshot(root, output):

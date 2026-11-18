@@ -1,0 +1,70 @@
+"""Compact source-bound evidence; raw polynomials/traces/weights remain ignored."""
+import hashlib,json,math,shutil
+from pathlib import Path
+import numpy as np
+ROOT=Path.cwd();OUT=ROOT/'paper/data/whole_body_control/base_goal_reference_v1'
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def read(p):return json.loads(p.read_text())
+def write(p,d):p.write_text(json.dumps(d,indent=2,allow_nan=False)+'\n')
+KEYS=('base_goal_error','base_heading_error_rad','ee_position_error','ee_orientation_error','time_to_first_settle','settled_seconds','base_linear_norm_m_s','base_angular_norm_rad_s','peak_hold_base_drift_m','peak_contact_force','max_penetration','unsafe_contact','wheel_lift','peak_base_linear_jerk_m_s3','peak_base_yaw_jerk_rad_s3')
+def render(value,depth=0,key=None):
+ indent='  '*depth
+ if isinstance(value,dict):
+  return '{\n'+',\n'.join('  '*(depth+1)+json.dumps(k)+': '+render(v,depth+1,k) for k,v in value.items())+'\n'+indent+'}'
+ if isinstance(value,list):
+  if key=='cases':
+   return '[\n'+',\n'.join('  '*(depth+1)+json.dumps(row,separators=(',', ': '),allow_nan=False) for row in value)+'\n'+indent+']'
+  if all(not isinstance(item,(dict,list)) for item in value):return json.dumps(value,allow_nan=False)
+  return '[\n'+',\n'.join('  '*(depth+1)+render(row,depth+1) for row in value)+'\n'+indent+']'
+ return json.dumps(value,allow_nan=False)
+
+def compact(c):
+ out={k:c[k] for k in ('id','seed','mode','cohort','success','code','target','start','duration_s','admission','endpoint_xy_error_m','endpoint_heading_error_rad','stop_confirmed','primitive','boundary_reached','terminal_pose_in_contract','gripper_open','full_pick_place_success','inference_counts','safety_flags','history_preserved','switched','source_case') if k in c}
+ if 'case' in c:out['case']=c['case']
+ m=c.get('metrics',c.get('physical',{}));out['metrics']={k:m[k] for k in KEYS if k in m}
+ if c.get('trace') and 'target' in c:
+  error=np.array(c['trace'][-1]['base'])-c['target'];error[2]=math.atan2(math.sin(error[2]),math.cos(error[2]));out['endpoint_xy_error_m']=float(np.linalg.norm(error[:2]));out['endpoint_heading_error_rad']=float(abs(error[2]));out['final_reference_progress_s']=c['trace'][-1].get('progress')
+ return out
+
+def main():
+ OUT.mkdir(parents=True,exist_ok=True)
+ native=ROOT/'logs/eval/base-goal-reference-native-v1';run=read(native/'run.json');assert run['complete']
+ receipt=ROOT/'logs/eval/base-goal-reference-regressions-v1/full.receipt.json'
+ from emet.rl.regression_gate import verify_regressions
+ verified=verify_regressions(receipt,root=ROOT)
+ probes=[]
+ for version in (1,2,3):
+  p=ROOT/f'logs/eval/base-point-reference-probe-v{version}/results.json';d=read(p);assert d['complete']
+  probes.append({'producer':f'base-point-reference-probe-v{version}','source_state_digest':d['source_state_digest'],'raw_report_sha256':sha(p),'runner_sha256':d['runner_sha256'],'cases':[compact(c) for c in d['cases']]})
+  runner=ROOT/f'logs/recovery/base-point-reference-probe-v{version}/run.py';shutil.copyfile(runner,OUT/f'probe-v{version}.py.txt')
+ cohorts={}
+ for name in ('base-directions','general-v1','general-v2','tamp','point-goals','compiled-goals','handoffs'):
+  p=native/f'{name}.json';rows=read(p);cohorts[name]={'report_sha256':sha(p),'cases':[compact(c) for c in rows]}
+ report={'format':'base-goal-reference-evidence-v1','run':run,'run_sha256':sha(native/'run.json'),'source_archive_sha256':'f9ca3fb2b69986cd055d3b618970b98fef18f20fa79a52e5a6f47f22c87b983c','native_job':'20261116_131735_782166','regression_job':'20261116_131731_f6ab79','regressions':{'tests':len(verified['test_ids']),'seconds':verified['finished_unix']-verified['started_unix'],'xml_sha256':verified['xml_sha256'],'receipt_sha256':sha(receipt)},'development_probes':probes,'cohorts':cohorts,'hardware_used':False,'safety_promoted':False,'new_training_steps':0}
+ wb=native/'wandb-evaluation.json'
+ if wb.exists():report['wandb_evaluation']=read(wb)
+ report['evidence_builder_sha256']=sha(Path(__file__))
+ text=render(report)+'\n';assert json.loads(text)==report;(OUT/'results.json').write_text(text)
+ shutil.copyfile(Path(__file__),OUT/'evidence-builder.py.txt')
+ shutil.copyfile(ROOT/'logs/recovery/base-goal-reference-evidence-v1/log_wandb.py',OUT/'offline-logging.py.txt')
+ shutil.copyfile(ROOT/'logs/recovery/base-goal-reference-native-v1/run.py',OUT/'native-runner.py.txt')
+ # These are the exact reusable helper producers, preserved elsewhere in git.
+ helpers={name:sha(ROOT/name) for name in ('logs/recovery/base-direction-bootstrap-v1/train.py','logs/recovery/base-navigation-native-v2/run.py')};write(OUT/'helper-hashes.json',helpers)
+ import matplotlib
+ matplotlib.use('Agg')
+ import matplotlib.pyplot as plt
+ fig,axes=plt.subplots(1,3,figsize=(14,4))
+ for version,mode,label in ((1,None,'Reference only'),(2,'fixed_ff','+ velocity feedforward'),(3,'xy_band_yaw2_ff','+ XY region and heading calibration')):
+  data=read(ROOT/f'logs/eval/base-point-reference-probe-v{version}/results.json');c=next(c for c in data['cases'] if c['id'].endswith(':0') and (mode is None or c.get('mode')==mode));trace=c['trace'];b=np.array([t['base'] for t in trace]);goal=np.array(c['target']);time=.05*(np.array([t['tick'] for t in trace])+1)
+  origin=np.array(c.get('start',trace[0]['base']))[:2];axes[0].plot(*(b[:,:2]-origin).T,label=label);axes[1].plot(time,np.abs(np.arctan2(np.sin(b[:,2]-goal[2]),np.cos(b[:,2]-goal[2]))),label=label)
+ axes[0].scatter([0],[.15],marker='x',c='black',label='Final goal');axes[0].set(xlabel='Base x displacement (m)',ylabel='Base y displacement (m)',title='Same lateral development goal');axes[0].axis('equal')
+ axes[1].axhline(np.deg2rad(5),color='black',linestyle=':',label='5 degree tolerance');axes[1].set(xlabel='Physical time (s)',ylabel='Final heading error (rad)',title='Endpoint error, not active-reference lag');axes[1].legend(fontsize=7)
+ audit=[c for c in read(native/'compiled-goals.json') if c['cohort']=='audit']
+ for c in audit:
+  start=np.array(c['start']);target=np.array(c['target']);xy=target[:2]-start[:2];color='tab:green' if c['success'] else 'tab:red'
+  axes[2].scatter(*xy,color=color,marker='x');axes[2].arrow(*xy,.02*np.cos(target[2]),.02*np.sin(target[2]),width=.0006,color=color,length_includes_head=True)
+  if c.get('trace'):
+   final=np.array(c['trace'][-1]['base'])[:2]-start[:2];axes[2].plot([xy[0],final[0]],[xy[1],final[1]],color=color,alpha=.6);axes[2].scatter(*final,color=color,s=8)
+ axes[2].scatter([0],[0],color='black',marker='s',label='Robot start');axes[2].set(xlabel='World x displacement (m)',ylabel='World y displacement (m)',title='Fresh endpoint audit: x target / dot final');axes[2].axis('equal');fig.tight_layout();fig.savefig(OUT/'lateral-goal.svg');fig.savefig(native/'lateral-goal-preview.png',dpi=120);plt.close(fig)
+ print(json.dumps({'summary':run['summary'],'regressions':report['regressions'],'artifact_bytes':sum(p.stat().st_size for p in OUT.iterdir())}))
+if __name__=='__main__':main()

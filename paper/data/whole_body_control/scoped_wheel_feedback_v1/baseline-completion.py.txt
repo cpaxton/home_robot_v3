@@ -1,0 +1,27 @@
+"""Complete only the aborted mask audit, preserving all finished baseline cohorts."""
+import hashlib,json,runpy,subprocess,sys
+from pathlib import Path
+import torch
+from emet.rl.regression_gate import ROOT,source_state
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.policy import load_control_policy
+
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def main():
+ torch.set_num_threads(1)
+ root=ROOT/'logs/eval/scoped-wheel-feedback-v2';out=root/'baseline';original=out/'run.json';r=json.loads(original.read_text());assert not r['complete']
+ assert sum(v['attempts'] for v in r['summary'].values())==109
+ assert digest(source_state(ROOT))==r['source_state_digest']
+ for name,expected in r['producer_hashes'].items():assert sha(ROOT/'logs/recovery/scoped-wheel-feedback-v1'/name)==expected
+ module=runpy.run_path(str(Path(__file__).with_name('run.py')));module['CoupledTrackingEnv'].__init__.__globals__['SCOPED']=False
+ helpers=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'));helpers['stop']=module['stop']
+ base=helpers['new_base_cases']()+json.loads((ROOT/'logs/manipulation/base-direction-bootstrap-v1/audit-cases.json').read_text())
+ bundle=load_control_policy(out/'actor',robot='innate_mars')
+ extra=runpy.run_path(str(Path(__file__).with_name('mask_handoffs.py')))
+ rows=extra['run'](bundle,module['CoupledTrackingEnv'],base,helpers,out)
+ r['summary']['mask-handoffs']={'attempts':len(rows),'successes':sum(c['success'] for c in rows)}
+ assert digest(source_state(ROOT))==r['source_state_digest']
+ r['complete']=True;r['completion_producer']={'scope':'four mask-handoff cases only; other 109 outcomes preserved from original producer','original_partial_run_sha256':sha(original),'resume_sha256':sha(Path(__file__)),'mask_handoff_sha256':sha(Path(__file__).with_name('mask_handoffs.py')),'reason':'audit incorrectly compared masked velocity hints when a hand mask intentionally became active; physical sample continuity now checked directly'}
+ (out/'run.completed.json').write_text(json.dumps(r,indent=2,allow_nan=False)+'\n');print('BASELINE_COMPLETE',r['summary'],flush=True)
+ subprocess.run([sys.executable,str(Path(__file__).with_name('run.py'))],check=True)
+if __name__=='__main__':main()
