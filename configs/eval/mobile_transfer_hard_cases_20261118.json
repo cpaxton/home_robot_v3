@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "suite": "configs/eval/mobile_clutter_layout_20261118.json",
+  "artifact_root": ".tamp-runs/expanded-clutter-20261118",
+  "cases": [
+    {
+      "id": "cube_clutter_left",
+      "phase": "source_preflight",
+      "baseline": {
+        "code": "no_plan_within_budget",
+        "witness": "unknown_swept_volume",
+        "planning_ik_calls": 0
+      },
+      "inputs": [
+        "source/raw-scan.npz",
+        "source/provided-scan.npz"
+      ],
+      "target": "certify_starting_payload_with_qualified_evidence",
+      "object": "object1",
+      "config": {
+        "initial_distractor_xy": [
+          0.04,
+          -0.63
+        ]
+      }
+    },
+    {
+      "id": "cube_clutter_front",
+      "phase": "source_preflight",
+      "baseline": {
+        "code": "no_plan_within_budget",
+        "witness": "unknown_swept_volume",
+        "planning_ik_calls": 0
+      },
+      "inputs": [
+        "source/raw-scan.npz",
+        "source/provided-scan.npz"
+      ],
+      "target": "certify_starting_payload_with_qualified_evidence",
+      "object": "object1",
+      "config": {
+        "initial_distractor_xy": [
+          0.14,
+          -0.55
+        ]
+      }
+    },
+    {
+      "id": "cylinder_clutter_right",
+      "phase": "source_search",
+      "baseline": {
+        "code": "stale_observation",
+        "planning_wall_s": 274.69,
+        "planning_ik_calls": 18
+      },
+      "inputs": [
+        "source/raw-scan.npz",
+        "source/provided-scan.npz",
+        "events.jsonl"
+      ],
+      "target": "certify_plan_before_source_expiry",
+      "object": "object2",
+      "config": {
+        "initial_distractor_xy": [
+          0.24,
+          -0.63
+        ]
+      }
+    },
+    {
+      "id": "cylinder_clutter_left",
+      "phase": "source_search",
+      "baseline": {
+        "code": "support_geometry_unknown",
+        "planning_wall_s": 275.03,
+        "planning_ik_calls": 30
+      },
+      "inputs": [
+        "source/raw-scan.npz",
+        "source/provided-scan.npz",
+        "events.jsonl"
+      ],
+      "target": "certify_support_and_plan",
+      "object": "object2",
+      "config": {
+        "initial_distractor_xy": [
+          0.04,
+          -0.63
+        ]
+      }
+    },
+    {
+      "id": "cube_clutter_back",
+      "phase": "release",
+      "baseline": {
+        "code": "collision",
+        "completed_ops": [
+          "grasp"
+        ],
+        "witness": "invalid_start"
+      },
+      "inputs": [
+        "release-states/release-00.npz",
+        "destination/raw-scan.npz",
+        "destination/provided-scan.npz"
+      ],
+      "target": "certify_opening_and_retreat_from_measured_pose",
+      "object": "object1",
+      "config": {
+        "initial_distractor_xy": [
+          0.14,
+          -0.78
+        ]
+      }
+    }
+  ],
+  "passing_controls": [
+    "cube_clutter_right",
+    "cube_clutter_far"
+  ],
+  "baseline_revision": "18b6db5c50fb6302cfd0809a87f99ce4a1b02720"
+}

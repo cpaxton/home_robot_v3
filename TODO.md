@@ -1,5 +1,7 @@
 # Living TODOs (small / near-term)
 
+- [ ] Follow the [TAMP agent qualification plan](docs/plans/2026-11-18_tamp_agent_closeout.md) for #250, search cost, observed execution, and agent trials.
+
 - [x] Reconcile #247 with main #246 and address the posted review. Preserve
       public TAMP receipts and measured settling; throttle capability retries,
       reject missing snapshot RGB and protect recorded credential fields.

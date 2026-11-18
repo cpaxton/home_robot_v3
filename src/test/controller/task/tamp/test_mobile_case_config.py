@@ -94,3 +94,17 @@ def test_clutter_layout_cases_parse_within_declared_geometry(monkeypatch, tmp_pa
         high = (center[0] + hx, center[1] + hy)
         assert all(table[0][i] <= low[i] <= high[i] <= table[1][i] for i in range(2))
         assert any(high[i] <= region[0][i] + 1e-9 or low[i] >= region[1][i] - 1e-9 for i in range(2))
+
+
+def test_hard_case_index_covers_declared_layouts():
+    root = Path(__file__).resolve().parents[5]
+    index = json.loads((root / "configs/eval/mobile_transfer_hard_cases_20261118.json").read_text())
+    suite = json.loads((root / index["suite"]).read_text())
+    ids = [case["id"] for case in index["cases"]] + index["passing_controls"]
+    assert index["schema_version"] == 1
+    assert len(ids) == len(set(ids))
+    assert {case["id"] for case in suite["cases"]} <= set(ids)
+    for case in index["cases"]:
+        assert case["baseline"]["code"] != "ok"
+        assert case["target"] and case["inputs"]
+        assert all(not Path(path).is_absolute() and ".." not in Path(path).parts for path in case["inputs"])
