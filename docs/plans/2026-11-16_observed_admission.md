@@ -227,3 +227,16 @@ opening volume at release after carry. Bounded destination alternatives with
 full-hand evidence remain the next placement gate. Its strict synchronous
 stationary gate is not an asynchronous or hardware motion bound. Existing
 observed source/ownership gates remain open.
+
+### November 18: bounded lateral release alternatives
+
+The [lateral-release follow-up](../experiments/lateral_release_20261118.md)
+completes a fresh clutter task through measured released support, shifted retreat,
+remapping and departure using one vertical and one 1 cm lateral correction. Full
+hand/payload opening/fall/retreat checks retain the requested region and all
+contact/retention/adjustment limits. Retained primitive/episode budgets charge IK
+and complete planning passes, including non-IK geometry. The final native/contact
+batch passes 353 checks, with separate provider-budget and unknown-volume controls.
+The first launch still expires source evidence during initial search; that failure
+and the historical release rejection remain. This recovers one assisted development
+case, not general observed execution or a replacement benchmark denominator.

@@ -782,3 +782,42 @@ Both mobile-map scripts accept `--refresh-source` to enable this experiment.
 The regression runner forwards it to task workers only; negative controls retain
 their declared paths. See the [source-finalization record](../experiments/source_finalization_20261117.md)
 for validation, retained failures and source-tier limits.
+
+### Bounded release destination alternatives
+
+The opt-in native bounded-release policy first checks the measured pose and its
+existing vertical corrections. If none certifies opening the whole hand, it
+also searches horizontal destination offsets. `ReleaseLimits.lateral_offsets_m`
+defaults to `(0.01, 0.02, 0.03)` metres, with the four cardinal
+`lateral_directions`; an empty offset tuple disables this fallback. Up to three
+horizontal magnitudes and four unit directions are supported. With the default
+three height increments this is at most 36 lateral candidates per planning pass.
+These are generic geometry candidates, independent of object labels.
+
+Every candidate checks closed-hand arm/payload motion, commanded and lowered
+opening geometry, sampled released fall, and open-hand retreat. The original
+support/goal-region footprint checks and 1 mm contact tolerance remain mandatory.
+Horizontal target/FK displacement is bounded from the original measured release
+position across both corrections, rather than granting a new 3 cm radius after
+each move. This bounds proposed destinations; sampled paths and future tracking
+remain separately checked, with no new controller-error guarantee.
+
+Executed lateral corrections shift the subsequent placement/retreat targets by
+the same amount. The internal selected goal follows the certified correction;
+the caller's requested region stays unchanged. The same two-adjustment limit
+covers vertical and lateral motion together, and a new current-pose certificate
+is still required before opening after the last adjustment.
+
+Native release refinement charges IK to the stored primitive's remaining call
+budget. Complete planning passes, including dense collision/opening/fall/retreat
+queries, charge its remaining planning time; a late candidate cannot authorize
+an adjustment or opening. Loaded refinement also carries its consumed calls/time
+forward. Controller execution remains outside the planning-time charge and keeps
+its existing measured-motion deadlines. Exhaustion after grasp returns partial
+execution with `completed_ops=["grasp"]`, `failed_stage=release` and inspection
+recovery, consuming the handle without sending the failed opening.
+
+Legacy native policy has no release refiner. This change adds no tool, fictitious
+sensor, attachment, live pose write, free-space assertion or relaxed retention
+threshold. [The lateral-release record](../experiments/lateral_release_20261118.md)
+keeps geometry diagnostics, complete assisted tasks and failures separate.

@@ -36,7 +36,7 @@ compact-manifest policy.
 | Graph room timeline A/B | [graph_room_evidence.md](graph_room_evidence.md) |
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
-| Provided-map mobile TAMP | [Bounded local maps](local_map_mobile_20261117.md) · [Release diagnosis and nine-case regression](mobile_release_20261117.md): five/seven tasks and both fault controls pass; [fresh-source finalization](source_finalization_20261117.md) investigates long-search expiry separately |
+| Provided-map mobile TAMP | [Bounded local maps](local_map_mobile_20261117.md) · [Release diagnosis and nine-case regression](mobile_release_20261117.md): five/seven tasks and both fault controls pass; [fresh-source finalization](source_finalization_20261117.md) and [lateral release](lateral_release_20261118.md) retain expiry/release failures alongside later complete controls |
 | Native retention pilots and preserved failures | [Fixed presets](tamp_native_closure_pilot_20261114.md) · [Contact-relative hold](tamp_native_contact_relative_pilot_20261114.md) · [Geometric ordering / base sensitivity](tamp_native_face_alignment_pilot_20261114.md) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
 | Mars controller timing and smoothness | [Matched wheel-feedback diagnosis](mars_aligned_jerk_measurements_20261115.md): same actor, 2/12→8/12 full passes; simulator diagnostic, zero new PPO |

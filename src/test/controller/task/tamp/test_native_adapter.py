@@ -15,10 +15,12 @@ from revalidation_fixtures import local_scene
 import emet.motion.placement_surfaces as surfaces_module
 from emet.agent.tools import get_tools
 from emet.controller.manipulation.native_scene import model_signature
+from emet.controller.task.tamp import native_placement
 from emet.controller.task.tamp import native_revalidation as validation
 from emet.controller.task.tamp.native_adapter import NativeTableAdapter, adapter_for
 from emet.controller.task.tamp.native_dispatch import dispatch_boundary
 from emet.motion.local_scene_store import LocalMapUnavailable, LocalSceneStore
+from emet.motion.release import ReleaseLimits
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.robosuite_load_utils import snap_joint_qpos_to_ctrl_for_position_actuators
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
@@ -567,9 +569,10 @@ def test_loaded_placement_refresh_preserves_reference_and_shared_budget(native, 
     ex.payload_body = plan.object_body
     ex.collision.set_payload(adapter.model, adapter.data, plan.object_body, ex.ee_body)
     before, reference = adapter.data.qpos.copy(), ex.collision.payload_transform.copy()
+    initial_calls = plan.planning_ik_calls
     attempts = []
     def paths(owner, executor, targets):
-        assert owner.planning_ik_calls == plan.planning_ik_calls+3*len(attempts)
+        assert owner.planning_ik_calls == initial_calls+3*len(attempts)
         assert executor.collision.payload_body == plan.object_body
         attempts.append(targets)
         owner.planning_ik_calls += 3
@@ -582,7 +585,7 @@ def test_loaded_placement_refresh_preserves_reference_and_shared_budget(native, 
     result = native_placement.refine_loaded_placement(adapter, plan)
     assert result.success is (not exhausted)
     assert len(attempts) == (1 if exhausted else 2)
-    assert adapter.planning_ik_calls == plan.planning_ik_calls+3*len(attempts)
+    assert adapter.planning_ik_calls == plan.planning_ik_calls == initial_calls+3*len(attempts)
     np.testing.assert_array_equal(adapter.data.qpos, before)
     np.testing.assert_array_equal(ex.collision.payload_transform, reference)
     assert ex.collision.payload_body == plan.object_body
@@ -927,3 +930,57 @@ def test_registry_lookup_during_dispatch_preserves_adapter_and_namespace(native)
         assert adapter.namespace == namespace
     assert adapter.robot is robot
     robot.arm_to.assert_not_called()
+
+
+def test_release_budget_exhaustion_preserves_completed_grasp_without_opening(native, monkeypatch):
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    ex = plan.executor
+    plan.planning_ik_limit = plan.planning_ik_calls
+    adapter.release_limits = ReleaseLimits(.04, .04)
+    ex.grasp_only = Mock(return_value=SimpleNamespace(success=True))
+    monkeypatch.setattr(adapter, '_verify', lambda *a, **k: True)
+    probe = SimpleNamespace(plan_pose=Mock(side_effect=AssertionError('IK beyond the retained budget')))
+
+    def release(executor, **kwargs):
+        with executor.release_planning_budget():
+            executor.release_pose_planner(probe, np.zeros(3), np.eye(3))
+        pytest.fail('exhausted release planning must not return a candidate')
+
+    monkeypatch.setattr(native_placement, 'refine_release', release)
+    ex.place_only = lambda *a, **k: ex.release_refiner()
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'no_plan_within_budget'
+    assert result['data']['completed_ops'] == ['grasp']
+    assert result['data']['failed_stage'] == 'release'
+    assert result['data']['execution_started'] is True and result['recovery'] == 'inspect'
+    assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
+    robot.open_gripper.assert_not_called()
+    robot.arm_to.assert_not_called()
+    probe.plan_pose.assert_not_called()
+
+
+def test_loaded_placement_deducts_dense_geometry_time_before_release(native, monkeypatch):
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    plan.planning_seconds_remaining = 2.
+    plan.executor.payload_retained = Mock(return_value=True)
+    clock = [10.]
+    monkeypatch.setattr(native_placement, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(native_placement, 'free_surface_centers',
+        lambda *a, **k: SimpleNamespace(centers=[plan.goal.copy()]))
+
+    def paths(*args):
+        clock[0] += 3.  # Expensive collision validation with no additional IK.
+        return [[], [], []], None
+
+    monkeypatch.setattr(native_placement, 'placement_paths', paths)
+    result = native_placement.refine_loaded_placement(adapter, plan)
+    assert not result.success and result.message == 'no_plan_within_budget'
+    assert plan.planning_seconds_remaining == 0.
+    assert plan.planning_ik_calls == adapter.planning_ik_calls
+    assert adapter._planning_deadline is None

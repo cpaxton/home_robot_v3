@@ -30,7 +30,12 @@ from emet.controller.task.tamp.native_approach import (
     verify_approach_ready,
 )
 from emet.controller.task.tamp.native_dispatch import dispatch_boundary, robot_identity
-from emet.controller.task.tamp.native_placement import local_support_patches, placement_paths, refine_loaded_placement
+from emet.controller.task.tamp.native_placement import (
+    local_support_patches,
+    placement_paths,
+    refine_loaded_placement,
+    refine_release_placement,
+)
 from emet.controller.task.tamp.native_policy import (
     FINE_GRASP_YAWS,
     bind_loaded_payload,
@@ -48,7 +53,6 @@ from emet.controller.task.tamp.native_revalidation import (
 )
 from emet.motion.grasp_alignment import face_aligned_grasp_order
 from emet.motion.mujoco_collision import body_subtree
-from emet.motion.release import refine_release
 from emet.robots.stretch import STRETCH_ARM_CHAIN
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
@@ -743,7 +747,7 @@ class NativeTableAdapter:
                 ex.transport = lambda: self._transport(plan)
                 phase = 'place'
                 if self.release_limits is not None:
-                    ex.release_refiner = lambda: refine_release(ex, support=plan.support_body, region=plan.placement_region, limits=self.release_limits)
+                    ex.release_refiner = lambda: refine_release_placement(self, plan)
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
                     witness = (VerificationFailure('loaded_motion', 'payload_not_retained')

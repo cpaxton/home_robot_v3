@@ -1,0 +1,414 @@
+{
+  "schema_version": 1,
+  "scope": "Assisted synchronous CPU MuJoCo/Stretch development controls; provided external RGBD/native state/full-scene geometry; no observed-only, household benchmark, hardware or LLM qualification.",
+  "starting_commit": "0cea6246",
+  "benchmark_denominator": null,
+  "prior_records": [
+    "docs/experiments/mobile_release_20261117.json",
+    "docs/experiments/source_finalization_20261117.json"
+  ],
+  "prior_denominators_unchanged": true,
+  "limits": {
+    "source_lifetime_s": 299,
+    "raise_m": 0.04,
+    "drop_m": 0.04,
+    "max_total_adjustments": 2,
+    "lateral_offsets_m": [
+      0.01,
+      0.02,
+      0.03
+    ],
+    "lateral_directions": [
+      [
+        1,
+        0
+      ],
+      [
+        -1,
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        -1
+      ]
+    ],
+    "contact_penetration_m": 0.001,
+    "retained_primitive_ik_budget": 256
+  },
+  "runtime_patches_sha256": {
+    "runtime.patch": "d197fa78cb5ff5cf958d5dc3b51fa82db487f5a4a8ef5468661e9e3966efa579",
+    "reviewed-runtime.patch": "78b5397d44244b16c5be0438ae309915b544234c0fd9d425ded48817e173ae1e",
+    "start.patch": "311ca6569be88c8fd64b6f0b7fedcb9f18ec2466939c8da36c545b5d143f57f1"
+  },
+  "runtime_versions": {
+    "d2566f8e94a2": {
+      "scripts/eval_mobile_mapped_contact.py": "bdafd7e5acb24d46c59c80911b9ea4cb912a938a1f21cc6324e1c7349640e744",
+      "src/emet/motion/release.py": "5a9cb8140c848b16dfcc405204773f48901b16e9568d71add2197e95167143db",
+      "src/emet/controller/task/tamp/native_revalidation.py": "e63426df2217463aeda00054ed9ce2ecf3b8611d3ef90b4b24e2fb53f2bd18dc",
+      "src/emet/controller/task/tamp/native_dispatch.py": "3cd9a713f15efa393870f350b754c191a43bfaf0e05bbe23bf0106f5eb64eccf",
+      "src/emet/controller/task/tamp/native_adapter.py": "e733bb03fcca119a1e550ad8c99c7ecae69a51f27f3e82dda36f3ff6a21dd91b",
+      "src/emet/controller/task/tamp/native_placement.py": "82920311d4742ecc8356864134696efe44bf8bdd5c0eea31bfac2aa08e8900c9",
+      "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+    },
+    "72e18680927e": {
+      "scripts/eval_mobile_mapped_contact.py": "bdafd7e5acb24d46c59c80911b9ea4cb912a938a1f21cc6324e1c7349640e744",
+      "src/emet/motion/release.py": "351834addd4bdf365647a9ea2b1d75942e300cdf6bbec4f0479a5c99b74d1880",
+      "src/emet/controller/task/tamp/native_revalidation.py": "e63426df2217463aeda00054ed9ce2ecf3b8611d3ef90b4b24e2fb53f2bd18dc",
+      "src/emet/controller/task/tamp/native_dispatch.py": "3cd9a713f15efa393870f350b754c191a43bfaf0e05bbe23bf0106f5eb64eccf",
+      "src/emet/controller/task/tamp/native_adapter.py": "e733bb03fcca119a1e550ad8c99c7ecae69a51f27f3e82dda36f3ff6a21dd91b",
+      "src/emet/controller/task/tamp/native_placement.py": "a7d8169c7e04a1539e731ca0f3445c3e2410987d08f75be410dc9f8987694747",
+      "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+    }
+  },
+  "fixture_versions": {
+    "afaf0c864bc8": {
+      "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+      "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+      "scene_environment.xml": "0a93dca69ebec53411d928cec023c16c47f4af41d967f1b89c3f0640d974ba5b",
+      "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+    },
+    "1df2c668f9e6": {
+      "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+      "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+      "scene_environment.xml": "466f897d0c7dc49045d6f0d860e8598ce1593213b58b1375a296d3a35e23477b",
+      "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+    }
+  },
+  "tests": [
+    {
+      "job_id": "20261118_000136_3985c8",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/unit",
+      "status": "completed",
+      "tests": 69,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "ac0ad1f8e6616185c660abf45137ccc93de8781138dbe4b45f20d5ae3e055569",
+      "failed_tests": []
+    },
+    {
+      "job_id": "20261118_000416_544617",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/regressions",
+      "status": "completed",
+      "tests": 350,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "a3b545f9b81e9d30ebfd2fb1a4b24700fd3169030f63ae2a7bf61d08dee5c0d8",
+      "failed_tests": [
+        "test_loaded_placement_refresh_preserves_reference_and_shared_budget[False]",
+        "test_loaded_placement_refresh_preserves_reference_and_shared_budget[True]"
+      ]
+    },
+    {
+      "job_id": "20261118_000739_289f4a",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/boundaries",
+      "status": "completed",
+      "tests": 77,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "3a720b02cdba49c30c325112c817ce567314b71f1e8f5d568941531008153018",
+      "failed_tests": []
+    },
+    {
+      "job_id": "20261118_001020_dfec3d",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/regressions-final",
+      "status": "completed",
+      "tests": 353,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "05a9c84726b0cd35ce56832cc25ac5646f97540764187d35422eebff47ea95df",
+      "failed_tests": []
+    },
+    {
+      "job_id": "20261118_002245_e25874",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/task-composition",
+      "status": "completed",
+      "tests": 74,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "233170c8d1094cf87e4a175871d602b94ebdc08175a78e779d354518341ee0c5",
+      "failed_tests": []
+    },
+    {
+      "job_id": "20261118_002644_5be4c8",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/map-controls",
+      "status": "completed",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "c0aa2427873c8d44a218f0d37c54af3d3161aeb72389432e07ef5c0ce9891188",
+      "failed_tests": []
+    }
+  ],
+  "task_attempts": [
+    {
+      "job_id": "20261118_000258_e1858e",
+      "case": "cube_clutter",
+      "status": "failed",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/clutter",
+      "source_commit": "0cea624689ea555b382992afd81d6bf40ea0dcdf",
+      "runtime_version": "d2566f8e94a2",
+      "fixture_version": "afaf0c864bc8",
+      "manifest_sha256": "ee093de03758156560e4a603b98d0f95a86d2d37e9f19485d76da29403103c04",
+      "revision_note": "Pre-complete-pass time guard; no finite retained-time cap in bounded_release",
+      "passed": false,
+      "error": "RuntimeError:support_geometry_unknown",
+      "result_sha256": "1be3f9507cb005752fdc65b53dc8319768c8c290614b87c6ca2a334ec4445e6d",
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "phase_wall_seconds": {
+        "navigate_to_source": 3.626714,
+        "map_source": 24.923904,
+        "plan_transfer": 274.117729
+      },
+      "receipt": {
+        "tool": "plan_pick_place",
+        "status": "error",
+        "code": "support_geometry_unknown",
+        "recovery": "inspect",
+        "completed_ops": [],
+        "failed_stage": null,
+        "execution_started": false
+      },
+      "commands": {
+        "total": 3,
+        "arm": 0,
+        "gripper": 0,
+        "base_goal": 1,
+        "base_stop": 2
+      },
+      "map_store": {
+        "loads": 1,
+        "unloads": 1,
+        "stale_rejections": 0,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24100770,
+        "load_seconds": 24.914434338999854
+      },
+      "peak_process_rss_bytes": 2003939328,
+      "events_sha256": "1475e56983d52deab6de50b51c4637db2226026b401520d19c4f73662d511b3d",
+      "release_decisions": []
+    },
+    {
+      "job_id": "20261118_000259_8b4baa",
+      "case": "cylinder_control",
+      "status": "passed",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/cylinder",
+      "source_commit": "0cea624689ea555b382992afd81d6bf40ea0dcdf",
+      "runtime_version": "d2566f8e94a2",
+      "fixture_version": "1df2c668f9e6",
+      "manifest_sha256": "5410caa0700b76728b910ca9c95e9b7b04464247df7453ab9c4f0926556dbe8e",
+      "revision_note": "Pre-complete-pass time guard; no finite retained-time cap in bounded_release",
+      "passed": true,
+      "error": null,
+      "result_sha256": "2cc55aaeff12d395080973d9adb4b3b35691c358b26b75613ec94d596ffab5de",
+      "cpu_affinity": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "phase_wall_seconds": {
+        "navigate_to_source": 3.685934,
+        "map_source": 24.784252,
+        "plan_transfer": 360.021199,
+        "source_finalization": 25.60642,
+        "map_finalized_source": 25.605829,
+        "pick_carry_place": 294.46088,
+        "map_carry": 24.416383,
+        "loaded_carry": 137.060099,
+        "map_destination": 24.680256,
+        "map_released": 25.310275,
+        "navigate_away": 50.175045
+      },
+      "receipt": {
+        "tool": "execute_pick_place_plan",
+        "status": "ok",
+        "code": "ok",
+        "recovery": "none",
+        "completed_ops": [
+          "grasp",
+          "place"
+        ],
+        "failed_stage": null,
+        "execution_started": true
+      },
+      "commands": {
+        "total": 108,
+        "arm": 97,
+        "gripper": 4,
+        "base_goal": 3,
+        "base_stop": 4
+      },
+      "map_store": {
+        "loads": 5,
+        "unloads": 5,
+        "stale_rejections": 4,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112842,
+        "load_seconds": 124.77755650600011
+      },
+      "peak_process_rss_bytes": 2029920256,
+      "events_sha256": "4c91f745f507dd8bfb617b8dbea8de237a349cf64b58cc3d98f21ec4bc59d6bd",
+      "release_decisions": [
+        {
+          "accepted": true,
+          "reason": null,
+          "target_point": [
+            0.11993018858938478,
+            -0.6377444210335075,
+            0.558906940997067
+          ],
+          "lateral": null,
+          "adjustment_count": 0
+        },
+        {
+          "accepted": true,
+          "reason": null,
+          "target_point": [
+            0.11981314416188642,
+            -0.6335956082344629,
+            0.5302395753865429
+          ],
+          "lateral": null,
+          "adjustment_count": 1
+        }
+      ]
+    },
+    {
+      "job_id": "20261118_001151_540dd1",
+      "case": "cube_clutter",
+      "status": "passed",
+      "artifact_directory": ".tamp-runs/lateral-release-20261118/clutter-repeat",
+      "source_commit": "0cea624689ea555b382992afd81d6bf40ea0dcdf",
+      "runtime_version": "72e18680927e",
+      "fixture_version": "afaf0c864bc8",
+      "manifest_sha256": "bb7a38aba980895f7dd49034476d43b7386a5d8c0dd16cbabd37f17f34c85740",
+      "revision_note": "Reviewed complete-pass time accounting",
+      "passed": true,
+      "error": null,
+      "result_sha256": "8acc8c653450a14a37d56b3d812aab27ba2e50303107782f1c940cea5b82e937",
+      "cpu_affinity": [
+        12,
+        13
+      ],
+      "phase_wall_seconds": {
+        "navigate_to_source": 3.513958,
+        "map_source": 24.862086,
+        "plan_transfer": 484.243339,
+        "source_finalization": 24.588837,
+        "map_finalized_source": 24.588329,
+        "pick_carry_place": 469.630131,
+        "map_carry": 25.626299,
+        "loaded_carry": 160.922905,
+        "map_destination": 25.308825,
+        "map_released": 25.551444,
+        "navigate_away": 49.787358
+      },
+      "receipt": {
+        "tool": "execute_pick_place_plan",
+        "status": "ok",
+        "code": "ok",
+        "recovery": "none",
+        "completed_ops": [
+          "grasp",
+          "place"
+        ],
+        "failed_stage": null,
+        "execution_started": true
+      },
+      "commands": {
+        "total": 115,
+        "arm": 104,
+        "gripper": 4,
+        "base_goal": 3,
+        "base_stop": 4
+      },
+      "map_store": {
+        "loads": 5,
+        "unloads": 5,
+        "stale_rejections": 4,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24114174,
+        "load_seconds": 125.91727292799624
+      },
+      "peak_process_rss_bytes": 2019155968,
+      "events_sha256": "771158345b39c8b0c2da88db16212818041fde6cf88cbb8a047cb4b851408245",
+      "release_decisions": [
+        {
+          "accepted": true,
+          "reason": null,
+          "target_point": [
+            0.12027318357058826,
+            -0.6687123697022348,
+            0.5579922460579185
+          ],
+          "lateral": null,
+          "adjustment_count": 0
+        },
+        {
+          "accepted": true,
+          "reason": null,
+          "target_point": [
+            0.1100988384400403,
+            -0.6651895997479775,
+            0.5661870904522159
+          ],
+          "lateral": [
+            -0.01,
+            0.0
+          ],
+          "adjustment_count": 1
+        },
+        {
+          "accepted": true,
+          "reason": null,
+          "target_point": [
+            0.11188478295373196,
+            -0.6609528628452203,
+            0.537289152084497
+          ],
+          "lateral": null,
+          "adjustment_count": 2
+        }
+      ]
+    }
+  ],
+  "saved_state_geometry": {
+    "job_id": "20261118_001322_79b9f8",
+    "scope": "Saved failed state is initial geometry only; newly rendered provided scan; no commands, no physical-task success score.",
+    "selected": true,
+    "error": null,
+    "commands": 0,
+    "ik_calls": 25,
+    "lateral": [
+      -0.01,
+      0.0
+    ],
+    "target_point": [
+      0.1100988384400403,
+      -0.6651895997479775,
+      0.5661870904522159
+    ],
+    "input_sha256": {
+      ".tamp-runs/source-finalization-20261117/final-clutter/cube_clutter/release-states/release-01.npz": "942a8bc868726ee041dd2f1cfdf5460ff564f37359f0c74ade504270ba2c7af7",
+      ".tamp-runs/source-finalization-20261117/final-clutter/cube_clutter/events.jsonl": "2d064a90d2220bc8276a55252f9a8d29af4210b888594fbb7b5837bfcd8d5502"
+    },
+    "result_sha256": "98289133717e9b0785d10241eb60f242c01d4f7ac9c573ca7ecbf477c894b9b6",
+    "script_sha256": "b76fce6b1a7c542b365c733c5eebc03a8aeb569b15cf5d4b5d2b32dd632628ea"
+  },
+  "archive_note": "Local relative paths are not a public archive. Dense traces/captures and source patches remain in the owning worktree; final source is committed with this summary."
+}
