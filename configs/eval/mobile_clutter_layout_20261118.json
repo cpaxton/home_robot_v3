@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Assisted MuJoCo development regression; expanded clutter/layout conditions. Provided RGBD map and native state; no observed-only qualification or benchmark denominator. Declared positions are development diagnostics, not held-out benchmark fixtures with independent replay certificates.",
+  "scope": "Assisted MuJoCo development regression; expanded clutter/layout conditions. Provided RGBD map and native state; no observed-only qualification or benchmark denominator. Nominal distractor footprints may touch the goal boundary. Declared positions are development diagnostics, not held-out benchmark fixtures with independent replay certificates.",
   "cases": [
     {"id": "cube_clutter_right", "object": "object1", "config": {"initial_distractor_xy": [0.24, -0.63]}},
     {"id": "cube_clutter_left", "object": "object1", "config": {"initial_distractor_xy": [0.04, -0.63]}},

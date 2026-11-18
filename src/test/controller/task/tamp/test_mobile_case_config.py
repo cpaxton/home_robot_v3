@@ -57,9 +57,25 @@ def test_declared_cases_parse_and_scaled_fixture_keeps_density(monkeypatch, tmp_
 
 
 def test_clutter_layout_cases_parse_within_declared_geometry(monkeypatch, tmp_path):
+    import xml.etree.ElementTree as ET
+
     root = Path(__file__).resolve().parents[5]
     monkeypatch.syspath_prepend(str(root / "scripts"))
     from tamp_mobile_cases import load_case
+
+    def horizontal_half_extents(name):
+        geom = world.find(f"body[@name='{name}']/geom")
+        size = [float(value) for value in geom.get("size").split()]
+        # Vertical cylinder: size[0] is the radius in the horizontal plane.
+        return (size[0], size[0]) if geom.get("type") == "cylinder" else (size[0], size[1])
+
+    world = ET.parse(root / "src/emet/assets/robot/scene_environment.xml").getroot().find("worldbody")
+    half = {name: horizontal_half_extents(name) for name in ("object1", "object2")}
+    table_pos = [float(value) for value in world.find("body[@name='table']").get("pos").split()[:2]]
+    table_size = [float(value) for value in world.find("body[@name='table']/geom").get("size").split()[:2]]
+    table = ((table_pos[0] - table_size[0], table_pos[1] - table_size[1]),
+             (table_pos[0] + table_size[0], table_pos[1] + table_size[1]))
+    region = ((0.06, -0.73), (0.22, -0.57))
 
     suite = json.loads((root / "configs/eval/mobile_clutter_layout_20261118.json").read_text())
     ids = [row["id"] for row in suite["cases"]]
@@ -69,8 +85,12 @@ def test_clutter_layout_cases_parse_within_declared_geometry(monkeypatch, tmp_pa
         path = tmp_path / "case.json"
         path.write_text(json.dumps(row.get("config", {})))
         assert load_case(path) == row.get("config", {})
-        # Distractors are declared on the 0.6 x 0.5 m table and clear the
-        # unchanged placement region, so a lateral release correction can move
-        # the held object away from any of the four surrounding sides.
-        distractor = row["config"]["initial_distractor_xy"]
-        assert -0.58 <= distractor[0] <= 0.58 and -1.48 <= distractor[1] <= -0.52
+        # Fixture-derived distractor footprint. Touching the region boundary is
+        # an intentional stress case for the lateral release search.
+        distractor = "object2" if row["object"] == "object1" else "object1"
+        hx, hy = half[distractor]
+        center = row["config"]["initial_distractor_xy"]
+        low = (center[0] - hx, center[1] - hy)
+        high = (center[0] + hx, center[1] + hy)
+        assert all(table[0][i] <= low[i] <= high[i] <= table[1][i] for i in range(2))
+        assert any(high[i] <= region[0][i] + 1e-9 or low[i] >= region[1][i] - 1e-9 for i in range(2))
