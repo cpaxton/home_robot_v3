@@ -68,6 +68,8 @@ def main():
         str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in [
             ROOT / "scripts/eval_mobile_mapped_contact.py",
+            ROOT / "scripts/tamp_sim_checkpoint.py",
+            ROOT / "scripts/tamp_release_diagnostics.py",
             ROOT / "src/emet/motion/release.py",
             ROOT / "src/emet/controller/task/tamp/native_revalidation.py",
             ROOT / "src/emet/controller/task/tamp/native_dispatch.py",
