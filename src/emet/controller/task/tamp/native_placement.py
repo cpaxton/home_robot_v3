@@ -7,6 +7,7 @@ import mujoco
 import numpy as np
 
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
+from emet.controller.task.tamp.native_revalidation import joint_proof, payload_copy
 from emet.motion.mujoco_collision import body_subtree
 from emet.motion.placement_geometry import HeldObject, PlacementScene
 from emet.motion.placement_surfaces import free_surface_centers
@@ -28,20 +29,32 @@ def local_support_patches(surfaces, point):
 
 def placement_paths(adapter, executor, targets):
     """Use one planning path for initial candidates and loaded refinements."""
-    paths = []
+    paths, proof = [], []
+    record = getattr(adapter, "reacquire_scene", None) is not None
+    executor._place_proof = ()
     for i, (target, rotation) in enumerate(targets):
         phase = ('preplace', 'place', 'retreat')[i]
         if i == 2:
             executor.collision.set_payload(adapter.model, adapter.data, None)
-            _, error = executor.plan_gripper_open()
+            opening_start = adapter.data.qpos.copy()
+            opening_payload = payload_copy(executor.collision) if record else None
+            opening, error = executor.plan_gripper_open()
             if error:
                 adapter._record_rejection('release_open', error, executor)
                 return None, error
+            if record:
+                proof.append(joint_proof(executor, 'place_open', opening_start, opening_payload, opening,
+                    names=tuple(executor.gripper_open_configuration)))
+        phase_start = adapter.data.qpos.copy()
+        phase_payload = payload_copy(executor.collision) if record else None
         path, error = adapter._plan_candidate_pose(executor, target, rotation)
         if error:
             adapter._record_rejection(phase, error, executor)
             return None, error
         paths.append(path)
+        if record:
+            proof.append(joint_proof(executor, phase, phase_start, phase_payload, path, endpoint=(target, rotation)))
+    executor._place_proof = tuple(proof)
     return paths, None
 
 

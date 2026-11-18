@@ -207,3 +207,23 @@ the cylinder completes carry but rejects release with persistent measured
 tracking shortfall. Both already use the native endpoint-settling gate; a
 redundant proposed setting and its duplicate runs were discarded. Release and
 collision bounds remain unchanged.
+
+### November 17: finalize inert proposals under fresh source evidence
+
+The [release follow-up](../experiments/mobile_release_20261117.md) repairs bounded
+candidate ordering and retains a five-of-seven primary task matrix plus two
+expected fault stops. Long search still expires source evidence. An opt-in
+native handoff now retires old map leases and handles, acquires a post-barrier
+scan and revalidates the selected nominal paths/FK endpoints/loaded sweep without
+IK before publishing a new handle. Capture times and original support rays are
+preserved. Immutable callback/lease bindings and transport-boundary accounting
+distinguish no-actuation expiry from possible-dispatch timeout.
+
+The [source-finalization record](../experiments/source_finalization_20261117.md)
+retains the initial successful refreshed cylinder and safely rejected
+180-second-budget clutter pilot. Three subsequent source handoffs pass; cylinder
+and shifted-cube full tasks finish, while clutter stops partial on unknown
+opening volume at release after carry. Bounded destination alternatives with
+full-hand evidence remain the next placement gate. Its strict synchronous
+stationary gate is not an asynchronous or hardware motion bound. Existing
+observed source/ownership gates remain open.

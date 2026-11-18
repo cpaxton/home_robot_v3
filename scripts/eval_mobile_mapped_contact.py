@@ -29,6 +29,7 @@ from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
 from emet.controller.task.tamp import native_adapter, native_approach, native_placement, native_policy
+from emet.controller.task.tamp.native_revalidation import RefreshedNativeScene
 from emet.eval.physical_tamp import base_pose, make_scene_checker, write_offline_base_pose
 from emet.motion import release
 from emet.motion.local_scene_store import LocalMapUnavailable, LocalScene, LocalSceneStore
@@ -248,12 +249,17 @@ def run(args):
         raw_sync(d)
 
     adapter.synchronize = sync
-    events = []
+
+    class Events(list):
+        def append(self, row):
+            super().append(row)
+            with (out / "events.jsonl").open("a") as stream:
+                stream.write(json.dumps(row) + "\n")
+
+    events = Events()
 
     def event(**row):
         events.append(row)
-        with (out / "events.jsonl").open("a") as stream:
-            stream.write(json.dumps(row) + "\n")
 
     adapter.events = events
     store = LocalSceneStore()
@@ -320,12 +326,26 @@ def run(args):
         ex = raw_executor(obj)
         result["endpoint_settle_s"] = ex.endpoint_settle_s
         ex.collision.additional_scene_checks = (current_guard.configuration_collides,)
+        ex.planning_lease = current_guard.lease
+        with ex.planning_lease.borrow() as scene:
+            ex.planning_capture = scene.support.capture
         robot.gate = current_guard.lease.require_current
         ex.event = event
         install_release_diagnostics(ex, robot, out / "release-states")
         return ex
 
     adapter._executor = executor
+
+    def reacquire_source():
+        nonlocal current_guard
+        with phase("source_finalization"):
+            current_guard = acquire("finalized_source")
+            robot.gate = current_guard.lease.require_current
+            return RefreshedNativeScene(current_guard.lease, (current_guard.configuration_collides,))
+
+    if args.refresh_source:
+        adapter.reacquire_scene = reacquire_source
+    result["refresh_source"] = args.refresh_source
 
     def prepare_transport(ex, obj, goal):
         start = base_pose(model, adapter.data)
@@ -347,12 +367,14 @@ def run(args):
         if not mobile:
             current_guard = acquire("destination")
             plan.executor.collision.additional_scene_checks = (current_guard.configuration_collides,)
+            plan.executor.planning_lease = current_guard.lease
             robot.gate = current_guard.lease.require_current
             return PhysicalMotionResult(True, "stationary_control", "transport")
         # A stopped, loaded handoff is a new acquisition boundary. Long grasp
         # search must not consume the carry scan's original evidence lifetime.
         current_guard = acquire("carry")
         plan.executor.collision.additional_scene_checks = (current_guard.configuration_collides,)
+        plan.executor.planning_lease = current_guard.lease
         robot.gate = robot.motion_gate = current_guard.lease.require_current
         with phase("loaded_carry") as row:
             sync(adapter.data)
@@ -367,6 +389,7 @@ def run(args):
             return PhysicalMotionResult(False, outcome.reason, "transport")
         current_guard = acquire("destination")
         plan.executor.collision.additional_scene_checks = (current_guard.configuration_collides,)
+        plan.executor.planning_lease = current_guard.lease
         robot.gate = robot.motion_gate = current_guard.lease.require_current
         return PhysicalMotionResult(True, "ok", "transport")
 
@@ -452,6 +475,7 @@ def run(args):
         store.invalidate()
         result.update(
             map_store=store.stats,
+            source_revalidation=[r for r in events if str(r.get("phase", "")).startswith("source_revalid")],
             commands=robot.commands,
             map_queries=sum(g.map_queries for g in guards),
             native_only_queries=sum(g.native_only_queries for g in guards),
@@ -474,6 +498,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--case-config", type=Path, help="JSON fixture/goal/transport overrides; initial conditions only."
+    )
+    parser.add_argument(
+        "--refresh-source",
+        action="store_true",
+        help="Reacquire and recertify the selected proposal before publishing a plan handle.",
     )
     parser.add_argument("--object", choices=["object1", "object2"], default="object2")
     parser.add_argument("--resolution", type=float, choices=[0.02, 0.005], default=0.005)

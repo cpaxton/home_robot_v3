@@ -88,6 +88,11 @@ class LocalSceneLease:
         with self.borrow():
             pass
 
+    def retire(self):
+        store = self._store()
+        if store is not None:
+            store.retire(self.key, self.generation)
+
 
 class LocalSceneStore:
     def __init__(self, *, max_bytes=64 * 1024**2, max_entries=1, clock=time.monotonic):
@@ -168,6 +173,15 @@ class LocalSceneStore:
                 yield entry[1]
             finally:
                 self._pins -= 1
+
+    def retire(self, key, generation):
+        """Idempotently retire this generation without removing a newer map."""
+        with self._lock:
+            if self._pins:
+                raise LocalMapUnavailable("busy")
+            entry = self._entries.get(key)
+            if entry is not None and entry[0] == generation:
+                self._retire(key)
 
     def invalidate(self):
         with self._lock:

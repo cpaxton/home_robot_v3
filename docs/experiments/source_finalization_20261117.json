@@ -1,0 +1,1087 @@
+{
+  "schema_version": 1,
+  "scope": "Synchronous CPU MuJoCo/Stretch assisted development controls; native state/full-scene geometry and provided external RGBD scanner; no hardware, observed-only or LLM qualification. Physics advances during controller sleeps.",
+  "starting_commit": "0934bad3",
+  "branch": "fix/tamp-observed-admission",
+  "benchmark_denominator": null,
+  "prior_primary_cohort": {
+    "record": "docs/experiments/mobile_release_20261117.json",
+    "task_passed": 5,
+    "task_declared": 7,
+    "negative_controls_verified": 2,
+    "negative_controls_declared": 2,
+    "unchanged": true
+  },
+  "followup_task_results": {
+    "passed": 2,
+    "selected": 3,
+    "source_revalidation_complete": 3,
+    "pooled_with_prior": false
+  },
+  "source_lifetime_s": 299,
+  "controls": "No source retiming, new free-space assertion, contact/retention relaxation, extra IK search, runtime pose writes or local GPU/VLM. Source finalization is opt-in.",
+  "tests": [
+    {
+      "job_id": "20261117_211014_3f8e55",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/tests",
+      "status": "completed",
+      "tests": 77,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 193.657,
+      "junit_sha256": "98291e52093d6c3227502ba363d91a902f46a612198f27b597c2cdb41c42d9e4"
+    },
+    {
+      "job_id": "20261117_211605_a0c918",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/public-tests",
+      "status": "collection_error",
+      "reason": "test_helper_import_path; fixed before public boundary checks"
+    },
+    {
+      "job_id": "20261117_211753_7efdbe",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/public-final",
+      "status": "completed",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 18.646,
+      "junit_sha256": "fc8a9d85ffe170828846672326647ed40898830fdb05e6d9885a55d282100866"
+    },
+    {
+      "job_id": "20261117_213507_575890",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/boundaries",
+      "status": "completed",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 26.972,
+      "junit_sha256": "b4f55bf464975bdc6bab71a673a29b1c3dddbbf104bf94aec7c300cd7970f56c"
+    },
+    {
+      "job_id": "20261117_214234_de0f7d",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/binding-review",
+      "status": "completed",
+      "tests": 27,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 26.814,
+      "junit_sha256": "a6d451f1277284f8f7e7e679efe81ac640a7241e5039a2b4ae6c1ff6b982bab8"
+    },
+    {
+      "job_id": "20261117_214033_c06ebf",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/regressions",
+      "status": "completed",
+      "tests": 323,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 231.109,
+      "junit_sha256": "e653d56d75eebcbcdb7d0e90b35864afd1bde87cdc47400f4f6e0be5d47b9e89"
+    },
+    {
+      "job_id": "20261117_214444_645b74",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/regressions-verified",
+      "status": "completed",
+      "tests": 326,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 235.226,
+      "junit_sha256": "9214ce338491621856f2195e7c86cb81ba2e4d59637f89314b6301a9956e86bf"
+    },
+    {
+      "job_id": "20261117_215810_42778c",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/all-transports",
+      "status": "completed",
+      "tests": 329,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 232.792,
+      "junit_sha256": "a8530ceaa48fed64cbd2ad3695cda2b075277b2785499176b2e56d868b7bab15"
+    },
+    {
+      "job_id": "20261117_220136_edc070",
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/cache-boundaries",
+      "status": "completed",
+      "tests": 32,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "wall_seconds": 33.11,
+      "junit_sha256": "37b3bcd36a1c962d1561219b5b3c508e09fbcdfd8060010af461e517b712cc42"
+    }
+  ],
+  "trials": [
+    {
+      "job_id": "20261117_211304_552d5a",
+      "case": "cylinder_control",
+      "validation_budget_s": 180,
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/cylinder",
+      "status": "passed",
+      "source_commit": "0934bad38051e4fa115d1221ce3feeb769caf7c0",
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "ed0c61552f16f0ae1bf042f21090058d712cb738476a32b9e20536f3faea8503",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff",
+        "src/emet/controller/task/tamp/native_revalidation.py": "4b106f7f2ba3c57f30e174b1886cf7353961e72522aaf7d77a17565d6a3b7073",
+        "src/emet/controller/task/tamp/native_adapter.py": "218f0f1bf807f3b17abda7a7bbf4723cf1e6cd0f6609b99409cbc699a4c2d33a",
+        "src/emet/controller/task/tamp/native_placement.py": "58842b791f673ab3a0f13af9cb2a49f307581965c79ae744a618f12581fc8ef9",
+        "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+      },
+      "fixture_sha256": {
+        "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+        "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+        "scene_environment.xml": "466f897d0c7dc49045d6f0d860e8598ce1593213b58b1375a296d3a35e23477b",
+        "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+      },
+      "manifest_sha256": "fe6af309bb18a5450dbf7d1525fae4571d5ee32e25c4c20ac07261b72f707e61",
+      "revision_note": "Initial pilot before callback-binding and dispatch-accounting hardening; not a final-code acceptance result.",
+      "result_sha256": "3d8398f90676f37bf95c37fd5fae7d0022bfbef91aa6b385536d905cd41c3d7b",
+      "passed": true,
+      "error": null,
+      "cpu_affinity": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.5268018009955995,
+          "cumulative_peak_rss_bytes": 1882771456
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 24.2425330699989,
+          "cumulative_peak_rss_bytes": 1995264000
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 338.05852961599885,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "source_finalization",
+          "wall_seconds": 24.488320019998355,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "map_finalized_source",
+          "wall_seconds": 24.487775790999876,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 290.6829870059955,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "map_carry",
+          "wall_seconds": 24.245302895003988,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "loaded_carry",
+          "success": true,
+          "reason": "ok",
+          "measured_base": [
+            0.136148058163045,
+            0.00018116297889501825,
+            8.126683525428139e-05
+          ],
+          "wall_seconds": 134.70390354499978,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "map_destination",
+          "wall_seconds": 24.24630855999567,
+          "cumulative_peak_rss_bytes": 2021691392
+        },
+        {
+          "phase": "map_released",
+          "wall_seconds": 24.15884552499483,
+          "cumulative_peak_rss_bytes": 2025631744
+        },
+        {
+          "phase": "navigate_away",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 48.61983031699492,
+          "cumulative_peak_rss_bytes": 2025631744
+        }
+      ],
+      "map_store": {
+        "loads": 5,
+        "unloads": 5,
+        "stale_rejections": 4,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112842,
+        "load_seconds": 121.35245540599863
+      },
+      "peak_process_rss_bytes": 2025631744,
+      "source_revalidation": null,
+      "commands": {
+        "total": 108,
+        "arm": 97,
+        "gripper": 4,
+        "base_goal": 3,
+        "base_stop": 4
+      },
+      "responses": [
+        {
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": null,
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        },
+        {
+          "tool": "plan_pick_place",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": 17,
+          "max_ik_calls": 256
+        },
+        {
+          "tool": "execute_pick_place_plan",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [
+            "grasp",
+            "place"
+          ],
+          "failed_stage": null,
+          "execution_started": true,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        }
+      ],
+      "events_sha256": "738328db0ae77ba1cc5eb77df246f59268aeb947b457b3fbb6e84449d7fa0e4c",
+      "last_map_rejection_witnesses": [
+        {
+          "payload": true,
+          "reason": "unknown_swept_volume",
+          "bounds": [
+            [
+              0.09935474862539362,
+              -0.6457016022051828,
+              0.4790998252637246
+            ],
+            [
+              0.13994623109427445,
+              -0.6042252854077569,
+              0.5598824738194479
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "job_id": "20261117_211303_fc3bce",
+      "case": "cube_clutter",
+      "validation_budget_s": 180,
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/clutter",
+      "status": "failed",
+      "source_commit": "0934bad38051e4fa115d1221ce3feeb769caf7c0",
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "ed0c61552f16f0ae1bf042f21090058d712cb738476a32b9e20536f3faea8503",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff",
+        "src/emet/controller/task/tamp/native_revalidation.py": "4b106f7f2ba3c57f30e174b1886cf7353961e72522aaf7d77a17565d6a3b7073",
+        "src/emet/controller/task/tamp/native_adapter.py": "218f0f1bf807f3b17abda7a7bbf4723cf1e6cd0f6609b99409cbc699a4c2d33a",
+        "src/emet/controller/task/tamp/native_placement.py": "58842b791f673ab3a0f13af9cb2a49f307581965c79ae744a618f12581fc8ef9",
+        "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+      },
+      "fixture_sha256": {
+        "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+        "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+        "scene_environment.xml": "0a93dca69ebec53411d928cec023c16c47f4af41d967f1b89c3f0640d974ba5b",
+        "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+      },
+      "manifest_sha256": "e4f77e6b6582c75a388e88b2aac14363755fb93182f901b91cb912a7e9a1ca88",
+      "revision_note": "Initial pilot before callback-binding and dispatch-accounting hardening; not a final-code acceptance result.",
+      "result_sha256": "f65d831dcdce7bbf673f70c05f0c481cf2b2120696ab19a035f6707eaaed89fd",
+      "passed": false,
+      "error": "RuntimeError:no_plan_within_budget",
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.4581294790041284,
+          "cumulative_peak_rss_bytes": 1881247744
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 23.982366033997096,
+          "cumulative_peak_rss_bytes": 1998381056
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 469.9615662299984,
+          "cumulative_peak_rss_bytes": 2011533312
+        },
+        {
+          "phase": "source_finalization",
+          "wall_seconds": 24.130247666995274,
+          "cumulative_peak_rss_bytes": 2011533312
+        },
+        {
+          "phase": "map_finalized_source",
+          "wall_seconds": 24.129736251001304,
+          "cumulative_peak_rss_bytes": 2011533312
+        }
+      ],
+      "map_store": {
+        "loads": 2,
+        "unloads": 2,
+        "stale_rejections": 1,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24100770,
+        "load_seconds": 48.10244926200539
+      },
+      "peak_process_rss_bytes": 2011533312,
+      "source_revalidation": null,
+      "commands": {
+        "total": 3,
+        "arm": 0,
+        "gripper": 0,
+        "base_goal": 1,
+        "base_stop": 2
+      },
+      "responses": [
+        {
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": null,
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        },
+        {
+          "tool": "plan_pick_place",
+          "status": "error",
+          "code": "no_plan_within_budget",
+          "recovery": "inspect",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": false,
+          "planning_ik_calls": 12,
+          "max_ik_calls": 256
+        }
+      ],
+      "events_sha256": "916076a00565b62cf1786dcc49161ed4bb48e923431f6d721458742372dd0df3",
+      "last_map_rejection_witnesses": [
+        {
+          "payload": false,
+          "reason": "occupied_environment",
+          "bounds": [
+            [
+              0.19716182607497662,
+              -0.6723879248599344,
+              0.5279368206778198
+            ],
+            [
+              0.2342958672646776,
+              -0.627951216057236,
+              0.5712170280829165
+            ]
+          ]
+        },
+        {
+          "payload": false,
+          "reason": "occupied_environment",
+          "bounds": [
+            [
+              0.19716828544935328,
+              -0.6725889053319272,
+              0.5511617101732362
+            ],
+            [
+              0.23429430522974545,
+              -0.6281477815273219,
+              0.594445428822203
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "job_id": "20261117_214001_29a0a4",
+      "case": "cylinder_control",
+      "validation_budget_s": 240,
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/final-cylinder",
+      "status": "passed",
+      "source_commit": "0934bad38051e4fa115d1221ce3feeb769caf7c0",
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "bdafd7e5acb24d46c59c80911b9ea4cb912a938a1f21cc6324e1c7349640e744",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff",
+        "src/emet/controller/task/tamp/native_revalidation.py": "30075be42e9fc72d8cc084f8a1d5f374b3f281446d41ebd41c04bdcab5e14b61",
+        "src/emet/controller/task/tamp/native_dispatch.py": "3f9a26a1891944f5dfcb26dc5a228a2835a7f710b59b86c57dadd385f0f4933f",
+        "src/emet/controller/task/tamp/native_adapter.py": "84634d19e44fa6513dd97b4754e5829321bfa4c335b43d7d8ca5880998c3ee8c",
+        "src/emet/controller/task/tamp/native_placement.py": "58842b791f673ab3a0f13af9cb2a49f307581965c79ae744a618f12581fc8ef9",
+        "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+      },
+      "fixture_sha256": {
+        "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+        "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+        "scene_environment.xml": "466f897d0c7dc49045d6f0d860e8598ce1593213b58b1375a296d3a35e23477b",
+        "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+      },
+      "manifest_sha256": "db142619ce2ab3cbff0afdb5647f8b8dc345448b2b3f20b995aef4b36a48d34d",
+      "revision_note": "Includes dispatch accounting; predates final missing-admission/mutable-guard checks. SHA-verified source files archived under runtime-snapshots/. Later regression and boundary tests cover final guards.",
+      "result_sha256": "fd9c994377bd441fe95fb75623cbb4db43211dab1afc93a3f9199097e5916fa2",
+      "passed": true,
+      "error": null,
+      "cpu_affinity": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.5272200100007467,
+          "cumulative_peak_rss_bytes": 1880072192
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 25.045082290998835,
+          "cumulative_peak_rss_bytes": 1996410880
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 344.60978573499597,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "source_finalization",
+          "wall_seconds": 25.095764382000198,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "map_finalized_source",
+          "wall_seconds": 25.095152995003446,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 299.5996132420041,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "map_carry",
+          "wall_seconds": 25.049591838003835,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "loaded_carry",
+          "success": true,
+          "reason": "ok",
+          "measured_base": [
+            0.136148058163045,
+            0.00018116297889501825,
+            8.126683525428139e-05
+          ],
+          "wall_seconds": 139.4823257809985,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "map_destination",
+          "wall_seconds": 25.29433813799551,
+          "cumulative_peak_rss_bytes": 2010394624
+        },
+        {
+          "phase": "map_released",
+          "wall_seconds": 24.816825618996518,
+          "cumulative_peak_rss_bytes": 2012311552
+        },
+        {
+          "phase": "navigate_away",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 48.41163309900003,
+          "cumulative_peak_rss_bytes": 2012311552
+        }
+      ],
+      "map_store": {
+        "loads": 5,
+        "unloads": 5,
+        "stale_rejections": 4,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112842,
+        "load_seconds": 125.28264757900615
+      },
+      "peak_process_rss_bytes": 2012311552,
+      "source_revalidation": [
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "grasp_open"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "pregrasp"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "grasp"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "lift"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "preplace"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "place"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "place_open"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "retreat"
+        },
+        {
+          "phase": "source_revalidation_complete",
+          "ik_calls": 0,
+          "segments": 8,
+          "base_sweep": true
+        }
+      ],
+      "commands": {
+        "total": 108,
+        "arm": 97,
+        "gripper": 4,
+        "base_goal": 3,
+        "base_stop": 4
+      },
+      "responses": [
+        {
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": null,
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        },
+        {
+          "tool": "plan_pick_place",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": 17,
+          "max_ik_calls": 256
+        },
+        {
+          "tool": "execute_pick_place_plan",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [
+            "grasp",
+            "place"
+          ],
+          "failed_stage": null,
+          "execution_started": true,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        }
+      ],
+      "events_sha256": "b928f069b87e741c4d5dcb605548cf41d4e198ffae8c3303974283a41def8a9b",
+      "last_map_rejection_witnesses": [
+        {
+          "payload": true,
+          "reason": "unknown_swept_volume",
+          "bounds": [
+            [
+              0.09935474862539362,
+              -0.6457016022051828,
+              0.4790998252637246
+            ],
+            [
+              0.13994623109427445,
+              -0.6042252854077569,
+              0.5598824738194479
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "job_id": "20261117_214002_ee4792",
+      "case": "cube_clutter",
+      "validation_budget_s": 240,
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/final-clutter",
+      "status": "failed",
+      "source_commit": "0934bad38051e4fa115d1221ce3feeb769caf7c0",
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "bdafd7e5acb24d46c59c80911b9ea4cb912a938a1f21cc6324e1c7349640e744",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff",
+        "src/emet/controller/task/tamp/native_revalidation.py": "30075be42e9fc72d8cc084f8a1d5f374b3f281446d41ebd41c04bdcab5e14b61",
+        "src/emet/controller/task/tamp/native_dispatch.py": "3f9a26a1891944f5dfcb26dc5a228a2835a7f710b59b86c57dadd385f0f4933f",
+        "src/emet/controller/task/tamp/native_adapter.py": "84634d19e44fa6513dd97b4754e5829321bfa4c335b43d7d8ca5880998c3ee8c",
+        "src/emet/controller/task/tamp/native_placement.py": "58842b791f673ab3a0f13af9cb2a49f307581965c79ae744a618f12581fc8ef9",
+        "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+      },
+      "fixture_sha256": {
+        "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+        "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+        "scene_environment.xml": "0a93dca69ebec53411d928cec023c16c47f4af41d967f1b89c3f0640d974ba5b",
+        "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+      },
+      "manifest_sha256": "15d8e2b8745b35faf0516e6c193b52ba44be82551c461c4d3e9ce608dbed34f6",
+      "revision_note": "Includes dispatch accounting; predates final missing-admission/mutable-guard checks. SHA-verified source files archived under runtime-snapshots/. Later regression and boundary tests cover final guards.",
+      "result_sha256": "6f5788b7aee36233d9749cc70b546b42340aa28a21ad17fa2e0b2df66b90c15c",
+      "passed": false,
+      "error": "RuntimeError:collision",
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.4851726859997143,
+          "cumulative_peak_rss_bytes": 1885478912
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 24.63300469800015,
+          "cumulative_peak_rss_bytes": 1998741504
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 478.1511851739997,
+          "cumulative_peak_rss_bytes": 2022858752
+        },
+        {
+          "phase": "source_finalization",
+          "wall_seconds": 24.697486747005314,
+          "cumulative_peak_rss_bytes": 2022858752
+        },
+        {
+          "phase": "map_finalized_source",
+          "wall_seconds": 24.696957733998715,
+          "cumulative_peak_rss_bytes": 2022858752
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 277.9767197590045,
+          "cumulative_peak_rss_bytes": 2027270144
+        },
+        {
+          "phase": "map_carry",
+          "wall_seconds": 24.39140818300075,
+          "cumulative_peak_rss_bytes": 2023407616
+        },
+        {
+          "phase": "loaded_carry",
+          "success": true,
+          "reason": "ok",
+          "measured_base": [
+            0.1361853001965057,
+            0.00022708291027221495,
+            0.0006509379769996654
+          ],
+          "wall_seconds": 136.91475085500133,
+          "cumulative_peak_rss_bytes": 2023407616
+        },
+        {
+          "phase": "map_destination",
+          "wall_seconds": 24.111972498001705,
+          "cumulative_peak_rss_bytes": 2027270144
+        }
+      ],
+      "map_store": {
+        "loads": 4,
+        "unloads": 4,
+        "stale_rejections": 3,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24100770,
+        "load_seconds": 97.81399795700418
+      },
+      "peak_process_rss_bytes": 2027270144,
+      "source_revalidation": [
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "grasp_open"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "pregrasp"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "grasp"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "lift"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "preplace"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "place"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "place_open"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "retreat"
+        },
+        {
+          "phase": "source_revalidation_complete",
+          "ik_calls": 0,
+          "segments": 8,
+          "base_sweep": true
+        }
+      ],
+      "commands": {
+        "total": 90,
+        "arm": 82,
+        "gripper": 3,
+        "base_goal": 2,
+        "base_stop": 3
+      },
+      "responses": [
+        {
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": null,
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        },
+        {
+          "tool": "plan_pick_place",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": 12,
+          "max_ik_calls": 256
+        },
+        {
+          "tool": "execute_pick_place_plan",
+          "status": "partial",
+          "code": "collision",
+          "recovery": "inspect",
+          "completed_ops": [
+            "grasp"
+          ],
+          "failed_stage": "release",
+          "execution_started": true,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        }
+      ],
+      "events_sha256": "2d064a90d2220bc8276a55252f9a8d29af4210b888594fbb7b5837bfcd8d5502",
+      "last_map_rejection_witnesses": [
+        {
+          "payload": false,
+          "reason": "unknown_swept_volume",
+          "bounds": [
+            [
+              0.19474250274091,
+              -0.6986269937963997,
+              0.5266693384045164
+            ],
+            [
+              0.23564726232624186,
+              -0.639578572509289,
+              0.5859713794019145
+            ]
+          ]
+        },
+        {
+          "payload": false,
+          "reason": "unknown_swept_volume",
+          "bounds": [
+            [
+              0.19711719550200518,
+              -0.6814399107162116,
+              0.5308398699816792
+            ],
+            [
+              0.23437526280051318,
+              -0.637414464881464,
+              0.5743425064779234
+            ]
+          ]
+        },
+        {
+          "payload": false,
+          "reason": "unknown_swept_volume",
+          "bounds": [
+            [
+              0.1969288418525912,
+              -0.6779557907603239,
+              0.5212858609616987
+            ],
+            [
+              0.23416961095154212,
+              -0.6342634844188086,
+              0.5650489370525762
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "job_id": "20261117_214530_350d17",
+      "case": "cube_shifted",
+      "validation_budget_s": 240,
+      "artifact_directory": ".tamp-runs/source-finalization-20261117/shifted-cube",
+      "status": "passed",
+      "source_commit": "0934bad38051e4fa115d1221ce3feeb769caf7c0",
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "bdafd7e5acb24d46c59c80911b9ea4cb912a938a1f21cc6324e1c7349640e744",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff",
+        "src/emet/controller/task/tamp/native_revalidation.py": "e63426df2217463aeda00054ed9ce2ecf3b8611d3ef90b4b24e2fb53f2bd18dc",
+        "src/emet/controller/task/tamp/native_dispatch.py": "3f9a26a1891944f5dfcb26dc5a228a2835a7f710b59b86c57dadd385f0f4933f",
+        "src/emet/controller/task/tamp/native_adapter.py": "9f8e8ea0d7fafaf838709e497e08368c970dc448169715f2b0758fe0d523aee7",
+        "src/emet/controller/task/tamp/native_placement.py": "58842b791f673ab3a0f13af9cb2a49f307581965c79ae744a618f12581fc8ef9",
+        "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+      },
+      "fixture_sha256": {
+        "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+        "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+        "scene_environment.xml": "0a93dca69ebec53411d928cec023c16c47f4af41d967f1b89c3f0640d974ba5b",
+        "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+      },
+      "manifest_sha256": "b9e0bebcaab698a2593df6726b0e6aaca1a41ab18db9546534c0ed9954741101",
+      "revision_note": "Includes final association guards; predates adapter-owned transport proxy and cache-identity hardening. Exact source bytes are archived by SHA; subsequent regression/boundary tests cover the final guard changes.",
+      "result_sha256": "ff6162a745c3e0e7537ca5bb0040f224b7e2f89b143b8b769134ecf7cc589b22",
+      "passed": true,
+      "error": null,
+      "cpu_affinity": [
+        12,
+        13
+      ],
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.5999581290016067,
+          "cumulative_peak_rss_bytes": 1884045312
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 24.58791451399884,
+          "cumulative_peak_rss_bytes": 1996926976
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 375.293913538997,
+          "cumulative_peak_rss_bytes": 2025242624
+        },
+        {
+          "phase": "source_finalization",
+          "wall_seconds": 25.585232899000403,
+          "cumulative_peak_rss_bytes": 2025242624
+        },
+        {
+          "phase": "map_finalized_source",
+          "wall_seconds": 25.584735933000047,
+          "cumulative_peak_rss_bytes": 2025242624
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 332.6841354700009,
+          "cumulative_peak_rss_bytes": 2027827200
+        },
+        {
+          "phase": "map_carry",
+          "wall_seconds": 24.332083946996136,
+          "cumulative_peak_rss_bytes": 2027249664
+        },
+        {
+          "phase": "loaded_carry",
+          "success": true,
+          "reason": "ok",
+          "measured_base": [
+            0.13753842152868545,
+            0.00022435707482123133,
+            0.0006312303030483611
+          ],
+          "wall_seconds": 135.13516895299836,
+          "cumulative_peak_rss_bytes": 2027249664
+        },
+        {
+          "phase": "map_destination",
+          "wall_seconds": 24.29900474599708,
+          "cumulative_peak_rss_bytes": 2027827200
+        },
+        {
+          "phase": "map_released",
+          "wall_seconds": 24.231381876998057,
+          "cumulative_peak_rss_bytes": 2027827200
+        },
+        {
+          "phase": "navigate_away",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 48.314361704004114,
+          "cumulative_peak_rss_bytes": 2027827200
+        }
+      ],
+      "map_store": {
+        "loads": 5,
+        "unloads": 5,
+        "stale_rejections": 4,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24114066,
+        "load_seconds": 123.01725675001217
+      },
+      "peak_process_rss_bytes": 2027827200,
+      "source_revalidation": [
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "grasp_open"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "pregrasp"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "grasp"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "lift"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "preplace"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "place"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "place_open"
+        },
+        {
+          "phase": "source_revalidated_segment",
+          "stage": "retreat"
+        },
+        {
+          "phase": "source_revalidation_complete",
+          "ik_calls": 0,
+          "segments": 8,
+          "base_sweep": true
+        }
+      ],
+      "commands": {
+        "total": 124,
+        "arm": 113,
+        "gripper": 4,
+        "base_goal": 3,
+        "base_stop": 4
+      },
+      "responses": [
+        {
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": null,
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        },
+        {
+          "tool": "plan_pick_place",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": null,
+          "planning_ik_calls": 14,
+          "max_ik_calls": 256
+        },
+        {
+          "tool": "execute_pick_place_plan",
+          "status": "ok",
+          "code": "ok",
+          "recovery": "none",
+          "completed_ops": [
+            "grasp",
+            "place"
+          ],
+          "failed_stage": null,
+          "execution_started": true,
+          "planning_ik_calls": null,
+          "max_ik_calls": null
+        }
+      ],
+      "events_sha256": "12d767d093872864b1b7d5f2efddc862169f6180b7a655a651ce162349767a85",
+      "last_map_rejection_witnesses": []
+    }
+  ],
+  "archive_note": "Artifact paths are local relative to the owning worktree, not a public archive. Dense logs/captures remain there. runtime-snapshots contains files verified against recorded hashes; frozen final source is committed with this summary.",
+  "remaining_scope": [
+    "full observed source/refiner/ownership",
+    "onboard-only sensing",
+    "asynchronous scene and hardware admission",
+    "household OVMM benchmark",
+    "agent exploration and held-out task qualification"
+  ]
+}

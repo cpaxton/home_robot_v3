@@ -51,10 +51,17 @@
       [release investigation](docs/experiments/mobile_release_20261117.md) now
       reproduces and repairs first-feasible release selection: both original
       mobile objects complete under bounded candidate-margin ranking. Expanded
-      cases still expose source-evidence expiry during long planning. Next gate:
-      consume the old plan handle, reacquire, and revalidate the chosen proposal
-      under a fresh lease before issuing a new handle; coarse grid equality is
-      insufficient. Full observed execution and broader OVMM remain unqualified.
+      cases still expose source-evidence expiry during long planning. The opt-in
+      [source-finalization handoff](docs/experiments/source_finalization_20261117.md)
+      now consumes old handles, reacquires evidence and revalidates the chosen
+      nominal proposal without IK before publishing a fresh handle. Original
+      depth rays remain authoritative; coarse-grid equality is insufficient.
+      Cylinder and shifted-cube follow-ups complete; clutter passes fresh-source
+      validation and carry but stops partial at release on unknown hand volume
+      near the distractor. Next: bounded destination alternatives within the
+      original goal, checking full opening/retreat geometry and measured retention
+      under the same budgets; preserve unknown rejection and partial feedback.
+      Full observed execution and broader OVMM remain unqualified.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

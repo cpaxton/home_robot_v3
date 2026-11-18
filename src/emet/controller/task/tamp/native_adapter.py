@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 import uuid
+from contextlib import ExitStack
 from dataclasses import dataclass
 
 import mujoco
@@ -28,12 +29,22 @@ from emet.controller.task.tamp.native_approach import (
     planning_starts,
     verify_approach_ready,
 )
+from emet.controller.task.tamp.native_dispatch import dispatch_boundary, robot_identity
 from emet.controller.task.tamp.native_placement import local_support_patches, placement_paths, refine_loaded_placement
 from emet.controller.task.tamp.native_policy import (
     FINE_GRASP_YAWS,
     bind_loaded_payload,
     native_policy,
     verification_failed,
+)
+from emet.controller.task.tamp.native_revalidation import (
+    BaseProof,
+    finalize_proposal,
+    frozen,
+    joint_proof,
+    payload_copy,
+    require_binding,
+    seal_proposal,
 )
 from emet.motion.grasp_alignment import face_aligned_grasp_order
 from emet.motion.mujoco_collision import body_subtree
@@ -61,6 +72,9 @@ class NativePlan:
     transport: object | None = None
     approach: object | None = None
     object_initial_pose: np.ndarray | None = None
+    proposal: object | None = None
+    evidence_lease: object | None = None
+    admission: object | None = None
 
 
 class NativeTableAdapter:
@@ -83,7 +97,10 @@ class NativeTableAdapter:
     _strategy_ik_limit = None
     _planning_deadline = None
 
-    def __init__(self, robot, *, model=None, policy='legacy'):
+    reacquire_scene = None
+
+    def __init__(self, robot, *, model=None, policy='legacy', reacquire_scene=None):
+        self.reacquire_scene = reacquire_scene
         selected = native_policy(policy)
         self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
         self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
@@ -386,20 +403,29 @@ class NativeTableAdapter:
             executor.grasp_targets = self._grasp_targets(grasp, rotation)
             if approach_offset is not None:
                 executor.grasp_targets[0] = (grasp + approach_offset, rotation)
-            _, error = executor.plan_gripper_open()
+            opening_start = self.data.qpos.copy()
+            opening_payload = payload_copy(executor.collision) if self.reacquire_scene else None
+            opening, error = executor.plan_gripper_open()
             if error:
                 self._record_rejection('gripper_open', error, executor)
                 return
+            proof = ([joint_proof(executor, 'grasp_open', opening_start, opening_payload, opening,
+                       names=tuple(executor.gripper_open_configuration))] if self.reacquire_scene else [])
             paths = []
             for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
                 if phase == 'lift':
                     executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
+                phase_start = self.data.qpos.copy()
+                phase_payload = payload_copy(executor.collision) if self.reacquire_scene else None
                 path, error = self._plan_candidate_pose(executor, target, rot, ordered_groups=phase == "pregrasp")
                 if error:
                     self._record_rejection(phase, error, executor)
                     break
                 paths.append(path)
+                if self.reacquire_scene:
+                    proof.append(joint_proof(executor, phase, phase_start, phase_payload, path, endpoint=(target, rot)))
             if len(paths) == 3:
+                executor._grasp_proof = tuple(proof)
                 yield rotation, paths
 
     def _grasp_options(self, executor, before, point, frames, pinch_offset, obj, *, aligned_only=False):
@@ -524,6 +550,8 @@ class NativeTableAdapter:
                                         continue
                                     self.data.qpos[:] = lifted
                                     mujoco.mj_kinematics(self.model, self.data)
+                                    base_start = self.data.qpos.copy()
+                                    base_payload = payload_copy(executor.collision) if self.reacquire_scene else None
                                     transport, transport_error = self._prepare_transport(executor, obj, goal)
                                     if transport_error:
                                         self._record_rejection('transport', transport_error, executor)
@@ -534,11 +562,28 @@ class NativeTableAdapter:
                                     if candidates is not None:
                                         executor.place_paths = candidates
                                         ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
-                                        self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, base_approach=base_approach, transport=transport, approach=approach,
+                                        plan = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, base_approach=base_approach, transport=transport, approach=approach,
                                             planning_ik_calls=self.planning_ik_calls,
                                             planning_ik_limit=self.max_planning_ik_calls,
                                             planning_seconds_remaining=max(0., self._planning_deadline-time.monotonic())
                                                 if self._planning_deadline is not None else None, **identity)
+                                        if self.reacquire_scene is not None:
+                                            # The proposal has no public authority. Acquire and
+                                            # recertify before allocating its executable handle.
+                                            base = None
+                                            if transport is not None:
+                                                from emet.eval.physical_tamp import base_pose
+                                                scratch = mujoco.MjData(self.model)
+                                                scratch.qpos[:] = base_start
+                                                mujoco.mj_kinematics(self.model, scratch)
+                                                start_pose = base_pose(self.model, scratch)
+                                                if np.linalg.norm(np.asarray(transport)-start_pose) > 1e-9:
+                                                    base = BaseProof(frozen(base_start), base_payload,
+                                                        frozen(start_pose), frozen(transport))
+                                            plan.proposal = seal_proposal(self, plan, base)
+                                            finalize_proposal(self, plan, self.reacquire_scene)
+                                            ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
+                                        self.plans[ref] = plan
                                         return response('plan_pick_place', data=self._data(**identity, plan_ref=ref,
                                             approach_required=base_approach is not None,
                                             planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[],
@@ -641,22 +686,38 @@ class NativeTableAdapter:
             completed = []
             started = False
             phase = None
+            boundary = ExitStack()
+            def entering():
+                nonlocal started
+                if not started:
+                    require_binding(self, plan)
+                plan.executor.planning_lease.require_current()
+                started = True
             try:
                 self.synchronize(self.data)
                 if plan.boot != self.boot or np.max(np.abs(qpos_difference(self.model, self.data.qpos, plan.initial))) > .01:
                     return fail('scene_changed_replan')
                 ex = plan.executor
+                if plan.proposal is not None or plan.evidence_lease is not None or plan.admission is not None:
+                    if plan.evidence_lease is None or plan.admission is None:
+                        return fail('scene_changed_replan')
+                    require_binding(self, plan)
+                    plan.evidence_lease.require_current()
+                    boundary.enter_context(dispatch_boundary(ex, entering, owner=self))
                 if plan.base_approach is not None:
                     phase = 'base_approach'
                     approach = execute_approach(self.robot, ex, plan.base_approach)
                     started = approach.execution_started
                     if not approach.success:
                         return fail(approach.reason, started=started, phase=phase)
-                started = True
                 phase = 'approach'
-                result = self._approach(plan)
-                if not result.success:
-                    return fail(result.message, started=True, phase=result.phase)
+                if plan.evidence_lease is None:
+                    started = True
+                    result = self._approach(plan)
+                    if not result.success:
+                        return fail(result.message, started=True, phase=result.phase)
+                # Refreshed proposals explicitly contain no approach action.
+                # Dispatch accounting starts at the actual executor transport.
                 phase = 'grasp'
                 if plan.base_approach is not None and not verify_approach_ready(ex, plan.base_approach):
                     return fail('base_approach_invalidated', started=started, phase='approach')
@@ -665,7 +726,7 @@ class NativeTableAdapter:
                     witness = (VerificationFailure('lift_motion', 'payload_not_retained'
                                if result.message == 'payload_not_retained' else 'motion_unverified')
                                if result.phase == 'lift' else None)
-                    return fail(result.message, started=True, phase=result.phase, verification=witness)
+                    return fail(result.message, started=started, phase=result.phase, verification=witness)
                 if not self._verify(plan, released=False, seconds=1):
                     return fail('grasp_verification_failed', started=True, phase='lift', verification=self.last_verification)
                 if self.payload_binding != 'preserve' and not self._bind_loaded_payload(plan, rebind=self.payload_binding == 'verified_lift'):
@@ -700,11 +761,13 @@ class NativeTableAdapter:
             except TimeoutError:
                 # The command may already have reached the controller. Preserve
                 # partial progress and prohibit reuse of this consumed handle.
-                return fail('command_outcome_unknown',
+                return fail('command_outcome_unknown' if started else 'observation_unavailable',
                                      completed=completed, started=started, phase=phase)
             except (ObservationUnavailable, ValueError, RuntimeError) as exc:
                 return fail(str(exc), completed=completed,
                                      started=started, phase=phase)
+            finally:
+                boundary.close()
 
 
 def adapter_for(context, robot):
@@ -718,7 +781,7 @@ def adapter_for(context, robot):
     robot_name = state.get('native_tamp_robot', 'stretch')
     snapshot_signature = state['native_tamp_snapshot'].get('model_signature')
     policy_changed = cached is not None and policy is not None and cached.policy != policy
-    if (cached is None or cached.robot is not robot or cached.boot != boot
+    if (cached is None or robot_identity(cached.robot) is not robot_identity(robot) or cached.boot != boot
             or cached.signature != snapshot_signature or cached.robot_name != robot_name or policy_changed):
         context.pop('_native_tamp_adapter', None)
         if robot_name == 'innate_mars':

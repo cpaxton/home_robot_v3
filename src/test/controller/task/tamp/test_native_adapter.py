@@ -10,11 +10,15 @@ from unittest.mock import Mock
 import mujoco
 import numpy as np
 import pytest
+from revalidation_fixtures import local_scene
 
 import emet.motion.placement_surfaces as surfaces_module
 from emet.agent.tools import get_tools
 from emet.controller.manipulation.native_scene import model_signature
-from emet.controller.task.tamp.native_adapter import NativeTableAdapter
+from emet.controller.task.tamp import native_revalidation as validation
+from emet.controller.task.tamp.native_adapter import NativeTableAdapter, adapter_for
+from emet.controller.task.tamp.native_dispatch import dispatch_boundary
+from emet.motion.local_scene_store import LocalMapUnavailable, LocalSceneStore
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.robosuite_load_utils import snap_joint_qpos_to_ctrl_for_position_actuators
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
@@ -789,3 +793,137 @@ def test_primary_placement_cannot_spend_the_vertical_fallback_reserve(native, mo
     result = call('plan_pick_place', object_name='blue cube', receptacle_name='table')
     assert result['status'] == 'ok', result
     assert seen == [None, (0., 0., .08)] and adapter.planning_ik_calls == 8
+
+
+@pytest.mark.parametrize("fault", [None, "new_obstacle", "camera_timeout"])
+def test_public_plan_finalization_issues_only_fresh_authorized_handles(native, monkeypatch, fault):
+    # Synthetic local-source evidence isolates the real public-tool boundary.
+    # Native FK/collisions remain real; this is not observed scene qualification.
+    robot, live, context, call = native
+    adapter = context["_native_tamp_adapter"]
+    old_ref = make_plan(call)
+    clock = [100.0]
+    monkeypatch.setattr(validation, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    store = LocalSceneStore(clock=lambda: clock[0] + 0.02)
+    old = store.load("source", lambda: local_scene(100.0, object_ref="object1"), reserve_bytes=1_000_000)
+    with old.borrow() as borrowed:
+        captured = borrowed.support.capture
+    factory = adapter._executor
+
+    def executor(obj):
+        ex = factory(obj)
+        ex.planning_lease, ex.planning_capture = old, captured
+        return ex
+
+    adapter._executor = executor
+
+    def reacquire():
+        if fault == "camera_timeout":
+            raise TimeoutError("read timed out before commands")
+        clock[0] = 120.0
+        robot._state["native_tamp_snapshot"].update(
+            qpos=live.qpos.tolist(), qvel=live.qvel.tolist(), sim_time=float(live.time), captured_at=time.time()
+        )
+        robot._state_received_monotonic = time.monotonic()
+        lease = store.load("source", lambda: local_scene(120.0, object_ref="object1"), reserve_bytes=1_000_000)
+        return validation.RefreshedNativeScene(lease, (lambda c, m, d: fault == "new_obstacle",))
+
+    adapter.reacquire_scene = reacquire
+    task = call("scene_tasks", object_filter="blue")["data"]["tasks"][0]["task_ref"]
+    before = [x.copy() for x in (live.qpos, live.qvel, live.ctrl)]
+    result = call("plan_pick_place", task_ref=task)
+    assert old_ref not in adapter.plans
+    assert call("execute_pick_place_plan", plan_ref=old_ref)["code"] == "unknown_plan"
+    with pytest.raises(LocalMapUnavailable):
+        old.require_current()
+    if fault is None:
+        assert result["status"] == "ok", result
+        ref = result["data"]["plan_ref"]
+        assert ref != old_ref and ref in adapter.plans
+        plan = adapter.plans[ref]
+        assert len(plan.proposal.joints) == 8
+        assert plan.planning_ik_calls == adapter.planning_ik_calls
+        assert adapter.events[-1]["phase"] == "source_revalidation_complete"
+        assert adapter.events[-1]["ik_calls"] == 0
+        store.invalidate()
+        rejected = call("execute_pick_place_plan", plan_ref=ref)
+        assert rejected["data"]["execution_started"] is False
+        assert rejected["status"] == "error"
+        assert call("execute_pick_place_plan", plan_ref=ref)["code"] == "unknown_plan"
+    else:
+        assert result["status"] == "error", result
+        assert result["data"]["execution_started"] is False
+        assert not adapter.plans
+    for a, b in zip(before, (live.qpos, live.qvel, live.ctrl), strict=True):
+        np.testing.assert_array_equal(a, b)
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ["preflight_expiry", "transport_timeout", "cleared_admission"])
+def test_refreshed_execution_reports_the_command_boundary(native, monkeypatch, fault):
+    robot, live, context, call = native
+    adapter = context["_native_tamp_adapter"]
+    clock = [100.0]
+    monkeypatch.setattr(validation, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    store = LocalSceneStore(clock=lambda: clock[0] + 0.02)
+    old = store.load("source", lambda: local_scene(100.0, object_ref="object1"), reserve_bytes=1_000_000)
+    with old.borrow() as scene:
+        capture = scene.support.capture
+    factory = adapter._executor
+
+    def executor(obj):
+        ex = factory(obj)
+        ex.planning_lease, ex.planning_capture = old, capture
+        return ex
+
+    adapter._executor = executor
+
+    def reacquire():
+        clock[0] = 120.0
+        robot._state["native_tamp_snapshot"]["captured_at"] = time.time()
+        robot._state_received_monotonic = time.monotonic()
+        lease = store.load("source", lambda: local_scene(120.0, object_ref="object1"), reserve_bytes=1_000_000)
+        return validation.RefreshedNativeScene(lease, (lambda c, m, d: False,))
+
+    adapter.reacquire_scene = reacquire
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    saved_paths = plan.executor.grasp_paths
+    if fault == "cleared_admission":
+        plan.evidence_lease = plan.admission = None
+
+    def replan(*a, **kw):
+        if fault == "preflight_expiry":
+            clock[0] = 250.0
+        return saved_paths, None
+
+    monkeypatch.setattr(plan.executor, "_replan_at_measured_pose", replan)
+    if fault == "transport_timeout":
+        robot.open_gripper.side_effect = TimeoutError("send may have succeeded")
+    result = call("execute_pick_place_plan", plan_ref=ref)
+    assert result["data"]["completed_ops"] == []
+    assert result["data"]["execution_started"] is (fault == "transport_timeout")
+    assert result["status"] == ("partial" if fault == "transport_timeout" else "error")
+    expected = {"transport_timeout": "command_outcome_unknown", "preflight_expiry": "stale_observation",
+                "cleared_admission": "scene_changed_replan"}
+    assert result["code"] == expected[fault]
+    assert robot.open_gripper.called is (fault == "transport_timeout")
+    robot.arm_to.assert_not_called()
+    robot.close_gripper.assert_not_called()
+    assert call("execute_pick_place_plan", plan_ref=ref)["code"] == "unknown_plan"
+
+
+def test_registry_lookup_during_dispatch_preserves_adapter_and_namespace(native):
+    robot, _, context, _ = native
+    adapter = context["_native_tamp_adapter"]
+    namespace = adapter.namespace
+    executor = adapter._executor("object1")
+    with dispatch_boundary(executor, Mock(), owner=adapter):
+        assert adapter.robot is not robot
+        assert adapter_for(context, robot) is adapter
+        assert context["_native_tamp_adapter"] is adapter
+        assert adapter.namespace == namespace
+    assert adapter.robot is robot
+    robot.arm_to.assert_not_called()

@@ -94,3 +94,15 @@ def test_retained_byte_budget_and_active_query_prevent_unsafe_replacement():
         with pytest.raises(LocalMapUnavailable):
             store.invalidate()
     assert 0 < store.stats["resident_bytes"] <= 1_000_000
+
+
+def test_retiring_old_generation_is_idempotent_and_cannot_retire_replacement():
+    store = LocalSceneStore(clock=lambda: 10.02)
+    old = store.load('source',scene,reserve_bytes=1_000_000)
+    old.retire()
+    newer = store.load('source',scene,reserve_bytes=1_000_000)
+    old.retire()
+    newer.require_current()
+    assert store.stats['unloads']==1
+    newer.retire()
+    assert store.stats['resident_bytes']==0

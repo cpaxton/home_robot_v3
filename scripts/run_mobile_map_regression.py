@@ -49,6 +49,9 @@ def main():
     parser.add_argument("--lane", type=int, default=0)
     parser.add_argument("--lanes", type=int, default=1)
     parser.add_argument("--case", action="append", help="Select exact case IDs; repeatable.")
+    parser.add_argument(
+        "--refresh-source", action="store_true", help="Enable post-search source reacquisition in task workers."
+    )
     parser.add_argument("--timeout-s", type=float, default=900.0)
     args = parser.parse_args()
     if not 0 <= args.lane < args.lanes or args.timeout_s <= 0:
@@ -63,7 +66,15 @@ def main():
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     sources = {
         str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-        for p in [ROOT / "scripts/eval_mobile_mapped_contact.py", ROOT / "src/emet/motion/release.py"]
+        for p in [
+            ROOT / "scripts/eval_mobile_mapped_contact.py",
+            ROOT / "src/emet/motion/release.py",
+            ROOT / "src/emet/controller/task/tamp/native_revalidation.py",
+            ROOT / "src/emet/controller/task/tamp/native_dispatch.py",
+            ROOT / "src/emet/controller/task/tamp/native_adapter.py",
+            ROOT / "src/emet/controller/task/tamp/native_placement.py",
+            ROOT / "src/emet/motion/local_scene_store.py",
+        ]
     }
 
     def save():
@@ -113,8 +124,10 @@ def main():
             str(out.resolve()),
         ]
         cmd += ["--fault", case["fault"]] if case.get("fault") else ["--case-config", str(config.resolve())]
+        if args.refresh_source and not case.get("fault"):
+            cmd.append("--refresh-source")
         row["command"] = cmd
-        row["runtime_sha256"] = {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in sources}
+        row["runtime_sha256"] = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in sources}
         save()
         env = {
             **os.environ,

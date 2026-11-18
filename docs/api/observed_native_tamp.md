@@ -732,3 +732,53 @@ cases separately from two negative controls, preserves crashes/timeouts/failures
 and rejects duplicate or inconsistent case receipts. These development counts
 are not a qualified benchmark denominator. The fixed suite is the default;
 `--suite PATH` explicitly selects another declaration.
+
+### Reacquire after search, before publishing a plan
+
+`NativeTableAdapter(..., reacquire_scene=callback)` opts into a source handoff;
+the default remains unchanged. Search records an inert proposal with immutable
+nominal joint paths, phase start states, FK endpoints and payload transforms.
+It cannot be executed through a public handle. Finalization consumes older
+handles and retires the original map lease before calling the source provider.
+The callback must acquire a new scan after that barrier and return
+`RefreshedNativeScene(lease, checks)`. Capture identity, calibration identity,
+non-overlapping capture times, object/support identity and lease generation are
+checked. Reusing or retiming an old capture cannot authorize the proposal.
+
+The callback is a trusted provider seam: its checks must actually query the
+returned lease's geometry and preserve support-ray/unknown-space checks. The
+callback tuple is copied and its identities are bound to the finalized handle;
+bound guards exposing a `lease` must own that same lease. An arbitrary callback
+cannot be independently certified by this interface. The provider must bound
+its acquisition I/O and construction scratch.
+
+Finalization replays all eight nominal joint segments (gripper opening,
+pregrasp, grasp, lift, preplace, place, release opening and retreat), plus any
+selected loaded straight base sweep, on private MuJoCo data. It checks fixed
+edges and FK endpoints against fresh native and local-map geometry without
+additional IK search. Identical coarse grids are insufficient: original support
+rays remain part of the geometry query. The existing measured grasp/placement
+refinement, checked closing and bounded release search still run during execution;
+nominal replay does not certify their future contact outcomes.
+
+This first handoff requires the full measured scene to stay stationary to
+`1e-8` qpos difference during acquisition/revalidation, a numerical equivalence
+gate for this assisted synchronous simulator. It rejects proposals with either
+an unloaded base approach or an arm approach action. Loaded transport remains
+supported. These restrictions are not a hardware tracking tolerance. Model,
+policy and plan changes also invalidate the proposal. Fixed-path validation has
+a separate 240-second wall budget; source lifetime and IK/search budgets are
+unchanged, and the source lease must still be current when validation finishes.
+Only successful finalization publishes a fresh executable handle.
+
+Before the first possible transport send, execution checks the finalized binding
+and current lease. Each subsequent primitive send checks its current phase lease.
+An expired source during planning reports `execution_started=false`; a transport
+timeout after entering a possible send reports partial execution with
+`command_outcome_unknown`. Both consume the handle. Transport providers must
+preserve lease guards when acquiring later carry/destination scenes.
+
+Both mobile-map scripts accept `--refresh-source` to enable this experiment.
+The regression runner forwards it to task workers only; negative controls retain
+their declared paths. See the [source-finalization record](../experiments/source_finalization_20261117.md)
+for validation, retained failures and source-tier limits.
