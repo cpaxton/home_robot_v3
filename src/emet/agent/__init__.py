@@ -9,25 +9,25 @@
 
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
-# Agent package: tools, prompt, and loop for robot + memory + optional Discord.
-#
-# Do not import ``emet.agent.loop`` at module level: it pulls DynaMem and circular-imports with
-# ``controller_dynamem`` (loop → dynamem_task → ``RobotAgent``). ``run_agent_with_robot`` is
-# exposed lazily via ``__getattr__`` so ``emet.agent.env_flags`` and other submodules can import
-# safely; call sites may also ``from emet.agent.loop import run_agent_with_robot`` directly.
+"""Public agent API, loaded lazily to keep skill metadata independent of robot IO.
 
-from emet.agent.prompt import (
-    DEFAULT_AGENT_NAME,
-    AgentPromptBuilder,
-    build_agent_system_prompt,
-    parse_tool_calls_response,
-)
-from emet.agent.tools import (
-    Tool,
-    get_tool_descriptions_for_prompt,
-    get_tool_schemas_for_llm,
-    get_tools,
-)
+Importing a tool type or mode must not initialize mapping, perception, audio, or
+controller modules. Public names retain their original identities once loaded.
+"""
+
+from importlib import import_module
+
+_EXPORT_MODULES = {
+    "DEFAULT_AGENT_NAME": "prompt",
+    "AgentPromptBuilder": "prompt",
+    "build_agent_system_prompt": "prompt",
+    "parse_tool_calls_response": "prompt",
+    "Tool": "tool",
+    "get_tool_descriptions_for_prompt": "tool",
+    "get_tool_schemas_for_llm": "tools",
+    "get_tools": "tools",
+    "run_agent_with_robot": "loop",
+}
 
 __all__ = [
     "DEFAULT_AGENT_NAME",
@@ -42,9 +42,9 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    if name == "run_agent_with_robot":
-        from emet.agent.loop import run_agent_with_robot as _run_agent_with_robot
-
-        globals()["run_agent_with_robot"] = _run_agent_with_robot
-        return _run_agent_with_robot
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name = _EXPORT_MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f"emet.agent.{module_name}"), name)
+    globals()[name] = value
+    return value

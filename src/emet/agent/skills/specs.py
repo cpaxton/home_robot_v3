@@ -2,7 +2,15 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Skill membership and EQA tool schemas (names/schemas must stay stable for traces)."""
+"""Canonical CHAT and EQA tool metadata, independent of handlers and live IO.
+
+Edit names, prompt descriptions, argument JSON schemas and ``returns_info`` here.
+CHAT bindings attach handlers in ``agent.tools``; EQA bindings dispatch through
+``agentic.tools``. Session capability/policy gates can remove tools or specialize
+schemas, so these declarations are the registry, not the advertised tool list.
+Stable names remain part of recorded traces. The human inventory and evidence
+contracts live in ``docs/agent_tool_contracts.md``.
+"""
 
 from __future__ import annotations
 

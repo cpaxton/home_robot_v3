@@ -1,7 +1,8 @@
 # The Stretch AI Agent
 
 > **Canonical agent docs for emet today:** [AGENT_RUN.md](AGENT_RUN.md) (Discord / CHAT vs
-> Habitat `EQA_EPISODE`), [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning)
+> Habitat `EQA_EPISODE`), [agent_architecture.md](agent_architecture.md) (source map and diagrams),
+> [agent_tool_contracts.md](agent_tool_contracts.md) (all current tools), [evaluation.md](evaluation.md#agentic-grapheqa-verify--offline-tuning)
 > (agentic GraphEQA tool loop), [attempt_ledger.md](attempt_ledger.md) (opt-in action-outcome
 > ledger / world-model attempts), and
 > [experiments/agentic_qwen_context.md](experiments/agentic_qwen_context.md#approach-current)
