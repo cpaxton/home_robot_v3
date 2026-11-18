@@ -1,5 +1,7 @@
 # Agent tools and contracts
 
+Source ownership and execution diagrams: [Agent architecture](agent_architecture.md).
+
 Use this page to see what an agent can request, what can change in the world,
 and what a successful result establishes. The [tool overview](agent_tools.md)
 links to deeper setup/API guides. The executable schemas live in

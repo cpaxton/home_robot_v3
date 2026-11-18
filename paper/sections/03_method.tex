@@ -102,7 +102,12 @@ Optionally (\texttt{eqa.agentic\_verify} / \texttt{EMET\_EQA\_AGENTIC\_VERIFY}),
 A fixed system prompt lists a small tool set; each round the model emits JSON tool calls, the controller executes them (navigation updates map/graph automatically), and a compact state message summarizes remaining budget plus \emph{evidence cards} for candidate places so the agent does not re-pick failed locations.
 Cheap open-vocab detectors (SigLIP / OWLv2 / YoloE) act only as \textbf{high-recall proposals} in state; answerability and the final letter are \textbf{VLM-first} (\texttt{vlm\_assess} on a fresh RGB, then \texttt{submit\_answer}).
 An optional text-only \textbf{router} VLM proposes tool calls among recalled cards; with the router off, a deterministic heuristic walks the same recalled list. Both instantiations are \emph{our method} --- the knob changes the tool proposer, not the memory substrate or the VLM-first verify gate: the holdout-8 headline used the router off (deterministic walk) for speed and stability, while the balanced-32 of-record composite used the router on (Section~\ref{sec:agentic_results}).
-Full tool schemas and response format live in Appendix~\ref{app:agentic_tools}.
+These verification and router conditions describe the historical scored rows.
+The current \texttt{model\_final} policy preserves explicit model submissions
+and does not force legacy explore-after-ABSENT substitutions; it keeps visual
+presence, retained object geometry and physical action permission separate.
+The tool catalog, response format and policy distinctions are documented in
+Appendix~\ref{app:agentic_tools}.
 
 \paragraph{Hypothesis recall (not a second policy).}
 \texttt{inspect\_graph} / post-capture refresh retrieves up to $K$ place cards (\texttt{EMET\_EQA\_HYP\_RECALL\_K}, default 6) from graph label hits, SigLIP hits, and frontier waypoints.
@@ -111,9 +116,16 @@ Each card is evidence: \texttt{obs\_id}, phrase, source, $xyz$, optional labels 
 Visited \textbf{frontier} nodes are retired from the graph (they are no longer frontiers) so they cannot reappear as candidates.
 
 \paragraph{Tools (summary).}
-In answer mode the agent may call: \texttt{inspect\_graph} (refresh evidence cards), \texttt{explore\_frontier} (grow coverage; agentic prefers a VLM pick among a small pool of reachable frontier RGBs, else uncovered / graph heuristics), \texttt{navigate\_to\_obs} (go to a listed \texttt{obs\_id}), \texttt{look\_around} (in-place scan), \texttt{verify\_siglip} (PRESENT / CANDIDATE / ABSENT proposal with similarity), and \texttt{submit\_answer} (MCQ letter; unlocked when VLM assess says answerable, not by detector PRESENT alone).
-Explore-only mode replaces \texttt{submit\_answer} with \texttt{finish}.
-These EQA tools are distinct from the interactive Discord/chat agent tools in Section~\ref{sec:interactive_agent}.
+Current answer-mode tools include \texttt{read\_history} and
+\texttt{recall\_image} (historical evidence), \texttt{inspect\_graph}
+(retrieval), \texttt{explore\_frontier} (coverage), \texttt{investigate}
+(approach/capture), \texttt{look\_around} (configured scan or measured head
+view), \texttt{verify\_siglip} (retrieval plus visual/geometry assessment),
+and \texttt{submit\_answer} (semantic termination under the selected policy).
+Explore mode replaces submission with \texttt{finish}. A legacy navigation alias
+is hidden in \texttt{model\_final}; floor and bounded relative-motion tools are
+capability-qualified. These EQA tools are distinct from interactive CHAT tools
+in Section~\ref{sec:interactive_agent}.
 
 \textbf{Habitat EQA grounding (HM-EQA).}
 On the Habitat harness we add three inference-time mechanisms on top of either loop:
@@ -146,6 +158,10 @@ Configuration: \texttt{dynav\_config.yaml} plus CLI overrides \texttt{--merge-xy
 
 The same Dynagraph stack is the default memory backend for the interactive tool agent (\texttt{emet run agent --memory-backend dynagraph}).
 Natural-language turns are routed by a lightweight text LLM into \emph{chat} tools that call the controller: \texttt{explore} / \texttt{scan\_environment} for coverage, \texttt{find\_objects} for open-vocab localization, \texttt{describe\_scene} / \texttt{send\_image} / \texttt{send\_map\_snapshot} for sharing views and maps, and \texttt{query\_memory} for graph/voxel QA (optional \texttt{--eqa} for VL captions).
+\texttt{ground\_object} admits object-specific geometry from the identified
+decision RGB-D snapshot without moving; a later approach still needs independent
+route validation. Shared tool metadata is bound separately for CHAT and EQA
+(Figure~\ref{fig:agent_tool_architecture}).
 Discord and the terminal share one input queue; action status is announced while long motions run.
 Scored Habitat HM-EQA uses the same episode function as \texttt{emet-habitat} via \texttt{emet run agent --eqa-eval} (optional \texttt{--extra-instruction}).
 The Discord/chat tool-router is not on the scored path; when agentic verify is enabled, scoring uses the EQA tool loop of Section~\ref{sec:eqa_loops} instead.

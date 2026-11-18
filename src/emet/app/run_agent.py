@@ -9,10 +9,19 @@
 
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
-# Agent chatbot: local LLM for tool routing + optional DynaMem captions/EQA.
-# Run with: emet run agent
-# Default: ``qwen35-4B`` (fast text tool-router). Shared VL: ``--llm qwen3-vl-eqa``.
-# Use ``--eqa --share-memory-vllm`` with a VL --llm so the voxel map reuses the same load.
+"""CLI composition root for ``emet run agent``.
+
+Three paths start here: offline text chat (no robot tools),
+interactive CHAT via ``agent.loop.run_agent_with_robot``, and ``--eqa-eval`` via
+``eval.habitat_eqa_agent.run_hmeqa_via_shared_episode`` (bypasses CHAT). ``--eqa`` enables
+CHAT caption/memory support; it does not select the scored episode orchestrator.
+
+Keep option precedence, launch setup and lifecycle ownership here; tool metadata
+belongs in ``agent.skills.specs`` and robot handlers in ``agent.tools``. The
+allocator environment default must precede imports that can allocate CUDA.
+See ``docs/AGENT_RUN.md`` for operation and ``docs/agent_architecture.md`` for
+module ownership and the shared tool flow.
+"""
 
 import os
 
@@ -55,12 +64,14 @@ log = Logger(__name__)
 
 
 def _load_native_task_config(path: str | None) -> dict | None:
+    """Load and validate the optional native diagnostic task before starting runtime IO."""
     if path is None:
         return None
     import json
     from pathlib import Path
 
     from emet.controller.task.tamp.native_transfer import validate_native_task_config
+
     try:
         return validate_native_task_config(json.loads(Path(path).read_text()))
     except (OSError, ValueError, TypeError, KeyError) as error:
@@ -494,10 +505,24 @@ def _load_native_task_config(path: str | None) -> dict | None:
         "Default is to discard sim logs so scripted runs stay readable."
     ),
 )
-@click.option("--state-only-sim", is_flag=True, help="Camera-free Stretch simulation TAMP only; requires --memory-backend dynamem. No vision/navigation tools.")
-@click.option("--native-task-config", type=click.Path(exists=True, dir_okay=False), default=None,
-              help="Privileged stationary Stretch region-transfer JSON; requires state-only physical mode.")
-@click.option("--max-tool-rounds", type=click.IntRange(1, 32), default=3, show_default=True, help="Bound tool rounds per user request; larger budgets permit multi-step TAMP.")
+@click.option(
+    "--state-only-sim",
+    is_flag=True,
+    help="Camera-free Stretch simulation TAMP only; requires --memory-backend dynamem. No vision/navigation tools.",
+)
+@click.option(
+    "--native-task-config",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Privileged stationary Stretch region-transfer JSON; requires state-only physical mode.",
+)
+@click.option(
+    "--max-tool-rounds",
+    type=click.IntRange(1, 32),
+    default=3,
+    show_default=True,
+    help="Bound tool rounds per user request; larger budgets permit multi-step TAMP.",
+)
 @click.pass_context
 @emet_config_options()
 def main(
@@ -574,6 +599,9 @@ def main(
 
     Default: connect to 127.0.0.1 (start ``emet serve mujoco`` first). Use --offline for local chat only.
     The --prompt option applies to --offline only; embodied mode uses the agent tool prompt (JSON tool_calls).
+    --eqa enables CHAT vision/memory support. --eqa-eval selects the scored Habitat
+    episode runner and bypasses the CHAT tool-router. Tool inventories and
+    capability/evidence contracts are documented in docs/agent_tools.md.
 
     Examples:
       emet run agent --offline

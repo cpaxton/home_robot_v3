@@ -19,7 +19,7 @@ import json
 import re
 from typing import Any
 
-from emet.agent.tools import Tool, get_tool_descriptions_for_prompt, get_tools
+from emet.agent.tool import Tool, get_tool_descriptions_for_prompt
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -152,6 +152,8 @@ def build_agent_system_prompt(
     from emet.agent.env_flags import env_base_rotate_only
 
     if tools is None:
+        from emet.agent.tools import get_tools
+
         tools = get_tools(context or {})
     identity = _IDENTITY_TEMPLATE.format(name=name)
     tools_block = get_tool_descriptions_for_prompt(tools)

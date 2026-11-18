@@ -4,7 +4,7 @@
 
 """Tool registry + prompts for the agentic GraphEQA explore/verify loop.
 
-Reuses the Discord agent's tool-calling contract (:class:`emet.agent.tools.Tool`
+Reuses the Discord agent's tool-calling contract (:class:`emet.agent.tool.Tool`
 schemas + ``{"tool_calls": [...], "message": ...}`` responses parsed by
 :func:`emet.agent.prompt.parse_tool_calls_response`) so local VLMs route tools
 through one proven JSON format instead of ad-hoc regex.
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from emet.agent.skills import AgentMode, build_skill_pack
-from emet.agent.tools import Tool, get_tool_descriptions_for_prompt
+from emet.agent.tool import Tool, get_tool_descriptions_for_prompt
 from emet.utils.logger import Logger
 
 if TYPE_CHECKING:

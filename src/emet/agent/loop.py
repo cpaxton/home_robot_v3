@@ -9,7 +9,19 @@
 
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
-# Agent main loop: start robot with logging, load memory, optional Discord, dispatch to tools.
+"""Interactive CHAT runtime: robot/memory setup, input, inference and dispatch.
+
+``app.run_agent`` resolves CLI modes and configuration before entering this
+module. ``run_agent_with_robot`` owns the robot client, executor, mutable tool
+context, model binding and terminal/Discord loop. ``_dispatch_tool_calls`` runs
+selected actions in order, retaining information results and TAMP stop receipts.
+It is not the scored EQA episode loop (``memory.graph_eqa.agentic.run``).
+
+Tool schemas live in ``skills.specs`` and context-bound implementations in
+``tools``. Camera snapshots and TAMP dialogue/lifecycle rules have dedicated
+modules; keep those evidence contracts out of prompt parsing. See
+``docs/agent_architecture.md`` for the module map.
+"""
 
 from __future__ import annotations
 

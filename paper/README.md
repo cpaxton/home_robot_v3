@@ -37,6 +37,7 @@ must download that image; generated files remain owned by the invoking user.
 - `main.tex` — document root (anonymous submission mode)
 - `corl_2026.sty`, `corlabbrvnat.bst` — official CoRL 2026 template files
 - `sections/` — one file per section (`00_abstract` … `06_conclusion`)
+- Current agent source map and diagrams: [agent_architecture.md](../docs/agent_architecture.md); complete tool contracts: [agent_tool_contracts.md](../docs/agent_tool_contracts.md). Appendix 7 separates current EQA capabilities from historical policies; Appendix 13 covers both orchestrators and all CHAT tools.
 - `sections/appendix/` — robot platforms, Innate Mars, Depth Anything 3, ground-truth graph (04), Habitat HM-EQA parity (05), agentic EQA tools (07)
 - `figs/` — paper figures (PNG; tracked via `.gitignore` exceptions)
 - `data/` — **minimal** checked-in result summaries (not full episode traces); see [`data/README.md`](data/README.md)
