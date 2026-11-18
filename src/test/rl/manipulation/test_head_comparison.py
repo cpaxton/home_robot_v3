@@ -90,6 +90,21 @@ def test_trainable_backbone_mode_is_explicit_and_keeps_initialization_rng_isolat
     assert any(not torch.equal(v, before[k]) for k, v in heads["direct"].gru.state_dict().items())
 
 
+def test_weighted_fitting_excludes_zero_weight_examples_and_rejects_invalid_mixtures():
+    torch.set_num_threads(1)
+    actor = matched_heads(WholeBodyActor())["direct"]
+    obs = observations("innate_mars")
+    targets = np.zeros((8, 8), np.float32)
+    targets[:, 2] = -0.2
+    targets[0, 2] = 0.2
+    fit_head(actor, obs, targets, updates=40, sample_weights=[1, 0, 0, 0, 0, 0, 0, 0])
+    tensor = {k: torch.from_numpy(v) for k, v in obs.items()}
+    assert torch.all(actor(tensor)[:, 2] > 0.1)
+    for weights in ([1], [0] * 8, [-1] + [1] * 7, [float("nan")] * 8, [1e308] * 8):
+        with pytest.raises(ValueError, match="sample weights"):
+            fit_head(actor, obs, targets, updates=1, sample_weights=weights)
+
+
 @pytest.mark.sim
 def test_acquisition_targets_do_not_teleport_or_edit_live_actuator_state():
     from emet.rl.manipulation.arm_splines import ArmSplineTrackingEnv, motion_manifest

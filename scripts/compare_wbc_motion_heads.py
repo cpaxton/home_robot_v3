@@ -33,6 +33,7 @@ def run(
     coupled_teacher=False,
     heads=("gain", "direct"),
     goal_queries=0,
+    general_exposure=0,
 ):
     output = Path(output)
     if output.exists() or type(count) is not int or not 1 <= count <= 16 or type(updates) is not int or updates <= 0:
@@ -41,6 +42,8 @@ def run(
         raise ValueError("explicit unique diagnostic heads required")
     if type(goal_queries) is not int or not 0 <= goal_queries <= 4:
         raise ValueError("bounded virtual goal query count required")
+    if type(general_exposure) is not int or not 0 <= general_exposure <= 8:
+        raise ValueError("bounded general exposure per family and split required")
     teacher_config = TaskPoseTeacherConfig(coupled_base_tracking=coupled_teacher)
     output.mkdir(parents=True)
     spec = load_manifest("configs/benchmarks/mars_arm_splines_v2.json")
@@ -70,6 +73,10 @@ def run(
             "teacher_configuration": asdict(teacher_config),
             "heads": list(heads),
             "goal_queries_every_five_ticks": goal_queries,
+            "general_exposure_per_family_split": general_exposure,
+            "fitting_family_weights": {"splines": 0.5, "hand": 1 / 6, "base": 1 / 6, "goal_changes": 1 / 6}
+            if general_exposure
+            else {"splines": 1.0},
         },
         "scope": "teacher-action fit with explicit backbone mode, followed by unchanged closed-loop development cases; not PPO",
         "hardware_used": False,
@@ -78,6 +85,7 @@ def run(
         "teacher_cases": [],
         "heads": {},
         "virtual_goal_labels": {"train": 0, "audit": 0, "static_rejections": []},
+        "sample_counts": {"train": {}, "audit": {}},
     }
     data = {split: {k: [] for k in ("history", "preview", "motion", "actions")} for split in ("train", "audit")}
     try:
@@ -153,6 +161,63 @@ def run(
             )
             save(output / "report.json", report)
             print("TEACHER", case["id"], variant, info["primitive_success"], flush=True)
+        for split in data:
+            report["sample_counts"][split]["splines"] = len(data[split]["actions"])
+        if general_exposure:
+            from emet.rl.manipulation.motion_distribution import make_reference_env, preflight_pools
+
+            for family, population in preflight_pools().items():
+                if family == "tamp":
+                    continue
+                selected = [
+                    c
+                    for split in ("train", "audit")
+                    for c in [c for c in population if c["split"] == split][:general_exposure]
+                ]
+                general = make_reference_env(
+                    family, selected, spec["spread_requirements"], settling_budget_s=spec["general_settling_budget_s"]
+                )
+                starts = {split: len(data[split]["actions"]) for split in data}
+                try:
+                    for case in selected:
+                        observation, _ = general.reset(options={"case_id": case["id"]})
+                        samples, e = data[case["split"]], general.unwrapped
+                        for _ in range(int(np.ceil(e.config.horizon / e.profile.dt)) + 1):
+                            if goal_queries and e.steps % 5 == 0 and e.control.hand_mask:
+                                labels, rejections = label_nearby_goals(
+                                    general, seed=case["seed"] + e.steps * 1000003, count=goal_queries
+                                )
+                                report["virtual_goal_labels"][case["split"]] += len(labels)
+                                report["virtual_goal_labels"]["static_rejections"].extend(
+                                    {"case": case["id"], "tick": e.steps, **r} for r in rejections
+                                )
+                                for label in labels:
+                                    for name in ("history", "preview", "motion"):
+                                        samples[name].append(label["observation"][name])
+                                    samples["actions"].append(label["action"])
+                            action = task_pose_teacher_action(e.control, config=teacher_config)
+                            for name in ("history", "preview", "motion"):
+                                samples[name].append(observation[name].copy())
+                            samples["actions"].append(action.copy())
+                            observation, _, done, truncated, info = general.step(action)
+                            if done or truncated:
+                                break
+                        report["teacher_cases"].append(
+                            {
+                                "case": case,
+                                "family": family,
+                                "variant": "nominal",
+                                "success": info["primitive_success"],
+                                "code": info["code"],
+                                "stop_confirmed": stop(general),
+                            }
+                        )
+                        save(output / "report.json", report)
+                        print("TEACHER", family, case["id"], info["primitive_success"], flush=True)
+                finally:
+                    general.close()
+                for split in data:
+                    report["sample_counts"][split][family] = len(data[split]["actions"]) - starts[split]
         # Audit labels never select training data or change the fitting budget.
         # Retain failed audit expert trials explicitly; they are not a teacher
         # qualification claim and never enter optimizer minibatches.
@@ -168,6 +233,18 @@ def run(
         ):
             raise ValueError("diagnostic teacher population failed; preserve all rows")
         data = {split: {k: np.asarray(v, np.float32) for k, v in samples.items()} for split, samples in data.items()}
+        # The family blocks are contiguous in collection order. Sampling weights
+        # implement an explicit mixture; episode length cannot erase base cases.
+        sample_weights = (
+            np.concatenate(
+                [
+                    np.full(n, report["configuration"]["fitting_family_weights"][family] / n)
+                    for family, n in report["sample_counts"]["train"].items()
+                ]
+            )
+            if general_exposure
+            else None
+        )
         np.savez_compressed(
             output / "teacher-samples.npz",
             **{f"{split}_{k}": v for split, samples in data.items() for k, v in samples.items()},
@@ -183,6 +260,7 @@ def run(
                 data["train"]["actions"],
                 updates=updates,
                 learning_rate=report["configuration"]["learning_rate"],
+                sample_weights=sample_weights,
             )
             for key, value in actor.state_dict().items():
                 if key.startswith("grip.") or (
@@ -237,6 +315,7 @@ if __name__ == "__main__":
     p.add_argument("--coupled-teacher", action="store_true")
     p.add_argument("--head", action="append", choices=("gain", "direct"))
     p.add_argument("--goal-queries", type=int, default=0)
+    p.add_argument("--general-exposure", type=int, default=0)
     a = p.parse_args()
     run(
         a.output,
@@ -248,4 +327,5 @@ if __name__ == "__main__":
         coupled_teacher=a.coupled_teacher,
         heads=tuple(a.head or ("gain", "direct")),
         goal_queries=a.goal_queries,
+        general_exposure=a.general_exposure,
     )

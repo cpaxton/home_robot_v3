@@ -1,6 +1,7 @@
 # Mars learned-controller hardware readiness
 
-Updated 2026-11-17 from source, simulation and a new passive robot audit.
+Updated 2026-11-18 from source and simulation; the passive robot audit below is
+from Nov 17 and has not been repeated in this update.
 Herman is reachable after power-on; source revision is `0d4c350d`, ROS Humble with
 Zenoh/domain 0. Existing arm/odom publications arrive at about 200/30 Hz. No
 motion commands, driver/service starts or active deployments were performed.
@@ -20,6 +21,7 @@ and bounded motion in that selected envelope are required.
 | Capability | What is implemented/observed | What remains before physical use |
 | --- | --- | --- |
 | Simulator policy | Fresh cases improve 12/24 → 16/24, safety flags 4 → 1, no longer-trained wheel lift in this set. | Coupled/goal-transition misses, a contact stop and large jerk peaks remain; checkpoint is not promoted. |
+| Experimental corrective-data fit | Original spline pool 23/24; fresh splines 19/32 vs teacher 31/32. All 110 spline/general/TAMP stops confirm. | One fresh spline contact stop, speed/path misses and broader task failures remain. Experimental weights are outside deployment bundles; this does not replace the retained controller or authorize hardware. |
 | Robot-side execution | `GuardedControlSession` defines SI base/arm velocity callbacks and command slew. | No attached verified hardware driver. Existing bridge is not this whole-body executor. Validate actual servo modes and supported command semantics. |
 | Measured feedback | Local bridge changes retain source/arrival ages, complete arm state and six-component odom twist, with child-to-world planar velocity mapping. | Not deployed or ROS-build-validated. Structural validity is separate from verified units and successful motor acquisition. Current/load remains a proxy. |
 | Units / read validity | Current robot source hashes retain the known velocity conversion and zero-on-failure defects. Updated patch passes offline C++ checks and a full native ROS build in an isolated temporary workspace. | Review/install the fix and verify live units, read validity, signs and capture ages. Source inspection is not proof of compiled-binary behavior. |

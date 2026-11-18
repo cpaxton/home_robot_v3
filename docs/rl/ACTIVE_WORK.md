@@ -11,6 +11,13 @@ completed 40/10/50 hand-active/base/TAMP tick split from the completed 30/10/10/
 completed split adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
 robot-side feedback/executor/stop work separate from policy progress.
 
+**Latest decision (Nov 18):** corrective goal labels substantially improve arm
+spline tracking, but do not yet yield a general controller. Fresh confirmation
+is **19/32 actor vs 31/32 teacher**, with one actor contact stop; all 110 stops
+across spline and general/TAMP checks confirm. A balanced mixed-family
+supervised diagnostic is running. No new PPO budget or hardware motion is
+enabled. Details and the unchanged physical-tick mixture are below.
+
 **Herman passive audit is current:** reachable, Zenoh/domain 0, arm/odom ~200/30 Hz.
 The active robot source retains the known velocity/failed-read bugs; a patch for
 its exact current revision passes offline C++ checks and an isolated native
@@ -176,13 +183,37 @@ does not erase that failure. This is supervised fitting, not PPO improvement
 or qualification. Output:
 `logs/eval/gain-local-response-v1/report.json`.
 
-**Independent-seed check is running:** `emet-gain-local-confirmation` freezes
+**Independent-seed check completed:** `emet-gain-local-confirmation` freezes
 that actor and evaluates 32 fresh spline identities (16 at level zero, eight
 each at levels one/two), paired with the same coupled teacher. It then reruns
 the existing hand/base/goal-change/unloaded-TAMP pools, explicitly labeled as
 reused regression cases. Nothing is fitted or pruned. The experimental weights
-remain outside deployment bundles. Output:
+remain outside deployment bundles. Results:
+
+| Fresh spline level | Actor | Coupled teacher |
+| --- | ---: | ---: |
+| Nearby | 12/16 | 16/16 |
+| Medium | 6/8 | 8/8 |
+| Faster/wider | 1/8 | 7/8 |
+
+All 64 spline stops confirm; the actor has eleven path misses, one timeout and
+one unsafe-contact stop (30.2 N reported peak), no wheel lift. Thirty of its 32
+episodes satisfy the two-second settling check, so accurate endpoints alone
+are insufficient. Reused pools yield hand 3/16, base 4/8, goal changes 7/16,
+unloaded TAMP 6/6, with all 46 stops confirmed. These are unloaded grasp-pose
+boundaries, not full pick/place or carry. The original base actor's 8/8 is not
+preserved by this zero-initialized motion-head experiment. Output:
 `logs/eval/gain-local-confirmation-v1/report.json`.
+
+**Next diagnostic is running:** `emet-gain-mixed-response` retains corrective
+labels and the 4,000-update budget, with explicit sampling probabilities: 50%
+spline examples and one sixth each ordinary hand, base and goal-change examples.
+It adds four canonical train/four audit identities per general family; audit
+labels never enter fitting. This tests missing cross-family exposure, without
+adding a residual controller, changing deployment architecture or relaxing
+acceptance bounds. The same confirmation script runs afterward; those seeds
+are now reused regression cases, not another independent holdout. Outputs:
+`logs/eval/gain-mixed-response-v1` and `logs/eval/gain-mixed-confirmation-v1`.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.

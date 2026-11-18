@@ -253,6 +253,17 @@ confirmation uses 32 fresh spline seeds plus reused general/TAMP regression
 pools before deciding whether to use these examples for future PPO warm starts.
 No controller is promoted and the acceptance bounds are unchanged.
 
+That confirmation completes at **19/32 actor vs 31/32 teacher**: nearby 12/16
+vs 16/16, medium 6/8 vs 8/8, faster/wider 1/8 vs 7/8. The actor has eleven path
+misses, one timeout and one contact stop, with no wheel lift. All 64 spline stops
+confirm. Reused hand/base/handoff/unloaded-TAMP pools give 3/16, 4/8, 7/16, 6/6,
+respectively, all 46 stops confirmed. The corrected arm feedback generalizes
+partially, but zeroing and fitting the motion head solely on arm splines loses
+base performance. A mixed-exposure diagnostic uses the same actor and fitting
+budget, sampling 50% splines and one sixth each hand/base/handoff examples.
+This is supervised family balancing, separate from the physical-tick PPO mix;
+it does not establish that PPO or the full architecture is solved.
+
 Reproduce confirmation with `scripts/eval_wbc_motion_head.py --fit
 logs/eval/gain-local-response-v1 --initializer INITIALIZER --output FRESH_DIR`
 under the exact fit-source overlay. It refuses unfinished or source-mismatched

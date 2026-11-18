@@ -193,7 +193,17 @@ def label_nearby_goals(env, *, seed, count=2, offset_rad=0.08):
     return labels, rejections
 
 
-def fit_head(actor, observations, targets, *, updates=1000, batch_size=128, seed=20261118, learning_rate=3e-3):
+def fit_head(
+    actor,
+    observations,
+    targets,
+    *,
+    updates=1000,
+    batch_size=128,
+    seed=20261118,
+    learning_rate=3e-3,
+    sample_weights=None,
+):
     """Teacher-action fitting isolates the head; this is not a PPO result."""
     if type(updates) is not int or updates <= 0 or type(batch_size) is not int or batch_size <= 0:
         raise ValueError("positive integer diagnostic fitting budget required")
@@ -217,11 +227,27 @@ def fit_head(actor, observations, targets, *, updates=1000, batch_size=128, seed
         or torch.any(targets.abs() > 1)
     ):
         raise ValueError("finite bounded teacher actions and aligned sensor observations required")
+    weights = None
+    if sample_weights is not None:
+        weights = torch.as_tensor(sample_weights, dtype=torch.float64)
+        if (
+            weights.shape != (count,)
+            or not torch.isfinite(weights).all()
+            or torch.any(weights < 0)
+            or not torch.isfinite(weights.sum())
+            or weights.sum() <= 0
+        ):
+            raise ValueError("finite nonnegative aligned sample weights with positive total required")
+        weights = weights / weights.sum()
     optimizer = torch.optim.Adam([p for p in actor.parameters() if p.requires_grad], lr=learning_rate)
     generator = torch.Generator().manual_seed(seed)
     losses = []
     for step in range(updates):
-        indices = torch.randint(count, (min(batch_size, count),), generator=generator)
+        indices = (
+            torch.randint(count, (min(batch_size, count),), generator=generator)
+            if weights is None
+            else torch.multinomial(weights, min(batch_size, count), replacement=True, generator=generator)
+        )
         batch = {k: v[indices] for k, v in tensors.items()}
         mask = actor.action_mask(batch)[:, :-1]
         loss = (((actor(batch)[:, :-1] - targets[indices, :-1]) ** 2) * mask).sum() / mask.sum().clamp_min(1)

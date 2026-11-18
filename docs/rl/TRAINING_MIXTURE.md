@@ -297,5 +297,15 @@ a successful recovery. Rejected static proposals are counted and retained.
 With the same 4,000-update fitting budget, this reaches 16/16 train and 7/8 audit
 cases versus 1/16 and 0/8 without those labels. All stops confirm, and no unsafe
 contact/wheel lift occurs. This is not additional PPO exposure or a general
-controller qualification. A frozen actor is being checked on 32 fresh spline
-seeds and reused general/TAMP regression pools before changing the main mixture.
+controller qualification. Frozen confirmation reaches 19/32 fresh splines vs
+31/32 for the teacher, with one actor contact stop and all 110 spline/general
+stops confirmed. Reused hand/base/goal-change/unloaded-TAMP outcomes are
+3/16, 4/8, 7/16 and 6/6; the arm-only fit does not preserve base performance.
+
+The next supervised probe (`--general-exposure 4`) draws 50% of fitting examples
+from spline data and one sixth each from ordinary hand/base/goal-change data.
+Weights apply to optimizer sampling, including the virtual labels; they are
+**not physical control-tick PPO shares**. Four train/four audit identities per
+general family are added, audit remains excluded from optimization, and the
+fitting budget stays at 4,000 updates. The unchanged PPO mixture above remains
+the only completed PPO exposure. New raw datasets and weights stay ignored.
