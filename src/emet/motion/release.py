@@ -459,11 +459,19 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
             best, best_score, best_index = candidate, score, index
         return None
 
-    # Phase 1: the measured pose and bounded vertical corrections, unchanged.
-    for index, (point, rotation) in enumerate(targets):
-        accepted = evaluate(index, point, rotation)
-        if index == 0 and accepted is not None:
-            return accepted, None
+    # Opening in place and moving with the object held have distinct checks.
+    accepted = evaluate(0, *targets[0])
+    if accepted is not None:
+        return accepted, None
+    if len(targets) > 1:
+        probe.data.qpos[:] = original
+        checker = held_checker(ex.collision, measured)
+        if checker.configuration_collides(model, probe.data):
+            reason = "arm_path_failed:invalid_start:collision"
+            decision(0, "adjustment_start", reason=reason, contacts=list(checker.last_contacts))
+            return None, reason
+    for index, (point, rotation) in enumerate(targets[1:], start=1):
+        evaluate(index, point, rotation)
     if best is not None:
         decision(best_index, "accepted", target_z=best.target_z, gap_m=best.gap_m, support_slack_m=best_score)
         return best, None
