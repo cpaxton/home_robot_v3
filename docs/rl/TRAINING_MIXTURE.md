@@ -159,3 +159,5 @@ controllers execute the continuous references, not these sparse samples.
 
 Hardware status is maintained separately in
 [Mars hardware readiness](MARS_HARDWARE_READINESS.md).
+
+Inspect the actual curriculum in the [4×4 video and 3D coverage gallery](CURRICULUM_VISUALIZATION.md). It distinguishes teacher execution, train/audit cases and extra visualization-only examples.

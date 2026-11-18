@@ -1,0 +1,353 @@
+"""Render actual teacher recordings as real-time 4x4 videos; never step physics."""
+
+import argparse
+import gzip
+import json
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+import cv2
+import mujoco
+import numpy as np
+from scipy.spatial.transform import Rotation
+
+from emet.rl.manipulation.arm_spline_benchmark import save
+from emet.visualization.curriculum_cases import FAMILIES, TITLES
+from emet.visualization.curriculum_record import sha
+
+CELL_W, CELL_H, SCENE_H, HEADER = 384, 288, 240, 80
+BG, TEXT, CYAN, ORANGE = (16, 24, 34), (225, 235, 245), (60, 230, 250), (255, 170, 70)
+
+
+def label(image, value, x, y, scale=0.36, color=TEXT):
+    cv2.putText(image, str(value), (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, color, 1, cv2.LINE_AA)
+
+
+def encoder(path, width, height, fps):
+    return subprocess.Popen(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            str(fps),
+            "-i",
+            "-",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-threads",
+            "1",
+            "-preset",
+            "fast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(path),
+        ],
+        stdin=subprocess.PIPE,
+    )
+
+
+def pose_rotation(pose):
+    c = np.asarray(pose)[3:].reshape(3, 2)
+    return np.column_stack([c, np.cross(c[:, 0], c[:, 1])])
+
+
+def segment(scene, start, end, color, width=0.0015, arrow=False):
+    if scene.ngeom >= scene.maxgeom:
+        raise ValueError("curriculum marker budget exhausted")
+    geom = scene.geoms[scene.ngeom]
+    kind = mujoco.mjtGeom.mjGEOM_ARROW if arrow else mujoco.mjtGeom.mjGEOM_LINE
+    mujoco.mjv_initGeom(geom, kind, np.zeros(3), np.asarray(start), np.eye(3).ravel(), color)
+    mujoco.mjv_connector(geom, kind, width, np.asarray(start), np.asarray(end))
+    scene.ngeom += 1
+
+
+def axes(scene, position, rotation, color):
+    for k in range(3):
+        segment(scene, position, position + rotation[:, k] * 0.045, color, arrow=True)
+
+
+def frame_index(times, now):
+    return max(0, min(len(times) - 1, int(np.searchsorted(times, now, side="right") - 1)))
+
+
+def render_cell(directory, row, index, path, *, fps, frame_count):
+    process = encoder(path, CELL_W, CELL_H, fps)
+    renderer = None
+    motion = {"recorded": False, "joint_span_deg": row.get("measured_joint_span_deg")}
+    try:
+        if row.get("recording"):
+            for name, digest in row["assets"].items():
+                if sha(directory / name) != digest:
+                    raise ValueError("recording changed before rendering")
+            with np.load(directory / row["recording"], allow_pickle=False) as archive:
+                values = {k: archive[k].copy() for k in archive.files}
+            with tempfile.NamedTemporaryFile(suffix=".mjb", dir=directory) as temporary:
+                with gzip.open(directory / row["model"], "rb") as source:
+                    shutil.copyfileobj(source, temporary)
+                temporary.flush()
+                if sha(temporary.name) != row["model_raw_sha256"]:
+                    raise ValueError("expanded model differs from recorded model")
+                model = mujoco.MjModel.from_binary_path(temporary.name)
+            if values["qpos"].shape != (len(values["time_s"]), model.nq):
+                raise ValueError("recorded qpos layout differs from model")
+            data = mujoco.MjData(model)
+            model.vis.headlight.active = 1
+            model.vis.headlight.ambient[:] = 0.4
+            model.vis.headlight.diffuse[:] = 0.7
+            renderer = mujoco.Renderer(model, height=SCENE_H, width=CELL_W)
+            camera = mujoco.MjvCamera()
+            mujoco.mjv_defaultCamera(camera)
+            camera.lookat[:] = [0.07, 0, 0.16]
+            camera.distance = 0.70 if "tamp" not in str(directory.name) else 0.80
+            camera.azimuth, camera.elevation = 225, -25
+            option = mujoco.MjvOption()
+            option.geomgroup[3] = 0
+            motion.update(
+                recorded=True,
+                base_xy_span_m=np.ptp(values["base"][:, :2], axis=0).tolist(),
+                base_yaw_span_rad=float(np.ptp(np.unwrap(values["base"][:, 2]))),
+            )
+        cached = None
+        previous = None
+        for tick in range(frame_count):
+            now = tick / fps
+            canvas = np.full((CELL_H, CELL_W, 3), BG, dtype=np.uint8)
+            case = row["case"]
+            split = case.get("split", "unknown").upper()
+            suffix = case.get("posture", case.get("mode", case.get("layout", "")))
+            label(canvas, f"{index + 1:02d} {split} | {suffix}", 8, 15)
+            label(canvas, f"seed {case['seed']}", 220, 15, 0.30)
+            if not row.get("recording"):
+                label(canvas, "REJECTED / NO ROLLOUT", 15, 120, 0.5, (255, 100, 100))
+                label(canvas, str(row.get("code", "not admitted"))[:55], 10, 145, 0.3)
+            else:
+                selected = frame_index(values["time_s"], now)
+                if previous != selected:
+                    data.qpos[:] = values["qpos"][selected]
+                    data.qvel[:] = 0
+                    mujoco.mj_forward(model, data)
+                    renderer.update_scene(data, camera=camera, scene_option=option)
+                    goal = values["hand_target"][selected]
+                    body = data.body("ee_link")
+                    axes(renderer.scene, body.xpos.copy(), body.xmat.copy().reshape(3, 3), [1, 0.65, 0.25, 1])
+                    axes(renderer.scene, goal[:3], pose_rotation(goal), [0.2, 0.9, 1, 0.85])
+                    base = values["base_target"][selected]
+                    point = np.r_[base[:2], 0.025]
+                    segment(
+                        renderer.scene,
+                        point,
+                        point + np.r_[0.08 * np.cos(base[2]), 0.08 * np.sin(base[2]), 0],
+                        [0.3, 0.55, 1, 1],
+                        arrow=True,
+                    )
+                    cached = renderer.render().copy()
+                    previous = selected
+                canvas[24:264] = cached
+                ended = now > values["time_s"][-1] + 1 / fps
+                hand = values["hand"][selected]
+                goal = values["hand_target"][selected]
+                position = float(np.linalg.norm(hand[:3] - goal[:3])) * 1000
+                angle = float(Rotation.from_matrix(pose_rotation(hand) @ pose_rotation(goal).T).magnitude())
+                detail = f"{now:04.1f}s | {position:.1f}mm / {np.rad2deg(angle):.1f}deg"
+                label(canvas, detail, 8, 281, 0.34)
+                status = (
+                    ("END " + str(row.get("code", "")))
+                    if ended
+                    else ("PASS" if row["success"] else "FAIL (see report)")
+                )
+                label(canvas, status[:30], 220, 281, 0.27, (100, 235, 150) if row["success"] else (255, 120, 100))
+            process.stdin.write(canvas.tobytes())
+        process.stdin.close()
+        if process.wait(timeout=60):
+            raise RuntimeError("tile encoder failed")
+        return motion
+    finally:
+        if process.poll() is None:
+            if process.stdin and not process.stdin.closed:
+                process.stdin.close()
+            process.terminate()
+            process.wait(timeout=10)
+        if renderer is not None:
+            renderer.close()
+
+
+def render(output, family, *, fps=8):
+    if family not in FAMILIES or type(fps) is not int or not 1 <= fps <= 20:
+        raise ValueError("known family and fps in 1..20 required")
+    output = Path(output)
+    directory = output / family
+    report_path = directory / "report.json"
+    report = json.loads(report_path.read_text())
+    if report.get("format") != "curriculum-recordings-v1" or not report.get("complete") or len(report["rows"]) != 16:
+        raise ValueError("complete sixteen-case recording required")
+    path = output / (family + ".mp4")
+    if path.exists():
+        raise ValueError("fresh grid video required")
+    duration = max((r.get("duration_s", 0) for r in report["rows"]), default=0)
+    if duration <= 0:
+        raise ValueError("no actual recordings available")
+    frame_count = int(np.ceil(duration * fps)) + 1
+    tiles = []
+    motion = []
+    try:
+        for index, row in enumerate(report["rows"]):
+            tile = directory / f"tile-{index:02d}.mp4"
+            tiles.append(tile)
+            motion.append(render_cell(directory, row, index, tile, fps=fps, frame_count=frame_count))
+            print("RENDER", family, index, flush=True)
+        head = np.full((HEADER, CELL_W * 4, 3), BG, dtype=np.uint8)
+        label(head, "MARS | " + TITLES[family], 15, 26, 0.65)
+        label(
+            head,
+            "ACTUAL ANALYTIC-TEACHER EXECUTIONS | 1x simulation time | 16 distinct case/seed identities | no hardware motion",
+            15,
+            49,
+            0.43,
+        )
+        label(
+            head,
+            "Cyan: hand target | orange: measured hand | blue: base target. Shorter records freeze at their final recorded state. Failures retained.",
+            15,
+            69,
+            0.39,
+        )
+        header = directory / "header.png"
+        cv2.imwrite(str(header), cv2.cvtColor(head, cv2.COLOR_RGB2BGR))
+        command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-filter_complex_threads", "1"]
+        for tile in tiles:
+            command += ["-threads", "1", "-i", str(tile)]
+        command += ["-loop", "1", "-i", str(header)]
+        layout = "|".join(f"{i % 4 * CELL_W}_{i // 4 * CELL_H}" for i in range(16))
+        filters = f"{''.join(f'[{i}:v]' for i in range(16))}xstack=inputs=16:layout={layout}[tiles];[tiles]pad={4 * CELL_W}:{4 * CELL_H + HEADER}:0:{HEADER}:color=0x101822[padded];[padded][16:v]overlay=0:0:shortest=1[out]"
+        partial = output / (family + ".partial.mp4")
+        command += [
+            "-filter_complex",
+            filters,
+            "-map",
+            "[out]",
+            "-t",
+            str(frame_count / fps),
+            "-r",
+            str(fps),
+            "-an",
+            "-c:v",
+            "libx264",
+            "-threads",
+            "1",
+            "-preset",
+            "fast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(partial),
+        ]
+        subprocess.run(command, check=True)
+        partial.replace(path)
+        webm = path.with_suffix(".webm")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-threads",
+                "1",
+                "-i",
+                str(path),
+                "-an",
+                "-c:v",
+                "libvpx-vp9",
+                "-threads",
+                "1",
+                "-row-mt",
+                "0",
+                "-deadline",
+                "realtime",
+                "-cpu-used",
+                "6",
+                "-crf",
+                "34",
+                "-b:v",
+                "0",
+                str(webm),
+            ],
+            check=True,
+        )
+        poster = path.with_suffix(".jpg")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-threads",
+                "1",
+                "-ss",
+                str(min(5, duration / 2)),
+                "-i",
+                str(path),
+                "-frames:v",
+                "1",
+                "-threads",
+                "1",
+                str(poster),
+            ],
+            check=True,
+        )
+        receipt = {
+            "format": "curriculum-video-v1",
+            "family": family,
+            "title": TITLES[family],
+            "controller": "analytic_teacher",
+            "fps": fps,
+            "frames": frame_count,
+            "duration_s": frame_count / fps,
+            "resolution": [4 * CELL_W, 4 * CELL_H + HEADER],
+            "time_scale": 1,
+            "hardware_used": False,
+            "simulation_steps_during_render": 0,
+            "source_report_sha256": sha(report_path),
+            "producer_sha256": sha(__file__),
+            "motion": motion,
+            "summary": report["summary"],
+            "assets": {p.name: sha(p) for p in (path, webm, poster)},
+        }
+        save(output / (family + "-video.json"), receipt)
+        return receipt
+    finally:
+        for tile in tiles:
+            tile.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--family", choices=FAMILIES, required=True)
+    parser.add_argument("--fps", type=int, default=8)
+    args = parser.parse_args()
+    render(args.output, args.family, fps=args.fps)
+
+
+if __name__ == "__main__":
+    main()

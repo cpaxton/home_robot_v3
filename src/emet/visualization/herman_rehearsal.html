@@ -31,6 +31,7 @@ Use <b>Hand close-up</b> to inspect it. <span class="actual">Orange axes: measur
 <label>View <select id="camera"><option value="orbit">Whole robot · drag to orbit</option><option value="hand">Hand close-up · drag to orbit</option><option value="head_left">Head camera · wrist motion may be invisible</option><option value="camera_arm">Wrist camera · model optics only</option></select></label>
 <button id="play" disabled>Play recording</button><button id="reset">Rewind</button>
 <a id="videoLink" href="/video.mp4" target="_blank" hidden>Watch / download MP4</a>
+<a id="curriculumLink" href="/curriculum/" hidden>4×4 curriculum videos + 3D coverage</a>
 </div>
 <div class="grid">
 <div class="card"><div class="caption">Herman's captured left head image · fixed observation</div><img id="actual" src="/head_left.jpg" alt="Herman captured head image"></div>
@@ -150,6 +151,7 @@ setInterval(() => {
 }, 40);
 (async () => {
   state = await json('/api/state');
+  $('curriculumLink').hidden = !state.curriculum_available;
   state.entries.forEach((entry,index) => {
     const option = document.createElement('option'); option.value = index; option.textContent = entry.label;
     $('replay').appendChild(option);

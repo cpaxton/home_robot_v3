@@ -215,8 +215,11 @@ def byte_range(header, size):
     return start, end
 
 
-def make_server(replay, port=8771, video=None):
+def make_server(replay, port=8771, video=None, curriculum=None):
+    from emet.visualization.curriculum_gallery import CurriculumAssets
+
     video = Path(video) if video is not None else None
+    gallery = CurriculumAssets(curriculum) if curriculum is not None else None
     render_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="herman-render")
 
     class Handler(BaseHTTPRequestHandler):
@@ -249,7 +252,16 @@ def make_server(replay, port=8771, video=None):
             url = urlsplit(self.path)
             query = parse_qs(url.query)
             try:
-                if url.path == "/":
+                if gallery is not None and url.path in {"/curriculum", "/curriculum/"}:
+                    self.reply(
+                        Path(__file__).with_name("curriculum_gallery.html").read_bytes(), "text/html; charset=utf-8"
+                    )
+                elif gallery is not None and url.path == "/curriculum/api/state":
+                    self.reply(gallery.state())
+                elif gallery is not None and url.path.startswith("/curriculum/assets/"):
+                    asset, content_type = gallery.asset(url.path.removeprefix("/curriculum/assets/"))
+                    self.media(asset, content_type)
+                elif url.path == "/":
                     self.reply(Path(__file__).with_suffix(".html").read_bytes(), "text/html; charset=utf-8")
                 elif url.path == "/api/state":
                     self.reply(
@@ -257,6 +269,7 @@ def make_server(replay, port=8771, video=None):
                             **replay.state(),
                             "video_available": bool(video and video.is_file()),
                             "video_webm_available": bool(video and video.with_suffix(".webm").is_file()),
+                            **({"curriculum_available": True} if gallery is not None else {}),
                         }
                     )
                 elif url.path == "/api/frames":
@@ -283,38 +296,42 @@ def make_server(replay, port=8771, video=None):
                     if not asset.is_file():
                         self.reply({"error": "video not available"}, code=404)
                         return
-                    size = asset.stat().st_size
-                    try:
-                        start, end = byte_range(self.headers.get("Range"), size)
-                    except ValueError:
-                        self.send_response(416)
-                        self.send_header("Content-Range", f"bytes */{size}")
-                        self.send_header("Content-Length", "0")
-                        self.end_headers()
-                        return
-                    self.send_response(206 if self.headers.get("Range") else 200)
-                    self.send_header("Content-Type", "video/webm" if url.path.endswith(".webm") else "video/mp4")
-                    self.send_header("Accept-Ranges", "bytes")
-                    self.send_header("Cache-Control", "no-store")
-                    self.send_header("Content-Length", str(end - start + 1))
-                    if self.headers.get("Range"):
-                        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-                    self.end_headers()
-                    with asset.open("rb") as stream:
-                        stream.seek(start)
-                        remaining = end - start + 1
-                        while remaining:
-                            chunk = stream.read(min(65536, remaining))
-                            if not chunk:
-                                raise OSError("video changed during transfer")
-                            self.wfile.write(chunk)
-                            remaining -= len(chunk)
+                    self.media(asset, "video/webm" if url.path.endswith(".webm") else "video/mp4")
                 else:
                     self.reply({"error": "not found"}, code=404)
             except (BrokenPipeError, ConnectionResetError):
                 return
             except (ValueError, KeyError, OSError) as exc:
                 self.reply({"error": str(exc)}, code=400)
+
+        def media(self, asset, content_type):
+            size = asset.stat().st_size
+            try:
+                start, end = byte_range(self.headers.get("Range"), size)
+            except ValueError:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(206 if self.headers.get("Range") else 200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if self.headers.get("Range"):
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            with asset.open("rb") as stream:
+                stream.seek(start)
+                remaining = end - start + 1
+                while remaining:
+                    chunk = stream.read(min(65536, remaining))
+                    if not chunk:
+                        raise OSError("media changed during transfer")
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
 
     class Server(ThreadingHTTPServer):
         # Browsers pre-open sockets without sending a request. Concurrent HTTP
@@ -337,10 +354,11 @@ def main():
     parser.add_argument("--rehearsal", type=Path, required=True)
     parser.add_argument("--port", type=int, default=8771)
     parser.add_argument("--video", type=Path, help="optional local MP4 to serve at /video.mp4")
+    parser.add_argument("--curriculum", type=Path, help="optional catalogued curriculum video directory")
     args = parser.parse_args()
     replay = Replay(args.rehearsal)
     video = args.video or args.rehearsal.with_name(args.rehearsal.name + "-comparison.mp4")
-    server = make_server(replay, args.port, video)
+    server = make_server(replay, args.port, video, args.curriculum)
     print(f"Offline Herman rehearsal: http://localhost:{server.server_port}", flush=True)
     try:
         server.serve_forever(poll_interval=0.2)
