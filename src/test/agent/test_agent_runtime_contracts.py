@@ -170,3 +170,71 @@ def test_successful_action_only_command_does_not_force_extra_model_round():
     dispatched = _dispatch_tool_calls([{"name": tool.name}], {tool.name: tool}, lambda commands: True)
     assert dispatched.continue_running and not dispatched.has_info
     assert dispatched.outcomes[0].ok
+
+
+@pytest.mark.parametrize(
+    "claimed_ok,status,code",
+    [(True, "partial", "command_outcome_unknown"), (True, "error", "controller_failed"), (False, "ok", "ok")],
+)
+def test_typed_result_disagreement_never_permits_continuation(claimed_ok, status, code):
+    envelope = response("execute_task_plan", status=status, code=code)
+    wrapped = ToolOutcome(claimed_ok, tool="execute_task_plan", payload=envelope)
+    normalized = ToolOutcome.coerce(wrapped.tool, wrapped)
+    assert not normalized.ok and normalized.status == "invalid_tool_result"
+    assert tamp_followup("Continue the transfer", [wrapped]) is None
+    later = Mock()
+    tools = {
+        wrapped.tool: Tool(wrapped.tool, "test", {}, lambda: wrapped, returns_info=True),
+        "scene_tasks": Tool("scene_tasks", "test", {}, later, returns_info=True),
+    }
+    dispatched = _dispatch_tool_calls([{"name": wrapped.tool}, {"name": "scene_tasks"}], tools, Mock())
+    assert not dispatched.outcomes[0].ok
+    later.assert_not_called()
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_versioned_receipt_owns_nested_provider_data(wrapped):
+    envelope = response("execute_task_plan", data={"completed_steps": 1, "completed_actions": [{"object_name": "cup"}]})
+    original = ToolOutcome(True, tool="execute_task_plan", payload=envelope) if wrapped else envelope
+    tool = Tool("execute_task_plan", "test", {}, lambda: original, returns_info=True)
+    dispatched = _dispatch_tool_calls([{"name": tool.name}], {tool.name: tool}, Mock())
+    envelope["data"]["completed_steps"] = 99
+    envelope["data"]["completed_actions"][0]["object_name"] = "later object"
+    data = dispatched.outcomes[0].payload["data"]
+    assert data["completed_steps"] == 1
+    assert data["completed_actions"] == [{"object_name": "cup"}]
+    context = TampDialogueContext()
+    context.record_turn("Move the cup", dispatched.outcomes)
+    assert '"completed_steps": 1' in context.prompt("Explain")
+    assert "later object" not in context.prompt("Explain")
+
+
+def test_rejected_exploration_never_includes_success_summary(monkeypatch):
+    import emet.agent.tools as tools_module
+
+    monkeypatch.setattr(tools_module, "snapshot_from_voxel_map", lambda *args: (None, {"summary_lines": []}, None))
+
+    class Executor:
+        agent = SimpleNamespace(_last_nav_plan={"outcome": "rejected_low_clearance"}, get_voxel_map=lambda: None)
+        _last_exec_ok = True
+
+        def __call__(self, commands):
+            return True
+
+    tools = {tool.name: tool for tool in get_tools({"executor": Executor()})}
+    outcome = tools["explore"].func()
+    assert not outcome.ok
+    assert "reported success" not in outcome.note
+
+
+@pytest.mark.parametrize("name", ["execute_task_plan", "execute_pick_place_plan", "pick_place", "move_forward"])
+def test_rotate_only_refusal_keeps_its_machine_reason_through_dispatch(monkeypatch, name):
+    monkeypatch.setenv("EMET_BASE_ROTATE_ONLY", "1")
+    tools = {tool.name: tool for tool in get_tools({})}
+    executor = Mock()
+    dispatched = _dispatch_tool_calls([{"name": name}], tools, executor)
+    outcome = dispatched.outcomes[0]
+    assert not outcome.ok and outcome.status == "base_rotate_only"
+    assert outcome.payload["recovery"] == "none"
+    assert "tethered" in outcome.note
+    executor.assert_not_called()

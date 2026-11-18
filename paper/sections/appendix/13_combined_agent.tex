@@ -122,7 +122,9 @@ to a simultaneous arm sweep when the ordered route is blocked.
 \paragraph{Structured outcomes govern continuation.}
 CHAT retains typed tool outcomes for continuation and historical summaries;
 prompt/log strings are renderings, rather than receipts parsed again by those
-consumers. Session liveness is independent from action success. Missing frames,
+consumers. Versioned receipts own nested provider data and reject a wrapper
+whose success flag disagrees with its embedded outcome. Session liveness is
+independent from action success. Missing frames,
 interrupted scans and rejected exploration carry explicit outcomes. Legacy prose
 is unverified, even when its wording suggests completion. A signature-aware
 client adapter binds supported inference arguments; internal model exceptions do

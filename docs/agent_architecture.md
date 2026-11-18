@@ -86,6 +86,10 @@ Capture, scan and exploration handlers return explicit outcomes. Legacy prose
 has `status=unverified_result` and cannot establish action success, even if it
 says “Done.”; opt-in ledger rows record such results as unknown. Existing
 versioned TAMP and relative-motion envelopes keep their validation contracts.
+Versioned receipts own their nested data and reject disagreement between wrapper
+success and envelope status/code. Historical summaries cannot inherit a provider's
+later mutations. Adapter caches also belong to their exact client; bound-method
+callbacks are rebound without writing to shared function metadata.
 The TAMP binder resolves mode, input provenance and adapters at call time;
 extraction does not cache authorization or enable observed execution.
 

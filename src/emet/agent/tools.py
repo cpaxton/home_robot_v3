@@ -414,7 +414,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
-        summary = format_navigation_report(stats, explore_ok=ok)
+        # The explicit outcome below owns completion status; map statistics
+        # must not turn executor liveness into an additional success claim.
+        summary = format_navigation_report(stats)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
         if str(outcome or "").startswith(("rejected_", "aborted_", "failed")) or outcome == "user_cancelled":
@@ -1051,6 +1053,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     if env_base_rotate_only():
         # Keep tool names in the pack so the LLM does not invent calls; stubs return a clear refusal.
         from emet.agent.tool_policy import ROTATE_ONLY_BLOCKED_TOOLS
+        from emet.controller.task.tamp.api import TAMP_TOOLS, response
 
         blocked = ROTATE_ONLY_BLOCKED_TOOLS
         stub_msg = (
@@ -1061,6 +1064,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
         def _make_stub(orig: Tool) -> Tool:
             def _fn(**_kwargs: Any) -> ToolOutcome:
+                if orig.name in TAMP_TOOLS or orig.name in {"rotate_base", "move_forward"}:
+                    envelope = response(orig.name, code="base_rotate_only", recovery="none")
+                    envelope["message"] = stub_msg
+                    return ToolOutcome.from_versioned_result(orig.name, envelope)
                 return ToolOutcome(False, status="base_rotate_only", tool=orig.name, note=stub_msg)
 
             return Tool(

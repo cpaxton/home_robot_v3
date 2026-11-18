@@ -109,6 +109,11 @@ missing frames, interrupted scans and rejected exploration remain failures.
 Legacy prose receives `unverified_result`, never success inferred from wording.
 Unknown legacy results are recorded as unknown in the opt-in attempt ledger.
 Versioned TAMP and relative-motion results retain their stricter envelope checks.
+Their nested receipt data is copied at admission, so later provider updates cannot
+rewrite retained progress. A typed wrapper whose success flag disagrees with its
+embedded receipt is rejected; partial execution cannot become a successful
+continuation. Rotate-only refusals retain their versioned reason and recovery
+instruction through dispatch.
 
 ## Evidence boundaries
 

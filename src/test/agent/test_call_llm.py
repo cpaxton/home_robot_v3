@@ -120,3 +120,33 @@ def test_vl_internal_typeerror_is_not_retried_as_missing_progress():
     with pytest.raises(TypeError, match="decoder failed"):
         _call_llm(client, "q", None, False, progress_callback=lambda msg: None)
     assert client.calls == 1
+
+
+def test_bound_method_adapter_never_reuses_a_different_receiver():
+    class Receiver:
+        def __init__(self, name):
+            self.name = name
+
+        def generate(self, text):
+            return self.name
+
+    first, second = Receiver("first"), Receiver("second")
+    assert _call_llm(first.generate, "hello", None, False)[0] == "first"
+    assert _call_llm(second.generate, "hello", None, False)[0] == "second"
+    assert "_agent_call_adapter" not in Receiver.generate.__dict__
+
+
+def test_copied_client_cannot_reuse_the_original_clients_bound_adapter():
+    from copy import copy
+
+    class Client:
+        name = "original"
+
+        def __call__(self, text):
+            return self.name
+
+    original = Client()
+    assert _call_llm(original, "hello", None, False)[0] == "original"
+    copied = copy(original)
+    copied.name = "copied"
+    assert _call_llm(copied, "hello", None, False)[0] == "copied"

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from inspect import Parameter, signature
+from inspect import Parameter, ismethod, signature
 from typing import Any
 
 from emet.llms.base import AbstractVLLMClient
@@ -63,11 +63,17 @@ class LLMCallAdapter:
 
 
 def call_adapter(client: Any) -> LLMCallAdapter:
-    """Reuse a bound adapter on ordinary clients; slot-only clients bind on demand."""
-    state = getattr(client, "__dict__", {})
+    """Cache on the exact client; bound methods and slot-only clients bind on demand.
+
+    A bound method exposes its function's shared dictionary, so caching there
+    would retain and reuse another receiver. Copied clients can also inherit an
+    adapter bound to the original instance; check identity before reusing it.
+    """
+    state = None if ismethod(client) else getattr(client, "__dict__", None)
+    if not isinstance(state, dict):
+        return LLMCallAdapter(client)
     adapter = state.get("_agent_call_adapter")
-    if not isinstance(adapter, LLMCallAdapter):
+    if not isinstance(adapter, LLMCallAdapter) or adapter.client is not client:
         adapter = LLMCallAdapter(client)
-        if isinstance(state, dict):
-            state["_agent_call_adapter"] = adapter
+        state["_agent_call_adapter"] = adapter
     return adapter

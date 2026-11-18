@@ -11,7 +11,8 @@ write structured attempts into the graph-memory action-outcome ledger.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from emet.controller.task.tamp.api import SCHEMA_VERSION, TAMP_TOOLS
@@ -114,37 +115,50 @@ class ToolOutcome:
         return cls(ok=ok, status=status, note=note, tool=tool, payload=d)
 
     @classmethod
+    def from_versioned_result(cls, tool: str, value: Any, *, wrapper: ToolOutcome | None = None) -> ToolOutcome:
+        """Own and validate a TAMP/motion receipt without a JSON round trip.
+
+        Wrapper success must agree with the embedded receipt. In particular, a
+        partial receipt cannot be promoted, or a failed wrapper silently erased.
+        Copy nested data so a provider's later updates cannot rewrite history.
+        """
+        envelope = deepcopy(value) if isinstance(value, dict) else value
+        if not _valid_versioned_result(tool, envelope):
+            return cls(
+                False,
+                status="invalid_tool_result",
+                tool=tool,
+                note=wrapper.note if wrapper is not None else "",
+                payload={"recovery": "inspect"},
+            )
+        success = envelope["status"] == "ok" and envelope["code"] == "ok"
+        if wrapper is not None and (wrapper.tool != tool or wrapper.ok is not success):
+            return cls(False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
+        return cls(
+            ok=success,
+            status=envelope["code"],
+            note=(wrapper.note if wrapper is not None else "") or str(envelope.get("message", "")),
+            tool=tool,
+            payload=envelope,
+        )
+
+    @classmethod
     def coerce(cls, tool: str, result: Any) -> ToolOutcome:
         """Normalize versioned TAMP JSON, EQA dictionaries, and legacy prose."""
         if isinstance(result, ToolOutcome):
             if not result.tool:
-                result.tool = tool
+                result = replace(result, tool=tool)
             if result.tool != tool:
                 return cls(False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
             if tool not in TAMP_TOOLS and tool not in {"rotate_base", "move_forward"}:
                 return result
-            # A typed wrapper cannot bypass versioned result admission. Keep
-            # explicit failure prose visible even when its envelope is missing.
-            if not _valid_versioned_result(tool, result.payload):
-                return cls(
-                    False, status="invalid_tool_result", tool=tool, note=result.note, payload={"recovery": "inspect"}
-                )
-            result = result.payload
+            return cls.from_versioned_result(tool, result.payload, wrapper=result)
         if tool in TAMP_TOOLS or tool in {"rotate_base", "move_forward"}:
             try:
                 envelope = json.loads(result) if isinstance(result, str) else result
             except (ValueError, TypeError):
                 envelope = None
-            if not _valid_versioned_result(tool, envelope):
-                return cls(ok=False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
-            # Outcome.status stores the machine-readable reason code for the ledger.
-            return cls(
-                ok=envelope["status"] == "ok" and envelope["code"] == "ok",
-                status=envelope["code"],
-                note=str(envelope.get("message", "")),
-                tool=tool,
-                payload=dict(envelope),
-            )
+            return cls.from_versioned_result(tool, envelope)
         if isinstance(result, dict) and "ok" in result:
             return cls.from_eqa_dict(tool, result)
         text = "" if result is None else str(result)
@@ -168,16 +182,8 @@ def retained_outcomes(results: list[ToolOutcome] | list[str]) -> list[ToolOutcom
     outcomes = []
     for result in results:
         if isinstance(result, ToolOutcome):
-            if result.tool in TAMP_TOOLS and not _valid_versioned_result(result.tool, result.payload):
-                outcomes.append(
-                    ToolOutcome(
-                        False,
-                        status="invalid_tool_result",
-                        tool=result.tool,
-                        note=result.note,
-                        payload={"recovery": "inspect"},
-                    )
-                )
+            if result.tool in TAMP_TOOLS:
+                outcomes.append(ToolOutcome.from_versioned_result(result.tool, result.payload, wrapper=result))
             else:
                 outcomes.append(result)
             continue
