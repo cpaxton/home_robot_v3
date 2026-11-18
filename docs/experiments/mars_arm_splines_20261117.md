@@ -96,3 +96,32 @@ goal-change, coupled and TAMP cases. Include the previously frozen elbow wave.
 Report path and endpoint errors, base drift, joint-limit pushing, jerk, contact,
 wheel unloading and stop confirmation. Improved spline performance alone does
 not qualify the whole-body controller or Herman deployment.
+
+## Launch record
+
+Implementation is `614dfcd6` on draft PR #241. The updated source passes all
+29 new tests (no skips), including four teacher executions with the final
+shortened deadline and the existing 0.5 wheel-feedback gain. The preceding
+56-test combined pass predates that final alignment; do not sum these as
+independent coverage. Runtime package parity, Ruff and diff checks pass.
+A local Chromium fixture test verifies gallery initialization, animated pixel
+changes, pointer orbit, disabled playback for rejected cases and mobile width;
+that fixture checks the UI, not robot geometry or policy performance.
+
+Transient user service `emet-arm-spline-training` runs one numerical worker on
+CPU 15, native threads one, CUDA hidden, 6 GB memory bound, offline W&B, and a
+12-hour maximum. It uses the frozen `logs/runtimes/arm-splines-614dfcd6` snapshot,
+so later worktree edits cannot change its source. It is currently in the full
+regression phase; teacher preflight and PPO are queued, not yet completed.
+
+- Pipeline state/logs: `logs/recovery/arm-spline-development-v1/`.
+- Fresh regression receipt, only if passed:
+  `logs/eval/arm-spline-regressions-v1/full.receipt.json`.
+- Full level-zero teacher report/gallery: `logs/eval/arm-spline-preflight-v1/`.
+- Bounded pilot, only after both checks pass: `logs/manipulation/arm-splines-v1/`.
+- Matched initializer/final spline comparison: `logs/eval/arm-spline-paired-v1/`.
+
+The pipeline stops on any failed prerequisite and does not silently increase
+the training budget. Ordinary/coupled/goal-change/TAMP and frozen-wave evaluation
+remain required after the spline comparison. No success, qualification or
+hardware-readiness claim is made for the queued checkpoint.

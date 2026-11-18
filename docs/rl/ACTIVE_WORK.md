@@ -48,8 +48,11 @@ with 10/10/10% existing hand/base/goal changes and 50% TAMP. Seeded FK-witness
 splines cover legal folded and reaching postures, continuous motion through
 interior knots, bounded derivatives and quiet holds. Four exploratory teacher
 cases pass below 2 mm; the complete level-zero teacher and source-bound tests
-must pass before the fixed PPO pilot starts. No training or hardware improvement
-is claimed from those four cases. [Protocol](../experiments/mars_arm_splines_20261117.md).
+must pass before the fixed PPO pilot starts. Transient service
+`emet-arm-spline-training` is running that sequence from frozen `614dfcd6`, one
+CPU worker, then a gated 65,536-decision pilot and matched spline comparison.
+State: `logs/recovery/arm-spline-development-v1/pipeline.json`. No training or
+hardware improvement is claimed from those four cases. [Protocol](../experiments/mars_arm_splines_20261117.md).
 
 ## One controller owner and development worktree
 
