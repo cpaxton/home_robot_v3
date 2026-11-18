@@ -7,6 +7,7 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+from tamp_sim_checkpoint import save_sim_checkpoint
 
 
 def install_release_diagnostics(executor, robot, output):
@@ -19,6 +20,7 @@ def install_release_diagnostics(executor, robot, output):
         if row.get("phase") == "release_plan":
             output.mkdir(parents=True, exist_ok=True)
             path = output / f"release-{count:02d}.npz"
+            save_sim_checkpoint(path.with_suffix(".mjstate"), ex.model, robot.data)
             count += 1
             probe = mujoco.MjData(ex.model)
             mujoco.mj_copyData(probe, ex.model, robot.data)

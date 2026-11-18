@@ -16,6 +16,7 @@ import os
 import resource
 import time
 from contextlib import contextmanager
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ import numpy as np
 from eval_mapped_native_contact import MappedContactRobot, MappedGuard, provided_scan
 from tamp_mobile_cases import load_case
 from tamp_release_diagnostics import install_release_diagnostics
+from tamp_sim_checkpoint import save_sim_checkpoint
 
 from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
@@ -280,10 +282,11 @@ def run(args):
         directory = out / name
         directory.mkdir(exist_ok=True)
         stats = {"phase": name}
+        save_sim_checkpoint(directory / "sim-state.npz", model, robot.data)
         with phase("map_" + name):
 
             def build():
-                _, admission, support, _ = provided_scan(
+                _, admission, support, capture = provided_scan(
                     args.fixture,
                     robot,
                     args.object,
@@ -292,9 +295,11 @@ def run(args):
                     include_target=include_target,
                     build_stats=stats,
                 )
+                stats["capture"] = asdict(capture)
                 return LocalScene(admission, support)
 
             lease = store.load(name, build, reserve_bytes=48 * 1024**2)
+        stats["generation"] = lease.generation
         result["map_builds"].append(stats)
         if old is not None:
             try:
@@ -402,8 +407,49 @@ def run(args):
     }
 
     def call(name, **kw):
+        folder = out / "tool-calls" / f"{len(result['responses']):02d}-{name}"
+        folder.mkdir(parents=True, exist_ok=True)
+        save_sim_checkpoint(folder / "before.mjstate", model, robot.data)
+        first_event = len(events)
+        first_command = len(robot.commands)
+        first_witness = {g.lease.generation: len(g.rejection_witnesses) for g in guards}
+        initial_map = None if lease is None else lease.generation
         row = json.loads(tools[name].func(**kw))
         result["responses"].append(row)
+        if row["status"] != "ok":
+            save_sim_checkpoint(folder / "after.mjstate", model, robot.data)
+            maps = [
+                build
+                for build in result["map_builds"]
+                if build["generation"] == initial_map or build["generation"] not in first_witness
+            ]
+            bundle = {
+                "schema_version": 1,
+                "tool": name,
+                "fixture": os.path.relpath(args.fixture.resolve(), folder),
+                "case_config": case,
+                "receipt": row,
+                "checkpoints": {"before": "before.mjstate", "after": "after.mjstate"},
+                "events": {"path": "../../events.jsonl", "start": first_event, "stop": len(events)},
+                "commands": {"path": "../../result.json", "start": first_command, "stop": len(robot.commands)},
+                "maps": [
+                    {
+                        "generation": build["generation"],
+                        "capture": build["capture"],
+                        "directory": "../../" + build["phase"],
+                    }
+                    for build in maps
+                ],
+                "map_rejections": {
+                    g.lease.generation: g.rejection_witnesses[first_witness.get(g.lease.generation, 0) :]
+                    for g in guards
+                    if len(g.rejection_witnesses) > first_witness.get(g.lease.generation, 0)
+                },
+                "release_diagnostics": "../../release-states" if (out / "release-states").is_dir() else None,
+            }
+            manifest = folder / "failure.json"
+            manifest.write_text(json.dumps(bundle, indent=2) + "\n")
+            result.setdefault("failure_bundles", []).append(str(manifest.relative_to(out)))
         save()
         return row
 
