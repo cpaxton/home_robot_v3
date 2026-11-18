@@ -40,7 +40,11 @@ class ToolOutcome:
         return d
 
     def render(self) -> str:
-        """Human/LLM-facing one-liner for chat transcripts and tool-result blocks."""
+        """Render public TAMP JSON intact; other outcomes use compact labeled prose."""
+        if self.tool in TAMP_TOOLS and self.payload.get("schema_version") == SCHEMA_VERSION:
+            # Continuation and historical task summaries consume the same public
+            # envelope. Prose rendering would lose plan handles/partial progress.
+            return f"[{self.tool}] " + json.dumps(self.payload, allow_nan=False)
         name = self.tool or "tool"
         head = f"[{name}] ok" if self.ok else f"[{name}] failed"
         bits = [head]

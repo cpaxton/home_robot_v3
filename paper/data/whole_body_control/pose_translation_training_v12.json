@@ -1,0 +1,10 @@
+{
+  "complete": true,
+  "new_ppo_steps": 32768,
+  "variants": 2,
+  "steps_per_variant": 16384,
+  "full_report_archive": "paper/data/whole_body_control/pose_translation_training_v12.json.gz",
+  "uncompressed_sha256": "c37f31230cd7298ca91189cf9da9d472a82527a9995266e56203c4d9465f87c6",
+  "training_source": "0c9cd1ba",
+  "safety_promoted": false
+}

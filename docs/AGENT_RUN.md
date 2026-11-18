@@ -58,6 +58,31 @@ flowchart LR
 | **No LLM** | `--no-llm` | Letter commands: `E` explore, `M` pick+place, `Q` question, `P` picture, `FIND x` / `find x`. |
 | **Scripted** | `-c` / `--command` | Run one or more turns non-interactively, then exit. **Discord is disabled** automatically (pass `--no-discord` in scripts to silence the warning). |
 
+### VLM history and shared inference
+
+`OpenaiVLLMClient.generate_multimodal()` clears history by default
+(`reset_context=True`). Passing `False` deliberately replays the full retained
+dialogue, including encoded prior images; it does not evict old images to save
+tokens. CHAT resets at the first tool round of each user turn and continues for
+tool follow-ups/summarization. TAMP retains a bounded text-only summary across
+consecutive TAMP turns, described below; it does not replay earlier images.
+Interactive `emet run chat` also intentionally keeps
+history; its single-turn mode resets. DynaMem caption/keyword calls go through
+`dynamem_vllm_call`, which explicitly resets on each inference.
+
+For episode-owned dialogue, `generate_messages()` temporarily installs the supplied
+turns, encodes earlier user images through `_conversation_user_content`, and
+restores the client's previous history even if inference fails. The episode owns
+its dialogue separately, so shared caption calls cannot replace that dialogue.
+
+Calls and history edits on one client must be serialized. Conversation preservation
+is not a concurrency lock. `last_call_metrics` is the latest request's record on
+that client: copy it before another call, or use separate client instances for
+concurrent traces. Separate remote clients may use the same server endpoint.
+`image_count` counts new images in the current user turn; `request_image_count`
+also counts prior images retransmitted in the request. Wall time includes server
+queueing, transport, decoding and retries; it is not server compute time.
+
 ### Skill library vs orchestrator modes
 
 One shared skill library (`emet.agent.skills`); two tool packs:
@@ -329,6 +354,27 @@ A failed/partial/unknown TAMP outcome ends that turn with a summary; no action
 returned by that final summary executes. Inspect before an explicit recovery
 turn. A request only to plan does not authorize execution.
 
+For contextual requests such as “please retry the remaining work,” CHAT supplies
+up to two preceding consecutive TAMP user requests and public outcome summaries.
+These contain named historical progress and failure/dispatch flags, without
+plan handles, raw observations or images. Each record is limited to 8192
+characters (up to two records plus prompt framing); oversized records are
+dropped whole. A dispatched non-TAMP tool clears context, including mixed turns;
+dispatch bookkeeping and deferred proposals do not. Nullable progress fields
+remain explicit. A turn with no TAMP outcome also clears the
+history. This summary is not current scene evidence or renewed authorization.
+A newly authorized retry requires fresh `scene_tasks` and a fresh plan. An
+explanation or plan-only request must not execute; ambiguous referents require
+clarification. Unknown dispatch and held-object recovery remain unqualified.
+
+CHAT dispatches only the first proposal from an all-TAMP batch, then returns its
+actual result to the model. Later proposals are logged in `deferred_tool_calls`
+and retained in the raw response; they are not executed or queued. The model must
+choose the next call from fresh results, including actual returned plan handles.
+Failure still ends the turn. Mixed capability batches retain the existing
+dispatcher stop rules. This prevents a bundled discovery/plan/execute response
+from dispatching a handle invented before planning has returned one.
+
 `--state-only-sim --memory-backend dynamem` is an explicit camera-free Stretch
 simulation diagnostic. It requires LLM CHAT, no EQA/camera input or checkpoint,
 and server metadata advertising zero cameras. Its CPU/manipulation-only executor
@@ -364,3 +410,24 @@ this provider. Python embedders can inject another `observed_tamp_provider`.
 Discovery results explicitly report `discovery_only`; CHAT summarizes and stops.
 Observed planning/execution remain unavailable pending collision geometry and
 verification providers. See the [provider contract](api/tamp.md#observed-discovery-integration-hook).
+
+### Native TAMP policy qualification
+
+The privileged stationary simulation path accepts
+`--set agent.native_tamp_policy=bounded_release` alongside physical mode and
+privileged inputs. The default is `legacy`. The same policy is used by primitive
+pick/place tools and `--native-task-config` multi-step sessions; the diagnostic
+recorder is not a separate executor. See [native task tools](api/tamp_task_plans.md#native-motion-policy)
+and the [qualification gate](plans/2026-11-13_native_tamp_qualification.md).
+`scripts/eval_native_chat_session.py --native-policy bounded_release` forwards
+that ordinary configuration override to the actual `run agent` CLI. Hardware,
+observed grounding and exploration remain separately qualified capabilities.
+
+The experimental `--set agent.native_tamp_policy=bounded_approach` additionally
+permits checked short unloaded base moves before grasp in the native simulator.
+It shares the same public tools; discovery reports the changed motion scope.
+See the [approach contract](api/tamp_task_plans.md#experimental-checked-base-approach).
+The [November 16 replay](experiments/tamp_native_base_approach_20261116.md) completes
+all four original development tasks through the actual CLI with remote Caliban
+inference. Loaded base transport, held-out reliability, observed navigation and
+hardware execution remain unqualified.

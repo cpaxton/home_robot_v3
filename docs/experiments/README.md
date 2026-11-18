@@ -66,6 +66,23 @@ while learned OVMM, SQA3D, and dynamic-exploration tables remain incomplete.
 Detailed commands / LaTeX mapping: [paper_benchmarks.md](../paper_benchmarks.md).
 GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [README § Documentation map](../../README.md#documentation-map).
 
+## Evidence storage
+
+Commit concise Markdown findings and JSON summaries/manifests. Include source
+commit and dirty-file hashes, profile/input tier, denominators, failed attempts,
+job IDs, artifact locations and hashes, and commands needed to reproduce figures.
+Keep dense per-frame/per-query traces, camera captures and full logs in managed
+run artifacts (`.tamp-runs/` or the job's output directory), rather than copying
+those arrays into each checked-in summary. JSON remains the structured format.
+
+A local artifact path is not a public archive. Evidence cited by a paper needs a
+durable accessible archive or enough versioned inputs to reproduce it, with an
+archive identifier and content hashes in its manifest. Retain failed runs as well
+as successful ones. Existing detailed records remain until an archive migration
+can preserve their references and evidence; deleting them now would not remove
+their already-committed bytes from history. New review summaries follow the
+compact-manifest policy.
+
 | Need | Go to |
 |------|--------|
 | Experiment matrix + smokes | this page |
@@ -76,7 +93,12 @@ GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [REA
 | Graph room timeline A/B | [graph_room_evidence.md](graph_room_evidence.md) |
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
+| Native retention pilots and preserved failures | [Fixed presets](tamp_native_closure_pilot_20261114.md) · [Contact-relative hold](tamp_native_contact_relative_pilot_20261114.md) · [Geometric ordering / base sensitivity](tamp_native_face_alignment_pilot_20261114.md) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
+| Mars controller timing and smoothness | [Matched wheel-feedback diagnosis](mars_aligned_jerk_measurements_20261115.md): same actor, 2/12→8/12 full passes; simulator diagnostic, zero new PPO |
+| Mars corrected-reset baselines | [Complete reset/TAMP readout](mars_current_feedback_reset_validation_20261115.md): legacy 151/164 general, 0/6 actual pregrasps; teacher 5/6; full 1,299 regressions |
+| Mars actual TAMP input diagnosis | [Four fixed traced episodes](mars_tamp_input_diagnostic_20261115.md): recording parity and exact actor replay; weak arm commands, clipped grip feedback and separate support-margin replan failure |
+| Mars grasp/hold and support preparation | [Twelve bounded task diagnostics](mars_task_arrival_20261115.md): repaired hold reacquisition reaches grasp/closure; support reserve, retention and fixed-hand/base tracking remain unqualified |
 
 ## HM-EQA baselines
 
@@ -121,6 +143,7 @@ Results JSONL: `~/.cache/habitat_eqa/results/`. Numbers + planned sweeps: [habit
 |-------|-----------|-----|---------------|----------------|-----------------|
 | **Backend localization** | qualitative / appendix | [backend_localization.md](backend_localization.md) | `uv run python scripts/smoke_backend_localization_figure.py --quick` | `~/runs/emet/backend_localization_smoke/` | `backend_localization_topdown.png`, `backend_localization_metrics_bar.png` |
 | **TAMP clutter** | `sec:tamp_clutter` | [tamp_clutter.md](tamp_clutter.md) (E1–E5 GPU queue) | `uv run python scripts/eval_tamp_clutter.py --smoke` | `~/runs/emet/tamp_clutter` | per-episode JSON + `aggregate_tamp_clutter.csv` |
+| **Panda native-reference pilot** | reference diagnostic, no agent score | [simulation realism plan](../plans/2026-11-01_tamp_sim_realism.md) · [results](tamp_sim_realism_20261101.md) | `scripts/eval_tamp_panda_reference.py --output RUN_DIR --tasks Lift Stack --seeds 7 13` via CPU `emet jobs` | `.tamp-runs/sim-realism-20261101/` | native actions, model/source snapshots, compact JSON manifest |
 | **TAMP GT+MCTS battery** | no-AI smoke | [tamp_clutter_testing.md](tamp_clutter_testing.md) | `uv run python scripts/eval_tamp_clutter.py --test-battery` | `~/runs/emet/tamp_clutter` | `battery_summary.json` |
 | **Dynamic exploration P1** | `tab:dynamic_explore_phase1` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `uv run python scripts/eval_dynamic_exploration.py --smoke --dry-run` | `~/runs/emet/dynamic_exploration/` | Rerun map from export dir |
 | **Dynamic exploration P2** | `tab:dynamic_explore_world_change` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `--phase world-change --cpu-only` | same | — |

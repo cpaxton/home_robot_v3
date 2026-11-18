@@ -1,0 +1,22 @@
+{
+  "baseline": {
+    "evidence": "paper/data/whole_body_control/recovered_v11/baseline/checkpoint_evidence.json",
+    "original_training_directory": "logs/manipulation/tamp-pose-precision-v9/seed-64"
+  },
+  "adaptive_restart": {
+    "evidence": "paper/data/whole_body_control/recovered_v11/adaptive_restart/checkpoint_evidence.json",
+    "original_training_directory": "logs/manipulation/mars-general-continuation-v11/adaptive_restart/seed-64"
+  },
+  "frozen_restart": {
+    "evidence": "paper/data/whole_body_control/recovered_v11/frozen_restart/checkpoint_evidence.json",
+    "original_training_directory": "logs/manipulation/mars-general-continuation-v11/frozen_restart/seed-64"
+  },
+  "adaptive_small": {
+    "evidence": "paper/data/whole_body_control/recovered_v11/adaptive_small/checkpoint_evidence.json",
+    "original_training_directory": "logs/manipulation/mars-general-continuation-v11/adaptive_small/seed-64"
+  },
+  "frozen_small": {
+    "evidence": "paper/data/whole_body_control/recovered_v11/frozen_small/checkpoint_evidence.json",
+    "original_training_directory": "logs/manipulation/mars-general-continuation-v11/frozen_small/seed-64"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_pilot",
+  "case_file": "configs/eval/tamp_native_qualification_20261113.json",
+  "case_file_sha256": "f493a411885581766a0a6eefaffc357d1c878592a21243603a8febdab72def4c",
+  "native_policy": "bounded_release",
+  "changes": {
+    "gripper_close": "normal full close, settle, then midpoint of measured motor position and original full-close target; settle again in shared 10s budget; encoder feedback only",
+    "original_retention_checked_at_every_post_lift_hold_sample": true,
+    "typed_verification_substage_in_primitive_and_task_failure_receipts": true,
+    "physical_model_contact_parameters_changed": false,
+    "retention_collision_release_and_goal_thresholds_changed": false,
+    "renew_failed_payload_reference": false,
+    "grasp_candidate_order": "Rank unchanged candidates by measured single-box face/jaw alignment; stable tie order; unknown/compound shapes unchanged; common 256 IK cap and all geometric/physical checks retained"
+  },
+  "episodes": [
+    {
+      "id": "aligned-swap",
+      "case_id": "swap-right25",
+      "role": "production_candidate",
+      "gripper_close_preset_override": null,
+      "port_offset": 2690
+    },
+    {
+      "id": "aligned-control",
+      "case_id": "control",
+      "role": "production_candidate",
+      "gripper_close_preset_override": null,
+      "port_offset": 2680
+    },
+    {
+      "id": "aligned-shift",
+      "case_id": "shift15",
+      "role": "production_candidate",
+      "gripper_close_preset_override": null,
+      "port_offset": 2700
+    },
+    {
+      "id": "default-swap-ablation",
+      "case_id": "swap-right25",
+      "role": "same_source_ablation",
+      "gripper_close_preset_override": "default",
+      "port_offset": 2670
+    }
+  ],
+  "cpu_set": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "serialized": true,
+  "planning_seconds": 120.0,
+  "exact_paired_initial_state_certificate": false,
+  "old_scores_and_attempts_preserved": true,
+  "held_out_or_training_claim": false,
+  "hardware_trials": false,
+  "local_vlm_or_gpu": false,
+  "pass_requires": [
+    "complete public receipt",
+    "independent supported settled whole-footprint goals",
+    "nonempty audit with zero forbidden commands"
+  ],
+  "previous_pilot": "configs/eval/tamp_native_contact_relative_pilot_20261114.json",
+  "previous_pilot_conclusion": "contact-relative control and shift pass, swap fails cube lift retention; first feasible rotated edge pinch precedes higher aligned grasp"
+}

@@ -203,10 +203,14 @@ def test_scene_graph_depth_points_stay_aligned_when_mapping_is_resized(tmp_path,
     monkeypatch.setattr(processor, "_encode_dinov3", lambda *args: None)
     vm.set_scene_graph_processor(processor)
     rgb = np.zeros((H, W, 3), np.uint8)
-    depth = np.broadcast_to(1.0 + 0.001 * np.arange(W, dtype=np.float32), (H, W)).copy()
-    pose = _pose_at(0.2, -0.1, 0.3)
-    vm.process_rgbd_images(rgb, depth, K, pose, received_monotonic=100.0)
-    (node,) = processor.scene_graph.nodes.values()
+    depth = np.broadcast_to(1. + .001 * np.arange(W, dtype=np.float32), (H, W)).copy()
+    pose = _pose_at(.2, -.1, .3)
+    timing = {'head_cam_left': {'timestamp_ns': 10000, 'clock_domain': 'camera_host',
+                               'source': 'renderer_scene_capture', 'available': True}}
+    vm.process_rgbd_images(rgb, depth, K, pose, received_monotonic=100., image_timing=timing)
+    assert processor.observed_tamp_provider.frame_gate._stamp == 10000
+    node, = processor.scene_graph.nodes.values()
+
     expected = camera_xyz_to_global_xyz(Camera.from_K(K, width=W, height=H).depth_to_xyz(depth), pose)
     assert node.point_cloud.shape == (H * W, 3)
     np.testing.assert_allclose(node.point_cloud.numpy(), expected.reshape(-1, 3), atol=1e-6)

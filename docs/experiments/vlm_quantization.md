@@ -1,8 +1,10 @@
 # VLM quantization: int4 vs fp16 (Qwen3-VL-8B)
 
-Quantization is not free for embodied EQA. Same model, same harness, same qids —
-only the weight precision changes (int4 bitsandbytes on the workstation GPU vs
-fp16 served on the Orin `caliban` over `EMET_VL_ENDPOINT`).
+This historical comparison uses the same model identifier, question set and
+harness configuration, with local int4 on the workstation versus remote fp16 on
+Caliban. Precision, hardware, serving path and image transport all change; it is
+not a precision-only intervention. The October 23 paper audit preserves the
+recorded totals while correcting the earlier causal interpretation.
 
 ## Headline
 
@@ -11,10 +13,11 @@ fp16 served on the Orin `caliban` over `EMET_VL_ENDPOINT`).
 | count/clock-15 (`12,21,28,32,33,43,47,48,51,60,78,84,86,88,93`) | 6/15 | **10/15** | **+4 (+66%)** |
 | **30-qid subset** (`12,21,28,32,33,43,47,48,51,60,78,84,86,88,93,0,7,14,29,30,37,42,50,56,82,92,100,104,108,110`) | **9/30** | **16/30** | **+7 (+78%)** |
 
-The fp16 8B reads fine detail (clock hands, shelf counts, mat placement) that int4
-distorts. This is a real, repeatable lift on the same model — the precision, not
-the model family, is the lever. Prior art running unquantized or larger VLMs would
-carry this advantage.
+The 30-question totals are 9/30 and 16/30. The earlier count/clock int4
+6/15 is a different run from the 4/15 count/clock portion of that 30-question
+int4 result; combine the latter with 5/15 to obtain 9/30. Do not combine 6/15
+and 5/15 into a contradictory total. These small development comparisons motivate
+a matched precision study but do not isolate quantization as the sole cause.
 
 ## Mechanism
 

@@ -601,6 +601,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         return env_manip_mode() or str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
 
+    def _observed_native_adapter():
+        from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter
+
+        adapter = context.get("observed_native_adapter")
+        return adapter if isinstance(adapter, ObservedNativeAdapter) and adapter.robot is _tamp_robot() else None
+
     def _native_input_gate() -> str | None:
         if _tamp_manip_mode().strip().lower() != "physical":
             return None
@@ -611,7 +617,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if inputs == "observed":
             # Do not read simulator task metadata before an observed-scene
             # adapter is installed. Input isolation includes task discovery.
-            return "observed_scene_unavailable"
+            return None if _observed_native_adapter() is not None else "observed_scene_unavailable"
         robot = _tamp_robot()
         session_getter = getattr(robot, "get_emet_session", None)
         session = session_getter() if callable(session_getter) else None
@@ -626,6 +632,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return failure_code(str(exc))
 
     def _native_adapter():
+        observed = _observed_native_adapter()
+        if observed is not None:
+            executor = context.get("executor")
+            inputs = getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed"
+            if inputs == "observed":
+                return observed
         from emet.controller.task.tamp.native_adapter import adapter_for
 
         return adapter_for(context, _tamp_robot())
@@ -883,6 +895,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             executor = context.get("executor")
             inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
             if inputs == "observed":
+                observed = _observed_native_adapter()
+                if observed is not None:
+                    return observed.discover(object_filter, robot)
                 from emet.controller.task.tamp.observed_discovery import discover_observed_tasks
 
                 return discover_observed_tasks(context.get("observed_tamp_provider"), object_filter, robot)
@@ -994,7 +1009,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="scene_tasks",
             description=(
-                "Enumerate candidate pick-and-place tasks from the configured input provider. "
+                "Inspect task state and enumerate tasks from the configured input provider. "
+                "After partial execution wait for a new user request, then use scene_tasks before fresh planning. "
                 "Observed discovery_only proposals do not enable planning or execution."
             ),
             parameters={
@@ -1002,7 +1018,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "properties": {
                     "object_filter": {
                         "type": "string",
-                        "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
+                        "description": "Optional category substring; omit for a bound multi-step session requiring complete role discovery.",
                     },
                     "robot": {
                         "type": "string",

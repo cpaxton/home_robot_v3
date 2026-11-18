@@ -1,0 +1,127 @@
+{
+  "format": "emet-mars-parallel-probe-v1",
+  "hardware_used": false,
+  "training_qualified": false,
+  "ticks": 40,
+  "substeps": 25,
+  "physics_dt": 0.002,
+  "noslip_iterations": 5,
+  "thresholds": {
+    "base_position_m": 0.001,
+    "base_orientation_rad": 0.01,
+    "joint_position": 0.02
+  },
+  "model_sha256": "0278cbaa02beff422dcbba8d2b19a3675e280a6043548206c1aafc24e631f794",
+  "state_sha256": "0e5c016941f1de92e1402a49e7fbfc50350352e8bfbd3a5c62f314b2b29e54d4",
+  "warp": "1.18.0",
+  "throughput": [
+    {
+      "worlds": 1,
+      "seconds": 1.401010351255536,
+      "physics_steps_per_second": 892.2132508726963,
+      "control_steps_per_second": 35.68853003490785,
+      "per_world_realtime_factor": 1.7844265017453926,
+      "contacts": 13
+    },
+    {
+      "worlds": 8,
+      "seconds": 1.5514953723177314,
+      "physics_steps_per_second": 6445.394667894695,
+      "control_steps_per_second": 257.8157867157878,
+      "per_world_realtime_factor": 1.6113486669736736,
+      "contacts": 104
+    },
+    {
+      "worlds": 32,
+      "seconds": 2.0284707825630903,
+      "physics_steps_per_second": 19719.288216445337,
+      "control_steps_per_second": 788.7715286578135,
+      "per_world_realtime_factor": 1.2324555135278337,
+      "contacts": 416
+    },
+    {
+      "worlds": 64,
+      "seconds": 2.2589197903871536,
+      "physics_steps_per_second": 35415.15743075096,
+      "control_steps_per_second": 1416.6062972300383,
+      "per_world_realtime_factor": 1.1067236697109675,
+      "contacts": 832
+    }
+  ],
+  "cpu_parity": {
+    "hold": {
+      "peaks": {
+        "base_position_m": 2.497231568127043e-11,
+        "base_orientation_rad": 1.032382731180714e-07,
+        "joint_position": 1.8440486748705354e-08
+      },
+      "within_probe_thresholds": true
+    },
+    "forward": {
+      "peaks": {
+        "base_position_m": 4.90580523179771e-07,
+        "base_orientation_rad": 3.05833401345632e-06,
+        "joint_position": 4.3627860666584084e-05
+      },
+      "within_probe_thresholds": true
+    },
+    "left": {
+      "peaks": {
+        "base_position_m": 2.3134043441972004e-05,
+        "base_orientation_rad": 4.4804706811546025e-05,
+        "joint_position": 0.002203587772244553
+      },
+      "within_probe_thresholds": true
+    },
+    "right": {
+      "peaks": {
+        "base_position_m": 7.078080981122122e-07,
+        "base_orientation_rad": 9.338832461512122e-06,
+        "joint_position": 0.00015545803195282648
+      },
+      "within_probe_thresholds": true
+    }
+  },
+  "parity_vs_validated_cpu": {
+    "hold": {
+      "peaks": {
+        "base_position_m": 9.839285780878173e-08,
+        "base_orientation_rad": 0.00018257993377030033,
+        "joint_position": 1.0539719585637985e-05
+      },
+      "within_probe_thresholds": true
+    },
+    "forward": {
+      "peaks": {
+        "base_position_m": 4.865633360137204e-05,
+        "base_orientation_rad": 0.00030383710330533916,
+        "joint_position": 0.004292661824350008
+      },
+      "within_probe_thresholds": true
+    },
+    "left": {
+      "peaks": {
+        "base_position_m": 4.313281804128071e-05,
+        "base_orientation_rad": 0.00040333872377921966,
+        "joint_position": 0.006671280149809944
+      },
+      "within_probe_thresholds": true
+    },
+    "right": {
+      "peaks": {
+        "base_position_m": 4.238703784307047e-05,
+        "base_orientation_rad": 0.0004460331422205865,
+        "joint_position": 0.002643660294990517
+      },
+      "within_probe_thresholds": true
+    }
+  },
+  "versions": {
+    "cpu_reference_mujoco": "3.5.0",
+    "caliban_cpu_and_gpu_mujoco": "3.17.0",
+    "mujoco_warp": "3.17.0",
+    "warp": "1.18.0",
+    "torch": "2.13.0+cu130"
+  },
+  "scope": "2-second low-speed open-loop cases, no policy; throughput excludes observation/reward/reset/inference"
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "purpose": "Development diagnostics for bounded TAMP cross-turn context; no held-out or contact recovery claim",
+  "parent_source": "117ed129a9365f4bf0e5cb04a99d3f4a47207f4e",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "inputs": "privileged",
+  "simulation": "MuJoCo Stretch; state-only; no physical robot",
+  "native_policy": "bounded_approach",
+  "model": {
+    "base_url": "http://192.168.1.55:8000/v1",
+    "id": "Qwen/Qwen3-VL-8B-Instruct"
+  },
+  "fault": "One evaluator-only no-command preflight refusal after a measured completed transfer",
+  "recovery_request": "Please retry the remaining work.",
+  "authorization_gate": [
+    "expected typed partial and forced final feedback",
+    "both objects supported and settled",
+    "no commands after feedback in quiet interval",
+    "exactly one recorded no-command evaluator fault"
+  ],
+  "required_recovery": [
+    "new stdin user turn",
+    "fresh scene_tasks then one-step plan_task then execute_task_plan",
+    "plan reference differs from consumed predecessor",
+    "one successful remaining transfer",
+    "both original goals measured and stable",
+    "zero forbidden commands; clean CLI exit"
+  ],
+  "denominators": "Report stop/control correctness separately from complete-task success. Preserve all attempts; no pooling with prior cohorts.",
+  "trials": [
+    {
+      "id": "stop-only",
+      "case_id": "two-goal-control",
+      "recover": false,
+      "recovery_style": "restated",
+      "port_offset": 3420,
+      "cpu_set": "0-7"
+    },
+    {
+      "id": "contextual-recovery",
+      "case_id": "two-goal-shift",
+      "recover": true,
+      "recovery_style": "contextual",
+      "port_offset": 3430,
+      "cpu_set": "8-13"
+    }
+  ]
+}

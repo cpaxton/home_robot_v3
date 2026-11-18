@@ -219,6 +219,7 @@ emet = [
     "perception/*.tsv",
     "assets/**/*",
     "rl/*.html",
+    "visualization/*.html",
 ]
 
 [tool.black]

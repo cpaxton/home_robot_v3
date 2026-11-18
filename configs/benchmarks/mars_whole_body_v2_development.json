@@ -1,0 +1,20 @@
+{
+  "format": "mars-whole-body-v2-development-v1",
+  "scope": "Training development cases only. Actual public TAMP approach/pregrasp, stopping before task-owned grasp closure. Not full pick/place or hardware qualification.",
+  "general_suite": "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
+  "general_stages": ["base", "arm", "coupled"],
+  "family_control_tick_weights": [0.5, 0.5],
+  "general_stage_weights": {"base": 0.3, "arm": 0.5, "coupled": 0.2},
+  "arm_reference": "s_curve",
+  "teacher_expected_failures": {"development:left:50g:2": "object_changed_replan"},
+  "train_cases": [
+    {"id": "development:left:20g:0", "layout": "left", "seed": 34600000, "mass_kg": 0.02, "yaw_offset_rad": 0.6},
+    {"id": "development:right:50g:1", "layout": "right", "seed": 34600001, "mass_kg": 0.05, "yaw_offset_rad": -0.6},
+    {"id": "development:left:50g:2", "layout": "left", "seed": 34600002, "mass_kg": 0.05, "yaw_offset_rad": 0.6},
+    {"id": "development:right:20g:3", "layout": "right", "seed": 34600003, "mass_kg": 0.02, "yaw_offset_rad": -0.6}
+  ],
+  "audit_cases": [
+    {"id": "audit:left:20g:0", "layout": "left", "seed": 34610000, "mass_kg": 0.02, "yaw_offset_rad": 0.6},
+    {"id": "audit:right:50g:1", "layout": "right", "seed": 34610001, "mass_kg": 0.05, "yaw_offset_rad": -0.6}
+  ]
+}

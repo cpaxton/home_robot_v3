@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_diagnostic",
+  "runner": "scripts/eval_tamp_contact_stability.py",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "scope": "Scripted public task tools with live native physics; no agent score or rescore of November 1",
+  "robot": "stretch",
+  "inputs": "privileged",
+  "execution": "simulation_live_async",
+  "hardware_trials_enabled": false,
+  "llm_calls": 0,
+  "cameras": false,
+  "startup_settle_sim_s": 6.0,
+  "task_strategy": "beam",
+  "per_refinement_ik_budget": 256,
+  "provider_ik_budget": 2048,
+  "retention_translation_limit_m": 0.02,
+  "retention_rotation_limit_rad": 0.1,
+  "physics_contact_parameters_changed": false,
+  "policies": {
+    "baseline": [0.0, -0.35, 0.35, -0.7, 0.7, -1.57, 1.57],
+    "fine_yaw": [0.0, -0.175, 0.175, -0.35, 0.35, -0.7, 0.7, -1.57, 1.57]
+  },
+  "episodes": [
+    {"id": "shift-baseline", "case_id": "two-goal-shift", "policy": "baseline", "port_offset": 1940},
+    {"id": "shift-fine-yaw", "case_id": "two-goal-shift", "policy": "fine_yaw", "port_offset": 1950},
+    {"id": "control-baseline", "case_id": "two-goal-control", "policy": "baseline", "port_offset": 1960},
+    {"id": "control-fine-yaw", "case_id": "two-goal-control", "policy": "fine_yaw", "port_offset": 1970}
+  ],
+  "invariants": {
+    "goals_and_collision_retention_thresholds_unchanged": true,
+    "same_recorder_for_both_policies": true,
+    "no_posthoc_population_exclusion": true,
+    "no_production_policy_promotion_from_one_shifted_case": true,
+    "initial_states_recorded_but_not_bit_identical": true,
+    "reference_certification": false,
+    "recording_latency_reported": true
+  },
+  "next_gate": "Inspect contact geometry and loaded lift residuals; rerun actual agent through Caliban only after a prospective native improvement and controls"
+}

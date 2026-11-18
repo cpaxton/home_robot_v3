@@ -1,0 +1,1225 @@
+{
+  "complete": true,
+  "scope": "Box/SAT aperture audit of saved baseline states; no model/physics changes or rollout.",
+  "hardware_used": false,
+  "qualification_eligible": false,
+  "limitations": "Static full OBB separation, not penetration depth/distance estimate, robustness certificate, reachability or dynamic success. Hypothetical pad-depth changes use the exact symmetric open-jaw axial projection cos(0.3491). Uses known admitted fixture object/model dimensions, not general arbitrary objects. Negative means overlap under this geometric proxy; no tolerances relaxed.",
+  "rows": [
+    {
+      "id": "left:20g:0",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-20g-0.json.gz",
+        "sha256": "35ac1e40857d2cc9962fa17c254bf4c4d1e0f48405583eb0a14775760e230c78",
+        "bytes": 6050623
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -2.4561939182354484e-05,
+          -6.341340952176373e-05
+        ],
+        "0.033": [
+          0.0009396978776879342,
+          0.0009008458322429819
+        ],
+        "0.036": [
+          0.0019039576945582195,
+          0.001865105074007731
+        ],
+        "0.038": [
+          0.0025467975724717453,
+          0.002507944568517549
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019683060493937653,
+        -4.847720194088499e-05,
+        0.004516138072050447
+      ]
+    },
+    {
+      "id": "left:50g:0",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-50g-0.json.gz",
+        "sha256": "b5363c8971b10406ed324f1770fb29f57895397cc01ba19d50859adf249f399b",
+        "bytes": 4094805
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          3.782627806357686e-05,
+          -0.0005050683790479588
+        ],
+        "0.033": [
+          0.0010020861621512257,
+          0.00045918802374471206
+        ],
+        "0.036": [
+          0.0019663460462389093,
+          0.0014234444265373968
+        ],
+        "0.038": [
+          0.002609185968964041,
+          0.0020662820283991763
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.020195157855894694,
+        0.00018930921046391856,
+        0.0044581369324120075
+      ]
+    },
+    {
+      "id": "left:100g:0",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-100g-0.json.gz",
+        "sha256": "a68e535197ab51862ccc7a1634704ce5973415b5ce341c0a6c8a3b4b0cc200c0",
+        "bytes": 4545052
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.2807558161530165e-05,
+          -0.00012145127317578046
+        ],
+        "0.033": [
+          0.0009314523280288534,
+          0.0008427983412992949
+        ],
+        "0.036": [
+          0.0018957122142192369,
+          0.0018070479557743251
+        ],
+        "0.038": [
+          0.002538552138346157,
+          0.002449881032091034
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019668491056349057,
+        -6.679405074513083e-05,
+        0.004515390473760929
+      ]
+    },
+    {
+      "id": "left:20g:1",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-20g-1.json.gz",
+        "sha256": "c9fa89ba02a4207357eadd38aaf1a6aaae13d7037932d77305a972bfec8f660f",
+        "bytes": 5345909
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.167936220893619e-05,
+          -0.00010986698766294982
+        ],
+        "0.033": [
+          0.0009325804820416866,
+          0.000854387242399288
+        ],
+        "0.036": [
+          0.0018968403262922887,
+          0.0018186414724615189
+        ],
+        "0.038": [
+          0.0025396802224593555,
+          0.0024614776258363325
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019684592825357918,
+        -4.783956045050501e-05,
+        0.004521866531755484
+      ]
+    },
+    {
+      "id": "left:50g:1",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-50g-1.json.gz",
+        "sha256": "4eba7f1240c4fba59aa848c2a52fe39f5e0bdad1fa01b75778cfc21a6fefc7ba",
+        "bytes": 3911967
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          0.0001436167489436268,
+          -0.0006716553122406328
+        ],
+        "0.033": [
+          0.0011078766397340876,
+          0.00029260456044327005
+        ],
+        "0.036": [
+          0.002072136530524531,
+          0.0012568644331271694
+        ],
+        "0.038": [
+          0.002714976457718182,
+          0.0018997043482497818
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.020372536900396355,
+        0.00036851333220098997,
+        0.004454342264463231
+      ]
+    },
+    {
+      "id": "left:100g:1",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-100g-1.json.gz",
+        "sha256": "7e338d7589fd1ce55a98ceb833e4ab9eb5e8f5edfb799b4a7f70741c47bb5814",
+        "bytes": 1940430
+      },
+      "available": false,
+      "reason": "no admitted measured-open grasp frame"
+    },
+    {
+      "id": "left:20g:2",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-20g-2.json.gz",
+        "sha256": "571d07b838d651a099af8d01e781a5beb5b6c05c53c1d5376ae41179adc05e9f",
+        "bytes": 662675
+      },
+      "available": false,
+      "reason": "no admitted measured-open grasp frame"
+    },
+    {
+      "id": "left:50g:2",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-50g-2.json.gz",
+        "sha256": "94f93041727015d61ef1e76cd680dd50e49d8df2340db274d54bf347e7f6af2d",
+        "bytes": 4288834
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -0.001632161886258995,
+          0.0010126694549707736
+        ],
+        "0.033": [
+          -0.0006679020253123388,
+          0.0019769258058718493
+        ],
+        "0.036": [
+          0.00029635783563430364,
+          0.002941182156772932
+        ],
+        "0.038": [
+          0.0009391977429320676,
+          0.0035840197240403007
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.020414059668746137,
+        -0.0014824078658710442,
+        0.004492836461652815
+      ]
+    },
+    {
+      "id": "left:100g:2",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-100g-2.json.gz",
+        "sha256": "8d30586bdd6f96a4122f5dd9ebfc10932c1ef1a17fa35c9136a6bdc559132f71",
+        "bytes": 3285359
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.3371073042298693e-05,
+          -0.00011371770138358592
+        ],
+        "0.033": [
+          0.0009308888105100492,
+          0.0008505332820079939
+        ],
+        "0.036": [
+          0.0018951486940623659,
+          0.0018147842653995529
+        ],
+        "0.038": [
+          0.002537988616430606,
+          0.0024576182543272797
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019668455036042736,
+        -6.850968269433272e-05,
+        0.0045151620272505565
+      ]
+    },
+    {
+      "id": "left:20g:3",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-20g-3.json.gz",
+        "sha256": "16fb1ed7ea99232d7ef8dc9bcbb5f9d3672db9cb55d217a85f8ea3d3f3d309a7",
+        "bytes": 5900346
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          9.355181688617577e-05,
+          -0.0003072284124212548
+        ],
+        "0.033": [
+          0.001057799886300925,
+          0.0006570235544380559
+        ],
+        "0.036": [
+          0.0020220479557156636,
+          0.0016212755212973353
+        ],
+        "0.038": [
+          0.002664880001992156,
+          0.0022641101658702114
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.01969277871568966,
+        -4.3141596809377e-05,
+        0.004512992887417844
+      ]
+    },
+    {
+      "id": "left:50g:3",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-50g-3.json.gz",
+        "sha256": "0b0567c45d06e3b327272b37401123443ae2034f066adb3e93bcfc1fcfbfc54d",
+        "bytes": 3462120
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -5.2015029051177136e-05,
+          -6.924539915958809e-05
+        ],
+        "0.033": [
+          0.0009122446946409138,
+          0.0008950124875879029
+        ],
+        "0.036": [
+          0.0018765044183329978,
+          0.0018592703743353835
+        ],
+        "0.038": [
+          0.002519344234127731,
+          0.0025021089655003787
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019694068515159792,
+        -5.290827999172876e-05,
+        0.004509000326917462
+      ]
+    },
+    {
+      "id": "left:100g:3",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-100g-3.json.gz",
+        "sha256": "c3162de9b945c5620839702b24ab529c8cf6b22aff0bc2dfbb7f9757189ecfce",
+        "bytes": 3914099
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -4.4470027085451516e-05,
+          -0.00010758933089035673
+        ],
+        "0.033": [
+          0.0009197897869711608,
+          0.0008566627331496549
+        ],
+        "0.036": [
+          0.0018840496010277801,
+          0.0018209147971896805
+        ],
+        "0.038": [
+          0.002526889477065518,
+          0.002463749506549673
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019675786256462113,
+        -6.629087974978031e-05,
+        0.004516320266372367
+      ]
+    },
+    {
+      "id": "left:20g:4",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-20g-4.json.gz",
+        "sha256": "e72530e4304dc4f4d702a4e5ce9aa9d7d80555cdf2cdc0b2dd7fcdffb3494bc2",
+        "bytes": 5229498
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.914025594164462e-05,
+          -0.00010905640329223962
+        ],
+        "0.033": [
+          0.000925119428198921,
+          0.0008551981692427879
+        ],
+        "0.036": [
+          0.001889379112339518,
+          0.0018194527417778154
+        ],
+        "0.038": [
+          0.0025322189017665826,
+          0.00246228912346785
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019686068393021637,
+        -4.997346916343954e-05,
+        0.004519857323120449
+      ]
+    },
+    {
+      "id": "left:50g:4",
+      "actual_success": false,
+      "actual_robot_failure": null,
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-50g-4.json.gz",
+        "sha256": "1e27de6b8b73953a3f19acaf2ab2e4067ee08a4fbc4503a731c7cfdc3f402819",
+        "bytes": 22929
+      },
+      "available": false,
+      "reason": "no admitted measured-open grasp frame"
+    },
+    {
+      "id": "left:100g:4",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-left-100g-4.json.gz",
+        "sha256": "1645dfeca6c639bf8d3362e384b71cb3e1792203e7f6ef911c8f96e8700fe63a",
+        "bytes": 3396971
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -2.9175675176523405e-05,
+          -7.737773421847248e-05
+        ],
+        "0.033": [
+          0.0009350842058817605,
+          0.0008868786815938012
+        ],
+        "0.036": [
+          0.001899344086940041,
+          0.0018511350974060679
+        ],
+        "0.038": [
+          0.002542184007645566,
+          0.002493972707947595
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.01966733393766737,
+        -6.882749622832602e-05,
+        0.004511711191449996
+      ]
+    },
+    {
+      "id": "right:20g:0",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-20g-0.json.gz",
+        "sha256": "f44adabd23fc5ba5b7fac902de6432a0570244af8c9a45fc959051bb46a10ce0",
+        "bytes": 6287506
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -2.4561939182354484e-05,
+          -6.341340952176373e-05
+        ],
+        "0.033": [
+          0.0009396978776879342,
+          0.0009008458322429819
+        ],
+        "0.036": [
+          0.0019039576945582195,
+          0.001865105074007731
+        ],
+        "0.038": [
+          0.0025467975724717453,
+          0.002507944568517549
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019683060493937653,
+        -4.847720194088499e-05,
+        0.004516138072050447
+      ]
+    },
+    {
+      "id": "right:50g:0",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-50g-0.json.gz",
+        "sha256": "0ecf0c9d2f9ca349400af16e3099c10dfb6fda71cff99ffc0896a2d35c0cc4f1",
+        "bytes": 4094824
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          3.782627806357686e-05,
+          -0.0005050683790479588
+        ],
+        "0.033": [
+          0.0010020861621512257,
+          0.00045918802374471206
+        ],
+        "0.036": [
+          0.0019663460462389093,
+          0.0014234444265373968
+        ],
+        "0.038": [
+          0.002609185968964041,
+          0.0020662820283991763
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.020195157855894694,
+        0.00018930921046391856,
+        0.0044581369324120075
+      ]
+    },
+    {
+      "id": "right:100g:0",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-100g-0.json.gz",
+        "sha256": "1458974b13af8fce09ebba5ab14716df64f5cb1a842b3300fa3a479fe185fd40",
+        "bytes": 4624468
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.2807558161530165e-05,
+          -0.00012145127317578046
+        ],
+        "0.033": [
+          0.0009314523280288534,
+          0.0008427983412992949
+        ],
+        "0.036": [
+          0.0018957122142192369,
+          0.0018070479557743251
+        ],
+        "0.038": [
+          0.002538552138346157,
+          0.002449881032091034
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019668491056349057,
+        -6.679405074513083e-05,
+        0.004515390473760929
+      ]
+    },
+    {
+      "id": "right:20g:1",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-20g-1.json.gz",
+        "sha256": "da27819bf40351026ce7f5cc430402d2668189d36e6a1807b2f09058c6bffdb3",
+        "bytes": 5345886
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.167936220893619e-05,
+          -0.00010986698766294982
+        ],
+        "0.033": [
+          0.0009325804820416866,
+          0.000854387242399288
+        ],
+        "0.036": [
+          0.0018968403262922887,
+          0.0018186414724615189
+        ],
+        "0.038": [
+          0.0025396802224593555,
+          0.0024614776258363325
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019684592825357918,
+        -4.783956045050501e-05,
+        0.004521866531755484
+      ]
+    },
+    {
+      "id": "right:50g:1",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-50g-1.json.gz",
+        "sha256": "d890ea689a303690ec1115c1a86ce3e638cb7ea44466f194ba95f805b3bd10f9",
+        "bytes": 3911980
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          0.0001436167489436268,
+          -0.0006716553122406328
+        ],
+        "0.033": [
+          0.0011078766397340876,
+          0.00029260456044327005
+        ],
+        "0.036": [
+          0.002072136530524531,
+          0.0012568644331271694
+        ],
+        "0.038": [
+          0.002714976457718182,
+          0.0018997043482497818
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.020372536900396355,
+        0.00036851333220098997,
+        0.004454342264463231
+      ]
+    },
+    {
+      "id": "right:100g:1",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-100g-1.json.gz",
+        "sha256": "d5a185293ff4b004ac7e1e65aad13f4d8ec032609ab715b0c88153f4173ae287",
+        "bytes": 1951878
+      },
+      "available": false,
+      "reason": "no admitted measured-open grasp frame"
+    },
+    {
+      "id": "right:20g:2",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-20g-2.json.gz",
+        "sha256": "f5616c8da34cf48bca8d389aa89d6eb8400d430852ea7fa227b632f7f9dd1687",
+        "bytes": 662675
+      },
+      "available": false,
+      "reason": "no admitted measured-open grasp frame"
+    },
+    {
+      "id": "right:50g:2",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-50g-2.json.gz",
+        "sha256": "11755c1b16c7f5377a9631f8ecf80ad02c72901cb44b42e8cead6c88371648ec",
+        "bytes": 4288848
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -0.001632161886258995,
+          0.0010126694549707736
+        ],
+        "0.033": [
+          -0.0006679020253123388,
+          0.0019769258058718493
+        ],
+        "0.036": [
+          0.00029635783563430364,
+          0.002941182156772932
+        ],
+        "0.038": [
+          0.0009391977429320676,
+          0.0035840197240403007
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.020414059668746137,
+        -0.0014824078658710442,
+        0.004492836461652815
+      ]
+    },
+    {
+      "id": "right:100g:2",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-100g-2.json.gz",
+        "sha256": "f1875afe6d4d376d701b165769f58510f6ea513b1bbd522b3aab9d0bbcfef003",
+        "bytes": 3296177
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.3371073042298693e-05,
+          -0.00011371770138358592
+        ],
+        "0.033": [
+          0.0009308888105100492,
+          0.0008505332820079939
+        ],
+        "0.036": [
+          0.0018951486940623659,
+          0.0018147842653995529
+        ],
+        "0.038": [
+          0.002537988616430606,
+          0.0024576182543272797
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019668455036042736,
+        -6.850968269433272e-05,
+        0.0045151620272505565
+      ]
+    },
+    {
+      "id": "right:20g:3",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-20g-3.json.gz",
+        "sha256": "d8eeefc8f36ac78665ebe50e06030fc7f47b86d99479f68c964f0540a0d83e5b",
+        "bytes": 5989211
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          9.355181688617577e-05,
+          -0.0003072284124212548
+        ],
+        "0.033": [
+          0.001057799886300925,
+          0.0006570235544380559
+        ],
+        "0.036": [
+          0.0020220479557156636,
+          0.0016212755212973353
+        ],
+        "0.038": [
+          0.002664880001992156,
+          0.0022641101658702114
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.01969277871568966,
+        -4.3141596809377e-05,
+        0.004512992887417844
+      ]
+    },
+    {
+      "id": "right:50g:3",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-50g-3.json.gz",
+        "sha256": "016ec8936aa0e1b28c02aa69b902b24df98a8cb6d96a4500e9967f3d8a99f2e3",
+        "bytes": 3462140
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -5.2015029051177136e-05,
+          -6.924539915958809e-05
+        ],
+        "0.033": [
+          0.0009122446946409138,
+          0.0008950124875879029
+        ],
+        "0.036": [
+          0.0018765044183329978,
+          0.0018592703743353835
+        ],
+        "0.038": [
+          0.002519344234127731,
+          0.0025021089655003787
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019694068515159792,
+        -5.290827999172876e-05,
+        0.004509000326917462
+      ]
+    },
+    {
+      "id": "right:100g:3",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-100g-3.json.gz",
+        "sha256": "53b20fecb893e660ff93225cd7e51f6ae8829184aecaefabfcdc20ac894d4f12",
+        "bytes": 3924564
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -4.4470027085451516e-05,
+          -0.00010758933089035673
+        ],
+        "0.033": [
+          0.0009197897869711608,
+          0.0008566627331496549
+        ],
+        "0.036": [
+          0.0018840496010277801,
+          0.0018209147971896805
+        ],
+        "0.038": [
+          0.002526889477065518,
+          0.002463749506549673
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019675786256462113,
+        -6.629087974978031e-05,
+        0.004516320266372367
+      ]
+    },
+    {
+      "id": "right:20g:4",
+      "actual_success": false,
+      "actual_robot_failure": "operation_failed",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-20g-4.json.gz",
+        "sha256": "d6607064d75d043c703cae226c6886dcf5dc355c01cce663788a21a381e32932",
+        "bytes": 5229468
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -3.914025594164462e-05,
+          -0.00010905640329223962
+        ],
+        "0.033": [
+          0.000925119428198921,
+          0.0008551981692427879
+        ],
+        "0.036": [
+          0.001889379112339518,
+          0.0018194527417778154
+        ],
+        "0.038": [
+          0.0025322189017665826,
+          0.00246228912346785
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.019686068393021637,
+        -4.997346916343954e-05,
+        0.004519857323120449
+      ]
+    },
+    {
+      "id": "right:50g:4",
+      "actual_success": false,
+      "actual_robot_failure": null,
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-50g-4.json.gz",
+        "sha256": "7f56aad723c7d4ba5899994aebf52d5529bbb183bc1f058a4dfa9a48af1711c4",
+        "bytes": 22941
+      },
+      "available": false,
+      "reason": "no admitted measured-open grasp frame"
+    },
+    {
+      "id": "right:100g:4",
+      "actual_success": false,
+      "actual_robot_failure": "retention_lost",
+      "artifact": {
+        "path": "logs/eval/mars-grasp-frame-probe-v1/baseline-right-100g-4.json.gz",
+        "sha256": "e039a9b585414725adc230caac56373f7584b3c09e97a7cb02eaaca3d0b1ad56",
+        "bytes": 3407303
+      },
+      "available": true,
+      "object_half_extents_m": [
+        0.008,
+        0.008,
+        0.03
+      ],
+      "basis": "actual first pregrasp payload pose and planned measured-open grasp goal; pinned pad boxes; driver/mimic set to existing nominal open limits",
+      "pad_axial_depth_to_open_jaw_signed_separation_m": {
+        "0.03": [
+          -2.9175675176523405e-05,
+          -7.737773421847248e-05
+        ],
+        "0.033": [
+          0.0009350842058817605,
+          0.0008868786815938012
+        ],
+        "0.036": [
+          0.001899344086940041,
+          0.0018511350974060679
+        ],
+        "0.038": [
+          0.002542184007645566,
+          0.002493972707947595
+        ]
+      },
+      "object_center_hand_frame_m": [
+        -0.01966733393766737,
+        -6.882749622832602e-05,
+        0.004511711191449996
+      ]
+    }
+  ],
+  "script_sha256": "026550695a21190a97329fb10a0bcd7f0dede6557c4ad2a80388bf705a56ddfd",
+  "native_transform_crosscheck": {
+    "complete": true,
+    "scope": "Verify offline pad-box transforms against admitted model FK; not a rollout.",
+    "hardware_used": false,
+    "qualification_eligible": false,
+    "cases": [
+      {
+        "id": "left:20g:0",
+        "states": 2,
+        "max_transform_abs_error": 3.3306690738754696e-16
+      },
+      {
+        "id": "left:50g:0",
+        "states": 2,
+        "max_transform_abs_error": 1.2212453270876722e-15
+      },
+      {
+        "id": "left:100g:0",
+        "states": 2,
+        "max_transform_abs_error": 2.220446049250313e-16
+      },
+      {
+        "id": "left:20g:1",
+        "states": 2,
+        "max_transform_abs_error": 1.7763568394002505e-15
+      },
+      {
+        "id": "left:50g:1",
+        "states": 2,
+        "max_transform_abs_error": 1.887379141862766e-15
+      },
+      {
+        "id": "left:100g:1",
+        "states": 2,
+        "max_transform_abs_error": 1.9984014443252818e-15
+      },
+      {
+        "id": "left:20g:2",
+        "states": 2,
+        "max_transform_abs_error": 1.7763568394002505e-15
+      },
+      {
+        "id": "left:50g:2",
+        "states": 2,
+        "max_transform_abs_error": 1.6653345369377348e-15
+      },
+      {
+        "id": "left:100g:2",
+        "states": 2,
+        "max_transform_abs_error": 1.4432899320127035e-15
+      },
+      {
+        "id": "left:20g:3",
+        "states": 2,
+        "max_transform_abs_error": 6.661338147750939e-16
+      },
+      {
+        "id": "left:50g:3",
+        "states": 2,
+        "max_transform_abs_error": 1.7763568394002505e-15
+      },
+      {
+        "id": "left:100g:3",
+        "states": 2,
+        "max_transform_abs_error": 1.1102230246251565e-15
+      },
+      {
+        "id": "left:20g:4",
+        "states": 2,
+        "max_transform_abs_error": 8.881784197001252e-16
+      },
+      {
+        "id": "left:50g:4",
+        "states": 0,
+        "reason": "no executed recorded physics states"
+      },
+      {
+        "id": "left:100g:4",
+        "states": 2,
+        "max_transform_abs_error": 6.661338147750939e-16
+      },
+      {
+        "id": "right:20g:0",
+        "states": 2,
+        "max_transform_abs_error": 1.6653345369377348e-15
+      },
+      {
+        "id": "right:50g:0",
+        "states": 2,
+        "max_transform_abs_error": 1.2212453270876722e-15
+      },
+      {
+        "id": "right:100g:0",
+        "states": 2,
+        "max_transform_abs_error": 4.440892098500626e-16
+      },
+      {
+        "id": "right:20g:1",
+        "states": 2,
+        "max_transform_abs_error": 1.7763568394002505e-15
+      },
+      {
+        "id": "right:50g:1",
+        "states": 2,
+        "max_transform_abs_error": 1.887379141862766e-15
+      },
+      {
+        "id": "right:100g:1",
+        "states": 2,
+        "max_transform_abs_error": 1.9984014443252818e-15
+      },
+      {
+        "id": "right:20g:2",
+        "states": 2,
+        "max_transform_abs_error": 1.7763568394002505e-15
+      },
+      {
+        "id": "right:50g:2",
+        "states": 2,
+        "max_transform_abs_error": 1.6653345369377348e-15
+      },
+      {
+        "id": "right:100g:2",
+        "states": 2,
+        "max_transform_abs_error": 1.4432899320127035e-15
+      },
+      {
+        "id": "right:20g:3",
+        "states": 2,
+        "max_transform_abs_error": 5.551115123125783e-16
+      },
+      {
+        "id": "right:50g:3",
+        "states": 2,
+        "max_transform_abs_error": 1.7763568394002505e-15
+      },
+      {
+        "id": "right:100g:3",
+        "states": 2,
+        "max_transform_abs_error": 1.1102230246251565e-15
+      },
+      {
+        "id": "right:20g:4",
+        "states": 2,
+        "max_transform_abs_error": 8.881784197001252e-16
+      },
+      {
+        "id": "right:50g:4",
+        "states": 0,
+        "reason": "no executed recorded physics states"
+      },
+      {
+        "id": "right:100g:4",
+        "states": 2,
+        "max_transform_abs_error": 6.661338147750939e-16
+      }
+    ],
+    "states_checked": 56,
+    "max_transform_abs_error": 1.9984014443252818e-15,
+    "script_sha256": "2236d8e0d75aaec8be4fd00d9551dac9416d59746214c882e57183d22219158c"
+  },
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/grasp-aperture-offline.json",
+      "sha256": "fac42c41ae56c6ee485ef245c058fac5e02d0e020f862991ed7fcf0e14bb991e",
+      "bytes": 31911
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/grasp-aperture-offline.py",
+      "sha256": "026550695a21190a97329fb10a0bcd7f0dede6557c4ad2a80388bf705a56ddfd",
+      "bytes": 3810
+    },
+    {
+      "path": "logs/eval/mars-grasp-depth-probe-v2/geometry-check.json",
+      "sha256": "5f3b6f6dd03607f885baacbf5743a45927df6041de9cb26a6e57ad76d68168eb",
+      "bytes": 3786
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/grasp-aperture-native-check-v2.py",
+      "sha256": "2236d8e0d75aaec8be4fd00d9551dac9416d59746214c882e57183d22219158c",
+      "bytes": 2703
+    }
+  ]
+}

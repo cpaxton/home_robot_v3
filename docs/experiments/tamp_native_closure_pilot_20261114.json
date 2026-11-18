@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "scope": "Same-source privileged native development grip-preset pilot; stricter sampled original-reference hold coverage; no hardware, force sensing, training, held-out or general qualification claim",
+  "source_commit": "13d22945f2683f607ec2b1b4ab95acc5f06b2126",
+  "protocol": "configs/eval/tamp_native_retention_pilot_20261114.json",
+  "exact_paired_initial_state_certificate": false,
+  "old_native_aggregate_unchanged": "4/8",
+  "old_caliban_aggregate_unchanged": "3/4",
+  "cases": [
+    {
+      "id": "default-swap",
+      "case_id": "swap-right25",
+      "role": "same_source_ablation",
+      "job_id": "20261114_194139_ae2f03",
+      "gripper_close_preset_override": "default",
+      "effective_gripper_close_loose": false,
+      "passed": false,
+      "run_status": "complete",
+      "code": "verification_failed",
+      "status": "partial",
+      "verification": {
+        "substage": "post_lift_hold",
+        "reason": "payload_not_retained"
+      },
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "cube_max_original_rotation_before_handoff_rad": 0.10002356084007694,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "boundary_checks": [],
+      "audit_commands": 437,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 193.8390574150253,
+      "last_event": {
+        "phase": "native_verification",
+        "accepted": false,
+        "substage": "post_lift_hold",
+        "reason": "payload_not_retained"
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/protocol.json",
+          "sha256": "2f5b8af950c7329ce254e9e9ea93c0e09ad4354ea10b1fd81c6ec6f4cec40d30"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/summary.json",
+          "sha256": "0a044f7fdb9907badfac039c6c164631318513e8f0d12b46095c606294d44074"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/initial.json",
+          "sha256": "2220ba051020e2da867082efcea6c081d2aab90a8f1326704a49f669ae5d3a6c"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/final.json",
+          "sha256": "3d25a1e87254955fee4edebfa91b57dc644d2c2826293100a84081cd273f29d5"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/contact.jsonl",
+          "sha256": "4c69489644fc198cb2302efd5bec6b192b93668a25bd5a18d9fe297449ad558f"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/adapter_events.json",
+          "sha256": "5270065661b4647f510b8ffba8c3c00ea97e73e52211a0ec030543785940708a"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/default-swap/actuation.jsonl",
+          "sha256": "09300cb3dba568223633fb0b60f2eb23384453469128f11eaab2e2eb54b018fe"
+        }
+      ]
+    },
+    {
+      "id": "loose-swap",
+      "case_id": "swap-right25",
+      "role": "production_candidate",
+      "job_id": "20261114_194139_80ff1f",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": true,
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "status": "ok",
+      "verification": null,
+      "completed_transfers": 3,
+      "declared_transfers": 3,
+      "cube_max_original_rotation_before_handoff_rad": 0.089791523557423,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "boundary_checks": [],
+      "audit_commands": 811,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 259.0619504870847,
+      "last_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/protocol.json",
+          "sha256": "475ef27c716d5bcafc1839c486a49a421e60d854732e83660045002cb9863a96"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/summary.json",
+          "sha256": "8d6ea2b8bc0fead7a25d02433b8bbe3152de4f72ce046d28520c8ccf5d503eb3"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/initial.json",
+          "sha256": "6e582650413b87922480576db3a0bede840583bb15d01b9fd0a1c0f244b28e2e"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/final.json",
+          "sha256": "7f400f8ef5063c147a42d3c3bd769d416b03dc12306b429107f7123caa1d44a8"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/contact.jsonl",
+          "sha256": "8bc51539edd4c582e36fea2faf8b0bef9e4d9509fb1d1d5a5267a3e6450b05a9"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/adapter_events.json",
+          "sha256": "765f25f00419257c9efc57921e7ea368467169ad843df523a3caf414b1cd4ae6"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-swap/actuation.jsonl",
+          "sha256": "4a476b837eab8a98dc5d8fba84fa7c5be2f7297579c5b4fc527c27890b12078e"
+        }
+      ]
+    },
+    {
+      "id": "loose-control",
+      "case_id": "control",
+      "role": "production_candidate",
+      "job_id": "20261114_194140_a7847b",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": true,
+      "passed": false,
+      "run_status": "complete",
+      "code": "verification_failed",
+      "status": "partial",
+      "verification": {
+        "substage": "post_lift_hold",
+        "reason": "payload_not_retained"
+      },
+      "completed_transfers": 1,
+      "declared_transfers": 2,
+      "cube_max_original_rotation_before_handoff_rad": 0.10026052201679714,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": false
+      },
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 437,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 115.01016759313643,
+      "last_event": {
+        "phase": "native_verification",
+        "accepted": false,
+        "substage": "post_lift_hold",
+        "reason": "payload_not_retained"
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/protocol.json",
+          "sha256": "cd537907b26c21043cc5129aa817466953909b736db69d92584139e25913bcb8"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/summary.json",
+          "sha256": "9b0312f1e3a3651125000d7eb19291e522917b8ab00f3786d2b3235202e97517"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/initial.json",
+          "sha256": "a83824e787962df2a82f885d5f9be90145f86b5eaf27f5c926021d8f72c21a70"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/final.json",
+          "sha256": "cda912bbdb885e22ca2f1a7dbe3a1639c4d1479a5da8f894482b472e444bdac5"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/contact.jsonl",
+          "sha256": "8b6a379bdc285eb8f2c2464368eaa2f148e45f831d29f311ae8c4371fa969a2b"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/adapter_events.json",
+          "sha256": "f48d30d8fbc440f44b0811b3d29ebf944d6abff16916a80bc1b9b0692e5daf06"
+        },
+        {
+          "path": ".tamp-runs/retention-20261114/loose-control/actuation.jsonl",
+          "sha256": "5b16c304d7822e495b378f406225b799e06d63455e1f9b7028e8d39be7c65e22"
+        }
+      ]
+    }
+  ],
+  "candidate_aggregate": {
+    "tasks_passed": 1,
+    "tasks": 2,
+    "completed_transfers": 4,
+    "declared_transfers": 5,
+    "boundary_checks_passed": 1,
+    "boundary_checks_observed": 1,
+    "audit_commands": 1248,
+    "forbidden_commands": 0,
+    "infrastructure_errors": 0
+  },
+  "regression": {
+    "tests": 324,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/retention-20261114/full-regression/results.xml",
+      "sha256": "4886eebc954522d1bf04fda7b8eb496f8448fb9f13b0505c1aa9f8ba43cfcb64"
+    }
+  },
+  "private_probe": {
+    "artifact": {
+      "path": ".tamp-runs/retention-20261114/preload_probe.json",
+      "sha256": "6ae92a8fc7b31df387636851e456dc800d6ddf0bea2d9ee2b47d99be9d537d3a"
+    },
+    "not_live_or_exact_replay": true,
+    "baseline_also_passed_private_probe": true
+  }
+}

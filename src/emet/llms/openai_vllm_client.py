@@ -7,6 +7,10 @@
 from __future__ import annotations
 
 import base64
+import threading
+import time
+from contextlib import contextmanager
+from functools import wraps
 from io import BytesIO
 from typing import Any
 
@@ -17,6 +21,14 @@ from PIL import Image
 from emet.llms.base import AbstractPromptBuilder, AbstractVLLMClient
 from emet.llms.openai_client import resolve_openai_api_key, resolve_openai_base_url
 from emet.llms.vl_image import downsample_rgb_hwc
+
+
+def _serialized(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._conversation_lock:
+            return method(self, *args, **kwargs)
+    return call
 
 
 def parse_openai_endpoint_spec(spec: str) -> tuple[str, str | None]:
@@ -40,7 +52,16 @@ def parse_openai_endpoint_spec(spec: str) -> tuple[str, str | None]:
 
 
 class OpenaiVLLMClient(AbstractVLLMClient):
-    """Stateless multimodal client posting JPEG data-URLs to ``/v1/chat/completions``."""
+    """Reset-per-turn VLM client posting JPEG data-URLs to chat completions.
+
+    Explicit ``reset_context=False`` continues the full retained dialogue,
+    including prior encoded images; no turns or images are silently evicted.
+    ``generate_messages`` temporarily installs an explicit dialogue and restores
+    the caller's history afterward, including on failure. Shared-client calls and
+    history API operations are serialized by one reentrant instance lock.
+    ``last_call_metrics`` describes the latest
+    request on this instance, not a concurrent per-request tracing interface.
+    """
 
     def __init__(
         self,
@@ -56,6 +77,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         device: str = "remote",
         **_kwargs: Any,
     ) -> None:
+        self._conversation_lock = threading.RLock()
         super().__init__(prompt if prompt is not None else "", None)
         self.model = model
         self.base_url = resolve_openai_base_url(base_url)
@@ -68,6 +90,37 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         self.jpeg_quality = int(jpeg_quality)
         self.device = device
         self._openai = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        self.last_call_metrics: dict[str, float | int | bool] | None = None
+
+    @_serialized
+    def reset(self):
+        return super().reset()
+
+    @_serialized
+    def add_history(self, message):
+        return super().add_history(message)
+
+    @_serialized
+    def get_history(self):
+        return super().get_history()
+
+    @_serialized
+    def is_first_message(self):
+        return super().is_first_message()
+
+    @property
+    @_serialized
+    def steps(self):
+        return super().steps
+
+    @_serialized
+    def get_history_as_str(self):
+        return super().get_history_as_str()
+
+    @contextmanager
+    def preserve_conversation(self):
+        with self._conversation_lock, super().preserve_conversation():
+            yield
 
     @property
     def canonical_model_key(self) -> str:
@@ -119,6 +172,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
             raise ValueError("OpenaiVLLMClient: empty user content")
         return blocks
 
+    @_serialized
     def generate_multimodal(
         self,
         user_content: str | list[Any],
@@ -130,13 +184,23 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         image: Any | None = None,
         assistant_prefill: str | None = None,
     ) -> str:
+        started = time.perf_counter()
+        self.last_call_metrics = None
         if reset_context:
             self.reset()
         sys_text = system_prompt if system_prompt is not None else (self.system_prompt or None)
         messages: list[dict[str, Any]] = self.get_history()
         if sys_text and not any(message.get("role") == "system" for message in messages):
             messages.append({"role": "system", "content": sys_text})
-        messages.append({"role": "user", "content": self._content_blocks(user_content, image)})
+        user_blocks = self._content_blocks(user_content, image)
+        n_images = sum(block.get("type") == "image_url" for block in user_blocks)
+        messages.append({"role": "user", "content": user_blocks})
+        request_images = sum(
+            isinstance(block, dict) and block.get("type") == "image_url"
+            for message in messages
+            if isinstance(message.get("content"), list)
+            for block in message["content"]
+        )
         history = list(messages)
         prefill = (assistant_prefill or "").strip()
         if prefill:
@@ -146,13 +210,30 @@ class OpenaiVLLMClient(AbstractVLLMClient):
             messages.append({"role": "assistant", "content": prefill})
         mt = int(max_new_tokens if max_new_tokens is not None else self.max_tokens)
         if verbose:
-            n_img = sum(1 for b in messages[-1]["content"] if isinstance(b, dict) and b.get("type") == "image_url")
-            print(f"OpenaiVLLMClient model={self.model} base_url={self.base_url} images={n_img} max_tokens={mt}")
-        completion = self._openai.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=mt,
-        )
+            print(f"OpenaiVLLMClient model={self.model} base_url={self.base_url} images={n_images} max_tokens={mt}")
+        encoded = time.perf_counter()
+        completed = False
+        try:
+            completion = self._openai.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=mt,
+            )
+            completed = True
+        finally:
+            finished = time.perf_counter()
+            # Client-side wall times only: request_s includes server queueing,
+            # image prefill, decoding, SDK retries and transport. It is not a
+            # measurement of server compute or time to first token. Latest call
+            # only; callers collecting concurrent traces need per-call clients.
+            self.last_call_metrics = {
+                "encode_s": encoded - started,
+                "request_s": finished - encoded,
+                "total_s": finished - started,
+                "image_count": n_images,
+                "request_image_count": request_images,
+                "completed": completed,
+            }
         text = completion.choices[0].message.content or ""
         self.conversation_history = history + [{"role": "assistant", "content": text}]
         self._iterations += 1
@@ -161,5 +242,5 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         return text
 
     def _conversation_user_content(self, content):
-        """Encode a prior user turn, including images, for multi-turn transport."""
+        """Hook called by AbstractVLLMClient.generate_messages for prior user turns."""
         return self._content_blocks(content, None)

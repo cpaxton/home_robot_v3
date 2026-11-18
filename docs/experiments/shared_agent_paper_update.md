@@ -80,6 +80,8 @@ No deeper GPU sweep has been launched by this plan. The first deliverables are
 the reproducible CPU pilot analysis and a paper build; the next work is fixture
 and evidence-loader qualification under the resource agreement.
 
+October 23 audit: [paper/agent appendix corrections and remaining gates](paper_audit_20261023.md). New native control repeats retain their malformed-output failure; these updates do not close the P1–P7 empirical gates below.
+
 **Current inventory:** see [project status (2026-10-12)](../project_status.md)
 for merged work, remaining PRs, latest acceptance evidence, and specific LaTeX
 inconsistencies. The dated pilot notes below preserve their original source and

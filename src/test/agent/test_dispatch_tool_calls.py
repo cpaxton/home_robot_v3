@@ -280,3 +280,23 @@ def test_dispatch_unknown_tool_returns_user_facing_info():
     assert ok and has_info
     assert any("don't have a working" in r.lower() or "can't drive" in r.lower() for r in results)
     assert _format_fast_tool_reply(results)
+
+
+def test_unavailable_tool_cannot_continue_a_tamp_batch():
+    invoked = []
+    tools = {
+        "scene_tasks": Tool(
+            name="scene_tasks",
+            description="",
+            parameters={},
+            func=lambda: invoked.append("discovered"),
+            returns_info=True,
+        )
+    }
+    _, results, has_info = _dispatch_tool_calls(
+        [{"name": "unavailable_inspection", "arguments": {}}, {"name": "scene_tasks", "arguments": {}}],
+        tools,
+        executor=lambda _: True,
+    )
+    assert has_info and not invoked
+    assert "batch_stopped" in results[-1]

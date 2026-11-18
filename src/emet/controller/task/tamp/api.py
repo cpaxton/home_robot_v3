@@ -5,9 +5,45 @@ from __future__ import annotations
 import functools
 import json
 import math
+from dataclasses import asdict, dataclass
 from typing import Any
 
 SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class VerificationFailure:
+    """Public failure witness: finite vocabulary, no body IDs or private text."""
+
+    substage: str
+    reason: str
+
+    def __post_init__(self):
+        if not isinstance(self.substage, str) or not isinstance(self.reason, str) or self.substage not in {
+            "lift_motion", "post_lift_hold", "loaded_payload_handoff", "loaded_motion", "post_release_support",
+            "loaded_placement_planning",
+        } or self.reason not in {
+            "payload_not_retained", "motion_unverified", "reference_binding_invalid",
+            "bilateral_contact_unverified", "support_contact_persists", "unexpected_contact",
+            "relative_pose_unstable", "settling_timeout", "effect_unverified",
+            "support_contact_unverified", "fingertip_contact_persists", "object_not_settled",
+            "placement_region_unverified", "placement_xy_unverified", "placement_height_unverified",
+        }:
+            raise ValueError("invalid_verification_failure")
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_data(cls, value):
+        if not isinstance(value, dict) or set(value) != {"substage", "reason"}:
+            return None
+        try:
+            return cls(**value)
+        except (ValueError, TypeError):
+            return None
+
+
 TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place", "set_receptacle_state", "plan_task", "execute_task_plan"})
 PLACEMENT_CODES = frozenset({
     "receptacle_requires_open", "articulation_unsupported", "articulation_state_unavailable",
@@ -26,6 +62,13 @@ TASK_FAILURE_CODES = frozenset({
     "unknown_task_object", "unknown_task_role", "swap_requires_two_grounded_regions",
     "unsupported_task_instruction", "conflicting_task_goals",
     "observation_unavailable", "tracking_timeout", "verification_failed",
+    "visual_verification_unavailable", "visual_effect_unknown", "visual_lift_not_verified",
+    "payload_identity_mismatch", "invalid_gripper_closing_axis",
+    "release_raise_limit",
+    "visual_placement_not_verified", "scene_observation_stale", "scene_revision_changed",
+    "payload_geometry_unknown", "payload_geometry_changed", "capture_motion_alignment_unknown", "robot_feedback_unqualified",
+    "base_approach_unavailable", "base_approach_invalidated", "base_approach_failed",
+    "navigation_cancellation_unconfirmed",
 })
 PLACEMENT_REJECTIONS = frozenset({
     "base_endpoint_rejected", "unsupported_base", "robot_self_collision",
@@ -71,7 +114,6 @@ def placement_evidence(executor) -> dict[str, Any]:
     return evidence
 
 
-
 def response(
     tool: str,
     *,
@@ -96,7 +138,7 @@ def response(
                 "receptacle_not_found",
             }
             else "replan"
-            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan", "stale_task_plan"}
+            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan", "stale_task_plan", "base_approach_invalidated"}
             else "inspect"
         )
     return {
@@ -165,6 +207,9 @@ def failure_code(message: str) -> str:
     message = {
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",
+        "gripper_close_command_failed": "execution_error",
+        "gripper_hold_command_failed": "execution_error",
+        "invalid_gripper_feedback": "invalid_measured_state",
     }.get(message, message)
     # MCTS wraps a bounded grounding failure; preserve only its known code,
     # never arbitrary body identifiers or planner details from that wrapper.
@@ -172,6 +217,24 @@ def failure_code(message: str) -> str:
     for part in reversed(parts):
         if part in PLACEMENT_CODES:
             return part
+        control_codes = {
+            "wheel_lift": "wheel_lift",
+            "unsafe_contact": "unsafe_contact",
+            "retention_lost": "retention_lost",
+            "invalid_physics": "invalid_physics",
+            "transport_tracking_timeout": "tracking_timeout",
+            "cartesian_tracking_timeout": "tracking_timeout",
+            "cartesian_hold_unsettled": "tracking_timeout",
+            "cartesian_path_tracking_envelope": "tracking_timeout",
+            "cartesian_witness_goal_mismatch": "invalid_plan",
+            "cartesian_schedule_too_long": "invalid_plan",
+            "invalid_cartesian_witness": "invalid_plan",
+            "arm_joint_margin": "joint_bounds",
+            "arm_static_support_margin": "planning_failed",
+            "arm_path_static_support_margin": "planning_failed",
+        }
+        if part in control_codes:
+            return control_codes[part]
         for code in ("placement_stale_observation", "placement_missing_joint_state",
                      "placement_nonfinite_joint_state", "placement_path_invalidated"):
             if part == code or part.endswith("_" + code):
@@ -187,6 +250,7 @@ def failure_code(message: str) -> str:
             ("ik_failed", "ik_failed"),
             ("planning_failed", "planning_failed"),
             ("verify_failed", "verification_failed"),
+            ("verification_failed", "verification_failed"),
         ):
             if part.endswith(suffix):
                 return code
@@ -194,7 +258,7 @@ def failure_code(message: str) -> str:
         "invalid_tamp_inputs", "observed_scene_unavailable",
         "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
         "privileged_inputs_require_simulation", "native_execution_unavailable",
-        "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
+        "native_model_mismatch", "native_robot_unsupported", "native_policy_unsupported", "invalid_measured_state",
         "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",
         "unknown_plan",
         "command_outcome_unknown",

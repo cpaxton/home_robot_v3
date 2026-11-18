@@ -1,0 +1,818 @@
+{
+  "scope": "Selected analytical baseline, one physical case; repeated controller configurations are not independent qualification cases",
+  "rows": [
+    {
+      "version": "v4",
+      "rotation_length_m_per_rad": 1.0,
+      "completed_stages": 0,
+      "robot_failure": "transport_tracking_timeout",
+      "stop_confirmed": true,
+      "reference_controller_calls": 643,
+      "learned_policy_evaluated": false,
+      "contact": {
+        "peak_contact_force": 3.3902648350968185,
+        "contact_impulse": 143.75948628382227,
+        "contact": true,
+        "max_penetration": 0.00028690814223258573,
+        "wheel_lift": true,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          3.294789105511009e-06,
+          0.00016076143656894304
+        ],
+        "min_wheel_load": [
+          2.4466732313912374,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": false,
+          "predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": false,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "last_result": {
+        "schema_version": 1,
+        "tool": "execute_pick_place_plan",
+        "status": "partial",
+        "code": "operation_failed",
+        "message": "operation failed",
+        "data": {
+          "mode": "physical",
+          "inputs": "privileged",
+          "geometry_source": "simulator_ground_truth",
+          "assistance": [],
+          "base_motion": "coordinated",
+          "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+          "robot": "innate_mars",
+          "controller": "mars_checkpoint_policy",
+          "object_name": "blue cube",
+          "receptacle_name": "destination support",
+          "completed_ops": [
+            "grasp"
+          ],
+          "failed_stage": "transport",
+          "execution_started": true,
+          "policy_calls": 643,
+          "policy_admission": null,
+          "execution_ik_calls": 8,
+          "stop_confirmed": true
+        },
+        "recovery": "inspect"
+      },
+      "completed_pose_phases": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023601769852061073,
+          "orientation_error_rad": 0.0012344588122887217,
+          "joint_witness_residual_rad": 0.0007643477940959265,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.599999999999495,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0011249643981058957,
+          "orientation_error_rad": 0.001239581042528232,
+          "joint_witness_residual_rad": 0.026199722585246568,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.000000000000009,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0007019872592340353,
+          "orientation_error_rad": 0.0001336910359538554,
+          "joint_witness_residual_rad": 0.01768672192621823,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "lift_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002039812106498686,
+          "orientation_error_rad": 0.0035355740518739328,
+          "joint_witness_residual_rad": 0.07363204276933727,
+          "controller_success": true
+        }
+      ]
+    },
+    {
+      "version": "v4",
+      "rotation_length_m_per_rad": 0.15,
+      "completed_stages": 0,
+      "robot_failure": "transport_tracking_timeout",
+      "stop_confirmed": true,
+      "reference_controller_calls": 643,
+      "learned_policy_evaluated": false,
+      "contact": {
+        "peak_contact_force": 3.270179201485255,
+        "contact_impulse": 144.65499522593922,
+        "contact": true,
+        "max_penetration": 0.00028688693883207814,
+        "wheel_lift": true,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          5.078266975197532e-07,
+          0.00019237139789688752
+        ],
+        "min_wheel_load": [
+          2.400264829239345,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": false,
+          "predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": false,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "last_result": {
+        "schema_version": 1,
+        "tool": "execute_pick_place_plan",
+        "status": "partial",
+        "code": "operation_failed",
+        "message": "operation failed",
+        "data": {
+          "mode": "physical",
+          "inputs": "privileged",
+          "geometry_source": "simulator_ground_truth",
+          "assistance": [],
+          "base_motion": "coordinated",
+          "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+          "robot": "innate_mars",
+          "controller": "mars_checkpoint_policy",
+          "object_name": "blue cube",
+          "receptacle_name": "destination support",
+          "completed_ops": [
+            "grasp"
+          ],
+          "failed_stage": "transport",
+          "execution_started": true,
+          "policy_calls": 643,
+          "policy_admission": null,
+          "execution_ik_calls": 8,
+          "stop_confirmed": true
+        },
+        "recovery": "inspect"
+      },
+      "completed_pose_phases": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0002359714886624412,
+          "orientation_error_rad": 0.0012336598958773927,
+          "joint_witness_residual_rad": 0.0007649406825818023,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.599999999999495,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0010613828111633399,
+          "orientation_error_rad": 0.001130567618512611,
+          "joint_witness_residual_rad": 0.02568110629337976,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.000000000000009,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00077841921419581,
+          "orientation_error_rad": 0.0004809079490142832,
+          "joint_witness_residual_rad": 0.018949376274706248,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "lift_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0019963005923739428,
+          "orientation_error_rad": 0.004313913318491759,
+          "joint_witness_residual_rad": 0.06955891698771993,
+          "controller_success": true
+        }
+      ]
+    },
+    {
+      "version": "v5",
+      "rotation_length_m_per_rad": 1.0,
+      "completed_stages": 0,
+      "robot_failure": "wheel_lift",
+      "stop_confirmed": true,
+      "reference_controller_calls": 643,
+      "learned_policy_evaluated": false,
+      "contact": {
+        "peak_contact_force": 3.3902648350968185,
+        "contact_impulse": 143.75948628382227,
+        "contact": true,
+        "max_penetration": 0.00028690814223258573,
+        "wheel_lift": true,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          3.294789105511009e-06,
+          0.00016076143656894304
+        ],
+        "min_wheel_load": [
+          2.4466732313912374,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": false,
+          "predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": false,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "last_result": {
+        "schema_version": 1,
+        "tool": "execute_pick_place_plan",
+        "status": "partial",
+        "code": "wheel_lift",
+        "message": "wheel lift",
+        "data": {
+          "mode": "physical",
+          "inputs": "privileged",
+          "geometry_source": "simulator_ground_truth",
+          "assistance": [],
+          "base_motion": "coordinated",
+          "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+          "robot": "innate_mars",
+          "controller": "analytical_cartesian_pose_teacher",
+          "object_name": "blue cube",
+          "receptacle_name": "destination support",
+          "completed_ops": [
+            "grasp"
+          ],
+          "failed_stage": "transport",
+          "execution_started": true,
+          "policy_calls": 0,
+          "reference_controller_calls": 643,
+          "policy_admission": null,
+          "execution_ik_calls": 8,
+          "stop_confirmed": true
+        },
+        "recovery": "inspect"
+      },
+      "completed_pose_phases": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023601769852061073,
+          "orientation_error_rad": 0.0012344588122887217,
+          "joint_witness_residual_rad": 0.0007643477940959265,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.599999999999495,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0011249643981058957,
+          "orientation_error_rad": 0.001239581042528232,
+          "joint_witness_residual_rad": 0.026199722585246568,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.000000000000009,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0007019872592340353,
+          "orientation_error_rad": 0.0001336910359538554,
+          "joint_witness_residual_rad": 0.01768672192621823,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "lift_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002039812106498686,
+          "orientation_error_rad": 0.0035355740518739328,
+          "joint_witness_residual_rad": 0.07363204276933727,
+          "controller_success": true
+        }
+      ]
+    },
+    {
+      "version": "v5",
+      "rotation_length_m_per_rad": 0.15,
+      "completed_stages": 0,
+      "robot_failure": "wheel_lift",
+      "stop_confirmed": true,
+      "reference_controller_calls": 643,
+      "learned_policy_evaluated": false,
+      "contact": {
+        "peak_contact_force": 3.270179201485255,
+        "contact_impulse": 144.65499522593922,
+        "contact": true,
+        "max_penetration": 0.00028688693883207814,
+        "wheel_lift": true,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          5.078266975197532e-07,
+          0.00019237139789688752
+        ],
+        "min_wheel_load": [
+          2.400264829239345,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": false,
+          "predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": false,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "last_result": {
+        "schema_version": 1,
+        "tool": "execute_pick_place_plan",
+        "status": "partial",
+        "code": "wheel_lift",
+        "message": "wheel lift",
+        "data": {
+          "mode": "physical",
+          "inputs": "privileged",
+          "geometry_source": "simulator_ground_truth",
+          "assistance": [],
+          "base_motion": "coordinated",
+          "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+          "robot": "innate_mars",
+          "controller": "analytical_cartesian_pose_teacher",
+          "object_name": "blue cube",
+          "receptacle_name": "destination support",
+          "completed_ops": [
+            "grasp"
+          ],
+          "failed_stage": "transport",
+          "execution_started": true,
+          "policy_calls": 0,
+          "reference_controller_calls": 643,
+          "policy_admission": null,
+          "execution_ik_calls": 8,
+          "stop_confirmed": true
+        },
+        "recovery": "inspect"
+      },
+      "completed_pose_phases": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0002359714886624412,
+          "orientation_error_rad": 0.0012336598958773927,
+          "joint_witness_residual_rad": 0.0007649406825818023,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.599999999999495,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0010613828111633399,
+          "orientation_error_rad": 0.001130567618512611,
+          "joint_witness_residual_rad": 0.02568110629337976,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.000000000000009,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00077841921419581,
+          "orientation_error_rad": 0.0004809079490142832,
+          "joint_witness_residual_rad": 0.018949376274706248,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "lift_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0019963005923739428,
+          "orientation_error_rad": 0.004313913318491759,
+          "joint_witness_residual_rad": 0.06955891698771993,
+          "controller_success": true
+        }
+      ]
+    },
+    {
+      "version": "v6-braking",
+      "rotation_length_m_per_rad": 1.0,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "reference_controller_calls": 1884,
+      "learned_policy_evaluated": false,
+      "contact": {
+        "peak_contact_force": 3.727094722380042,
+        "contact_impulse": 379.14080228953844,
+        "contact": true,
+        "max_penetration": 0.0003945387345773779,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          3.294789105511009e-06,
+          3.761956887864126e-05
+        ],
+        "min_wheel_load": [
+          1.606451989519207,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": true,
+          "predicates": {
+            "inside_goal_region": true,
+            "destination_support": true,
+            "gripper_open": true,
+            "fingers_clear": true,
+            "object_still": true,
+            "safe": true,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "last_result": {
+        "schema_version": 1,
+        "tool": "plan_pick_place",
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "message": "no plan within budget",
+        "data": {
+          "mode": "physical",
+          "inputs": "privileged",
+          "geometry_source": "simulator_ground_truth",
+          "assistance": [],
+          "base_motion": "coordinated",
+          "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+          "robot": "innate_mars",
+          "controller": "analytical_cartesian_pose_teacher",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": false,
+          "planning_rejections": {
+            "surface:no_collision_free_placement": 3,
+            "pregrasp:ik_failed": 39,
+            "lift:ik_failed": 1
+          },
+          "planning_ik_calls": 256,
+          "max_ik_calls": 256,
+          "policy_calls": 0,
+          "reference_controller_calls": 1884,
+          "policy_admission": null,
+          "execution_ik_calls": 14,
+          "stop_confirmed": null
+        },
+        "recovery": "inspect"
+      },
+      "completed_pose_phases": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023601769852061073,
+          "orientation_error_rad": 0.0012344588122887217,
+          "joint_witness_residual_rad": 0.0007643477940959265,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.599999999999495,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0011249643981058957,
+          "orientation_error_rad": 0.001239581042528232,
+          "joint_witness_residual_rad": 0.026199722585246568,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.000000000000009,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0007019872592340353,
+          "orientation_error_rad": 0.0001336910359538554,
+          "joint_witness_residual_rad": 0.01768672192621823,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "lift_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002039812106498686,
+          "orientation_error_rad": 0.0035355740518739328,
+          "joint_witness_residual_rad": 0.07363204276933727,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.10000000002626,
+          "phase": "preplace_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0009401942223804426,
+          "orientation_error_rad": 0.0021086266010660218,
+          "joint_witness_residual_rad": 0.029285625017682282,
+          "controller_success": true
+        },
+        {
+          "sim_time": 80.84999999999297,
+          "phase": "place_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0002859300179852418,
+          "orientation_error_rad": 0.0027797029331039906,
+          "joint_witness_residual_rad": 0.019696377427915024,
+          "controller_success": true
+        },
+        {
+          "sim_time": 101.3499999999452,
+          "phase": "retreat_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.000713692792985053,
+          "orientation_error_rad": 0.0020871273220549034,
+          "joint_witness_residual_rad": 0.03384270246224866,
+          "controller_success": true
+        }
+      ]
+    },
+    {
+      "version": "v6-braking",
+      "rotation_length_m_per_rad": 0.15,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "reference_controller_calls": 1883,
+      "learned_policy_evaluated": false,
+      "contact": {
+        "peak_contact_force": 3.7242958886320014,
+        "contact_impulse": 379.4270764835107,
+        "contact": true,
+        "max_penetration": 0.00039266356777040504,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          5.078266975197532e-07,
+          3.128471642743075e-05
+        ],
+        "min_wheel_load": [
+          1.622896861479173,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": true,
+          "predicates": {
+            "inside_goal_region": true,
+            "destination_support": true,
+            "gripper_open": true,
+            "fingers_clear": true,
+            "object_still": true,
+            "safe": true,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "last_result": {
+        "schema_version": 1,
+        "tool": "plan_pick_place",
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "message": "no plan within budget",
+        "data": {
+          "mode": "physical",
+          "inputs": "privileged",
+          "geometry_source": "simulator_ground_truth",
+          "assistance": [],
+          "base_motion": "coordinated",
+          "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+          "robot": "innate_mars",
+          "controller": "analytical_cartesian_pose_teacher",
+          "completed_ops": [],
+          "failed_stage": null,
+          "execution_started": false,
+          "planning_rejections": {
+            "surface:no_collision_free_placement": 3,
+            "pregrasp:ik_failed": 39,
+            "lift:ik_failed": 1
+          },
+          "planning_ik_calls": 256,
+          "max_ik_calls": 256,
+          "policy_calls": 0,
+          "reference_controller_calls": 1883,
+          "policy_admission": null,
+          "execution_ik_calls": 14,
+          "stop_confirmed": null
+        },
+        "recovery": "inspect"
+      },
+      "completed_pose_phases": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0002359714886624412,
+          "orientation_error_rad": 0.0012336598958773927,
+          "joint_witness_residual_rad": 0.0007649406825818023,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.599999999999495,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0010613828111633399,
+          "orientation_error_rad": 0.001130567618512611,
+          "joint_witness_residual_rad": 0.02568110629337976,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.000000000000009,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00077841921419581,
+          "orientation_error_rad": 0.0004809079490142832,
+          "joint_witness_residual_rad": 0.018949376274706248,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "lift_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0019963005923739428,
+          "orientation_error_rad": 0.004313913318491759,
+          "joint_witness_residual_rad": 0.06955891698771993,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.150000000026324,
+          "phase": "preplace_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0009528272955379144,
+          "orientation_error_rad": 0.0017954795090622414,
+          "joint_witness_residual_rad": 0.030593237982473986,
+          "controller_success": true
+        },
+        {
+          "sim_time": 80.84999999999297,
+          "phase": "place_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0002992008030891734,
+          "orientation_error_rad": 0.0029013636237623483,
+          "joint_witness_residual_rad": 0.019619411573173207,
+          "controller_success": true
+        },
+        {
+          "sim_time": 101.3499999999452,
+          "phase": "retreat_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0008041232761666735,
+          "orientation_error_rad": 0.0032177377876638513,
+          "joint_witness_residual_rad": 0.03402309504894696,
+          "controller_success": true
+        }
+      ]
+    }
+  ],
+  "qualification_gate": false,
+  "source_note": "v4 retains the overwritten timeout and old callable label; v5 preserves first safety cause and correct labels; v6 adds quiet braking before hold. All outcomes retained.",
+  "full_report_archive": "paper/data/whole_body_control/cartesian_pose_oracle_v5.json.gz",
+  "uncompressed_sha256": "15d1a5324dc24c6919f71ed3e6925189760443e80da71ecbc3fc86fbd40a0aa4",
+  "safety_promoted": false
+}

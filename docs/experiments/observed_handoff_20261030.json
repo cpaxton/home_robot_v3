@@ -1,0 +1,305 @@
+{
+  "schema_version": 1,
+  "source_base": "f0302767fb1bb8a1361422cf97733b9480470d00",
+  "scope": "Development visibility and native contact control diagnostics; not held-out observed task successes",
+  "observed_task_success_assessed": false,
+  "execution_qualified": false,
+  "self_occupancy_blocker_resolved": false,
+  "runtime_input_tiers": {
+    "tracker": "Head/wrist calibrated RGBD, operator colour initialization, complete cylinder prior, original shared-snapshot capture interval; no simulator object poses/segmentation",
+    "controller": "Privileged native table planner with normal actuators through public tools and scripted CHAT dispatch; in-process physics, no full ZMQ/run-agent session",
+    "scorer": "Simulator body poses, segmentation and privileged task verification; never passed to tracker"
+  },
+  "profile": {
+    "shape": {
+      "kind": "cylinder",
+      "dimensions_half_sizes_m": [
+        0.02,
+        0.04
+      ]
+    },
+    "appearance_model": "neutral_specular",
+    "component_policy": "complete_prior_union",
+    "allow_clipped_views": true,
+    "head_render_size": [
+      424,
+      240
+    ],
+    "wrist_render_size": [
+      480,
+      270
+    ],
+    "capture_source": "One private frozen physics snapshot shared by both cameras",
+    "noise_and_hardware_range_qualified": false,
+    "capture_calibration_id": "sim-shared-snapshot"
+  },
+  "attempts": [
+    {
+      "name": "wrist-v1",
+      "job_id": "20261030_174948_752dd3",
+      "raw_directory": ".tamp-runs/observed-transfer-20261030/wrist-v1",
+      "summary": {
+        "scope": "observed sensor diagnostics during a privileged native contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "camera": "wrist",
+        "camera_geometry": "separate calibrated RGB/depth optical frames; measured depth registration, holes unfilled",
+        "privileged_control_passed": true,
+        "frames": 80,
+        "candidate_frames": 0,
+        "rejection_codes": [
+          "invalid_moving_reference_mask",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_rejection": {
+        "index": 0,
+        "capture_start": 342986.307295643,
+        "received_monotonic": 342986.464665671,
+        "sim_time": 2.999999999999891,
+        "state": "unknown",
+        "scorer_visible_pixels": 0,
+        "reason": "invalid_moving_reference_mask"
+      }
+    },
+    {
+      "name": "head-wrist-v1",
+      "job_id": "20261030_180051_471f16",
+      "raw_directory": ".tamp-runs/observed-transfer-20261030/head-wrist-v1",
+      "setup_failure": "native adapter construction rejected stale debug snapshot after camera initialization; no task attempt completed",
+      "first_rejection": null,
+      "max_accepted_center_error_m": 0.0012509867665880775
+    },
+    {
+      "name": "head-wrist-v2",
+      "job_id": "20261030_180938_2886e7",
+      "raw_directory": ".tamp-runs/observed-transfer-20261030/head-wrist-v2",
+      "summary": {
+        "scope": "co-sampled camera handoff during privileged contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "privileged_control_passed": true,
+        "frames": 749,
+        "candidate_frames": 187,
+        "rejection_codes": [
+          "moving_multiview_association_unknown",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_rejection": {
+        "index": 187,
+        "capture": {
+          "observation_id": "paired:187:344264.490971423",
+          "earliest": 344264.490971423,
+          "latest": 344264.491079057,
+          "received_monotonic": 344264.764205935
+        },
+        "state": "unknown",
+        "sim_time": 6.749999999999479,
+        "scorer_visible_pixels": {
+          "head": 0,
+          "wrist": 4906
+        },
+        "reason": "moving_multiview_association_unknown"
+      },
+      "max_accepted_center_error_m": 0.0012509867665880775
+    },
+    {
+      "name": "head-wrist-v3",
+      "job_id": "20261030_183224_d2cbdf",
+      "raw_directory": ".tamp-runs/observed-transfer-20261030/head-wrist-v3",
+      "summary": {
+        "scope": "co-sampled camera handoff during privileged contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "privileged_control_passed": true,
+        "frames": 81,
+        "candidate_frames": 17,
+        "rejection_codes": [
+          "moving_multiview_association_unknown",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_rejection": {
+        "index": 17,
+        "capture": {
+          "observation_id": "paired:17:345553.451608496",
+          "earliest": 345553.451608496,
+          "latest": 345553.451710731,
+          "received_monotonic": 345553.772846242
+        },
+        "state": "unknown",
+        "sim_time": 6.781999999999475,
+        "scorer_visible_pixels": {
+          "head": 1,
+          "wrist": 4985
+        },
+        "reason": "moving_multiview_association_unknown",
+        "view_rejections": {
+          "head": "moving_mask_lost",
+          "wrist": "moving_mask_ambiguous"
+        }
+      },
+      "max_accepted_center_error_m": 0.0012509867665880775
+    },
+    {
+      "name": "head-wrist-v4",
+      "job_id": "20261030_183643_9b7083",
+      "raw_directory": ".tamp-runs/observed-transfer-20261030/head-wrist-v4",
+      "summary": {
+        "scope": "co-sampled camera handoff during privileged contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "privileged_control_passed": true,
+        "frames": 81,
+        "candidate_frames": 56,
+        "rejection_codes": [
+          "moving_geometry_ambiguous",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_rejection": {
+        "index": 56,
+        "capture": {
+          "observation_id": "paired:56:345835.963009863",
+          "earliest": 345835.963009863,
+          "latest": 345835.963113132,
+          "received_monotonic": 345836.262050837
+        },
+        "state": "unknown",
+        "sim_time": 16.54600000000171,
+        "scorer_visible_pixels": {
+          "head": 6,
+          "wrist": 4672
+        },
+        "reason": "moving_geometry_ambiguous",
+        "view_rejections": {
+          "head": "moving_mask_insufficient"
+        }
+      },
+      "max_accepted_center_error_m": 0.0012509867665880775
+    },
+    {
+      "name": "head-wrist-v5",
+      "job_id": "20261030_184129_cc941e",
+      "raw_directory": ".tamp-runs/observed-transfer-20261030/head-wrist-v5",
+      "summary": {
+        "scope": "co-sampled camera handoff during privileged contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "privileged_control_passed": true,
+        "frames": 81,
+        "candidate_frames": 81,
+        "rejection_codes": []
+      },
+      "first_rejection": null,
+      "max_accepted_center_error_m": 0.0012509867665880775
+    }
+  ],
+  "offline_replays": [
+    {
+      "profile": "union",
+      "scope": "offline replay; original source clock; not live evidence or observed task success",
+      "frames": 81,
+      "candidate_frames": 56,
+      "first_rejection": {
+        "index": 56,
+        "capture": {
+          "observation_id": "paired:56:345572.232537457",
+          "earliest": 345572.232537457,
+          "latest": 345572.23264614,
+          "received_monotonic": 345572.496667676
+        },
+        "sim_time": 16.54600000000171,
+        "state": "unknown",
+        "reason": "moving_geometry_ambiguous",
+        "view_rejections": {
+          "head": "moving_mask_insufficient"
+        }
+      },
+      "raw": ".tamp-runs/observed-transfer-20261030/head-wrist-v3-union-replay.json"
+    },
+    {
+      "profile": "highlight",
+      "scope": "offline replay; original source clock; not live evidence or observed task success",
+      "frames": 81,
+      "candidate_frames": 81,
+      "first_rejection": null,
+      "raw": ".tamp-runs/observed-transfer-20261030/head-wrist-v3-highlight-replay.json"
+    }
+  ],
+  "final": {
+    "job_id": "20261030_184129_cc941e",
+    "frames": 81,
+    "candidate_frames": 81,
+    "max_accepted_center_error_m": 0.0012509867665880775,
+    "view_usage": {
+      "head": 7,
+      "head_and_wrist": 8,
+      "wrist": 66
+    },
+    "clipped_capture_count": 1,
+    "distinct_capture_ids": 81,
+    "distinct_reference_ids": 1,
+    "max_processing_s": 0.2286198689835146,
+    "max_source_delivery_age_s": 0.4019390890025534,
+    "video": "media/stretch_head_wrist_contact_20261030.mp4"
+  },
+  "validation": {
+    "regression": {
+      "job_id": "20261030_184624_3ef777",
+      "tests": 853,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 157.709
+    },
+    "focused_before_final_boundary_guard": {
+      "tests": 49,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 8.829
+    },
+    "earlier_overlapping_regressions": [
+      {
+        "job_id": "20261030_183734_3b1cf5",
+        "tests": 847,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 159.197
+      },
+      {
+        "job_id": "20261030_184131_8809e1",
+        "tests": 852,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 157.954
+      }
+    ],
+    "counts_overlap": true,
+    "ruff": "passed",
+    "whitespace": "passed",
+    "paper": {
+      "pages": 53,
+      "undefined_references_or_citations": false
+    }
+  },
+  "source_hash_scope": "Final working files; attempts were not frozen commits, so these hashes do not identify historical attempt implementations",
+  "working_source_sha256": {
+    "scripts/eval_stretch_multiview_masks.py": "4fb30114a85c11cc3232d04831d7447d278c9a473a19f9805be28f0c8315bcd2",
+    "src/emet/controller/manipulation/multiview_rgbd_tracking.py": "95cc6f60a86983a84cd994a89375770f60d4d9994f781b56e427d1b163d2c8d0",
+    "src/emet/motion/observed_background.py": "882a6e77ea6447c2f45531c2a34b8eaa8f200dea5b71d72b953c2e47c88f9ae7",
+    "src/test/motion/test_multiview_rgbd_tracking.py": "92d42c7e11245dd0be089e42cbaf5309b6d6981e04e006d84c8cc0b11a10e2f3",
+    "src/test/motion/test_observed_background.py": "ceaffd7cc1be3c31627e34140711203e119134a2af40461ee8826a569b0e6279",
+    "scripts/eval_stretch_moving_masks.py": "19d6b8e8a0151b166e13cfea22368d96d03419ca174699ca7a061adf93954825",
+    "src/emet/controller/manipulation/moving_rgbd_tracking.py": "4bcc4a2e77b71c907c9c324d8cc755ce174a2c7a2d47b1556fdf81698aca21fa",
+    "src/emet/motion/observed_workspace.py": "6038f39dc56198bf805cad29e66c648ffd99acbeabb0bb5cd08113e3c94a9316",
+    "src/emet/simulation/mujoco_server_stretch.py": "0120a6799fc167f4052cbb98f441b0ac59b3c21afa8351322dec9621594d5e27",
+    "src/emet/simulation/stretch_mujoco/mujoco_server_camera_manager.py": "8619f26a6efe93a464c56788f08810aaf0efdadc709d43f8f6498e320968aa29",
+    "src/test/motion/test_observed_workspace.py": "b80997b166b89606bda098db5c36161d2fde98083ce548f4334fc0ba72a95300",
+    "src/test/simulation/test_stretch_render_intrinsics.py": "643dd3cb23f98f4ee8e503292aba232c77bf7fb0f6f92ca70c25f729badefc61"
+  }
+}

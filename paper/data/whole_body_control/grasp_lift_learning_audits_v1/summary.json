@@ -1,0 +1,665 @@
+{
+  "scope": "Retain every fixed-case checkpoint outcome and independent transfer failure.",
+  "safety_promoted": false,
+  "production_mixture_replaced": false,
+  "hardware_used": false,
+  "audits": {
+    "v16": {
+      "scope": "Fixed development-case PPO learning audit; never a production task mixture.",
+      "additional_steps_per_variant": 8192,
+      "variants": {
+        "independent_base": {
+          "wandb_offline_run_id": "n6bbz3ua",
+          "numbered_and_post_update_outcomes": [
+            {
+              "step": 0,
+              "success": false,
+              "code": "fixed_base_contract_violation",
+              "return": 2.26477428219615,
+              "first_settle_s": null,
+              "position_error_m": 0.03644097114705062,
+              "orientation_error_rad": 0.11965127281569721,
+              "base_error_m": 0.010090914777906699,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 2048,
+              "success": false,
+              "code": "retention_lost",
+              "return": 12.62680311550315,
+              "first_settle_s": null,
+              "position_error_m": 0.056262964621027534,
+              "orientation_error_rad": 0.1955142261713753,
+              "base_error_m": 0.0033602470711827817,
+              "wheel_lift": false,
+              "retention_lost": true
+            },
+            {
+              "step": 4096,
+              "success": false,
+              "code": "retention_lost",
+              "return": 15.042845092336215,
+              "first_settle_s": null,
+              "position_error_m": 0.054411317092298316,
+              "orientation_error_rad": 0.2336787549423759,
+              "base_error_m": 0.005070502630418896,
+              "wheel_lift": false,
+              "retention_lost": true
+            },
+            {
+              "step": 6144,
+              "success": false,
+              "code": "retention_lost",
+              "return": 11.192545318937796,
+              "first_settle_s": null,
+              "position_error_m": 0.05396253482558242,
+              "orientation_error_rad": 0.21915468641357416,
+              "base_error_m": 0.007688706890342319,
+              "wheel_lift": false,
+              "retention_lost": true
+            },
+            {
+              "step": 8192,
+              "success": false,
+              "code": "retention_lost",
+              "return": 13.33095618758529,
+              "first_settle_s": null,
+              "position_error_m": 0.05789498836666077,
+              "orientation_error_rad": 0.23392495203972888,
+              "base_error_m": 0.005351498929197099,
+              "wheel_lift": false,
+              "retention_lost": true
+            },
+            {
+              "step": 8192,
+              "success": false,
+              "code": "retention_lost",
+              "return": 11.501133015735551,
+              "first_settle_s": null,
+              "position_error_m": 0.06093633401780854,
+              "orientation_error_rad": 0.24660108147036797,
+              "base_error_m": 0.004735822233085321,
+              "wheel_lift": false,
+              "retention_lost": true
+            }
+          ],
+          "best_training_case_by_final_position_error": {
+            "step": 0,
+            "success": false,
+            "code": "fixed_base_contract_violation",
+            "return": 2.26477428219615,
+            "first_settle_s": null,
+            "position_error_m": 0.03644097114705062,
+            "orientation_error_rad": 0.11965127281569721,
+            "base_error_m": 0.010090914777906699,
+            "wheel_lift": false,
+            "retention_lost": false
+          },
+          "successes": 0,
+          "outcome_count": 6
+        },
+        "coupled_base": {
+          "wandb_offline_run_id": "9z63achq",
+          "numbered_and_post_update_outcomes": [
+            {
+              "step": 0,
+              "success": false,
+              "code": "fixed_base_contract_violation",
+              "return": -13.770044780901834,
+              "first_settle_s": null,
+              "position_error_m": 0.03644097114705062,
+              "orientation_error_rad": 0.11965127281569721,
+              "base_error_m": 0.010090914777906699,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 2048,
+              "success": false,
+              "code": "retention_lost",
+              "return": -15.034482754854864,
+              "first_settle_s": null,
+              "position_error_m": 0.06609353762465235,
+              "orientation_error_rad": 0.1984684226626304,
+              "base_error_m": 0.0032657318942956744,
+              "wheel_lift": false,
+              "retention_lost": true
+            },
+            {
+              "step": 4096,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 4.35651777158517,
+              "first_settle_s": null,
+              "position_error_m": 0.011298543544124708,
+              "orientation_error_rad": 0.06508947349560873,
+              "base_error_m": 0.0020088585812520518,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 6144,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 5.958096199798641,
+              "first_settle_s": null,
+              "position_error_m": 0.0048465800405976985,
+              "orientation_error_rad": 0.02381215569704135,
+              "base_error_m": 0.002883682035919178,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 8192,
+              "success": false,
+              "code": "fixed_base_contract_violation",
+              "return": -14.129769867095336,
+              "first_settle_s": null,
+              "position_error_m": 0.038139882080892855,
+              "orientation_error_rad": 0.15329914416026916,
+              "base_error_m": 0.01002225877190169,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 8192,
+              "success": false,
+              "code": "fixed_base_contract_violation",
+              "return": -14.049639397877622,
+              "first_settle_s": null,
+              "position_error_m": 0.037328659858117744,
+              "orientation_error_rad": 0.14909885089883515,
+              "base_error_m": 0.008754800645396514,
+              "wheel_lift": false,
+              "retention_lost": false
+            }
+          ],
+          "best_training_case_by_final_position_error": {
+            "step": 6144,
+            "success": false,
+            "code": "tracking_timeout",
+            "return": 5.958096199798641,
+            "first_settle_s": null,
+            "position_error_m": 0.0048465800405976985,
+            "orientation_error_rad": 0.02381215569704135,
+            "base_error_m": 0.002883682035919178,
+            "wheel_lift": false,
+            "retention_lost": false
+          },
+          "successes": 0,
+          "outcome_count": 6
+        }
+      }
+    },
+    "v17": {
+      "scope": "Fixed development-case PPO learning audit; never a production task mixture.",
+      "additional_steps_per_variant": 4096,
+      "variants": {
+        "small_updates": {
+          "wandb_offline_run_id": "j9i632to",
+          "numbered_and_post_update_outcomes": [
+            {
+              "step": 6144,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 5.958096199798641,
+              "first_settle_s": null,
+              "position_error_m": 0.0048465800405976985,
+              "orientation_error_rad": 0.02381215569704135,
+              "base_error_m": 0.002883682035919178,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 7168,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.677360725288209,
+              "first_settle_s": null,
+              "position_error_m": 0.005013967611862049,
+              "orientation_error_rad": 0.014929782032842396,
+              "base_error_m": 0.00288320134101402,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 8192,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.462960536156931,
+              "first_settle_s": null,
+              "position_error_m": 0.004793934809660482,
+              "orientation_error_rad": 0.018159669465825513,
+              "base_error_m": 0.0031158751680992686,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 9216,
+              "success": false,
+              "code": "fixed_base_contract_violation",
+              "return": -15.233576231793538,
+              "first_settle_s": null,
+              "position_error_m": 0.02283550059330535,
+              "orientation_error_rad": 0.09411357718315828,
+              "base_error_m": 0.008102698675692244,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 10240,
+              "success": false,
+              "code": "fixed_base_contract_violation",
+              "return": -14.878370649019189,
+              "first_settle_s": null,
+              "position_error_m": 0.02330470456638849,
+              "orientation_error_rad": 0.08443751990198765,
+              "base_error_m": 0.00816799345961872,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 10240,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 4.491603613108238,
+              "first_settle_s": null,
+              "position_error_m": 0.00816774849168438,
+              "orientation_error_rad": 0.05425705047205947,
+              "base_error_m": 0.004441797175167527,
+              "wheel_lift": false,
+              "retention_lost": false
+            }
+          ],
+          "best_training_case_by_final_position_error": {
+            "step": 8192,
+            "success": false,
+            "code": "tracking_timeout",
+            "return": 6.462960536156931,
+            "first_settle_s": null,
+            "position_error_m": 0.004793934809660482,
+            "orientation_error_rad": 0.018159669465825513,
+            "base_error_m": 0.0031158751680992686,
+            "wheel_lift": false,
+            "retention_lost": false
+          },
+          "successes": 0,
+          "outcome_count": 6
+        },
+        "small_updates_low_noise": {
+          "wandb_offline_run_id": "9uui3l1u",
+          "numbered_and_post_update_outcomes": [
+            {
+              "step": 6144,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 5.958096199798641,
+              "first_settle_s": null,
+              "position_error_m": 0.0048465800405976985,
+              "orientation_error_rad": 0.02381215569704135,
+              "base_error_m": 0.002883682035919178,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 7168,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.143468426251042,
+              "first_settle_s": null,
+              "position_error_m": 0.004947325049173007,
+              "orientation_error_rad": 0.022337875419494068,
+              "base_error_m": 0.0031180339928113497,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 8192,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.301217950821334,
+              "first_settle_s": null,
+              "position_error_m": 0.004956562385086884,
+              "orientation_error_rad": 0.020290732746110603,
+              "base_error_m": 0.002811267970133947,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 9216,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.520693153359875,
+              "first_settle_s": null,
+              "position_error_m": 0.00439817634985129,
+              "orientation_error_rad": 0.018136371922104308,
+              "base_error_m": 0.001733537229163567,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 10240,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.083452588944859,
+              "first_settle_s": null,
+              "position_error_m": 0.005330144246495453,
+              "orientation_error_rad": 0.02030988741006336,
+              "base_error_m": 0.0015767784017159418,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 10240,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 5.89394049091812,
+              "first_settle_s": null,
+              "position_error_m": 0.005406523666121193,
+              "orientation_error_rad": 0.021616255941924026,
+              "base_error_m": 0.0026735577813653444,
+              "wheel_lift": false,
+              "retention_lost": false
+            }
+          ],
+          "best_training_case_by_final_position_error": {
+            "step": 9216,
+            "success": false,
+            "code": "tracking_timeout",
+            "return": 6.520693153359875,
+            "first_settle_s": null,
+            "position_error_m": 0.00439817634985129,
+            "orientation_error_rad": 0.018136371922104308,
+            "base_error_m": 0.001733537229163567,
+            "wheel_lift": false,
+            "retention_lost": false
+          },
+          "successes": 0,
+          "outcome_count": 6
+        }
+      }
+    },
+    "v18": {
+      "scope": "Fixed development-case PPO learning audit; never a production task mixture.",
+      "additional_steps_per_variant": 32768,
+      "variants": {
+        "precision": {
+          "wandb_offline_run_id": "f7lunba9",
+          "numbered_and_post_update_outcomes": [
+            {
+              "step": 9216,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.520693153359875,
+              "first_settle_s": null,
+              "position_error_m": 0.00439817634985129,
+              "orientation_error_rad": 0.018136371922104308,
+              "base_error_m": 0.001733537229163567,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 11264,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.6840955721309285,
+              "first_settle_s": null,
+              "position_error_m": 0.004532266309464796,
+              "orientation_error_rad": 0.015312685962865686,
+              "base_error_m": 0.003018008442657581,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 13312,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.202546659117995,
+              "first_settle_s": null,
+              "position_error_m": 0.004464428325330504,
+              "orientation_error_rad": 0.01217698596127454,
+              "base_error_m": 0.0025009056485701445,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 15360,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.345306224027711,
+              "first_settle_s": null,
+              "position_error_m": 0.004129152764609739,
+              "orientation_error_rad": 0.012995466693483653,
+              "base_error_m": 0.003383764107655163,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 17408,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.661069026503848,
+              "first_settle_s": null,
+              "position_error_m": 0.005279391546983811,
+              "orientation_error_rad": 0.013077627131307161,
+              "base_error_m": 0.0022739482250669846,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 19456,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.143562826681629,
+              "first_settle_s": null,
+              "position_error_m": 0.00579119198198491,
+              "orientation_error_rad": 0.015222767277826784,
+              "base_error_m": 0.0023736976854392576,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 21504,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.866827525386067,
+              "first_settle_s": null,
+              "position_error_m": 0.005414326796050196,
+              "orientation_error_rad": 0.010794882415224971,
+              "base_error_m": 0.0025648933579077516,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 23552,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.692496443576902,
+              "first_settle_s": null,
+              "position_error_m": 0.004904257649617861,
+              "orientation_error_rad": 0.012919174527454013,
+              "base_error_m": 0.0038379473114402395,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 25600,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.890122552053762,
+              "first_settle_s": null,
+              "position_error_m": 0.005065518580667171,
+              "orientation_error_rad": 0.012616995294265446,
+              "base_error_m": 0.004062873959785596,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 27648,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 6.864860052248643,
+              "first_settle_s": null,
+              "position_error_m": 0.005492058032277264,
+              "orientation_error_rad": 0.010620923143953428,
+              "base_error_m": 0.0026607945369104265,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 29696,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.04027838281762,
+              "first_settle_s": null,
+              "position_error_m": 0.004877176562284918,
+              "orientation_error_rad": 0.011901107007331747,
+              "base_error_m": 0.003290760282708337,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 31744,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.168475605324228,
+              "first_settle_s": null,
+              "position_error_m": 0.005293420886901134,
+              "orientation_error_rad": 0.010373000382931041,
+              "base_error_m": 0.0028199144020881355,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 33792,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.359300844852546,
+              "first_settle_s": null,
+              "position_error_m": 0.005185034578475193,
+              "orientation_error_rad": 0.01061365439209292,
+              "base_error_m": 0.0035884995214144682,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 35840,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.094553550572687,
+              "first_settle_s": null,
+              "position_error_m": 0.005054684272839803,
+              "orientation_error_rad": 0.01179270814976466,
+              "base_error_m": 0.003609944170582141,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 37888,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.060682210728736,
+              "first_settle_s": null,
+              "position_error_m": 0.005114512335870096,
+              "orientation_error_rad": 0.010332861080161501,
+              "base_error_m": 0.0025222320161756157,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 39936,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.105665604156553,
+              "first_settle_s": null,
+              "position_error_m": 0.00520783464082237,
+              "orientation_error_rad": 0.011446421107674236,
+              "base_error_m": 0.003394377860854802,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 41984,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.159955959366365,
+              "first_settle_s": null,
+              "position_error_m": 0.005370672517478112,
+              "orientation_error_rad": 0.01057360261035283,
+              "base_error_m": 0.003381032990903821,
+              "wheel_lift": false,
+              "retention_lost": false
+            },
+            {
+              "step": 41984,
+              "success": false,
+              "code": "tracking_timeout",
+              "return": 7.031965861194089,
+              "first_settle_s": null,
+              "position_error_m": 0.0051974188323577995,
+              "orientation_error_rad": 0.011529111658743842,
+              "base_error_m": 0.0036371363525252785,
+              "wheel_lift": false,
+              "retention_lost": false
+            }
+          ],
+          "best_training_case_by_final_position_error": {
+            "step": 15360,
+            "success": false,
+            "code": "tracking_timeout",
+            "return": 7.345306224027711,
+            "first_settle_s": null,
+            "position_error_m": 0.004129152764609739,
+            "orientation_error_rad": 0.012995466693483653,
+            "base_error_m": 0.003383764107655163,
+            "wheel_lift": false,
+            "retention_lost": false
+          },
+          "successes": 0,
+          "outcome_count": 18
+        }
+      }
+    }
+  },
+  "independent_transfer": {
+    "selection": {
+      "scope": "Independent component replay of training-case-selected diagnostic; no promotion.",
+      "selected_checkpoint": "logs/manipulation/mars-lift-long-audit-v18/attempt-001/precision/step-15360",
+      "training_case_seed": 3101000,
+      "selection_rule": "Minimum training-case final position error among numbered checkpoints available at selection time; no held-out selection.",
+      "selection_snapshot_complete": false,
+      "selection_snapshot_sha256": "8d6b9e211954dd63fe0c07717b104102b921dae5e770a0ffd259256ba615d71b",
+      "training_case_result": {
+        "step": 15360,
+        "success": false,
+        "code": "tracking_timeout",
+        "return": 7.345306224027711,
+        "first_settle_s": null,
+        "position_error_m": 0.004129152764609739,
+        "orientation_error_rad": 0.012995466693483653,
+        "base_error_m": 0.003383764107655163,
+        "wheel_lift": false,
+        "retention_lost": false
+      },
+      "teacher_initial_physics_identical": true,
+      "complete": true,
+      "safety_promoted": false
+    },
+    "cases": 8,
+    "successes": 0,
+    "ever_settled": 0,
+    "codes": {
+      "fixed_base_contract_violation": 4,
+      "tracking_timeout": 4
+    },
+    "mean_final_position_error_m": 0.013479512678160294,
+    "mean_final_orientation_error_rad": 0.029533343803157863,
+    "wheel_failures": 0,
+    "retention_failures": 0
+  },
+  "archive": "paper/data/whole_body_control/grasp_lift_learning_audits_v1/reports.json.gz",
+  "uncompressed_sha256": "c64fcf67182ddb80b39330a346575ef69ada6d45341c1c1c4c3b36b8b84acec4",
+  "total_new_ppo_steps": 57344,
+  "complete": true
+}

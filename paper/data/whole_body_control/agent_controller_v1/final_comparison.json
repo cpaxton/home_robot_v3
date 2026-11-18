@@ -1,0 +1,3863 @@
+{
+  "scope": "Final-source paired public delivery replay; first fixture uses the real agent.",
+  "benchmark": {
+    "version": "mars-agent-controller-v1",
+    "scope": "Single-delivery development acceptance through agent public tools; existing multi-transfer gates remain unchanged",
+    "cases": [
+      "left:20g:0",
+      "left:50g:0",
+      "right:20g:0"
+    ],
+    "selection_case": "left:20g:0",
+    "program": {
+      "id": "single_delivery",
+      "instruction": "Pick up the blue object, carry it to destination support, place it entirely within the required region, release it and remain still.",
+      "stages": [
+        {
+          "object": "blue",
+          "support": "destination"
+        }
+      ]
+    },
+    "safety_promoted": false
+  },
+  "complete": true,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "physics_paused_during_inference": true,
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "server_weight_revision_verified": false,
+  "sampler": "server defaults",
+  "matched_initial_physics": true,
+  "episodes": [
+    {
+      "label": "reference",
+      "case": {
+        "id": "left:20g:0",
+        "layout": "left",
+        "seed": 1861000,
+        "mass_kg": 0.02,
+        "yaw_offset_rad": 0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.24986386124376467,
+            0.05903310786603164,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0009640054633338128,
+            -4.932190148013802e-06,
+            9.284661069111383e-05
+          ],
+          "witness_hand": [
+            0.26581914273620844,
+            0.07003348572767182,
+            0.2387905364491753,
+            0.8252739969157307,
+            -0.5647120253608552,
+            0.5647190945598107,
+            0.8252831793230616,
+            -0.0038954145199553286,
+            0.002828840621267565
+          ],
+          "placement_region": [
+            [
+              0.21986386124376467,
+              0.029033107866031638
+            ],
+            [
+              0.27986386124376467,
+              0.08903310786603164
+            ]
+          ]
+        },
+        "model_signature": "805e6b34c8ab1e13c603fbdf747cd1e9c8dd0843aff3fee7e2bd4d7f5bcd91ca",
+        "initial_qpos": [
+          -0.0009640054633338128,
+          -4.932190148013802e-06,
+          -0.00013553556144078532,
+          0.9999971018348052,
+          6.750209742119732e-05,
+          0.0024061640478344934,
+          4.626048068370673e-05,
+          3.635035196037852e-07,
+          -0.3740895334158756,
+          -0.021935610619412696,
+          0.3990145580531259,
+          -2.997133564785949e-07,
+          0.34939866298144384,
+          -0.3494048648351942,
+          -1.0635778343509418e-05,
+          -0.0030428410452761814,
+          -0.014812594034436815,
+          0.0022003188610619905,
+          -0.09154339539312738,
+          0.2844706886935954,
+          -0.05291695903734503,
+          0.24314927927513433,
+          0.9999697202837616,
+          0.00041817643483186087,
+          0.007748816959015801,
+          -0.0005826489671320427,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          6.431712599295586e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "selector": "llm_privileged",
+      "controller": "reference_teacher",
+      "success": true,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "policy_calls": 0,
+      "agent_terminal": "execution_returned_ok_pending_physical_score",
+      "failure_at": null,
+      "contact_metrics": {
+        "peak_contact_force": 3.317826920998131,
+        "contact_impulse": 224.78105062117373,
+        "contact": true,
+        "max_penetration": 0.00030416782550980395,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          1.5145669562127257,
+          0.10699237292308193,
+          0.002159482920041306
+        ]
+      },
+      "motion_metrics": {
+        "samples": 1351,
+        "duration_s": 67.50000000002164,
+        "hand_position_rms_m": 0.0016349596728012184,
+        "hand_position_max_m": 0.005548756810312293,
+        "hand_rotation_rms_rad": 0.00613163885030133,
+        "hand_rotation_max_rad": 0.025765718266060278,
+        "arm_speed_max_rad_s": 0.06486062816396934,
+        "arm_velocity_command_error_rms_rad_s": 0.010524192888933316,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.8695986476350555,
+        "arm_jerk_rms_rad_s3": 2.04457785993698,
+        "arm_jerk_max_rad_s3": 16.74596284901542
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "controller_success": true,
+          "residual": 0.0005421430437625961
+        },
+        {
+          "sim_time": 1.7500000000000013,
+          "phase": "pregrasp",
+          "residual": 0.004323324065035788,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.149999999999985,
+          "phase": "pregrasp",
+          "residual": 0.004356506165609815,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.5499999999999408,
+          "phase": "pregrasp",
+          "residual": 0.0038919158560558748,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.899999999999902,
+          "phase": "pregrasp",
+          "residual": 0.004908459451652192,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.2499999999998637,
+          "phase": "pregrasp",
+          "residual": 0.004818834902239236,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.599999999999825,
+          "phase": "pregrasp",
+          "residual": 0.004437016471983732,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.9499999999997866,
+          "phase": "pregrasp",
+          "residual": 0.004105152889604877,
+          "controller_success": true
+        },
+        {
+          "sim_time": 4.549999999999721,
+          "phase": "pregrasp_complete",
+          "controller_success": true,
+          "residual": 0.0032711678754178686
+        },
+        {
+          "sim_time": 4.849999999999688,
+          "phase": "grasp",
+          "residual": 0.003704646462462574,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.199999999999649,
+          "phase": "grasp",
+          "residual": 0.0036468100098464296,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.549999999999611,
+          "phase": "grasp",
+          "residual": 0.0033585691826682473,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.849999999999578,
+          "phase": "grasp",
+          "residual": 0.004830062552374809,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.199999999999539,
+          "phase": "grasp",
+          "residual": 0.0032710294744056623,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.799999999999473,
+          "phase": "grasp_complete",
+          "controller_success": true,
+          "residual": 0.0033978996117789706
+        },
+        {
+          "sim_time": 7.199999999999429,
+          "phase": "gripper_settled",
+          "measured": 0.3247744809519919,
+          "controller_success": true
+        },
+        {
+          "sim_time": 8.749999999999591,
+          "phase": "lift",
+          "residual": 0.00419043216734763,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.249999999999758,
+          "phase": "lift",
+          "residual": 0.004035356065112711,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.699999999999909,
+          "phase": "lift",
+          "residual": 0.00422197162226115,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.100000000000042,
+          "phase": "lift",
+          "residual": 0.004834268526458574,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.500000000000176,
+          "phase": "lift",
+          "residual": 0.004384457592015126,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.90000000000031,
+          "phase": "lift",
+          "residual": 0.0038554366881415197,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.250000000000426,
+          "phase": "lift",
+          "residual": 0.004985893280076051,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.600000000000543,
+          "phase": "lift",
+          "residual": 0.004891769923836414,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.95000000000066,
+          "phase": "lift",
+          "residual": 0.004574030272904581,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.300000000000777,
+          "phase": "lift",
+          "residual": 0.0042339410529828,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.650000000000894,
+          "phase": "lift",
+          "residual": 0.00394864805425893,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.00000000000101,
+          "phase": "lift",
+          "residual": 0.0037268999383721843,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.350000000001128,
+          "phase": "lift",
+          "residual": 0.0035358281817441176,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.700000000001245,
+          "phase": "lift",
+          "residual": 0.0033587202045624043,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.050000000001361,
+          "phase": "lift",
+          "residual": 0.0032169852156940376,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.400000000001478,
+          "phase": "lift",
+          "residual": 0.00311653828009055,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.700000000001578,
+          "phase": "lift",
+          "residual": 0.004997708690254149,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.050000000001695,
+          "phase": "lift",
+          "residual": 0.0032978908695415476,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.350000000001796,
+          "phase": "lift",
+          "residual": 0.00486618909573977,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.700000000001912,
+          "phase": "lift",
+          "residual": 0.003098472746089126,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.00000000000201,
+          "phase": "lift",
+          "residual": 0.004667411975725955,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.350000000001817,
+          "phase": "lift",
+          "residual": 0.0029465160728904816,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.65000000000165,
+          "phase": "lift",
+          "residual": 0.004513069216892346,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.950000000001484,
+          "phase": "lift",
+          "residual": 0.004922492247408816,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.250000000001318,
+          "phase": "lift",
+          "residual": 0.004917457635806699,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.550000000001152,
+          "phase": "lift",
+          "residual": 0.004863120673541055,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.850000000000986,
+          "phase": "lift",
+          "residual": 0.0047599463449631285,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.15000000000082,
+          "phase": "lift",
+          "residual": 0.0047013538137650746,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.450000000000653,
+          "phase": "lift",
+          "residual": 0.0046147883489161545,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.750000000000487,
+          "phase": "lift",
+          "residual": 0.004575213045390103,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.05000000000032,
+          "phase": "lift",
+          "residual": 0.004506244242701907,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.350000000000154,
+          "phase": "lift",
+          "residual": 0.004481847769413239,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.649999999999988,
+          "phase": "lift",
+          "residual": 0.004426094787654655,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.899999999999295,
+          "phase": "lift_complete",
+          "controller_success": true,
+          "residual": 0.004333551059249707
+        },
+        {
+          "sim_time": 25.84999999999655,
+          "phase": "preplace",
+          "residual": 0.0038910514848684505,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.299999999996302,
+          "phase": "preplace",
+          "residual": 0.004682262650258888,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.749999999996053,
+          "phase": "preplace",
+          "residual": 0.004058952004378044,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.14999999999583,
+          "phase": "preplace",
+          "residual": 0.004984258556881352,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.54999999999561,
+          "phase": "preplace",
+          "residual": 0.004645426703187308,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.949999999995388,
+          "phase": "preplace",
+          "residual": 0.004165968475169396,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.349999999995166,
+          "phase": "preplace",
+          "residual": 0.00374501409075903,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.749999999994944,
+          "phase": "preplace",
+          "residual": 0.0034002592214476823,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.149999999994723,
+          "phase": "preplace",
+          "residual": 0.0031186609249484465,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.49999999999453,
+          "phase": "preplace",
+          "residual": 0.004844568162198137,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.899999999994307,
+          "phase": "preplace",
+          "residual": 0.002963878324495295,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.249999999994113,
+          "phase": "preplace",
+          "residual": 0.004464372165026431,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.59999999999392,
+          "phase": "preplace",
+          "residual": 0.00463972579776567,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.949999999993725,
+          "phase": "preplace",
+          "residual": 0.00451057106607361,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.29999999999353,
+          "phase": "preplace",
+          "residual": 0.004351666295675238,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.649999999993337,
+          "phase": "preplace",
+          "residual": 0.004206288422882898,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.999999999993143,
+          "phase": "preplace",
+          "residual": 0.0040874180163734675,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.34999999999357,
+          "phase": "preplace",
+          "residual": 0.003980161792364489,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.699999999994,
+          "phase": "preplace",
+          "residual": 0.0039004899193809672,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.04999999999443,
+          "phase": "preplace",
+          "residual": 0.0038295462757817478,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.399999999994854,
+          "phase": "preplace",
+          "residual": 0.0037654280405894913,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.74999999999528,
+          "phase": "preplace",
+          "residual": 0.0037178072245289684,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.09999999999571,
+          "phase": "preplace",
+          "residual": 0.003682439210765054,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.44999999999614,
+          "phase": "preplace",
+          "residual": 0.0036457218400935965,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.799999999996565,
+          "phase": "preplace",
+          "residual": 0.003615488886541951,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.14999999999699,
+          "phase": "preplace",
+          "residual": 0.003594711131625572,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.49999999999742,
+          "phase": "preplace",
+          "residual": 0.0035753174944583854,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.84999999999785,
+          "phase": "preplace",
+          "residual": 0.0035565876509965344,
+          "controller_success": true
+        },
+        {
+          "sim_time": 36.199999999998276,
+          "phase": "preplace",
+          "residual": 0.00354712451784156,
+          "controller_success": true
+        },
+        {
+          "sim_time": 37.499999999999865,
+          "phase": "preplace_complete",
+          "controller_success": true,
+          "residual": 0.0043597898423359815
+        },
+        {
+          "sim_time": 37.900000000000354,
+          "phase": "place",
+          "residual": 0.004960469455724481,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.350000000000904,
+          "phase": "place",
+          "residual": 0.003785356611831714,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.75000000000139,
+          "phase": "place",
+          "residual": 0.004371537841678541,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.15000000000188,
+          "phase": "place",
+          "residual": 0.004002833384784299,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.55000000000237,
+          "phase": "place",
+          "residual": 0.0035370915280580895,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.9000000000028,
+          "phase": "place",
+          "residual": 0.004776173059541422,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.250000000003226,
+          "phase": "place",
+          "residual": 0.004757926778117344,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.600000000003654,
+          "phase": "place",
+          "residual": 0.004464274292739712,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.95000000000408,
+          "phase": "place",
+          "residual": 0.004175077947950273,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.30000000000451,
+          "phase": "place",
+          "residual": 0.0039177133867390745,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.65000000000494,
+          "phase": "place",
+          "residual": 0.0037092305735341724,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.000000000005365,
+          "phase": "place",
+          "residual": 0.003531943115615152,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.35000000000579,
+          "phase": "place",
+          "residual": 0.003386742067317053,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.70000000000622,
+          "phase": "place",
+          "residual": 0.003264257422327582,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.05000000000665,
+          "phase": "place",
+          "residual": 0.0031590441860644553,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.400000000007076,
+          "phase": "place",
+          "residual": 0.0030863459426664075,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.7500000000075,
+          "phase": "place",
+          "residual": 0.0030163199420926087,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.05000000000787,
+          "phase": "place",
+          "residual": 0.004999321590482385,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.4000000000083,
+          "phase": "place",
+          "residual": 0.003279197732952828,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.700000000008664,
+          "phase": "place",
+          "residual": 0.004921717962738985,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.05000000000909,
+          "phase": "place",
+          "residual": 0.003132128269984734,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.35000000000946,
+          "phase": "place",
+          "residual": 0.0047666659830850056,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.70000000000989,
+          "phase": "place",
+          "residual": 0.002995378696819262,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.00000000001025,
+          "phase": "place",
+          "residual": 0.004662382476876767,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.35000000001068,
+          "phase": "place",
+          "residual": 0.002904496865478806,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.65000000001105,
+          "phase": "place",
+          "residual": 0.004567827077418096,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.000000000011475,
+          "phase": "place",
+          "residual": 0.0028392655795501653,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.30000000001184,
+          "phase": "place",
+          "residual": 0.0045260121484562155,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.60000000001221,
+          "phase": "place",
+          "residual": 0.004955568933143278,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.950000000012636,
+          "phase": "place",
+          "residual": 0.002814575199074132,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.250000000013,
+          "phase": "place",
+          "residual": 0.004420364110503228,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.55000000001337,
+          "phase": "place",
+          "residual": 0.004872508187265423,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.850000000013736,
+          "phase": "place",
+          "residual": 0.00492285901699635,
+          "controller_success": true
+        },
+        {
+          "sim_time": 49.1500000000141,
+          "phase": "place",
+          "residual": 0.004878935236631965,
+          "controller_success": true
+        },
+        {
+          "sim_time": 50.35000000001557,
+          "phase": "place_complete",
+          "controller_success": true,
+          "residual": 0.004441228306403644
+        },
+        {
+          "sim_time": 51.000000000016364,
+          "phase": "release",
+          "controller_success": true
+        },
+        {
+          "sim_time": 51.75000000001728,
+          "phase": "retreat",
+          "residual": 0.0049162228058996504,
+          "controller_success": true
+        },
+        {
+          "sim_time": 52.25000000001789,
+          "phase": "retreat",
+          "residual": 0.004567029208644158,
+          "controller_success": true
+        },
+        {
+          "sim_time": 52.70000000001844,
+          "phase": "retreat",
+          "residual": 0.004526788559994499,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.10000000001893,
+          "phase": "retreat",
+          "residual": 0.0049852317446736905,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.50000000001942,
+          "phase": "retreat",
+          "residual": 0.004467913768749998,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.90000000001991,
+          "phase": "retreat",
+          "residual": 0.003865708476734897,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.250000000020336,
+          "phase": "retreat",
+          "residual": 0.0048594784005975555,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.60000000002076,
+          "phase": "retreat",
+          "residual": 0.004714813678208973,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.95000000002119,
+          "phase": "retreat",
+          "residual": 0.004371532390812144,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.30000000002162,
+          "phase": "retreat",
+          "residual": 0.004031930180258714,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.65000000002205,
+          "phase": "retreat",
+          "residual": 0.0037439323945140657,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.000000000022474,
+          "phase": "retreat",
+          "residual": 0.00350108925115461,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.3500000000229,
+          "phase": "retreat",
+          "residual": 0.003287955844482368,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.65000000002327,
+          "phase": "retreat",
+          "residual": 0.004972471047109364,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.0000000000237,
+          "phase": "retreat",
+          "residual": 0.0033294868365047886,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.30000000002406,
+          "phase": "retreat",
+          "residual": 0.004711984661781771,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.60000000002443,
+          "phase": "retreat",
+          "residual": 0.0049889457170069,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.9000000000248,
+          "phase": "retreat",
+          "residual": 0.004931409340917289,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.20000000002516,
+          "phase": "retreat",
+          "residual": 0.004791558751027649,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.50000000002553,
+          "phase": "retreat",
+          "residual": 0.004657631455715822,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.800000000025896,
+          "phase": "retreat",
+          "residual": 0.004544635568739422,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.10000000002626,
+          "phase": "retreat",
+          "residual": 0.0044385288078094,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.40000000002663,
+          "phase": "retreat",
+          "residual": 0.004347234892719903,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.700000000026996,
+          "phase": "retreat",
+          "residual": 0.00427314983911245,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.00000000002736,
+          "phase": "retreat",
+          "residual": 0.004210750686941642,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.30000000002773,
+          "phase": "retreat",
+          "residual": 0.004154804559220682,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.600000000028096,
+          "phase": "retreat",
+          "residual": 0.004101223637372808,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.90000000002846,
+          "phase": "retreat",
+          "residual": 0.004051899715065338,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.20000000002883,
+          "phase": "retreat",
+          "residual": 0.004025373314423819,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.500000000029196,
+          "phase": "retreat",
+          "residual": 0.003985452407027079,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.80000000002956,
+          "phase": "retreat",
+          "residual": 0.00396889037557388,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.50000000003042,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.00496332114695297
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 61.500000000029196,
+          "phase": "retreat",
+          "command": [
+            0.6891908837048476,
+            -0.5644067095988271,
+            -0.20839317126053936,
+            0.7747444046381122,
+            -7.084731368606949e-05
+          ],
+          "measured": [
+            0.6891889466929308,
+            -0.5649731487251465,
+            -0.20440771885351228,
+            0.7713007933605296,
+            -6.61230109102141e-05
+          ],
+          "residual": 0.003985452407027079,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.80000000002956,
+          "phase": "retreat",
+          "command": [
+            0.6892074594727329,
+            -0.5622891828249229,
+            -0.22670565691971817,
+            0.7908543600383708,
+            -9.341779829702976e-05
+          ],
+          "measured": [
+            0.6892034773875849,
+            -0.5628412126635035,
+            -0.2227367665441443,
+            0.7874341945689797,
+            -8.831862564210048e-05
+          ],
+          "residual": 0.00396889037557388,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.50000000003042,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.00496332114695297
+        }
+      ]
+    },
+    {
+      "label": "learned_gain3",
+      "case": {
+        "id": "left:20g:0",
+        "layout": "left",
+        "seed": 1861000,
+        "mass_kg": 0.02,
+        "yaw_offset_rad": 0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.24986386124376467,
+            0.05903310786603164,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0009640054633338128,
+            -4.932190148013802e-06,
+            9.284661069111383e-05
+          ],
+          "witness_hand": [
+            0.26581914273620844,
+            0.07003348572767182,
+            0.2387905364491753,
+            0.8252739969157307,
+            -0.5647120253608552,
+            0.5647190945598107,
+            0.8252831793230616,
+            -0.0038954145199553286,
+            0.002828840621267565
+          ],
+          "placement_region": [
+            [
+              0.21986386124376467,
+              0.029033107866031638
+            ],
+            [
+              0.27986386124376467,
+              0.08903310786603164
+            ]
+          ]
+        },
+        "model_signature": "805e6b34c8ab1e13c603fbdf747cd1e9c8dd0843aff3fee7e2bd4d7f5bcd91ca",
+        "initial_qpos": [
+          -0.0009640054633338128,
+          -4.932190148013802e-06,
+          -0.00013553556144078532,
+          0.9999971018348052,
+          6.750209742119732e-05,
+          0.0024061640478344934,
+          4.626048068370673e-05,
+          3.635035196037852e-07,
+          -0.3740895334158756,
+          -0.021935610619412696,
+          0.3990145580531259,
+          -2.997133564785949e-07,
+          0.34939866298144384,
+          -0.3494048648351942,
+          -1.0635778343509418e-05,
+          -0.0030428410452761814,
+          -0.014812594034436815,
+          0.0022003188610619905,
+          -0.09154339539312738,
+          0.2844706886935954,
+          -0.05291695903734503,
+          0.24314927927513433,
+          0.9999697202837616,
+          0.00041817643483186087,
+          0.007748816959015801,
+          -0.0005826489671320427,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          6.431712599295586e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "selector": "llm_privileged",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "stop_confirmed": true,
+      "policy_calls": 543,
+      "agent_terminal": "partial_execution_requires_recovery",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.692514721780548,
+        "contact_impulse": 239.81757308941624,
+        "contact": true,
+        "max_penetration": 0.0017420862389238012,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          2.2660790362082073e-05,
+          3.763132217789178e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.1453835946390432
+        ]
+      },
+      "motion_metrics": {
+        "samples": 586,
+        "duration_s": 29.249999999994085,
+        "hand_position_rms_m": 0.004967951868718883,
+        "hand_position_max_m": 0.008164606660729549,
+        "hand_rotation_rms_rad": 0.027079936299817402,
+        "hand_rotation_max_rad": 0.10039020752255254,
+        "arm_speed_max_rad_s": 0.021680163534247118,
+        "arm_velocity_command_error_rms_rad_s": 0.0016710926833417967,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.4761660547379417,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.800000000001278,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0023936124959023876,
+          "orientation_error_rad": 0.011864951536026071,
+          "joint_witness_residual_rad": 0.06046423875762147,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.299999999997965,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0025532493374299395,
+          "orientation_error_rad": 0.01959040721623303,
+          "joint_witness_residual_rad": 0.06780284367750733,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.64999999999777,
+          "phase": "gripper_settled",
+          "measured": 0.36108513772854256,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 24.649999999997217,
+          "phase": "lift",
+          "reference_replan": "measured_world_pose",
+          "accepted": true,
+          "reason": null,
+          "execution_ik_added": true,
+          "witness_position_error_m": 0.012752814576669358,
+          "witness_orientation_error_rad": 0.013359183334939241
+        },
+        {
+          "sim_time": 24.649999999997217,
+          "phase": "lift",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 30.299999999994085,
+          "phase": "lift",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "cartesian_path_tracking_envelope",
+          "position_error_m": 0.008074706379303331,
+          "orientation_error_rad": 0.10039020752255254
+        }
+      ]
+    },
+    {
+      "label": "reference",
+      "case": {
+        "id": "left:50g:0",
+        "layout": "left",
+        "seed": 1861000,
+        "mass_kg": 0.05,
+        "yaw_offset_rad": 0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.24979280095587936,
+            0.05900118419056325,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0010343119591263883,
+            -5.693450868747411e-06,
+            -1.4127644951802843e-05
+          ],
+          "witness_hand": [
+            0.2657602556204419,
+            0.07000521715668712,
+            0.23878524762536557,
+            0.8253343266966482,
+            -0.5646237085918007,
+            0.5646308085812077,
+            0.8253435847209536,
+            -0.003911416255074017,
+            0.0028345821572347517
+          ],
+          "placement_region": [
+            [
+              0.21979280095587936,
+              0.029001184190563252
+            ],
+            [
+              0.27979280095587933,
+              0.08900118419056324
+            ]
+          ]
+        },
+        "model_signature": "46ce9f3bf4e3965c845a8dfa1bd45d702e1729ee76b730ed0dc9810f4686f704",
+        "initial_qpos": [
+          -0.0010343119591263883,
+          -5.693450868747411e-06,
+          -0.00013613513483020062,
+          0.9999970831985121,
+          6.548255685768927e-05,
+          0.002414384879551337,
+          -7.22186128188609e-06,
+          4.59520418144124e-05,
+          -0.37403130107555493,
+          -0.02184660856323406,
+          0.3990521277285142,
+          9.779315747827556e-06,
+          0.3498873912861142,
+          -0.349900741188876,
+          -1.0620007885561043e-05,
+          -0.02536718137641168,
+          0.004518417946279037,
+          -0.0002171177813744958,
+          -0.09138690873709086,
+          0.28438653769500144,
+          -0.052945420710748876,
+          0.24313395347410247,
+          0.9999719968268571,
+          0.0012573445345733687,
+          0.007197203404053121,
+          -0.0016201573968565308,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          5.675133626956692e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "selector": "scripted_reference",
+      "controller": "reference_teacher",
+      "success": true,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "policy_calls": 0,
+      "agent_terminal": null,
+      "failure_at": null,
+      "contact_metrics": {
+        "peak_contact_force": 3.816596523782792,
+        "contact_impulse": 233.94281603010893,
+        "contact": true,
+        "max_penetration": 0.00032563046232775386,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          4.573675736377868e-05
+        ],
+        "min_wheel_load": [
+          1.9351540308413164,
+          0.26445890186205323,
+          0.0
+        ]
+      },
+      "motion_metrics": {
+        "samples": 1381,
+        "duration_s": 69.00000000001815,
+        "hand_position_rms_m": 0.0016586594327899088,
+        "hand_position_max_m": 0.005732385915687118,
+        "hand_rotation_rms_rad": 0.006163203673595706,
+        "hand_rotation_max_rad": 0.026147639717837574,
+        "arm_speed_max_rad_s": 0.06581755403017765,
+        "arm_velocity_command_error_rms_rad_s": 0.010511135994663794,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.7151731560169755,
+        "arm_jerk_rms_rad_s3": 2.0444505690010013,
+        "arm_jerk_max_rad_s3": 15.85431212116233
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "controller_success": true,
+          "residual": 0.0005548040294128531
+        },
+        {
+          "sim_time": 1.7500000000000013,
+          "phase": "pregrasp",
+          "residual": 0.004438551361730424,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.149999999999985,
+          "phase": "pregrasp",
+          "residual": 0.004436556590079764,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.5499999999999408,
+          "phase": "pregrasp",
+          "residual": 0.003975444677899627,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.9499999999998967,
+          "phase": "pregrasp",
+          "residual": 0.0034951148207374994,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.299999999999858,
+          "phase": "pregrasp",
+          "residual": 0.004693718483529188,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.6499999999998196,
+          "phase": "pregrasp",
+          "residual": 0.00461281056120276,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.999999999999781,
+          "phase": "pregrasp",
+          "residual": 0.0043701244699897585,
+          "controller_success": true
+        },
+        {
+          "sim_time": 4.599999999999715,
+          "phase": "pregrasp_complete",
+          "controller_success": true,
+          "residual": 0.003227039114289787
+        },
+        {
+          "sim_time": 4.849999999999688,
+          "phase": "grasp",
+          "residual": 0.004830173171831625,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.199999999999649,
+          "phase": "grasp",
+          "residual": 0.0037408348412927006,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.499999999999616,
+          "phase": "grasp",
+          "residual": 0.004733153431475123,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.799999999999583,
+          "phase": "grasp",
+          "residual": 0.004752756978488065,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.09999999999955,
+          "phase": "grasp",
+          "residual": 0.004618723587190066,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.399999999999517,
+          "phase": "grasp",
+          "residual": 0.004436433984605304,
+          "controller_success": true
+        },
+        {
+          "sim_time": 7.149999999999435,
+          "phase": "grasp_complete",
+          "controller_success": true,
+          "residual": 0.003653134527802998
+        },
+        {
+          "sim_time": 7.599999999999385,
+          "phase": "gripper_settled",
+          "measured": 0.3106216049497711,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.149999999999725,
+          "phase": "lift",
+          "residual": 0.00486322302251041,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.649999999999892,
+          "phase": "lift",
+          "residual": 0.004570976789003145,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.100000000000042,
+          "phase": "lift",
+          "residual": 0.004663277949594979,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.550000000000193,
+          "phase": "lift",
+          "residual": 0.003924071516608646,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.950000000000326,
+          "phase": "lift",
+          "residual": 0.004530252901799509,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.35000000000046,
+          "phase": "lift",
+          "residual": 0.004128819270514561,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.750000000000593,
+          "phase": "lift",
+          "residual": 0.003647722526482211,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.10000000000071,
+          "phase": "lift",
+          "residual": 0.004833522099286648,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.450000000000827,
+          "phase": "lift",
+          "residual": 0.004791963441373948,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.800000000000944,
+          "phase": "lift",
+          "residual": 0.004491536540268718,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.15000000000106,
+          "phase": "lift",
+          "residual": 0.0042087384538163014,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.500000000001178,
+          "phase": "lift",
+          "residual": 0.00392526558691798,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.850000000001295,
+          "phase": "lift",
+          "residual": 0.0037174962433105113,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.200000000001411,
+          "phase": "lift",
+          "residual": 0.0035430300658746,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.550000000001528,
+          "phase": "lift",
+          "residual": 0.003357626051676374,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.900000000001645,
+          "phase": "lift",
+          "residual": 0.003243447466668048,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.250000000001762,
+          "phase": "lift",
+          "residual": 0.0031199876993692477,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.600000000001879,
+          "phase": "lift",
+          "residual": 0.003050140718923927,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.950000000001996,
+          "phase": "lift",
+          "residual": 0.002986360393597981,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.250000000001872,
+          "phase": "lift",
+          "residual": 0.004934592202033655,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.60000000000168,
+          "phase": "lift",
+          "residual": 0.0032369597130275096,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.900000000001512,
+          "phase": "lift",
+          "residual": 0.004848304042010698,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.250000000001318,
+          "phase": "lift",
+          "residual": 0.003066303137689602,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.550000000001152,
+          "phase": "lift",
+          "residual": 0.004676705324109631,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.900000000000958,
+          "phase": "lift",
+          "residual": 0.0029293577867741116,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.20000000000079,
+          "phase": "lift",
+          "residual": 0.004567812197857457,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.500000000000625,
+          "phase": "lift",
+          "residual": 0.004961922436171662,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.85000000000043,
+          "phase": "lift",
+          "residual": 0.0028295418212269108,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.150000000000265,
+          "phase": "lift",
+          "residual": 0.004405989996514259,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.4500000000001,
+          "phase": "lift",
+          "residual": 0.004821301211984874,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.749999999999932,
+          "phase": "lift",
+          "residual": 0.004860618117318527,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.049999999999766,
+          "phase": "lift",
+          "residual": 0.004795767711072152,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.3499999999996,
+          "phase": "lift",
+          "residual": 0.004743920968860227,
+          "controller_success": true
+        },
+        {
+          "sim_time": 21.599999999998907,
+          "phase": "lift_complete",
+          "controller_success": true,
+          "residual": 0.004342536844854861
+        },
+        {
+          "sim_time": 26.44999999999622,
+          "phase": "preplace",
+          "residual": 0.004982790348231847,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.89999999999597,
+          "phase": "preplace",
+          "residual": 0.004737792184425715,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.34999999999572,
+          "phase": "preplace",
+          "residual": 0.003988835990190884,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.7499999999955,
+          "phase": "preplace",
+          "residual": 0.004928138787580139,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.149999999995277,
+          "phase": "preplace",
+          "residual": 0.004594737537222018,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.549999999995055,
+          "phase": "preplace",
+          "residual": 0.004124398694793446,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.949999999994834,
+          "phase": "preplace",
+          "residual": 0.0037182726258931653,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.349999999994612,
+          "phase": "preplace",
+          "residual": 0.0033830525518643573,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.74999999999439,
+          "phase": "preplace",
+          "residual": 0.0031027110990653473,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.099999999994196,
+          "phase": "preplace",
+          "residual": 0.004840613185806475,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.499999999993975,
+          "phase": "preplace",
+          "residual": 0.0029533347945382427,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.84999999999378,
+          "phase": "preplace",
+          "residual": 0.004467689549215503,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.199999999993587,
+          "phase": "preplace",
+          "residual": 0.00464419164256441,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.549999999993393,
+          "phase": "preplace",
+          "residual": 0.004523532137171937,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.8999999999932,
+          "phase": "preplace",
+          "residual": 0.00437123356056629,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.24999999999345,
+          "phase": "preplace",
+          "residual": 0.004220025774030467,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.59999999999388,
+          "phase": "preplace",
+          "residual": 0.004100157962014572,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.949999999994304,
+          "phase": "preplace",
+          "residual": 0.004000197682393625,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.29999999999473,
+          "phase": "preplace",
+          "residual": 0.0039057770685151927,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.64999999999516,
+          "phase": "preplace",
+          "residual": 0.0038362565861952413,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.99999999999559,
+          "phase": "preplace",
+          "residual": 0.0037866545117213324,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.349999999996015,
+          "phase": "preplace",
+          "residual": 0.0037371460454611594,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.69999999999644,
+          "phase": "preplace",
+          "residual": 0.0037008522658037446,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.04999999999687,
+          "phase": "preplace",
+          "residual": 0.0036636010117868656,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.3999999999973,
+          "phase": "preplace",
+          "residual": 0.003644642450978064,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.749999999997726,
+          "phase": "preplace",
+          "residual": 0.0036025374829431467,
+          "controller_success": true
+        },
+        {
+          "sim_time": 36.099999999998154,
+          "phase": "preplace",
+          "residual": 0.0036029875161175395,
+          "controller_success": true
+        },
+        {
+          "sim_time": 36.44999999999858,
+          "phase": "preplace",
+          "residual": 0.003579668686384263,
+          "controller_success": true
+        },
+        {
+          "sim_time": 36.79999999999901,
+          "phase": "preplace",
+          "residual": 0.0035547986352543193,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.1000000000006,
+          "phase": "preplace_complete",
+          "controller_success": true,
+          "residual": 0.0043783025351478155
+        },
+        {
+          "sim_time": 38.50000000000109,
+          "phase": "place",
+          "residual": 0.004742437265766064,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.900000000001576,
+          "phase": "place",
+          "residual": 0.004956743686986342,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.300000000002065,
+          "phase": "place",
+          "residual": 0.004419951446005599,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.700000000002554,
+          "phase": "place",
+          "residual": 0.0038374293591756925,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.10000000000304,
+          "phase": "place",
+          "residual": 0.003362222444737606,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.45000000000347,
+          "phase": "place",
+          "residual": 0.004617360811140225,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.8000000000039,
+          "phase": "place",
+          "residual": 0.00460782666122686,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.150000000004326,
+          "phase": "place",
+          "residual": 0.004312499515961465,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.50000000000475,
+          "phase": "place",
+          "residual": 0.004038981531683805,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.85000000000518,
+          "phase": "place",
+          "residual": 0.003797107122127552,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.20000000000561,
+          "phase": "place",
+          "residual": 0.0036134365179765204,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.55000000000604,
+          "phase": "place",
+          "residual": 0.0034305858315070853,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.900000000006465,
+          "phase": "place",
+          "residual": 0.003289356255781223,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.25000000000689,
+          "phase": "place",
+          "residual": 0.0031772612787222404,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.60000000000732,
+          "phase": "place",
+          "residual": 0.0030701049255617355,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.95000000000775,
+          "phase": "place",
+          "residual": 0.00298972184711524,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.250000000008114,
+          "phase": "place",
+          "residual": 0.004955119759800597,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.60000000000854,
+          "phase": "place",
+          "residual": 0.0032522177188471293,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.90000000000891,
+          "phase": "place",
+          "residual": 0.004849749464217255,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.25000000000934,
+          "phase": "place",
+          "residual": 0.0030776890873065454,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.5500000000097,
+          "phase": "place",
+          "residual": 0.004684840689764935,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.90000000001013,
+          "phase": "place",
+          "residual": 0.0029437806521669524,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.2000000000105,
+          "phase": "place",
+          "residual": 0.0045695460070696164,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.500000000010864,
+          "phase": "place",
+          "residual": 0.004991353358309025,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.85000000001129,
+          "phase": "place",
+          "residual": 0.0028443796381481534,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.15000000001166,
+          "phase": "place",
+          "residual": 0.004412639192273554,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.450000000012025,
+          "phase": "place",
+          "residual": 0.004854526333840176,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.75000000001239,
+          "phase": "place",
+          "residual": 0.004892171969153675,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.05000000001276,
+          "phase": "place",
+          "residual": 0.004844627781137784,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.350000000013125,
+          "phase": "place",
+          "residual": 0.00476467318085641,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.65000000001349,
+          "phase": "place",
+          "residual": 0.0047221294243950385,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.95000000001386,
+          "phase": "place",
+          "residual": 0.00468063377579464,
+          "controller_success": true
+        },
+        {
+          "sim_time": 49.250000000014225,
+          "phase": "place",
+          "residual": 0.004646081927394297,
+          "controller_success": true
+        },
+        {
+          "sim_time": 49.55000000001459,
+          "phase": "place",
+          "residual": 0.00460948754730911,
+          "controller_success": true
+        },
+        {
+          "sim_time": 50.80000000001612,
+          "phase": "place_complete",
+          "controller_success": true,
+          "residual": 0.004401817305594247
+        },
+        {
+          "sim_time": 52.30000000001795,
+          "phase": "release",
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.350000000019236,
+          "phase": "retreat",
+          "residual": 0.004351541706756501,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.800000000019786,
+          "phase": "retreat",
+          "residual": 0.004909613336369689,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.250000000020336,
+          "phase": "retreat",
+          "residual": 0.004134111332736279,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.650000000020825,
+          "phase": "retreat",
+          "residual": 0.004561504827432006,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.05000000002131,
+          "phase": "retreat",
+          "residual": 0.004098925348847815,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.4500000000218,
+          "phase": "retreat",
+          "residual": 0.0035657334339604385,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.80000000002223,
+          "phase": "retreat",
+          "residual": 0.004577237491760783,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.15000000002266,
+          "phase": "retreat",
+          "residual": 0.004474965385474539,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.500000000023086,
+          "phase": "retreat",
+          "residual": 0.004159442786974249,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.85000000002351,
+          "phase": "retreat",
+          "residual": 0.0038594073616458335,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.20000000002394,
+          "phase": "retreat",
+          "residual": 0.003584465809047921,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.55000000002437,
+          "phase": "retreat",
+          "residual": 0.0033659505916405486,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.850000000024735,
+          "phase": "retreat",
+          "residual": 0.004999157629518983,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.20000000002516,
+          "phase": "retreat",
+          "residual": 0.003360692301980814,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.50000000002553,
+          "phase": "retreat",
+          "residual": 0.004724040388507572,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.800000000025896,
+          "phase": "retreat",
+          "residual": 0.004982541198072579,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.10000000002626,
+          "phase": "retreat",
+          "residual": 0.004915566815230796,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.40000000002663,
+          "phase": "retreat",
+          "residual": 0.004776593072313203,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.700000000026996,
+          "phase": "retreat",
+          "residual": 0.004629638571283394,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.00000000002736,
+          "phase": "retreat",
+          "residual": 0.004509853279512165,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.30000000002773,
+          "phase": "retreat",
+          "residual": 0.004408758724244361,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.600000000028096,
+          "phase": "retreat",
+          "residual": 0.004308157059084716,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.90000000002846,
+          "phase": "retreat",
+          "residual": 0.004233755257650615,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.20000000002883,
+          "phase": "retreat",
+          "residual": 0.004156841884828025,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.500000000029196,
+          "phase": "retreat",
+          "residual": 0.004106521288581078,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.80000000002956,
+          "phase": "retreat",
+          "residual": 0.004046627008372036,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.10000000002993,
+          "phase": "retreat",
+          "residual": 0.00400722789052857,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.400000000030296,
+          "phase": "retreat",
+          "residual": 0.003973295466706828,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.70000000003066,
+          "phase": "retreat",
+          "residual": 0.003941177489716063,
+          "controller_success": true
+        },
+        {
+          "sim_time": 63.00000000003103,
+          "phase": "retreat",
+          "residual": 0.0039069862314773385,
+          "controller_success": true
+        },
+        {
+          "sim_time": 63.300000000031396,
+          "phase": "retreat",
+          "residual": 0.0038849223456777493,
+          "controller_success": true
+        },
+        {
+          "sim_time": 64.00000000003224,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.004915627634284381
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 63.00000000003103,
+          "phase": "retreat",
+          "command": [
+            0.6972355485408326,
+            -0.5686655537828473,
+            -0.19741846911220445,
+            0.7678530825887884,
+            -0.00016764299805396623
+          ],
+          "measured": [
+            0.6972317516437928,
+            -0.569221993190076,
+            -0.19351148288072711,
+            0.7644268607819237,
+            -0.0001665357028670522
+          ],
+          "residual": 0.0039069862314773385,
+          "controller_success": true
+        },
+        {
+          "sim_time": 63.300000000031396,
+          "phase": "retreat",
+          "command": [
+            0.6972638954386082,
+            -0.5666336396258674,
+            -0.21553491082041468,
+            0.7839324891611164,
+            -0.00017350512324502965
+          ],
+          "measured": [
+            0.6972579847624454,
+            -0.5671679298139922,
+            -0.21164998847473693,
+            0.7805243123126353,
+            -0.00017250983524097285
+          ],
+          "residual": 0.0038849223456777493,
+          "controller_success": true
+        },
+        {
+          "sim_time": 64.00000000003224,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.004915627634284381
+        }
+      ]
+    },
+    {
+      "label": "learned_gain3",
+      "case": {
+        "id": "left:50g:0",
+        "layout": "left",
+        "seed": 1861000,
+        "mass_kg": 0.05,
+        "yaw_offset_rad": 0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.24979280095587936,
+            0.05900118419056325,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0010343119591263883,
+            -5.693450868747411e-06,
+            -1.4127644951802843e-05
+          ],
+          "witness_hand": [
+            0.2657602556204419,
+            0.07000521715668712,
+            0.23878524762536557,
+            0.8253343266966482,
+            -0.5646237085918007,
+            0.5646308085812077,
+            0.8253435847209536,
+            -0.003911416255074017,
+            0.0028345821572347517
+          ],
+          "placement_region": [
+            [
+              0.21979280095587936,
+              0.029001184190563252
+            ],
+            [
+              0.27979280095587933,
+              0.08900118419056324
+            ]
+          ]
+        },
+        "model_signature": "46ce9f3bf4e3965c845a8dfa1bd45d702e1729ee76b730ed0dc9810f4686f704",
+        "initial_qpos": [
+          -0.0010343119591263883,
+          -5.693450868747411e-06,
+          -0.00013613513483020062,
+          0.9999970831985121,
+          6.548255685768927e-05,
+          0.002414384879551337,
+          -7.22186128188609e-06,
+          4.59520418144124e-05,
+          -0.37403130107555493,
+          -0.02184660856323406,
+          0.3990521277285142,
+          9.779315747827556e-06,
+          0.3498873912861142,
+          -0.349900741188876,
+          -1.0620007885561043e-05,
+          -0.02536718137641168,
+          0.004518417946279037,
+          -0.0002171177813744958,
+          -0.09138690873709086,
+          0.28438653769500144,
+          -0.052945420710748876,
+          0.24313395347410247,
+          0.9999719968268571,
+          0.0012573445345733687,
+          0.007197203404053121,
+          -0.0016201573968565308,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          5.675133626956692e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "selector": "scripted_reference",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "base_drift_during_arm",
+      "stop_confirmed": true,
+      "policy_calls": 537,
+      "agent_terminal": null,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "base_drift_during_arm",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 5.036438498480153,
+        "contact_impulse": 234.4021913139092,
+        "contact": true,
+        "max_penetration": 0.0008432284054243344,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          2.0393298325663278e-05,
+          4.657276303790536e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          0.006798918991972457
+        ]
+      },
+      "motion_metrics": {
+        "samples": 603,
+        "duration_s": 30.099999999993614,
+        "hand_position_rms_m": 0.004606479214340466,
+        "hand_position_max_m": 0.007435740862444311,
+        "hand_rotation_rms_rad": 0.02004935971030686,
+        "hand_rotation_max_rad": 0.06620882700053635,
+        "arm_speed_max_rad_s": 0.01999898962363398,
+        "arm_velocity_command_error_rms_rad_s": 0.0014395813871213795,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.18481980541975568,
+        "arm_jerk_rms_rad_s3": 0.3266013873574857,
+        "arm_jerk_max_rad_s3": 4.998917551104697
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.450000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0013143748472124242,
+          "orientation_error_rad": 0.0023814207833825953,
+          "joint_witness_residual_rad": 0.0011742687272140485,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.90000000000198,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002725231062250925,
+          "orientation_error_rad": 0.011481283043292729,
+          "joint_witness_residual_rad": 0.06609247244322308,
+          "controller_success": true
+        },
+        {
+          "sim_time": 25.59999999999669,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002384010881348413,
+          "orientation_error_rad": 0.019096247526896128,
+          "joint_witness_residual_rad": 0.06980650599053916,
+          "controller_success": true
+        },
+        {
+          "sim_time": 25.949999999996496,
+          "phase": "gripper_settled",
+          "measured": 0.36177748474273363,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 26.949999999995942,
+          "phase": "lift",
+          "reference_replan": "measured_world_pose",
+          "accepted": true,
+          "reason": null,
+          "execution_ik_added": true,
+          "witness_position_error_m": 0.013509386958665357,
+          "witness_orientation_error_rad": 0.012852250668858294
+        },
+        {
+          "sim_time": 26.949999999995942,
+          "phase": "lift",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 31.149999999993614,
+          "phase": "lift",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "base_drift_during_arm",
+          "check": "measured_configuration"
+        }
+      ]
+    },
+    {
+      "label": "reference",
+      "case": {
+        "id": "right:20g:0",
+        "layout": "right",
+        "seed": 1861000,
+        "mass_kg": 0.02,
+        "yaw_offset_rad": -0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.2498218919322006,
+            -0.16485408808201746,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            -0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0009640054633338128,
+            -4.932190148013802e-06,
+            9.284661069111383e-05
+          ],
+          "witness_hand": [
+            0.26584180376274796,
+            -0.17575877057794548,
+            0.23875729884081665,
+            0.8253781123024062,
+            0.5645598403221233,
+            -0.5645658371055993,
+            0.8253880283886401,
+            -0.004048123685199973,
+            -0.002605626253347648
+          ],
+          "placement_region": [
+            [
+              0.2198218919322006,
+              -0.19485408808201746
+            ],
+            [
+              0.27982189193220064,
+              -0.13485408808201746
+            ]
+          ]
+        },
+        "model_signature": "fdd5c1c20f332f4d808418bfe18423b2f573e58d51ce25a02324a90f2e60c1ac",
+        "initial_qpos": [
+          -0.0009640054633338128,
+          -4.932190148013802e-06,
+          -0.00013553556144078532,
+          0.9999971018348052,
+          6.750209742119732e-05,
+          0.0024061640478344934,
+          4.626048068370673e-05,
+          3.635035196037852e-07,
+          -0.3740895334158756,
+          -0.021935610619412696,
+          0.3990145580531259,
+          -2.997133564785949e-07,
+          0.34939866298144384,
+          -0.3494048648351942,
+          -1.0635778343509418e-05,
+          -0.0030428410452761814,
+          -0.014812594034436815,
+          0.0022003188610619905,
+          -0.09154339539312738,
+          0.2844706886935954,
+          -0.05291695903734503,
+          0.24314927927513433,
+          0.9999697202837616,
+          0.00041817643483186087,
+          0.007748816959015801,
+          -0.0005826489671320427,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          6.431712599295586e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "selector": "scripted_reference",
+      "controller": "reference_teacher",
+      "success": true,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "policy_calls": 0,
+      "agent_terminal": null,
+      "failure_at": null,
+      "contact_metrics": {
+        "peak_contact_force": 3.0787522237227947,
+        "contact_impulse": 227.0487162150597,
+        "contact": true,
+        "max_penetration": 0.0002942759174137589,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.6082776626046389,
+          2.1452200438370777,
+          0.002159482920041306
+        ]
+      },
+      "motion_metrics": {
+        "samples": 1358,
+        "duration_s": 67.85000000002083,
+        "hand_position_rms_m": 0.001631686844690269,
+        "hand_position_max_m": 0.005604270038884755,
+        "hand_rotation_rms_rad": 0.006111370571242505,
+        "hand_rotation_max_rad": 0.02578810256904452,
+        "arm_speed_max_rad_s": 0.06488604167673838,
+        "arm_velocity_command_error_rms_rad_s": 0.010531068821358297,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.8695986476350555,
+        "arm_jerk_rms_rad_s3": 2.037029242156906,
+        "arm_jerk_max_rad_s3": 16.51553608837846
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "controller_success": true,
+          "residual": 0.0005421430437625961
+        },
+        {
+          "sim_time": 1.7500000000000013,
+          "phase": "pregrasp",
+          "residual": 0.004323324065035788,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.149999999999985,
+          "phase": "pregrasp",
+          "residual": 0.004356506165609815,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.5499999999999408,
+          "phase": "pregrasp",
+          "residual": 0.0038919158560558748,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.899999999999902,
+          "phase": "pregrasp",
+          "residual": 0.004908459451652192,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.2499999999998637,
+          "phase": "pregrasp",
+          "residual": 0.004818834902239236,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.599999999999825,
+          "phase": "pregrasp",
+          "residual": 0.004437016471983732,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.9499999999997866,
+          "phase": "pregrasp",
+          "residual": 0.004105152889604877,
+          "controller_success": true
+        },
+        {
+          "sim_time": 4.549999999999721,
+          "phase": "pregrasp_complete",
+          "controller_success": true,
+          "residual": 0.0032711678754178686
+        },
+        {
+          "sim_time": 4.849999999999688,
+          "phase": "grasp",
+          "residual": 0.003704646462462574,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.199999999999649,
+          "phase": "grasp",
+          "residual": 0.0036468100098464296,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.549999999999611,
+          "phase": "grasp",
+          "residual": 0.0033585691826682473,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.849999999999578,
+          "phase": "grasp",
+          "residual": 0.004830062552374809,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.199999999999539,
+          "phase": "grasp",
+          "residual": 0.0032710294744056623,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.799999999999473,
+          "phase": "grasp_complete",
+          "controller_success": true,
+          "residual": 0.0033978996117789706
+        },
+        {
+          "sim_time": 7.199999999999429,
+          "phase": "gripper_settled",
+          "measured": 0.3247744809519919,
+          "controller_success": true
+        },
+        {
+          "sim_time": 8.749999999999591,
+          "phase": "lift",
+          "residual": 0.00419043216734763,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.249999999999758,
+          "phase": "lift",
+          "residual": 0.004035356065112711,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.699999999999909,
+          "phase": "lift",
+          "residual": 0.00422197162226115,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.100000000000042,
+          "phase": "lift",
+          "residual": 0.004834268526458574,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.500000000000176,
+          "phase": "lift",
+          "residual": 0.004384457592015126,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.90000000000031,
+          "phase": "lift",
+          "residual": 0.0038554366881415197,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.250000000000426,
+          "phase": "lift",
+          "residual": 0.004985893280076051,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.600000000000543,
+          "phase": "lift",
+          "residual": 0.004891769923836414,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.95000000000066,
+          "phase": "lift",
+          "residual": 0.004574030272904581,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.300000000000777,
+          "phase": "lift",
+          "residual": 0.0042339410529828,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.650000000000894,
+          "phase": "lift",
+          "residual": 0.00394864805425893,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.00000000000101,
+          "phase": "lift",
+          "residual": 0.0037268999383721843,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.350000000001128,
+          "phase": "lift",
+          "residual": 0.0035358281817441176,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.700000000001245,
+          "phase": "lift",
+          "residual": 0.0033587202045624043,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.050000000001361,
+          "phase": "lift",
+          "residual": 0.0032169852156940376,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.400000000001478,
+          "phase": "lift",
+          "residual": 0.00311653828009055,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.700000000001578,
+          "phase": "lift",
+          "residual": 0.004997708690254149,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.050000000001695,
+          "phase": "lift",
+          "residual": 0.0032978908695415476,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.350000000001796,
+          "phase": "lift",
+          "residual": 0.00486618909573977,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.700000000001912,
+          "phase": "lift",
+          "residual": 0.003098472746089126,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.00000000000201,
+          "phase": "lift",
+          "residual": 0.004667411975725955,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.350000000001817,
+          "phase": "lift",
+          "residual": 0.0029465160728904816,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.65000000000165,
+          "phase": "lift",
+          "residual": 0.004513069216892346,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.950000000001484,
+          "phase": "lift",
+          "residual": 0.004922492247408816,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.250000000001318,
+          "phase": "lift",
+          "residual": 0.004917457635806699,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.550000000001152,
+          "phase": "lift",
+          "residual": 0.004863120673541055,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.850000000000986,
+          "phase": "lift",
+          "residual": 0.0047599463449631285,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.15000000000082,
+          "phase": "lift",
+          "residual": 0.0047013538137650746,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.450000000000653,
+          "phase": "lift",
+          "residual": 0.0046147883489161545,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.750000000000487,
+          "phase": "lift",
+          "residual": 0.004575213045390103,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.05000000000032,
+          "phase": "lift",
+          "residual": 0.004506244242701907,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.350000000000154,
+          "phase": "lift",
+          "residual": 0.004481847769413239,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.649999999999988,
+          "phase": "lift",
+          "residual": 0.004426094787654655,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.899999999999295,
+          "phase": "lift_complete",
+          "controller_success": true,
+          "residual": 0.004333551059249707
+        },
+        {
+          "sim_time": 25.84999999999655,
+          "phase": "preplace",
+          "residual": 0.0038415347991765103,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.299999999996302,
+          "phase": "preplace",
+          "residual": 0.004626959857129791,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.749999999996053,
+          "phase": "preplace",
+          "residual": 0.004010567912668003,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.14999999999583,
+          "phase": "preplace",
+          "residual": 0.004935574528815309,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.54999999999561,
+          "phase": "preplace",
+          "residual": 0.0046037577065673185,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.949999999995388,
+          "phase": "preplace",
+          "residual": 0.004127473518764774,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.349999999995166,
+          "phase": "preplace",
+          "residual": 0.0037102145321707136,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.749999999994944,
+          "phase": "preplace",
+          "residual": 0.0033719013103481743,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.149999999994723,
+          "phase": "preplace",
+          "residual": 0.003094550400817353,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.49999999999453,
+          "phase": "preplace",
+          "residual": 0.004811064101419987,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.849999999994335,
+          "phase": "preplace",
+          "residual": 0.004974664366763637,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.19999999999414,
+          "phase": "preplace",
+          "residual": 0.004798280309879999,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.549999999993947,
+          "phase": "preplace",
+          "residual": 0.004584266362995415,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.899999999993753,
+          "phase": "preplace",
+          "residual": 0.004399743194439809,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.24999999999356,
+          "phase": "preplace",
+          "residual": 0.004236970843044918,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.599999999993365,
+          "phase": "preplace",
+          "residual": 0.0041083781444168355,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.94999999999317,
+          "phase": "preplace",
+          "residual": 0.003995687361542266,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.29999999999351,
+          "phase": "preplace",
+          "residual": 0.003908038426647553,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.64999999999394,
+          "phase": "preplace",
+          "residual": 0.003833814709185368,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.999999999994365,
+          "phase": "preplace",
+          "residual": 0.0037625429958195733,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.34999999999479,
+          "phase": "preplace",
+          "residual": 0.0037182447111749894,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.69999999999522,
+          "phase": "preplace",
+          "residual": 0.003673506468341081,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.04999999999565,
+          "phase": "preplace",
+          "residual": 0.0036278663981209602,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.399999999996076,
+          "phase": "preplace",
+          "residual": 0.003603591843211462,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.749999999996504,
+          "phase": "preplace",
+          "residual": 0.0035783619234340813,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.09999999999693,
+          "phase": "preplace",
+          "residual": 0.0035551612129409715,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.44999999999736,
+          "phase": "preplace",
+          "residual": 0.0035461458858725425,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.79999999999779,
+          "phase": "preplace",
+          "residual": 0.003529805722735091,
+          "controller_success": true
+        },
+        {
+          "sim_time": 36.149999999998215,
+          "phase": "preplace",
+          "residual": 0.0035135376784068972,
+          "controller_success": true
+        },
+        {
+          "sim_time": 37.39999999999974,
+          "phase": "preplace_complete",
+          "controller_success": true,
+          "residual": 0.004452820766590704
+        },
+        {
+          "sim_time": 37.80000000000023,
+          "phase": "place",
+          "residual": 0.004791120572915364,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.20000000000072,
+          "phase": "place",
+          "residual": 0.004978664905136598,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.60000000000121,
+          "phase": "place",
+          "residual": 0.004416126633303374,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.0000000000017,
+          "phase": "place",
+          "residual": 0.0038580280234734032,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.350000000002126,
+          "phase": "place",
+          "residual": 0.004987495734602387,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.700000000002554,
+          "phase": "place",
+          "residual": 0.0049022819737657986,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.05000000000298,
+          "phase": "place",
+          "residual": 0.004568491263014535,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.40000000000341,
+          "phase": "place",
+          "residual": 0.0042345637607399955,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.75000000000384,
+          "phase": "place",
+          "residual": 0.003961169499927475,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.100000000004265,
+          "phase": "place",
+          "residual": 0.0037269559947149533,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.45000000000469,
+          "phase": "place",
+          "residual": 0.0035192636756515017,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.80000000000512,
+          "phase": "place",
+          "residual": 0.003360738091648663,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.15000000000555,
+          "phase": "place",
+          "residual": 0.0032186903513298087,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.500000000005976,
+          "phase": "place",
+          "residual": 0.0031148455295151173,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.8500000000064,
+          "phase": "place",
+          "residual": 0.003025092273541752,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.15000000000677,
+          "phase": "place",
+          "residual": 0.004942508528908575,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.5000000000072,
+          "phase": "place",
+          "residual": 0.003249072949245646,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.800000000007564,
+          "phase": "place",
+          "residual": 0.004821396902374556,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.15000000000799,
+          "phase": "place",
+          "residual": 0.0030691661368753486,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.45000000000836,
+          "phase": "place",
+          "residual": 0.004644692515699874,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.80000000000879,
+          "phase": "place",
+          "residual": 0.0029282975216651658,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.10000000000915,
+          "phase": "place",
+          "residual": 0.0045290658022054675,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.40000000000952,
+          "phase": "place",
+          "residual": 0.00491665655142233,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.70000000000989,
+          "phase": "place",
+          "residual": 0.0049470095899809274,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.00000000001025,
+          "phase": "place",
+          "residual": 0.004881209600056724,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.30000000001062,
+          "phase": "place",
+          "residual": 0.004801601739544359,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.600000000010986,
+          "phase": "place",
+          "residual": 0.004736532410409833,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.90000000001135,
+          "phase": "place",
+          "residual": 0.004667466457405484,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.20000000001172,
+          "phase": "place",
+          "residual": 0.004612562761592359,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.500000000012086,
+          "phase": "place",
+          "residual": 0.0045638716550493175,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.80000000001245,
+          "phase": "place",
+          "residual": 0.004528413728160485,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.10000000001282,
+          "phase": "place",
+          "residual": 0.004501356008762725,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.400000000013186,
+          "phase": "place",
+          "residual": 0.004471577890909295,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.70000000001355,
+          "phase": "place",
+          "residual": 0.0044502753310487475,
+          "controller_success": true
+        },
+        {
+          "sim_time": 49.90000000001502,
+          "phase": "place_complete",
+          "controller_success": true,
+          "residual": 0.00447908252148177
+        },
+        {
+          "sim_time": 51.35000000001679,
+          "phase": "release",
+          "controller_success": true
+        },
+        {
+          "sim_time": 52.10000000001771,
+          "phase": "retreat",
+          "residual": 0.004400732127784024,
+          "controller_success": true
+        },
+        {
+          "sim_time": 52.60000000001832,
+          "phase": "retreat",
+          "residual": 0.004046951501493812,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.05000000001887,
+          "phase": "retreat",
+          "residual": 0.0040973105215498795,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.45000000001936,
+          "phase": "retreat",
+          "residual": 0.004616654319089253,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.85000000001985,
+          "phase": "retreat",
+          "residual": 0.0041518185657888895,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.250000000020336,
+          "phase": "retreat",
+          "residual": 0.003611722927068989,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.60000000002076,
+          "phase": "retreat",
+          "residual": 0.004618082298950804,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.95000000002119,
+          "phase": "retreat",
+          "residual": 0.004499960199349173,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.30000000002162,
+          "phase": "retreat",
+          "residual": 0.004178451487889867,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.65000000002205,
+          "phase": "retreat",
+          "residual": 0.003871430349149302,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.000000000022474,
+          "phase": "retreat",
+          "residual": 0.0035999724509631903,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.3500000000229,
+          "phase": "retreat",
+          "residual": 0.003363920392165959,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.70000000002333,
+          "phase": "retreat",
+          "residual": 0.0031728888397403177,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.0000000000237,
+          "phase": "retreat",
+          "residual": 0.00484663326007137,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.350000000024124,
+          "phase": "retreat",
+          "residual": 0.003224820368395498,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.65000000002449,
+          "phase": "retreat",
+          "residual": 0.0046051795788732836,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.95000000002486,
+          "phase": "retreat",
+          "residual": 0.00487535359417372,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.250000000025224,
+          "phase": "retreat",
+          "residual": 0.004822857542639563,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.55000000002559,
+          "phase": "retreat",
+          "residual": 0.004688317170763704,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.85000000002596,
+          "phase": "retreat",
+          "residual": 0.004564138236317742,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.150000000026324,
+          "phase": "retreat",
+          "residual": 0.004442634905258092,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.45000000002669,
+          "phase": "retreat",
+          "residual": 0.004347196578394379,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.75000000002706,
+          "phase": "retreat",
+          "residual": 0.0042556641229743175,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.050000000027424,
+          "phase": "retreat",
+          "residual": 0.0041860669708227854,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.35000000002779,
+          "phase": "retreat",
+          "residual": 0.004117776936473375,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.65000000002816,
+          "phase": "retreat",
+          "residual": 0.004067223032012485,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.950000000028524,
+          "phase": "retreat",
+          "residual": 0.004016065812757819,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.25000000002889,
+          "phase": "retreat",
+          "residual": 0.003979273390155663,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.55000000002926,
+          "phase": "retreat",
+          "residual": 0.003940768559539065,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.850000000029624,
+          "phase": "retreat",
+          "residual": 0.003913962334653326,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.15000000002999,
+          "phase": "retreat",
+          "residual": 0.0038847271399217176,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.850000000030846,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.00490204258547533
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 61.850000000029624,
+          "phase": "retreat",
+          "command": [
+            -0.692519317409155,
+            -0.5626364841788186,
+            -0.20976032037789683,
+            0.774359141475701,
+            -7.991028385451762e-05
+          ],
+          "measured": [
+            -0.6925100245232368,
+            -0.5631336570929788,
+            -0.2058463580432435,
+            0.7709018928859817,
+            -7.618793687627202e-05
+          ],
+          "residual": 0.003913962334653326,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.15000000002999,
+          "phase": "retreat",
+          "command": [
+            -0.6925618178670553,
+            -0.5608489825820859,
+            -0.22784217909809593,
+            0.790550707142624,
+            -9.805288578059379e-05
+          ],
+          "measured": [
+            -0.6925546215521876,
+            -0.5613299262445187,
+            -0.2239574519581742,
+            0.7871115690124472,
+            -9.384878127353245e-05
+          ],
+          "residual": 0.0038847271399217176,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.850000000030846,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.00490204258547533
+        }
+      ]
+    },
+    {
+      "label": "learned_gain3",
+      "case": {
+        "id": "right:20g:0",
+        "layout": "right",
+        "seed": 1861000,
+        "mass_kg": 0.02,
+        "yaw_offset_rad": -0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.2498218919322006,
+            -0.16485408808201746,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            -0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0009640054633338128,
+            -4.932190148013802e-06,
+            9.284661069111383e-05
+          ],
+          "witness_hand": [
+            0.26584180376274796,
+            -0.17575877057794548,
+            0.23875729884081665,
+            0.8253781123024062,
+            0.5645598403221233,
+            -0.5645658371055993,
+            0.8253880283886401,
+            -0.004048123685199973,
+            -0.002605626253347648
+          ],
+          "placement_region": [
+            [
+              0.2198218919322006,
+              -0.19485408808201746
+            ],
+            [
+              0.27982189193220064,
+              -0.13485408808201746
+            ]
+          ]
+        },
+        "model_signature": "fdd5c1c20f332f4d808418bfe18423b2f573e58d51ce25a02324a90f2e60c1ac",
+        "initial_qpos": [
+          -0.0009640054633338128,
+          -4.932190148013802e-06,
+          -0.00013553556144078532,
+          0.9999971018348052,
+          6.750209742119732e-05,
+          0.0024061640478344934,
+          4.626048068370673e-05,
+          3.635035196037852e-07,
+          -0.3740895334158756,
+          -0.021935610619412696,
+          0.3990145580531259,
+          -2.997133564785949e-07,
+          0.34939866298144384,
+          -0.3494048648351942,
+          -1.0635778343509418e-05,
+          -0.0030428410452761814,
+          -0.014812594034436815,
+          0.0022003188610619905,
+          -0.09154339539312738,
+          0.2844706886935954,
+          -0.05291695903734503,
+          0.24314927927513433,
+          0.9999697202837616,
+          0.00041817643483186087,
+          0.007748816959015801,
+          -0.0005826489671320427,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          6.431712599295586e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "selector": "scripted_reference",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "stop_confirmed": true,
+      "policy_calls": 543,
+      "agent_terminal": null,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.692514721780548,
+        "contact_impulse": 239.81757308941624,
+        "contact": true,
+        "max_penetration": 0.0017420862389238012,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          2.2660790362082073e-05,
+          3.763132217789178e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.1453835946390432
+        ]
+      },
+      "motion_metrics": {
+        "samples": 586,
+        "duration_s": 29.249999999994085,
+        "hand_position_rms_m": 0.004967951868718883,
+        "hand_position_max_m": 0.008164606660729549,
+        "hand_rotation_rms_rad": 0.027079936299817402,
+        "hand_rotation_max_rad": 0.10039020752255254,
+        "arm_speed_max_rad_s": 0.021680163534247118,
+        "arm_velocity_command_error_rms_rad_s": 0.0016710926833417967,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.4761660547379417,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.800000000001278,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0023936124959023876,
+          "orientation_error_rad": 0.011864951536026071,
+          "joint_witness_residual_rad": 0.06046423875762147,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.299999999997965,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0025532493374299395,
+          "orientation_error_rad": 0.01959040721623303,
+          "joint_witness_residual_rad": 0.06780284367750733,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.64999999999777,
+          "phase": "gripper_settled",
+          "measured": 0.36108513772854256,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 24.649999999997217,
+          "phase": "lift",
+          "reference_replan": "measured_world_pose",
+          "accepted": true,
+          "reason": null,
+          "execution_ik_added": true,
+          "witness_position_error_m": 0.012752814576669358,
+          "witness_orientation_error_rad": 0.013359183334939241
+        },
+        {
+          "sim_time": 24.649999999997217,
+          "phase": "lift",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 30.299999999994085,
+          "phase": "lift",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "cartesian_path_tracking_envelope",
+          "position_error_m": 0.008074706379303331,
+          "orientation_error_rad": 0.10039020752255254
+        }
+      ]
+    }
+  ],
+  "uncompressed_sha256": "0f2c77dfb134670696f6cbd6e242178bd61db1845db3bec4ff0e4d39c6c826fe",
+  "full_report_archive": "paper/data/whole_body_control/agent_controller_v1/final_comparison.json.gz"
+}

@@ -5,6 +5,18 @@ from emet.agent.tool_outcome import ToolOutcome
 from emet.controller.task.tamp.api import TAMP_TOOLS
 
 
+def serial_tamp_calls(tool_calls: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Defer later proposals in all-TAMP batches until the first result is seen.
+
+    Planning produces fresh handles that cannot be known by a precomputed
+    execution call. Deferred proposals are logged, never automatically queued.
+    Mixed capability batches retain the dispatcher's existing stop semantics.
+    """
+    if len(tool_calls) > 1 and all(call.get('name') in TAMP_TOOLS for call in tool_calls):
+        return tool_calls[:1], tool_calls[1:]
+    return tool_calls, []
+
+
 def tamp_followup(user_goal: str, results: list[str]) -> str | None:
     """Continue only a wholly successful TAMP batch; otherwise keep summarize-only.
 

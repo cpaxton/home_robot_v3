@@ -1,0 +1,8 @@
+{
+  "new_ppo_steps": 17408,
+  "candidate": "logs/manipulation/hold-rotation-feedback-v7-grip-hold/seed-64/step-17408",
+  "source_note": "v6 16384 steps precede the explicit close-during-hold fix; v7 exact continuation adds 1024 steps with final control sources. Neither is promoted.",
+  "full_report_archive": "paper/data/whole_body_control/hold_rotation_training_v3.json.gz",
+  "uncompressed_sha256": "a2faf82bfcac419ecee9646a0582d21c03d2db867e15eb96dff591b0f3817bd0",
+  "safety_promoted": false
+}

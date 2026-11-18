@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_followup",
+  "runner": "scripts/eval_tamp_contact_stability.py",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "scope": "Native asynchronous Stretch tool reference; privileged release-search diagnostic, zero agent/VLM calls",
+  "policy": "fine_yaw",
+  "payload_binding": "verified_lift",
+  "release_policies": ["legacy", "bounded"],
+  "max_release_raise_m": 0.04,
+  "max_release_drop_m": 0.04,
+  "opening_lift_axis_vertical_reserve_m": 0.003,
+  "nominal_release_height_offsets_m": [0.003, 0.006, 0.01],
+  "maximum_measured_corrections": 2,
+  "startup_settle_sim_s": 6.0,
+  "hardware_trials": false,
+  "production_policy_changed": false,
+  "old_failed_episodes_unchanged": true,
+  "same_final_footprint_support_settling_goals": true,
+  "episodes": [
+    {"id": "shift-legacy", "case_id": "two-goal-shift", "release_policy": "legacy", "port_offset": 2020},
+    {"id": "shift-bounded", "case_id": "two-goal-shift", "release_policy": "bounded", "port_offset": 2030},
+    {"id": "control-legacy", "case_id": "two-goal-control", "release_policy": "legacy", "port_offset": 2040},
+    {"id": "control-bounded", "case_id": "two-goal-control", "release_policy": "bounded", "port_offset": 2050}
+  ],
+  "limitations": [
+    "Nominal initial fixture is matched, but asynchronous measured initial states are not bit-identical",
+    "The fixed-orientation vertical release sweep is sampled static collision validation, not a dynamics proof",
+    "Opening reserve certifies one additional lift-axis pose, not a full uncertainty tube",
+    "Measured native opening/contact verification is simulator ground truth debug, not a hardware sensor claim",
+    "Maximum two concurrent CPU simulators; no local GPU or model inference"
+  ]
+}
