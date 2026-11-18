@@ -12,6 +12,7 @@ from uuid import uuid4
 import numpy as np
 
 from emet.controller.dynamem.constants import (
+    DYNAMEM_HEAD_ARRIVAL_TOL_RAD,
     DYNAMEM_HEAD_SETTLE_S,
     DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S,
     DYNAMEM_HEAD_SWEEP_MAX_WAIT_S,
@@ -198,7 +199,7 @@ def inspect_floor(agent, **options):
         base_before = np.asarray(get_base(), dtype=float).copy()
         out = observe_floor(agent, **options)
         current = np.asarray(getter(), dtype=float)
-        if np.allclose(current, previous, atol=0.12):
+        if np.allclose(current, previous, atol=DYNAMEM_HEAD_ARRIVAL_TOL_RAD):
             return out
         moved = robot.head_to(*previous, blocking=True)
         if moved is False:
@@ -206,7 +207,11 @@ def inspect_floor(agent, **options):
         deadline = time.monotonic() + 5.0
         while True:
             measured = np.asarray(getter(), dtype=float)
-            if measured.shape == (2,) and np.isfinite(measured).all() and np.max(abs(measured - previous)) <= 0.12:
+            if (
+                measured.shape == (2,)
+                and np.isfinite(measured).all()
+                and np.max(abs(measured - previous)) <= DYNAMEM_HEAD_ARRIVAL_TOL_RAD
+            ):
                 break
             if time.monotonic() >= deadline:
                 raise RuntimeError("head restoration unconfirmed")
@@ -267,83 +272,16 @@ def _observe_floor(
     bounds = floor_head_bounds(getattr(agent, "robot", None))
     if bounds is None:
         return {"ok": False, "status": "floor_gaze_unavailable"}
-    if pan_rad is not None and (
-        isinstance(pan_rad, bool)
-        or not isinstance(pan_rad, (int, float))
-        or not np.isfinite(pan_rad)
-        or not bounds[0][0] <= pan_rad <= bounds[0][1]
-    ):
-        return {"ok": False, "status": "invalid_head_pan"}
-    if (
-        isinstance(tilt_rad, bool)
-        or not isinstance(tilt_rad, (int, float))
-        or not np.isfinite(tilt_rad)
-        or not bounds[1][0] <= tilt_rad <= bounds[1][1]
-    ):
-        return {"ok": False, "status": "invalid_head_tilt"}
+    from .head_observation import capture_head_view
+
+    receipt, obs = capture_head_view(agent, pan_rad=pan_rad, tilt_rad=tilt_rad, bounds=bounds, require_depth=True)
+    if not receipt["ok"]:
+        return receipt
     robot = agent.robot
-    if not all(callable(getattr(robot, method, None)) for method in ("head_to", "get_pan_tilt")):
-        return {"ok": False, "status": "unsupported_head_observation"}
-    if not isinstance(getattr(robot, "_seq_id", None), int):
-        return {"ok": False, "status": "observation_freshness_unavailable"}
-    pan, _ = robot.get_pan_tilt()
-    if pan_rad is not None:
-        pan = float(pan_rad)
-    if not np.isfinite(pan):
-        return {"ok": False, "status": "head_pose_unconfirmed"}
-    tilt = float(tilt_rad)
-    get_base_pose = getattr(robot, "get_base_pose", None)
-    if not callable(get_base_pose):
-        return {"ok": False, "status": "base_pose_unavailable"}
-    base_before = np.asarray(get_base_pose(), dtype=float)
-    if base_before.shape != (3,) or not np.isfinite(base_before).all():
-        return {"ok": False, "status": "base_pose_unavailable"}
-    moved = robot.head_to(float(pan), tilt, blocking=True)
-    if moved is False:
-        return {"ok": False, "status": "head_motion_failed"}
-    sequence = robot._seq_id  # Require a frame received after motion completion.
-    wait_post_motion_obs(robot, timeout=5.0)
-    if robot._seq_id <= sequence:
-        return {"ok": False, "status": "stale_observation"}
-    measured = np.asarray(robot.get_pan_tilt(), dtype=float)
-    deadline = time.monotonic() + 5.0
-    # Some adapters acknowledge head_to before the mechanism arrives. Close
-    # the observation loop on measured pose, without widening its tolerance.
-    while np.isfinite(measured).all() and np.max(np.abs(measured - [pan, tilt])) > 0.12:
-        if time.monotonic() >= deadline:
-            break
-        time.sleep(0.05)
-        measured = np.asarray(robot.get_pan_tilt(), dtype=float)
-    if not np.isfinite(measured).all() or np.max(np.abs(measured - [pan, tilt])) > 0.12:
-        return {
-            "ok": False,
-            "status": "head_pose_unconfirmed",
-            "observation": {
-                "requested_head_pan_tilt_rad": [pan, tilt],
-                "measured_head_pan_tilt_rad": measured.tolist(),
-            },
-        }
-    # Waiting for joint arrival may have consumed the first fresh image. Require
-    # another frame after the verified pose before mapping that view.
-    sequence = robot._seq_id
-    wait_post_motion_obs(robot, timeout=5.0)
-    if robot._seq_id <= sequence:
-        return {"ok": False, "status": "stale_observation"}
-    base_after = np.asarray(get_base_pose(), dtype=float)
-    if base_after.shape != (3,) or not np.isfinite(base_after).all():
-        return {"ok": False, "status": "base_pose_unavailable"}
-    yaw_delta = np.arctan2(np.sin(base_after[2] - base_before[2]), np.cos(base_after[2] - base_before[2]))
-    if np.linalg.norm(base_after[:2] - base_before[:2]) > float(getattr(agent, "pos_err_threshold", 0.02)) or abs(
-        yaw_delta
-    ) > float(getattr(agent, "rot_err_threshold", 0.03)):
-        return {
-            "ok": False,
-            "status": "base_moved_during_head_observation",
-            "observation": {"base_before_xyt": base_before.tolist(), "base_after_xyt": base_after.tolist()},
-        }
-    obs = robot.get_observation()
-    if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
-        return {"ok": False, "status": "calibrated_depth_unavailable"}
+    detail = receipt["observation"]
+    measured = np.asarray(detail["measured_head_pan_tilt_rad"])
+    base_before = np.asarray(detail["base_before_xyt"])
+    base_after = np.asarray(detail["base_after_xyt"])
     before = len(agent.voxel_map.observations)
     plan = getattr(agent, "_last_nav_plan", None) or {}
     checked_pose = plan.get("footprint", {}).get("checked_pose")
@@ -427,6 +365,10 @@ def wait_post_motion_obs(robot, timeout: float) -> None:
     the previous heading. Stretch has no ``wait_for_obs``; both clients expose
     ``_seq_id`` from the recv thread — wait until that increments.
     """
+    fresh_capture = getattr(robot, "wait_for_fresh_observation", None)
+    if callable(fresh_capture):
+        fresh_capture(timeout=timeout)
+        return
     if hasattr(robot, "wait_for_obs"):
         robot.wait_for_obs(timeout=timeout)
     prev = getattr(robot, "_seq_id", None)

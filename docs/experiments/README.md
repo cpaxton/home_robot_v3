@@ -1,5 +1,67 @@
 # Paper experiments — master index
 
+**PR #247 review (2026-11-17):** [Main reconciliation and source-bound verification](pr247_review_20261117.md)
+records conflict resolutions, review fixes, 1,776 passing tests with one optional
+Habitat skip, a separate passing configuration probe and the 73-page paper build.
+These are software/integration checks, not new learned task-quality results.
+
+**Baseline design (2026-10-29):** [Shared-agent literature review and baseline matrix](shared_agent_literature_review_20261029.md)
+covers images-only/retrieval controls, minimal active tools, GraphEQA adaptation
+versus reproduction, and the closest memory/navigation/manipulation work.
+
+**Model API connection (2026-10-30):** [GraphEQA fork and paired context smoke](grapheqa_model_api_connection_20261030.md)
+records the real Qwen API check, supplied-model runner, input restrictions and
+remaining active-execution gates. Frozen-context inference is not active EQA.
+
+**Active baseline qualification (2026-10-30):** [Sensor-only GraphEQA connection](grapheqa_active_qualification_20261030.md)
+records passing short movement gates, floor calibration and independent image
+attachments. Its three-case model diagnostic still fails active acceptance;
+the matched captured-history comparison is 0/3 in each condition. Keep these
+qualification results separate from the main shared-harness EQA benchmarks.
+
+**Review and planner-contract probes (2026-10-31):** [GraphEQA review disposition and live follow-up](grapheqa_review_and_contract_probe_20261031.md)
+records 42 passing fork tests and the reviewed native stream replay. Frozen
+ordering probes suggested actions, but fresh one/four-view checks still stopped
+wrong without motion. The default field-order change was reverted; active
+acceptance and matched physical contracts remain open.
+
+**Interaction audit (2026-11-01):** [GraphEQA decoding, history and frontier registry](grapheqa_decoding_control_20261101.md)
+records a real model-selected arrival, bounded-retry/trace repairs, and selected
+follow-up format improvement from 1/6 to 6/6 valid replies. Native replay confirms
+the graph exposes only callable frontiers. Tests pass (46 fork / 25 emet), but
+the final two-case live check has zero successful answers. The connection is
+qualified; task failures remain results, and matched evaluation is separate work.
+No answer/action override is added.
+
+**Navigation repair acceptance (2026-11-06):** [Calibration, checked routes and acquisition](sensor_navigation_repairs_20261106.md)
+passes q2/q6/q12 (six measured arrivals and complete scans at 137/138/139 of 200
+actions), the independent 180-degree turn, unknown-goal rejection and ordinary
+Habitat renderer preflight. Source-linked figures and a reproducible validator
+retain the failed controls. This is navigation acceptance, not EQA/OVMM quality.
+
+**Initial task-independent acquisition (2026-11-06):** [RGB-D history and physical gates](exploration_history_20261106.md)
+records 486 frames across three development scenes; 0/2, 1/2 and 2/2 frontier
+legs complete. Floor-conflict and odometry-turn guards remain explicit failures.
+Saving geometry sampling RNG makes a separate q2 map replay exact. Source-linked
+panels and hashes are retained; no answer model runs and no EQA gain is claimed.
+
+**Frozen paired answering (2026-11-03):** [Three answer paths on identical PNG packets](frozen_eqa_comparison_20261103.md)
+records 36 planned trials with matched output allowances and counted helper calls.
+Images-only / GraphEQA / emet packet answer counts are 0/12, 1/12, 1/12 on four
+correlated development snapshots; mean answer-path times are 2.44 / 11.97 / 3.61 s.
+The packet audit passes and figures expose limited target coverage. This tests
+answer/context modules, not full active-agent performance or representative accuracy.
+
+**Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
+[proposed controlled capability suite](harness_capability_benchmark.md).
+The current shared-harness development pilot is separate from historical
+controller results. The [2026-10-29 frozen-main benchmark refresh](benchmark_refresh_20261029.md)
+now has serial idle-GPU admission and source-linked figure exports; its full matrix
+takes multiple windows. New live Stretch cases use the existing CHAT agent.
+The [refresh failure audit](benchmark_failure_audit_20261029.md) separates the
+DynaMem exception, Molmo execution-mode mismatch, and navigation/verification
+diagnostics from task-quality results.
+
 **Status (2026-10-12):** [Main, open PRs, and paper evidence](../project_status.md)
 is the current inventory. The matrix below lists available harnesses and smokes;
 it does not mean every paper result is complete. Historical HM-EQA results exist,

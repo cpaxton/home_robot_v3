@@ -3,6 +3,35 @@
 Qualify the same harness across EQA and OVMM. Model correctness, geometry
 admission, motion safety and task completion are separate outcomes.
 
+Live operator qualification on 2026-11-16 exposed two additional gaps: measured
+head arrival through the rby1/Galaxea-proxy bridge, and failed FIND feedback to
+the coordinator. FIND now has passing controlled production CHAT/HTTP cases
+in `test_chat_camera_history.py::test_chat_find_result_reaches_next_model_request`,
+covering success and failure. Single execution and detailed navigation feedback
+are checked in `test_dispatch_tool_calls.py`; task failure independent of
+executor liveness is checked in `test_dynamem_sim_manip_gating.py`. Live retry
+now confirms head/floor recovery but still lacks admitted target geometry. A
+separate furnished-scene probe confirms all four requested head configurations;
+the earlier runs had dead physics despite live publication. The fast progress
+gate is `src/test/motion/test_sim_physics_progress.py` (CPU MuJoCo, no renderer
+or model). Keep these separate gates;
+process exit-zero does not pass them. See the
+[operator report](../experiments/independent_operator_trial_20261116.md) for
+exact actions, source pin, receipt paths and the proposed repair tests.
+
+Current-view `ground_object` is covered by `test_ground_object.py`,
+`test_query_grounding.py` and the real CHAT/HTTP cases in
+`test_chat_camera_history.py`. They distinguish admitted object geometry from
+search anchors, preserve abstention/provenance and verify that explicit object
+constraints reach the VLM prompt. A bounded recorded RGB-D check exercises real
+Qwen/SAM2 providers with manually inspected masks; see
+[grounding qualification](../experiments/coordinator_grounding_20261116.md).
+Live snapshot association now passes two grounding calls; a manually inspected
+foreground-stool control admits geometry, while the clipped microwave still
+abstains. See [decision-view qualification](../experiments/decision_view_handoff_20261117.md).
+This parent-operated diagnostic does not pass the microwave task or paired
+benchmark gates.
+
 ## Fast cross-tool integration gate
 
 ```bash
@@ -42,6 +71,11 @@ wheel-control, rendered-image, mapping-sensor or VLM acceptance.
 | OBS-05 | Partial/no motion: report measured rather than requested travel; capture actual outcome even after failure. | `test_validated_relative_motion.py`, `test_agent_relative_motion.py` |
 | OBS-06 | Stale recovery: new attempts have distinct plan identity; receipt mutation cannot alter recovery geometry. | Cross-tool receipt-isolation case and `test_agentic_floor_recovery.py` |
 | OBS-07 | Bounded sensing: measured head arrival and fresh acquisition required; missing depth is not free floor. | `test_floor_recovery.py` |
+| OBS-08 | Camera changes during inference: ground the decision's owned RGB-D/calibration, preserve history and return matching source identity. Missing camera cannot reuse a prior turn. | `test_chat_camera_history.py`, `test_camera_snapshot.py`; two live association checks pass |
+| OBS-09 | Map reset during inference: reject old-scope decision before map insertion/geometry admission and clear prior grounding. | `test_query_grounding.py`; CHAT scope propagation in `test_chat_camera_history.py`; CPU-qualified |
+| OBS-10 | Production voxel frame is immutable: metadata annotation must preserve snapshot association through real admission and cache write. | `test_query_grounding.py::test_coordinator_supplied_snapshot_reaches_admission_without_recapture`; live positive control at `25534704` |
+| OBS-11 | Explicit task gaze honors angles/limits, leaves the head at the measured pose, rejects stale frames and base drift. Floor constraints and default scan/caption remain separate. | `test_task_gaze.py`; real CHAT/HTTP success/rejection in `test_chat_camera_history.py`; [bounded live qualification](../experiments/task_gaze_qualification_20261117.md) |
+| OBS-12 | Clearance diagnostics convert the local robot pose to the planning world before querying the map. Missing conversion cannot fabricate a value. | `test_navigation_diagnostic_frames.py`; CPU-qualified follow-up to the live diagnostic |
 
 The new cross-tool cases use real movement/recovery/grounding functions with
 controlled planner, semantic-response and map inputs. They are not physics,

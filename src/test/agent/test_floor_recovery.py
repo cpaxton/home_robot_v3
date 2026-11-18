@@ -281,7 +281,9 @@ def test_floor_observation_requires_fresh_measured_capture(
 
 @pytest.mark.parametrize("pan_rad", [float("nan"), float("inf"), -1.01, 1.01, True, "left"])
 def test_floor_observation_rejects_invalid_pan_before_motion(pan_rad):
-    assert look.observe_floor(SimpleNamespace(), pan_rad=pan_rad) == {"ok": False, "status": "invalid_head_pan"}
+    out = look.observe_floor(SimpleNamespace(), pan_rad=pan_rad)
+    assert not out["ok"] and out["status"] == "invalid_head_pan"
+    assert out["observation"]["head_inspection_bounds_rad"]["pan"] == [-1, 1]
 
 
 @pytest.mark.parametrize(
@@ -298,4 +300,6 @@ def test_floor_observation_reports_bridge_failure_without_mapping(error):
 
 @pytest.mark.parametrize("tilt_rad", [float("nan"), float("inf"), -1.41, -0.69, True, "down"])
 def test_floor_observation_rejects_invalid_tilt_before_motion(tilt_rad):
-    assert look.observe_floor(SimpleNamespace(), tilt_rad=tilt_rad) == {"ok": False, "status": "invalid_head_tilt"}
+    out = look.observe_floor(SimpleNamespace(), tilt_rad=tilt_rad)
+    assert not out["ok"] and out["status"] == "invalid_head_tilt"
+    assert out["observation"]["head_inspection_bounds_rad"]["tilt"] == [-1.4, -0.7]

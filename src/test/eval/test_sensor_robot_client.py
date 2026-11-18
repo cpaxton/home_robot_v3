@@ -1,0 +1,228 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from emet.eval.grapheqa_navigation import ObservedSpaceNavigation, predicted_camera_pose
+from emet.eval.grapheqa_sensor import command_camera_pose
+from emet.eval.sensor_robot_client import SensorRobotClient
+
+
+class Sensor:
+    def __init__(self):
+        self.actions = []
+        self.last = {
+            "camera_pose": command_camera_pose(yaw_deg=90, tilt_deg=-30, sensor_height=1.5),
+            "rgb": np.zeros((8, 10, 3), np.uint8),
+            "depth": np.ones((8, 10), np.float32),
+            "camera_K": np.eye(3),
+            "sequence": 1,
+            "timestamp_ns": 12,
+            "collided": False,
+        }
+
+    def capture(self):
+        self.last = {**self.last, "sequence": self.last["sequence"] + 1}
+        return self.last
+
+    def step(self, action, amount):
+        self.actions.append((action, amount))
+        self.last["camera_pose"] = predicted_camera_pose(self.last["camera_pose"], action, amount)
+        return self.capture()
+
+
+def robot():
+    nav = ObservedSpaceNavigation()
+    nav.update = lambda frame: None
+    return SensorRobotClient(Sensor(), nav)
+
+
+def test_observation_uses_only_sensor_estimate_and_declares_acquisition():
+    client = robot()
+    obs = client.get_observation()
+    np.testing.assert_allclose(obs.compass, [np.pi / 2])
+    np.testing.assert_array_equal(obs.camera_pose, client.sensor.last["camera_pose"])
+    assert obs.semantic is None and obs.emet_session is None
+    assert obs.image_timing["head_cam_left"]["timestamp_ns"] == 12
+    assert obs.seq_id == client._seq_id == 2
+    assert not hasattr(client, "_sim") and not hasattr(client, "find_path_to_xy")
+    assert client.get_footprint() is client.navigation.footprint
+
+
+def test_tracking_loss_never_becomes_command_pose():
+    client = robot()
+    client.sensor.last["camera_pose"] = None
+    with pytest.raises(RuntimeError, match="tracking lost"):
+        client.get_base_pose()
+
+
+def test_relative_motion_converts_using_measured_heading():
+    client = robot()
+    routes = []
+    client.executor.execute = lambda route: routes.append(route) or {"success": False, "reason": "unknown_floor"}
+    assert client.move_base_to([1, 0, 0], relative=True) is False
+    np.testing.assert_allclose(routes[0][0], [0, 1, np.pi / 2], atol=1e-12)
+    assert client.last_motion_failed() and not client.at_goal()
+
+
+def test_impossible_gaze_rejects_without_motion_or_false_feedback():
+    client = robot()
+    before = client.get_pan_tilt()
+    assert client.head_to(0.3, -0.5) is False
+    assert client.head_to(0, 0.5) is False
+    assert client.sensor.actions == []
+    assert client.get_pan_tilt() == before
+    assert not client.get_head_capability().contains([0.3, -0.5])
+
+
+def test_supported_head_motion_uses_bounded_measured_steps():
+    client = robot()
+    assert client.head_to(0, np.deg2rad(-42))
+    assert all(amount <= 5 for _, amount in client.sensor.actions)
+    assert np.isclose(client.get_pan_tilt()[1], np.deg2rad(-42))
+    assert client._seq_id > 1
+
+
+def test_synchronous_post_motion_wait_acquires_real_fresh_frame(monkeypatch):
+    from emet.controller.dynamem import look
+
+    client = robot()
+    before = client._seq_id
+    monkeypatch.setattr(look.time, "sleep", lambda _: pytest.fail("Must acquire, not wait for a nonexistent receiver"))
+    look.wait_post_motion_obs(client, timeout=1)
+    assert client._seq_id > before
+
+
+def test_sensor_body_does_not_pretend_manipulation_is_supported():
+    with pytest.raises(NotImplementedError, match="no manipulator"):
+        robot().move_to_manip_posture()
+
+
+def test_motion_cap_returns_partial_receipt_and_keeps_final_camera_available():
+    from emet.eval.exploration_history import RecordedSensor
+    from emet.eval.grapheqa_navigation import HabitatMotionExecutor
+
+    raw = Sensor()
+    sensor = RecordedSensor(raw, lambda *args: None, max_primitives=1, max_seconds=10)
+    navigation = SimpleNamespace(space=SimpleNamespace(is_valid=lambda pose: True), update=lambda frame: None)
+    executor = HabitatMotionExecutor(sensor, navigation)
+    assert executor.move_base_to([0, 0.3, np.pi / 2], blocking=True, world_frame=True, timeout=10) is False
+    assert executor._command_receipt["result"]["reason"] == "motion_budget_exhausted"
+    assert sensor.primitive_count == 1 and len(raw.actions) == 1
+    before = sensor.last["sequence"]
+    frame = sensor.capture()
+    assert frame["sequence"] > before
+    np.testing.assert_allclose(frame["camera_pose"][:2, 3], [0, 0.1], atol=1e-12)
+
+
+def test_head_cap_preserves_partial_measured_pose_without_more_motion():
+    from emet.eval.exploration_history import RecordedSensor
+
+    client = robot()
+    client.sensor = RecordedSensor(client.sensor, lambda *args: None, max_primitives=1, max_seconds=10)
+    assert client.head_to(0, np.deg2rad(-45)) is False
+    assert client.sensor.primitive_count == 1
+    assert np.isclose(client.get_pan_tilt()[1], np.deg2rad(-35))
+    assert client.get_observation() is not None
+
+
+def test_navigation_sampling_does_not_share_model_cpu_rng(monkeypatch):
+    import torch
+
+    from emet.eval.grapheqa_navigation import ObservedSpaceNavigation
+
+    draws = []
+    frame = Sensor().last
+    for seed in (13, 42):
+        nav = ObservedSpaceNavigation()
+        monkeypatch.setattr(nav.map, "add", lambda **kwargs: draws.append(torch.rand(5)))
+        monkeypatch.setattr(nav.map, "get_navigation_map", lambda: (torch.zeros((256, 256), dtype=torch.bool),) * 2)
+        torch.manual_seed(seed)
+        before = torch.get_rng_state().clone()
+        nav.update(frame)
+        assert torch.equal(torch.get_rng_state(), before)
+    assert torch.equal(*draws)
+
+
+def test_factory_keeps_production_agent_and_model_final_contract(tmp_path, monkeypatch):
+    from emet.eval import sensor_agent, stack
+
+    captured = {}
+    client = robot()
+    grid = client.navigation.map
+    production = SimpleNamespace(
+        graph_memory=SimpleNamespace(),
+        voxel_map=SimpleNamespace(
+            grid_size=grid.grid_size, grid_resolution=grid.grid_resolution, grid_origin=grid.grid_origin
+        ),
+        sensor_builder=None,
+    )
+
+    def build(**kwargs):
+        captured.update(kwargs)
+        return production
+
+    remote = object()
+    monkeypatch.setattr(stack, "build_memory_agent", build)
+    monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: remote)
+    agent, transport = sensor_agent.build_sensor_agent(
+        client, {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
+    )
+    assert agent is production and transport is remote
+    assert captured["robot"] is client and captured["backend"] == "lazy_graph"
+    assert captured["use_instance_graph"] is False
+    assert captured["server_ip"] == "127.0.0.1"
+    assert captured["parameters"].get("eqa/agentic_decision_policy") == "model_final"
+    assert captured["parameters"].get("eqa/habitat_perfect_nav") is False
+    assert agent.graph_memory.eqa_client._vl is remote
+    assert agent.voxel_map.eqa_client is agent.graph_memory.eqa_client
+    assert agent.space is client.navigation.space
+    assert agent.planner.space is client.navigation.space
+    assert agent.planner.min_clearance_m == 0
+    ObservedSpaceNavigation.update(client.navigation, client.sensor.last)
+    agent.planner.reset()
+    assert agent.space.is_valid(client.get_base_pose())
+
+
+def test_production_controller_initializes_without_a_manipulation_server(tmp_path, monkeypatch):
+    from emet.eval import sensor_agent
+
+    # Exercise real controller construction; only weights and HTTP are mocked.
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    monkeypatch.setattr("emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder", lambda **kwargs: None)
+    monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: object())
+    client = robot()
+    agent, _ = sensor_agent.build_sensor_agent(
+        client, {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
+    )
+    try:
+        assert type(agent).__name__ == "LazyGraphController"
+        assert agent._use_instance_memory is False
+        assert agent.parameters.get("eqa/agentic_decision_policy") == "model_final"
+        assert agent.space is client.navigation.space
+        assert agent.voxel_map.grid_resolution == client.navigation.map.grid_resolution
+        np.testing.assert_array_equal(agent.voxel_map.grid_origin, client.navigation.map.grid_origin)
+        xy = np.array([0.4, 2.0])
+        cell = agent.space.voxel_map.xy_to_grid_coords(xy)
+        np.testing.assert_allclose(agent.voxel_map.grid_coords_to_xy(cell), xy, atol=1e-6)
+    finally:
+        context = agent.manip_socket.context
+        agent.manip_socket.close(linger=0)
+        context.term()
+
+
+def test_grid_mismatch_fails_before_any_model_transport_is_created(tmp_path, monkeypatch):
+    import torch
+
+    from emet.eval import sensor_agent, stack
+
+    wrong_grid = SimpleNamespace(grid_resolution=0.1, grid_size=[1024, 1024], grid_origin=torch.tensor([512, 512, 0]))
+    monkeypatch.setattr(stack, "build_memory_agent", lambda **kwargs: SimpleNamespace(voxel_map=wrong_grid))
+    monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: pytest.fail("Grid must be checked first"))
+    with pytest.raises(ValueError, match="grids must share"):
+        sensor_agent.build_sensor_agent(
+            robot(), {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
+        )

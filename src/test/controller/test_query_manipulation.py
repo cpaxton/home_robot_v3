@@ -15,6 +15,7 @@ from emet.memory.query_candidates import QueryCandidates
 
 def executor():
     task = object.__new__(DynamemTaskExecutor)
+    task._manip_mode = "stretch_visual_servo"  # Constructor's mode for this fixture.
     store = QueryCandidates()
     record = store.propose("mug", 1, 0, [1, 1, 1])
     store.ground(record.handle, instance_id=7, observation_revision=2)
@@ -32,6 +33,15 @@ def executor():
     task.visual_servo = True
     task.grasp_object = Mock(return_value=True)
     return task, target
+
+
+def test_physical_mode_requires_guarded_adapter_even_with_query_memory():
+    task, _ = executor()
+    task._manip_mode = "physical"
+    task._query_manipulation = Mock()
+    assert not task._pickup("mug")
+    assert not task._place("table", None)
+    task._query_manipulation.assert_not_called()
 
 
 def test_pick_handoff_passes_geometry_and_revokes_all_aliases():

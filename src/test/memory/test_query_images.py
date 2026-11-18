@@ -9,6 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+from PIL import Image
 
 from emet.memory.graph_eqa.query_images import dump_query_rgb, query_images_dir
 
@@ -30,3 +31,16 @@ def test_query_images_dir_off(monkeypatch, tmp_path):
     monkeypatch.setenv("EMET_AGENTIC_QUERY_IMAGES", "0")
     monkeypatch.setenv("EMET_AGENTIC_QUERY_IMAGES_DIR", str(tmp_path))
     assert query_images_dir(SimpleNamespace()) is None
+
+
+def test_context_dump_preserves_canonical_current_pixels(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_AGENTIC_QUERY_IMAGES_DIR", str(tmp_path))
+    monkeypatch.setenv("EMET_AGENTIC_QUERY_IMAGES", "1")
+    ex = SimpleNamespace(_round=1)
+    current = np.zeros((8, 8, 3), dtype=np.uint8)
+    context = np.full_like(current, 77)
+    current_paths = dump_query_rgb(ex, 7, current)
+    context_paths = dump_query_rgb(ex, 7, context, kind="vlm_assess_image_2", write_canonical=False)
+    assert "rgb_png" not in context_paths
+    np.testing.assert_array_equal(np.asarray(Image.open(current_paths["rgb_png"])), current)
+    np.testing.assert_array_equal(np.asarray(Image.open(context_paths["query_png"])), context)

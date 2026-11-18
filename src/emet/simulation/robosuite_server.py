@@ -190,6 +190,7 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
         self._mj_lock = threading.RLock()
         self._initial_xyt: np.ndarray | None = None
         self._running = False
+        self._physics_error: Exception | None = None
         self.control_mode = "navigation"
         self._at_goal = False
         self._emet_session: dict[str, Any] | None = None
@@ -907,6 +908,16 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
 
     def _hold_stationary_base_if_idle(self) -> None:
         """Pin mobile base (free joint and/or planar slide+yaw) while not executing a nav goal."""
+        from emet.simulation.physical_execution import physical_execution_enabled
+
+        if physical_execution_enabled():
+            # The legacy hold writes base state or welds it to the world. Leave
+            # support to dynamics in physical runs, including when idle.
+            if self._mjmodel is not None and self._mjdata is not None:
+                weld = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_EQUALITY, "emet_stationary_base")
+                if weld >= 0:
+                    self._mjdata.eq_active[weld] = False
+            return
         self._hold_stationary_base_freejoint_if_idle()
         self._hold_stationary_planar_base_if_idle()
 
@@ -2917,13 +2928,19 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
         if self._mujoco_ctrl_debug_enabled():
             self._ctrl_debug_emit_apply_logs = True
             logger.info("[mujoco_ctrl_debug] headless _sim_loop: apply logging enabled")
-        while self._running:
-            self._step_physics_tick()
-            if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
-                self._running = False
-                break
-            time.sleep(1 / self.simulation_rate)
+        try:
+            while self._running:
+                self._step_physics_tick()
+                if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
+                    logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
+                    break
+                time.sleep(1 / self.simulation_rate)
+        except Exception as exc:
+            self._physics_error = exc
+            raise
+        finally:
+            # Observation/action threads must not outlive failed physics.
+            self._running = False
 
     def _run_passive_viewer_main_loop(self, show_viewer_ui: bool) -> None:
         """Step physics in the same thread as ``launch_passive`` (required for a stable viewer)."""
@@ -2968,6 +2985,8 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
             self._sim_thread.start()
             while self._running:
                 time.sleep(dt)
+            if self._physics_error is not None:
+                raise RuntimeError("MuJoCo physics loop failed") from self._physics_error
             return
         self._running = False
 
@@ -3217,6 +3236,8 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
             self._sim_thread.start()
             while self._running:
                 time.sleep(1 / self.simulation_rate)
+            if self._physics_error is not None:
+                raise RuntimeError("MuJoCo physics loop failed") from self._physics_error
 
     def stop(self):
         if getattr(self, "_reactive_controller", None) is not None:

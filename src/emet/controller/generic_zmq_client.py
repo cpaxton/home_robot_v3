@@ -742,6 +742,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             elif not (isinstance(raw_depth, np.ndarray) and raw_depth.ndim == 2):
                 logger.warning("Observation depth failed to decode; skipping frame.")
                 continue
+            from emet.memory.navigation_views import retain_navigation_observation
+
+            retain_navigation_observation(self, output)
             with self._obs_lock:
                 self._obs = output
                 if "step" in output:

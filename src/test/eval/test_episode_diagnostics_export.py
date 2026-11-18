@@ -49,6 +49,20 @@ class _FakeAgent:
         self.graph_memory = None
 
 
+def test_recorder_flush_preserves_query_images_written_during_the_episode(tmp_path):
+    from emet.eval.episode_diagnostics import _clear_managed_diagnostic_outputs
+
+    images = tmp_path / "images"
+    images.mkdir()
+    query = images / "vlm_assess_r00_obs123.png"
+    query.write_bytes(b"current question evidence")
+    stale = images / "frame_0000.png"
+    stale.write_bytes(b"legacy recorder output")
+    _clear_managed_diagnostic_outputs(tmp_path)
+    assert query.read_bytes() == b"current question evidence"
+    assert not stale.exists()
+
+
 def test_flush_writes_map_and_manifest(tmp_path: Path) -> None:
     agent = _FakeAgent()
     rec = EpisodeDiagnosticsRecorder(

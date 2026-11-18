@@ -23,6 +23,7 @@ def controller():
         depth=np.ones((8, 8)),
         full_world_xyz=np.ones((8, 8, 3)),
         instance=None,
+        info={},
     )
     agent.voxel_map = SimpleNamespace(observations=[frame, frame], min_depth=0.1, max_depth=5.0)
     agent.detection_model = Mock(class_list=["mug"])
@@ -60,12 +61,175 @@ def test_current_view_grounds_without_retrieval_or_camera_anchor():
     assert record.require_grounding(2) == result["obs_id"]
 
 
+def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    frame = agent.voxel_map.observations[-1]
+    frame.info = {"observation_scope_id": "episode-1", "image_timing": {"clock_domain": "fixture"}}
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    agent.retrieve_query_candidate = Mock(side_effect=AssertionError("retrieval must not gate a visible object"))
+    result = agent.ground_current_view(" MUG on the table ")
+    assert result["ok"] and result["status"] == "grounded"
+    assert result["observation"] == {
+        "input_source": "tool_capture",
+        "source_obs_id": 3,
+        "view_id": "voxel-frame:3",
+        "image_timing": {"clock_domain": "fixture"},
+        "observation_scope_id": "episode-1",
+        "acquisition_freshness": "not_verified_by_this_tool",
+    }
+    assert result["geometry"]["status"] == "admitted"
+    assert result["geometry"]["coordinate_frame"] == "world"
+    assert result["geometry"]["units"] == "meters"
+    assert result["geometry"]["xyz"] == [1, 1, 1]
+    assert result["geometry"]["point_count"] == 64
+    record = next(iter(agent.query_candidates.records.values()))
+    assert record.query == "mug on the table" and record.target_description == "mug on the table"
+    assert record.instance_id == result["geometry"]["obs_id"]
+    agent.update.assert_called_once_with(full_perception=True)
+    agent.retrieve_query_candidate.assert_not_called()
+
+
+def test_coordinator_supplied_snapshot_reaches_admission_without_recapture(tmp_path):
+    import json
+
+    from emet.mapping.voxel.voxel import Frame
+
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_cache_dir": str(tmp_path)}
+    agent.voxel_map.observation_scope_id = "episode-1"
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    source = agent.voxel_map.observations[-1]
+    frame = Frame(**{name: getattr(source, name, None) for name in Frame._fields})._replace(info={})
+    agent.voxel_map.observations[-1] = frame
+    snapshot = SimpleNamespace(rgb=frame.rgb.copy(), depth=frame.depth.copy())
+    identity = {
+        "decision_view_id": "decision-view:fixture",
+        "rgb_sha256": "source-rgb",
+        "sensor_depth_sha256": "source-depth",
+        "observation_scope_id": "episode-1",
+    }
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    result = agent.ground_current_view("mug", observation=snapshot, decision_view=identity)
+    agent.update.assert_called_once_with(full_perception=True, observation=snapshot)
+    assert result["ok"]
+    assert result["observation"]["input_source"] == "coordinator_snapshot"
+    assert result["observation"]["decision_view_id"] == identity["decision_view_id"]
+    assert frame.info["decision_view"] == identity
+    with open(result["cache_path"]) as stream:
+        cached = json.load(stream)
+    assert cached["metadata"]["decision_view"] == identity
+
+
+def test_coordinator_snapshot_from_previous_map_cannot_admit_geometry():
+    agent = controller()
+    agent.voxel_map.observation_scope_id = "new-map"
+    agent._grounded_query_target = object()
+    agent.update = Mock()
+    result = agent.ground_current_view(
+        "mug", observation=object(), decision_view={"observation_scope_id": "previous-map"}
+    )
+    assert not result["ok"] and result["status"] == "observation_scope_mismatch"
+    assert agent._grounded_query_target is None
+    agent.update.assert_not_called()
+    agent.detection_model.predict.assert_not_called()
+
+
+def test_coordinator_capture_failure_clears_previous_geometry():
+    agent = controller()
+    agent._grounded_query_target = object()
+    agent.update = Mock()  # No captured frame added.
+    result = agent.ground_current_view("mug")
+    assert not result["ok"] and result["status"] == "observation_unavailable"
+    assert agent._grounded_query_target is None
+    assert not agent.query_candidates.records
+    agent.detection_model.predict.assert_not_called()
+
+
+def test_coordinator_abstention_does_not_return_old_geometry():
+    agent = controller()
+    agent._grounded_query_target = object()
+    frame = agent.voxel_map.observations[-1]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [], "constraints_verified": false}')
+    result = agent.ground_current_view("mug")
+    assert not result["ok"] and result["geometry"]["status"] == "not_admitted"
+    assert "xyz" not in result["geometry"] and "xyz" not in result
+    assert agent._grounded_query_target is None
+    assert not agent.query_candidates.records
+
+
+def test_coordinator_repeated_calls_capture_distinct_views():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    frame = agent.voxel_map.observations[-1]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    first = agent.ground_current_view("mug")
+    second = agent.ground_current_view("mug")
+    assert first["observation"]["source_obs_id"] == 3
+    assert second["observation"]["source_obs_id"] == 4
+    assert agent.update.call_count == 2
+
+
+def test_coordinator_object_constraints_reach_real_vlm_prompt():
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "point", "mask_backend": "rgbd"}
+    client = agent.graph_memory.eqa_client = Mock(return_value='{"verified": false, "reason": "not visible"}')
+    frame = agent.voxel_map.observations[-1]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    result = agent.ground_current_view("nearest black stool in the foreground")
+    assert not result["ok"] and not agent.query_candidates.records
+    assert result["geometry"]["model_reason"] == "not visible"
+    command = client.call_args[0][0]
+    assert "nearest black stool in the foreground" in command[0]
+    agent.detection_model.predict.assert_not_called()
+
+
 def test_current_view_without_verifier_reports_unavailable_not_absent():
     agent = controller()
     result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")
     assert result["reason"] == "semantic verification unavailable"
     assert not agent.query_candidates.records
     assert not agent.graph_memory.get_nodes()
+
+
+def test_far_surface_reason_survives_controller_and_visual_feedback():
+    from emet.memory.graph_eqa.agentic.verify import verification_feedback
+    from emet.memory.vlm_region_grounding import select_supported_region
+
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "depth_candidates"}
+    agent.voxel_map.max_depth = 2.5
+    agent.voxel_map.observations[-1].depth[:] = 3.4
+    frame = agent.voxel_map.observations[-1]
+    client = Mock()
+    _, _, audit = select_supported_region(
+        frame.rgb,
+        frame.depth,
+        "microwave",
+        "Where is the microwave?",
+        client=client,
+        min_depth=0.1,
+        max_depth=2.5,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones(frame.depth.shape, dtype=bool)],
+    )
+    # Exercise promotion/feedback with the real external-proposal range audit,
+    # without loading the GPU segmentation model that supplies those masks.
+    agent.ground_vlm_frame = Mock(return_value=(frame, [], [], audit))
+    result = agent.ground_query_view("microwave", source_obs_id=2, target_description="Where is the microwave?")
+    feedback = verification_feedback("CANDIDATE", {"ok": True, "present": True}, {"view_obs_id": 123, **result}, 123)
+    assert feedback["status"] == "VISUAL_PRESENT"
+    assert feedback["geometry"]["status"] == "not_admitted"
+    assert "supported depth range (2.5 m maximum)" in feedback["geometry"]["reason"]
+    # Bind proposal cues to the captured view, not a historical retrieval anchor.
+    assert feedback["geometry"]["depth_support"]["view"]["source_obs_id"] == 2
+    assert feedback["geometry"]["depth_support"]["proposals"][0]["base_yaw_delta_deg"] is None
+    stale = verification_feedback("CANDIDATE", {"ok": True, "present": True}, {"view_obs_id": 123, **result}, 124)
+    assert stale["geometry"] == {"status": "not_attempted"}
+    assert not result["ok"] and not agent.query_candidates.records
+    assert not agent.graph_memory.get_nodes()
+    client.assert_not_called()
 
 
 def test_budget_exhaustion_releases_only_new_unadmitted_candidate():

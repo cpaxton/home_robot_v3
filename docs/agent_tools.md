@@ -5,6 +5,8 @@ interactive terminal/Discord agent (`run agent`); **EQA_EPISODE** is the separat
 embodied question-answering/exploration loop. Their tool packs are distinct.
 Enabling a caption model in CHAT does not switch to the EQA episode loop.
 See [running the agent](AGENT_RUN.md) and the [TAMP overview](tamp.md).
+For the complete list with effects, evidence boundaries, failure codes and
+adapter support, use [Agent tools and contracts](agent_tool_contracts.md).
 
 A registered tool is not a guarantee that the connected robot can execute it.
 Handlers depend on the configured executor, robot, cameras, memory, and simulator
@@ -18,11 +20,18 @@ The source of truth for names, argument JSON schemas, and prompt descriptions is
 [EQA bindings](../src/emet/agent/skills/eqa.py). This index describes capabilities;
 use those schemas for exact arguments rather than copying prose into calls.
 
+The current CHAT registry has 34 tools; a normal session without a qualified
+task provider advertises 32 because the general task-plan pair is gated. The
+model-final EQA pack has 8–11 depending on capabilities. See the
+[exact inventory and consolidation review](experiments/agent_tool_surface_20261117.md)
+for the current names, measured prompt sizes and live qualification limits.
+
 ## CHAT: perception and memory
 
 | Tool | Purpose and requirements | More |
 | --- | --- | --- |
-| `describe_scene` | Caption the live head-camera view; needs camera/caption backend. Does not move closer | [Agent guide](AGENT_RUN.md#skill-checklist-interactive) |
+| `describe_scene` | Caption the live head camera; optional pan/tilt requests measured stationary head inspection | [Task gaze](#measured-task-gaze) |
+| `ground_object` | Request observed 3D geometry for one object in the latest RGB-D view, without navigating; returns geometry or an explicit abstention | [Grounding provenance](#current-view-object-grounding) |
 | `send_image` | Capture and attach the head-camera image; Discord delivery when connected | [Discord](discord_bot.md) |
 | `take_picture` | Capture a head-camera image locally | [CHAT handlers](../src/emet/agent/tools.py) |
 | `query_memory` | Ask about remembered objects/locations; uses graph EQA when enabled, otherwise voxel memory | [Graph memory](graph_memory.md) |
@@ -32,12 +41,97 @@ use those schemas for exact arguments rather than copying prose into calls.
 | `aim_arm_at` | Localize a named target and aim the arm/wrist camera where supported | [CHAT handlers](../src/emet/agent/tools.py) |
 | `take_ee_picture` | Capture the wrist camera after a successful `aim_arm_at`; needs an available wrist stream | [CHAT handlers](../src/emet/agent/tools.py) |
 
+## Measured task gaze
+
+Use `describe_scene(tilt_rad=-0.3)` in CHAT or `look_around(tilt_rad=-0.3)` in
+EQA to request an absolute head joint angle. The value is an example, not a
+universal robot setting. An omitted joint retains its measured angle. Both
+use the same measured capture routine, with declared robot limits; a request
+outside those limits fails with the active bounds rather than silently clipping.
+Adapters without declared limits return `head_limits_unavailable`.
+
+Explicit gaze leaves the head at the requested view, does not sweep or move the
+base, and reports requested/measured angles, base poses, received-frame sequence
+and available acquisition timing. It requires measured arrival and subsequent
+frame reception. Sensor acquisition timing remains independently unverified;
+RGB can be returned even when depth is missing. This observation does not admit
+object geometry or certify navigation. Inspect the next image, then request
+`ground_object` or EQA verification as needed.
+
+In CHAT, explicit gaze returns the inspection receipt/photo for the coordinator
+to interpret, without an additional caption-model call. In EQA, the captured
+observation enters the existing map/capture/verification flow without a sweep.
+No-argument `describe_scene` retains caption-only behavior; no-argument
+`look_around` retains the configured scan policy. No new tool is added.
+
+`observe_floor` shares the measured motion/capture primitive but keeps its
+downward bounds, calibrated-depth requirement, footprint recheck and task-view
+restoration. It is not the API for aiming at an elevated object.
+
+## Current-view object grounding
+
+Call `ground_object(query="silver microwave above the stove")`
+when the object is visible and the coordinator needs its geometry. The query
+must contain the complete identifying object phrase; do not pass an EQA question
+or answer options. The VLM grounder intentionally treats EQA's separate question
+context as non-binding, so constraints belong in this explicit object query.
+When a camera image is attached to the coordinator decision, the loop retains
+an owned copy of its RGB, depth, calibration, pose, stereo inputs and timing.
+The tool grounds that snapshot, rather than recapturing after inference. Only
+one current decision snapshot is held; later decisions replace it. Without a
+camera-enabled decision it can capture through the controller. A missing image
+in a camera-enabled decision returns `observation_unavailable` rather than using
+the previous turn's image. The tool invokes the existing `ground_query_view`
+boundary, also used for confirmed EQA views. It does not
+require a retrieval candidate, navigate, or manipulate anything.
+
+With `query_memory.grounding_backend: vlm`, the configured VLM selects a region
+under the query's visual constraints. Configured RGB-D/SAM2 providers supply
+surface masks; `yoloe_sam2` can use query-conditioned YOLOE masks as proposals.
+The VLM supplies semantic selection, while valid masked depth pixels, camera
+calibration and camera world pose supply the geometry. XYZ is the median of
+the admitted object's world points, not coordinates invented by the VLM or a
+depth median across the whole frame. Sensor or estimated-depth provenance follows
+the configured depth provider. Simulator object poses and ground-truth masks
+are not inputs. The separate `yoloe` grounding backend remains configurable;
+using the tool does not silently select a different perception model.
+
+Results distinguish `grounded`, `not_grounded`, `observation_unavailable`, and
+unsupported configurations. `geometry` contains admitted world XYZ, graph
+observation ID, geometry source and point count only on success; `observation`
+identifies the captured voxel frame, `decision_view_id`, source/display RGB
+hashes, sensor-depth hash and available acquisition timing. The decision ID also
+appears beside the coordinator's image, and the admission cache retains it with
+the calibration. Image
+timing does not become a freshness guarantee merely because a frame was added.
+The decision also retains the map scope when available; a reset during inference
+returns `observation_scope_mismatch` before map insertion or grounding, requiring
+a new camera decision rather than relabeling old evidence as a new episode.
+The result belongs to the recorded decision view, which can differ from the
+next live camera attachment or from a view after another action in a batch. It
+is observed evidence, not a claim of continued visibility. Failure clears the
+controller's current grounding reference;
+unverified search points never become a fallback success.
+
+Successful grounding stores the normal query target, so `find_objects` with
+the same query can plan an approach from that reference. Route clearance and
+manipulation reacquisition remain independent checks. No answer is overridden.
+
+Use a controller supporting current-view grounding (currently LazyGraph) and
+enable object admission explicitly. `configs/emet/shared_find_acceptance.yaml`
+opts into `graph_object_fusion.enabled` and `use_instance_nodes`; generic defaults
+remain unchanged. In LazyGraph, ordinary updates still record viewpoints rather
+than stream object instances. Configure `query_memory.grounding_cache_dir` or
+`EMET_EQA_EPISODE_DIR` to retain the exact RGB, depth, masks, selection prompts,
+raw responses, admission settings and calibration for manual inspection.
+
 ## CHAT: navigation and mapping
 
 | Tool | Purpose and requirements | More |
 | --- | --- | --- |
 | `explore` | Navigate to grow map coverage; requires navigation/mapping executor | [Agent guide](AGENT_RUN.md#skill-checklist-interactive) |
 | `scan_environment` | In-place survey to update map and memory; can rotate the robot | [Agent guide](AGENT_RUN.md#lifelong-reload) |
+| `observe_floor` | Bounded downward inspection with footprint recheck and task-gaze restoration; does not authorize motion | [Observation contract](agent_tool_contracts.md#head-and-frame-contract) |
 | `find_objects` | Find and navigate toward a named object/location; inspect rejection or cancellation before retrying | [Navigation diagnostics](AGENT_RUN.md#skill-checklist-interactive) |
 | `go_home` | Navigate to the starting position using the accumulated map | [CHAT handlers](../src/emet/agent/tools.py) |
 | `rotate_base` | Relative base yaw in degrees; positive is left/counterclockwise | [CHAT handlers](../src/emet/agent/tools.py) |
@@ -83,14 +177,16 @@ See [Graph EQA](graph_eqa.md), [Habitat EQA](habitat_eqa.md), and
 
 | Tool | Purpose and requirements |
 | --- | --- |
+| `read_history` | Read exact archived dialogue text; no new observation |
+| `recall_image` | Reattach retained historical pixels, without fresh-visibility claims |
 | `inspect_graph` | Read detections and stored views without motion; detection handles are proposals, not camera images |
 | `explore_frontier` | Grow coverage; optional weak `toward` bias does not replace investigating a detection |
 | `investigate` | Navigate around a listed detection/place, capture a fresh view, and assess it |
 | `navigate_to_obs` | Compatibility alias for `investigate` |
-| `look_around` | Scan in place to refresh map/graph |
+| `look_around` | Configured scan, or optional capability-qualified measured head view |
 | `verify_siglip` | Visual matching plus VLM assessment of the current/stored view; matching alone does not establish answerability |
-| `submit_answer` | Answer-mode terminal action, gated by VLM answerability or exhausted round budget |
-| `finish` | Explore-mode terminal action, gated by exhausted frontiers or exploration budget |
+| `submit_answer` | Answer-mode terminal action; model-final preserves explicit model submission, while legacy policies can gate differently |
+| `finish` | Explore-mode terminal action; follows the active episode policy |
 
 `submit_answer` and `finish` belong to different submodes. The conceptual pairs
 `scan_environment`/`look_around` and `explore`/`explore_frontier` share intent but

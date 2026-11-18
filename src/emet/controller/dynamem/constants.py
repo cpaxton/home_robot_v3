@@ -32,6 +32,8 @@ INIT_HEAD_TILT = -0.65
 # After look_front / move_to_nav_posture, wait briefly so the head reaches goal and depth/RGB
 # stabilize before base motion (Stretch ZMQ + mapping).
 DYNAMEM_HEAD_SETTLE_S = 0.25
+# Shared measured task inspection and restored task-gaze arrival tolerance.
+DYNAMEM_HEAD_ARRIVAL_TOL_RAD = 0.12
 # After a blocking yaw, wait this long for a newer full-obs (ZMQ CONFLATE).
 DYNAMEM_POST_MOTION_OBS_WAIT_S = 2.0
 # Head sweep: command non-blocking; exit on near-goal or settled motion.

@@ -1,0 +1,63 @@
+{
+  "scope": "Mask-level acceptance on four correlated development views/queries, not correctness or live localization",
+  "planned": 24,
+  "completed": 24,
+  "conditions": [
+    {
+      "case": "molmo_bowl",
+      "method": "cached_support",
+      "accepted": 3,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "molmo_bowl",
+      "method": "qwen_box_sam2",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "molmo_microwave",
+      "method": "cached_support",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "molmo_microwave",
+      "method": "qwen_box_sam2",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "s0_clipped_blue",
+      "method": "cached_support",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "s0_clipped_blue",
+      "method": "qwen_box_sam2",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "molmo_absent_extinguisher",
+      "method": "cached_support",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    },
+    {
+      "case": "molmo_absent_extinguisher",
+      "method": "qwen_box_sam2",
+      "accepted": 0,
+      "planned": 3,
+      "complete": 3
+    }
+  ]
+}

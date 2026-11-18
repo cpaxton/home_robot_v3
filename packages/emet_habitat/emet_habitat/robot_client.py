@@ -94,6 +94,10 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         """Run one Habitat discrete action and notify post-step hooks."""
         frame = self._sim.step(action)
         self._sync_pose_from_sim()
+        if getattr(self, "navigation_view_buffer", None) is not None:
+            from emet.memory.navigation_views import retain_navigation_observation
+
+            retain_navigation_observation(self, self._observation_from_frame(frame))
         for hook in self._post_step_hooks:
             try:
                 hook(self, frame)
@@ -140,7 +144,10 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         Returns:
             Latest :class:`~emet.core.interfaces.Observations` from Habitat-Sim.
         """
-        frame = self._sim.get_frame()
+        return self._observation_from_frame(self._sim.get_frame())
+
+    def _observation_from_frame(self, frame):
+        """Convert an acquired frame without rendering again or exposing task labels."""
         observation = habitat_rgb_depth_to_observations(
             rgb=frame.rgb,
             depth=frame.depth,
@@ -465,7 +472,24 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
 
     def get_pan_tilt(self) -> tuple[float, float]:
         """Return current head pan/tilt in radians."""
-        return (float(self._head_pan), float(self._head_tilt))
+        return (float(self._sim.head_pan_rad), float(self._sim.head_tilt_rad))
+
+    def get_head_capability(self):
+        """Advertise the active simulator's camera range; absent means unsupported."""
+        getter = getattr(self._sim, "get_head_capability", None)
+        return getter() if callable(getter) else None
+
+    def capture_head_observation(self, timeout: float = 5.0):
+        """Render after arrival; require the native acquisition clock to advance."""
+        import time
+
+        before = time.monotonic_ns()
+        obs = self.get_observation()
+        timing = (getattr(obs, "image_timing", None) or {}).get("head_cam_left", {})
+        stamp = timing.get("timestamp_ns")
+        if timing.get("clock_domain") != "habitat_monotonic" or not isinstance(stamp, int) or stamp <= before:
+            return None
+        return obs
 
     def get_joint_state(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Stretch-shaped joint vector with base XYT + head pan/tilt filled in."""
@@ -520,11 +544,10 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         """Aim the Habitat head camera (pan/tilt radians); updates RGB/depth on next frame."""
         pan = float(head_pan)
         tilt = float(head_tilt)
-        self._head_pan = pan
-        self._head_tilt = tilt
         set_look = getattr(self._sim, "set_camera_look", None)
         if callable(set_look):
             set_look(pan, tilt)
+            self._head_pan, self._head_tilt = pan, tilt
 
     def look_front(self, blocking: bool = True, timeout: float = 10.0) -> None:
         """Reset head to Stretch ``look_front`` pan/tilt."""
