@@ -21,7 +21,8 @@ class Tool:
 
     ``func`` is the direct handler; ``executor_commands`` optionally maps a call
     to legacy executor tuples instead. CHAT's dispatcher uses ``returns_info``
-    to feed output back to the model; that flag does not establish success.
+    to feed successful information back to the model; failed or unverified
+    outcomes also request feedback. That flag does not establish success.
     This object serializes metadata but does not validate physical preconditions
     or guarantee that the session supports the requested action.
     """

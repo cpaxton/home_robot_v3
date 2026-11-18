@@ -35,7 +35,7 @@ for the current names, measured prompt sizes and live qualification limits.
 | `describe_scene` | Caption the live head camera; optional pan/tilt requests measured stationary head inspection | [Task gaze](#measured-task-gaze) |
 | `ground_object` | Request observed 3D geometry for one object in the latest RGB-D view, without navigating; returns geometry or an explicit abstention | [Grounding provenance](#current-view-object-grounding) |
 | `send_image` | Capture and attach the head-camera image; Discord delivery when connected | [Discord](discord_bot.md) |
-| `take_picture` | Capture a head-camera image locally | [CHAT handlers](../src/emet/agent/tools.py) |
+| `take_picture` | Run local capture and queue an available head photo; explicit failure if no frame is available | [CHAT handlers](../src/emet/agent/tools.py) |
 | `query_memory` | Ask about remembered objects/locations; uses graph EQA when enabled, otherwise voxel memory | [Graph memory](graph_memory.md) |
 | `query_scene_graph` | Ask GraphEQA where/what questions, or inspect the open-vocabulary graph fallback | [Graph EQA](graph_eqa.md) |
 | `list_scene_relations` | List remembered objects and spatial relations | [Dynagraph](dynagraph.md) |

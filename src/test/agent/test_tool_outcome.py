@@ -46,9 +46,10 @@ def test_chat_render_preserves_capture_and_grounding_failure_separately():
 
 
 def test_tool_outcome_coerce_and_render():
-    ok = ToolOutcome.coerce("explore", "Done.")
-    assert ok.ok is True
-    assert "[explore]" in ok.render()
+    legacy = ToolOutcome.coerce("explore", "Done.")
+    assert legacy.ok is False
+    assert legacy.status == "unverified_result"
+    assert "[explore]" in legacy.render()
 
     bad = ToolOutcome.coerce("explore", "Tool explore failed: boom")
     assert bad.ok is False

@@ -693,7 +693,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="take_picture",
         modes=frozenset({AgentMode.CHAT}),
-        description="Capture the head camera locally. Prefer send_image or describe_scene when the user should see or hear a description — those attach a photo / caption to Discord.",
+        description="Run the configured local head-camera capture command and queue an available head photo for the reply. Missing camera data is an explicit failure; command completion alone does not verify local storage. Prefer send_image for photo-only requests or describe_scene for a caption.",
         parameters={
             "type": "object",
             "properties": {},
@@ -858,20 +858,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
 CHAT_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(s.name for s in CHAT_SKILL_SPECS)
 
 # EQA-only skills (must not appear in the CHAT pack by default).
-EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "read_history",
-        "recall_image",
-        "inspect_graph",
-        "explore_frontier",
-        "investigate",
-        "navigate_to_obs",
-        "look_around",
-        "verify_siglip",
-        "submit_answer",
-        "finish",
-    }
-)
+EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(spec.name for spec in EQA_SKILL_SPECS)
 
 
 def eqa_specs_for_submode(submode: str) -> tuple[SkillSpec, ...]:
