@@ -1,5 +1,11 @@
 # Living TODOs (small / near-term)
 
+- [x] Reconcile #247 with main #246 and address the posted review. Preserve
+      public TAMP receipts and measured settling; throttle capability retries,
+      reject missing snapshot RGB and protect recorded credential fields.
+      Frozen integration: 1,776 passed, one optional Habitat skip with a separate
+      passing configuration probe; paper builds to 73 pages. Re-review record:
+      `docs/experiments/pr247_review_20261117.md`. No new model-quality claim.
 - [x] Bind optional gaze arguments to adapter capabilities; native Habitat uses
       acquisition-time confirmation rather than requiring a streaming sequence.
       Preserve bounded movement RGB/pose/timing independently of voxel updates
@@ -16,7 +22,7 @@
       micro-pilot: EQA 0/2 both arms; S0 candidate object+destination 2/2 versus
       pre-gaze 1/2 (212.2 vs 656.7 s episode wall). One seed/two questions do not
       establish general superiority or a current-main merge gate.
-- [ ] Run the next matched-source small EQA/simple-OVMM pair with complete
+- [ ] At the next benchmark refresh, run a matched-source small EQA/simple-OVMM pair with complete
       assessment PNG packets saved. The packet audit extension passes 45
       focused tests; do not treat the candidate-only Q12 replay as a pair.
 - [ ] Evaluate a small subset of [NVIDIA USDCraft-10K](https://huggingface.co/datasets/nvidia/USDCraft-10K)

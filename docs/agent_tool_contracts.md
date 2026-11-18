@@ -200,6 +200,19 @@ Physical guards, admission and measured execution remain deterministic. Choosing
 another view, route, tool or final answer belongs to the coordinator, subject to
 the declared action budgets. No harness retry script is implied.
 
+Episode dialogue archives older state text by reference when needed. Current
+instructions, assistant actions and tool receipts remain exact. If those
+required fields alone exceed the configured text budget, inference fails
+explicitly and the original dialogue is preserved; they are not silently
+truncated to force another model call.
+
+Experimental request recording uses private artifact directories and redacts
+common JSON credential fields on disk while forwarding original network bytes.
+Task text and images remain sensitive; free-text secrets are not automatically
+detected. Use ignored `logs/` or `runs/`, or storage outside the checkout, and
+check recording status and original/recorded hashes before treating an artifact
+as an exact request.
+
 ## Updating a contract
 
 Change the canonical spec, mode binding, handler and model-facing receipt

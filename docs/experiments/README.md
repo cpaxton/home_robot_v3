@@ -1,5 +1,10 @@
 # Paper experiments — master index
 
+**PR #247 review (2026-11-17):** [Main reconciliation and source-bound verification](pr247_review_20261117.md)
+records conflict resolutions, review fixes, 1,776 passing tests with one optional
+Habitat skip, a separate passing configuration probe and the 73-page paper build.
+These are software/integration checks, not new learned task-quality results.
+
 **Baseline design (2026-10-29):** [Shared-agent literature review and baseline matrix](shared_agent_literature_review_20261029.md)
 covers images-only/retrieval controls, minimal active tools, GraphEQA adaptation
 versus reproduction, and the closest memory/navigation/manipulation work.
