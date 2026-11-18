@@ -1,10 +1,11 @@
-"""Critic contact features use owned active arrays, never binding object slices."""
+"""Critic and reward contact features use owned arrays, never binding object slices."""
 
 from types import SimpleNamespace
 
 import numpy as np
 
 from emet.rl.manipulation.whole_body_observation import PRIVILEGED_FIELDS, privileged_state
+from emet.rl.manipulation.whole_body_reward import current_contact_force
 
 
 def test_critic_snapshots_active_contact_arrays_and_preserves_load_units():
@@ -67,3 +68,40 @@ def test_critic_snapshots_active_contact_arrays_and_preserves_load_units():
     empty = privileged_state(env)
     np.testing.assert_array_equal(empty[7:13], 0)
     np.testing.assert_array_equal(empty[19:24], 0)
+
+
+def test_reward_contact_force_snapshots_active_arrays_and_never_constructs_objects():
+    class Contacts:
+        geom1 = np.array([0])
+        geom2 = np.array([1])
+        efc_address = np.array([0])
+        dim = np.array([3])
+        exclude = np.array([0])
+        friction = np.ones((1, 5))
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, item):
+            raise AssertionError("individual C-backed contact objects must not be accessed")
+
+        def __iter__(self):
+            raise AssertionError("individual C-backed contact objects must not be iterated")
+
+    model = SimpleNamespace(
+        geom_bodyid=np.array([2, 3]),
+        ngeom=2,
+        opt=SimpleNamespace(cone=1),  # elliptic: bound is the L1 norm of local force.
+    )
+    data = SimpleNamespace(
+        contact=Contacts(),
+        ncon=1,
+        nefc=3,
+        efc_force=np.array([2.0, 0.0, 4.0]),
+    )
+    monitor = SimpleNamespace(robot_geoms={0}, support_geoms=set(), floor={-1})
+    env = SimpleNamespace(monitor=monitor, model=model, data=data, payload=3)
+    assert current_contact_force(env) == 6.0
+    # Empty contact sets return the documented zero, without iterating objects.
+    data.ncon = 0
+    assert current_contact_force(env) == 0.0

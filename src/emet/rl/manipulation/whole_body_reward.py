@@ -20,9 +20,22 @@ def current_contact_force(env):
 
     monitor, model, data = env.monitor, env.model, env.data
     bodies = np.asarray(model.geom_bodyid).copy()
+    # Copy the active scalar contact arrays once, exactly as the critic path
+    # does. Never construct individual C-backed contact objects: that slice/
+    # iterator has crashed in long mixed rollouts, and this reward meter runs
+    # every physical control tick rather than once per decision.
+    contacts = data.contact
+    count = min(int(data.ncon), len(contacts))
+    geom1 = contacts.geom1[:count].copy()
+    geom2 = contacts.geom2[:count].copy()
+    addresses = contacts.efc_address[:count].copy()
+    dimensions = contacts.dim[:count].copy()
+    excludes = contacts.exclude[:count].copy()
+    friction = contacts.friction[:count].copy()
+    forces = np.asarray(data.efc_force).copy()
     pairs = {}
-    for i, contact in enumerate(data.contact[: data.ncon]):
-        a, b = map(int, np.asarray(contact.geom).copy())
+    for i in range(count):
+        a, b = int(geom1[i]), int(geom2[i])
         if not (0 <= a < model.ngeom and 0 <= b < model.ngeom):
             raise ValueError("invalid active contact geometry")
         if a not in monitor.robot_geoms and b not in monitor.robot_geoms and env.payload not in (bodies[a], bodies[b]):
@@ -30,7 +43,17 @@ def current_contact_force(env):
         if (a in monitor.support_geoms and b in monitor.floor) or (b in monitor.support_geoms and a in monitor.floor):
             continue
         pair = tuple(sorted((int(bodies[a]), int(bodies[b]))))
-        pairs[pair] = pairs.get(pair, 0.0) + solved_contact_force(model, data, i)[1]
+        _, bound = solved_contact_force(
+            model,
+            data,
+            i,
+            efc_address=addresses[i],
+            dim=dimensions[i],
+            exclude=excludes[i],
+            efc_force=forces,
+            friction=friction[i],
+        )
+        pairs[pair] = pairs.get(pair, 0.0) + bound
     return max(pairs.values(), default=0.0)
 
 
