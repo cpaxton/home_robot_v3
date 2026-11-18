@@ -103,3 +103,49 @@ stable tracking of this selected wave/hold envelope; then attach and test the
 corrected source-timed SI/read-validity feedback, physical command-loss watchdog
 and measured stop interface. Do not stream a learned actor directly to the
 position queue or add an ad hoc ROS command publisher to bypass those gaps.
+
+## Rendered comparison and playback fix
+
+A **25-second, 1536×768, 20 fps** comparison is available at
+`http://localhost:8771/video.mp4`, with WebM at `/video.webm`. The viewer's
+**Watch / download** link selects a supported format. These files stay in ignored
+`logs/eval/`; only their checksums and [validation record](../../paper/data/whole_body_control/herman_wave_v1/video-validation.json)
+are committed. This is recorded simulation from the synthetic start, not hardware
+video. The three panels show teacher/older actor/newer actor, target and measured
+hand axes, close-ups and measured-versus-target rotation plots. Failed recordings
+freeze the last active frame with an explicit label; post-stop motion was not
+recorded and is not fabricated. Playback is at recorded speed, without magnifying
+the robot's motion.
+
+The page originally selected a static captured frame and a head camera that hid
+the small wrist motion. It now defaults to the teacher's moving recording and an
+external camera. It identifies the initial two-second hold, labels the static
+capture, adds hand close-up and target/actual axes, restarts an ended recording on
+Play, decodes images before swapping them, and skips obsolete frames to maintain
+recorded time over a slow link.
+
+A separate HTTP stall was reproduced: an idle browser preconnection could block
+the single-threaded server. Concurrent HTTP handling now sends every graphics
+operation and context teardown to one dedicated render worker. Regression tests
+cover an idle connection plus active requests, concurrent render calls, graphics
+thread identity, and byte-range seeking for both media formats. **19 tests pass.**
+Chromium checks verify decoded image pixels change, 400 ms simulated latency
+preserves playback timing, rewind works, static capture is explicit, mobile layout
+fits, and native video plays/seeks. The test Chromium lacks H.264 support and uses
+the WebM fallback; ffmpeg successfully decodes all 500 MP4 frames. No policy,
+physics, admission or hardware-motion behavior changed.
+
+To reproduce the MP4 with one rendering worker (choose a fresh output filename):
+
+```bash
+PYTHONPATH=src MUJOCO_GL=egl OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  taskset -c 15 .venv/bin/python -m emet.visualization.herman_video \
+  --rehearsal logs/eval/herman-wave-20261117-v3 \
+  --output logs/eval/herman-wave-fresh-comparison.mp4
+```
+
+For the optional browser fallback, transcode the generated MP4 to the same basename
+with a `.webm` extension using ffmpeg/libvpx-vp9. By default the viewer looks beside
+its rehearsal directory for `<directory-name>-comparison.mp4` and the matching
+WebM. `--video PATH.mp4` selects a different generated video. The same 8771 SSH
+tunnel serves replay frames and the downloadable files.

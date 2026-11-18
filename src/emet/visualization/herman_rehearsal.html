@@ -1,29 +1,166 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Herman · Offline rehearsal</title>
 <style>
-:root{color-scheme:dark;font:15px system-ui;background:#101821;color:#e2ebf4}body{margin:0 auto;padding:24px;max-width:1400px}h1{font-size:26px;margin:0 0 8px}p{line-height:1.5;color:#bacbdc}.badge{color:#ffcf80;border:1px solid #735c38;border-radius:7px;padding:9px 13px;display:inline-block}.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:20px 0}button,select{background:#223449;color:#eef7ff;border:1px solid #516579;padding:10px;border-radius:7px;font:inherit;max-width:100%}button{cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#182534;border:1px solid #30455b;border-radius:10px;overflow:hidden}.caption{padding:12px 16px;color:#bfd3e5}.card img{display:block;width:100%;aspect-ratio:4/3;object-fit:contain;background:#080d13}#simulation{touch-action:none;cursor:grab}#simulation:active{cursor:grabbing}input{width:100%;margin:18px 0}#status{min-height:24px;color:#a6dbff}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;line-height:1.5;margin:0}details{margin-top:18px}.error{color:#ffaf9e}@media(max-width:780px){body{padding:14px}.grid{grid-template-columns:1fr}.controls>*{width:100%}}
-</style></head><body>
-<h1>Herman · Offline rehearsal</h1><div class="badge">Recorded observations + simulation · No robot control</div>
-<p>Actual head view beside a calibrated simulation. Colored blocks represent observed surfaces only; empty space can be unobserved. The recorded parked posture is shown with static forward kinematics, without stepping physics.</p>
+[hidden]{display:none!important}
+:root{color-scheme:dark;font:15px system-ui;background:#101821;color:#e2ebf4}
+body{margin:0 auto;padding:24px;max-width:1400px}h1{font-size:26px;margin:0 0 8px}
+p{line-height:1.5;color:#bacbdc}.badge{color:#ffcf80;border:1px solid #735c38;border-radius:7px;padding:9px 13px;display:inline-block}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:20px 0}
+button,select,a{background:#223449;color:#eef7ff;border:1px solid #516579;padding:10px;border-radius:7px;font:inherit;max-width:100%}
+button,a{cursor:pointer}a{display:inline-block;text-decoration:none}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.card{background:#182534;border:1px solid #30455b;border-radius:10px;overflow:hidden}.caption{padding:12px 16px;color:#bfd3e5}
+.card img{display:block;width:100%;aspect-ratio:4/3;object-fit:contain;background:#080d13}
+#simulation{touch-action:none;cursor:grab}#simulation:active{cursor:grabbing}input{width:100%;margin:18px 0}
+#status,#clock{min-height:24px;color:#a6dbff}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;line-height:1.5;margin:0}
+details{margin-top:18px}.error{color:#ffaf9e}.actual{color:#ffaf51}.target{color:#33e6ff}video{width:100%;max-height:75vh}
+@media(max-width:780px){body{padding:14px}.grid{grid-template-columns:1fr}.controls>*{width:100%}}
+</style>
+</head>
+<body>
+<h1>Herman · Offline rehearsal</h1>
+<div class="badge">Recorded observations + simulation · No robot control</div>
+<p>Play a recorded controller run below. The wave is deliberately tiny (±3.4°) and starts with a two-second hold.
+Use <b>Hand close-up</b> to inspect it. <span class="actual">Orange axes: measured hand</span> ·
+<span class="target">Cyan axes: target hand</span>. The captured head photo on the left always stays fixed.</p>
 <div id="status">Loading verified replay…</div>
-<div class="controls"><label>Replay <select id="replay"></select></label><label>View <select id="camera"><option value="head_left">Calibrated head camera</option><option value="orbit">Orbit · drag to rotate</option><option value="camera_arm">Wrist · model optics only</option></select></label><button id="play" disabled>Play recorded simulation</button><button id="reset">Reset replay</button></div>
-<div class="grid"><div class="card"><div class="caption">Herman's captured left head image · fixed observation</div><img id="actual" src="/head_left.jpg" alt="Herman captured head image"></div><div class="card"><div class="caption" id="viewLabel">Calibrated simulated head image</div><img id="simulation" alt="Simulation rendered from recorded robot state"></div></div>
-<input id="frame" type="range" min="0" max="0" step="1" value="0" aria-label="Recorded frame"><div id="clock">0.00 s</div>
-<details open><summary>Case result and readiness</summary><pre id="result"></pre></details>
+<div class="controls">
+<label>Replay <select id="replay"></select></label>
+<label>View <select id="camera"><option value="orbit">Whole robot · drag to orbit</option><option value="hand">Hand close-up · drag to orbit</option><option value="head_left">Head camera · wrist motion may be invisible</option><option value="camera_arm">Wrist camera · model optics only</option></select></label>
+<button id="play" disabled>Play recording</button><button id="reset">Rewind</button>
+<a id="videoLink" href="/video.mp4" target="_blank" hidden>Watch / download MP4</a>
+</div>
+<div class="grid">
+<div class="card"><div class="caption">Herman's captured left head image · fixed observation</div><img id="actual" src="/head_left.jpg" alt="Herman captured head image"></div>
+<div class="card"><div class="caption" id="viewLabel">Recorded robot motion · fixed world camera</div><img id="simulation" alt="Simulation rendered from recorded robot state"></div>
+</div>
+<input id="frame" type="range" min="0" max="0" step="1" value="0" aria-label="Recorded frame"><div id="clock">Loading frames…</div>
+<details><summary>Case result and readiness</summary><pre id="result"></pre></details>
 <details><summary>Captured posture, geometry and depth audit</summary><pre id="audit"></pre></details>
 <script>
-const $=id=>document.getElementById(id);let state,times=[0],playing=false,busy=false,azimuth=135,elevation=-25,dirty=true,lastFrameAt=0,drag=null;
-async function json(url){const r=await fetch(url);if(!r.ok)throw Error((await r.json()).error);return r.json()}
-function stop(){playing=false;$('play').textContent='Play recorded simulation'}
-async function choose(){stop();const meta=await json('/api/frames?replay='+$('replay').value);times=meta.time_s;$('frame').max=meta.frames-1;$('frame').value=0;$('play').disabled=meta.frames<=1;const entry=state.entries[+$('replay').value];$('result').textContent=JSON.stringify({case:entry.label,metrics:entry.metrics||null,summary:state.summary,captured_blockers:state.audit.physics_blockers,hardware_ready:false},null,2);dirty=true}
-async function render(){if(busy||!dirty)return;busy=true;dirty=false;try{const query=new URLSearchParams({replay:$('replay').value,frame:$('frame').value,camera:$('camera').value,azimuth,elevation});const r=await fetch('/frame.jpg?'+query);if(!r.ok)throw Error((await r.json()).error);const url=URL.createObjectURL(await r.blob());const old=$('simulation').dataset.url;$('simulation').src=url;$('simulation').dataset.url=url;if(old)URL.revokeObjectURL(old);$('clock').textContent=times[+$('frame').value].toFixed(2)+' s';$('status').textContent=$('replay').value==='0'?'Captured posture: physics rollout blocked. Static FK display only.':'Synthetic staged start, simulated execution only. Not a robot reposition command.';$('status').className='';}catch(e){$('status').textContent=e.message;$('status').className='error';stop()}finally{busy=false}}
-$('replay').onchange=()=>choose().catch(showError);$('camera').onchange=()=>{dirty=true;$('viewLabel').textContent=$('camera').value==='orbit'?'Recorded simulation · drag to orbit':$('camera').value==='head_left'?'Calibrated simulated head image':'Simulated wrist · physical optics unverified'};
-$('frame').oninput=()=>{stop();dirty=true};$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'Pause replay':'Play recorded simulation';lastFrameAt=performance.now()};$('reset').onclick=()=>{stop();$('frame').value=0;dirty=true};
-$('simulation').onpointerdown=e=>{if($('camera').value!=='orbit')return;drag={x:e.clientX,y:e.clientY};$('simulation').setPointerCapture(e.pointerId)};
-$('simulation').onpointermove=e=>{if(!drag)return;azimuth=((azimuth+(e.clientX-drag.x)*.4+360)%360);elevation=Math.max(-89,Math.min(-5,elevation+(e.clientY-drag.y)*.3));drag={x:e.clientX,y:e.clientY};dirty=true};
-function release(){drag=null}for(const name of ['pointerup','pointercancel','lostpointercapture'])$('simulation').addEventListener(name,release);window.addEventListener('blur',()=>{stop();release()});document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();release()}});
-function showError(e){$('status').textContent=e.message;$('status').className='error'}
-setInterval(()=>{if(playing&&!busy){const n=+$('frame').value;if(n>=times.length-1)stop();else if(performance.now()-lastFrameAt>=1000*(times[n+1]-times[n])){$('frame').value=n+1;lastFrameAt=performance.now();dirty=true}}render()},40);
-(async()=>{state=await json('/api/state');state.entries.forEach((entry,i)=>{const option=document.createElement('option');option.value=i;option.textContent=entry.label;$('replay').appendChild(option)});$('audit').textContent=JSON.stringify({audit:state.audit,depth:state.depth,proposed_start:state.proposed_start},null,2);await choose()})().catch(showError);
-</script></body></html>
+const $ = id => document.getElementById(id);
+let state, times = [0], playing = false, busy = false, ready = false;
+let azimuth = 225, elevation = -15, dirty = false, drag = null, revision = 0;
+let wallOrigin = 0, recordingOrigin = 0, displayedFrame = 0;
+async function json(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw Error((await r.json()).error);
+  return r.json();
+}
+function frameAtTime(values, time) {
+  let low = 0, high = values.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (values[middle] <= time) low = middle + 1; else high = middle;
+  }
+  return Math.max(0, low - 1);
+}
+function clock() {
+  const t = times[displayedFrame] ?? 0;
+  $('clock').textContent = `${t.toFixed(2)} / ${times[times.length - 1].toFixed(2)} s · Frame ${displayedFrame + 1}/${times.length} · ${playing ? 'Playing at 1×' : 'Paused'}`;
+}
+function stop() {
+  playing = false;
+  $('play').textContent = 'Play recording';
+  clock();
+}
+async function choose() {
+  stop(); ready = false;
+  const selection = ++revision, index = +$('replay').value;
+  $('play').disabled = true;
+  const meta = await json('/api/frames?replay=' + index);
+  if (selection !== revision) return;
+  times = meta.time_s; displayedFrame = 0;
+  $('frame').max = meta.frames - 1; $('frame').value = 0;
+  $('play').disabled = meta.frames <= 1;
+  $('play').textContent = meta.frames <= 1 ? 'Static capture · no playback' : 'Play recording';
+  const entry = state.entries[index];
+  $('result').textContent = JSON.stringify({case:entry.label,metrics:entry.metrics || null,summary:state.summary,captured_blockers:state.audit.physics_blockers,hardware_ready:false},null,2);
+  ready = true; dirty = true; clock();
+}
+async function render() {
+  if (busy || !dirty || !ready) return;
+  busy = true; dirty = false;
+  const selection = revision, index = +$('replay').value, frame = +$('frame').value;
+  const camera = $('camera').value;
+  try {
+    const query = new URLSearchParams({replay:index,frame,camera,azimuth,elevation});
+    const r = await fetch('/frame.jpg?' + query);
+    if (!r.ok) throw Error((await r.json()).error);
+    const url = URL.createObjectURL(await r.blob());
+    const decoded = new Image(); decoded.src = url;
+    try { await decoded.decode(); } catch (error) { URL.revokeObjectURL(url); throw error; }
+    if (selection !== revision || camera !== $('camera').value) { URL.revokeObjectURL(url); dirty = true; return; }
+    const old = $('simulation').dataset.url;
+    $('simulation').src = url; $('simulation').dataset.url = url;
+    if (old) URL.revokeObjectURL(old);
+    displayedFrame = frame; clock();
+    const isWave = state.entries[index].key.includes('wrist_wave');
+    $('status').textContent = index === 0
+      ? 'Static captured posture: physics rollout blocked. Select a controller recording to animate.'
+      : `Offline simulated execution from a synthetic staged start.${isWave && times[frame] < 2 ? ' Initial hold: motion begins at 2.0 s.' : ''}${frame === times.length - 1 ? ' Recording ended; Play rewinds automatically.' : ''}${camera === 'head_left' ? ' The fixed head view may hide wrist movement; use the external views.' : ''}`;
+    $('status').className = '';
+  } catch (error) { showError(error); stop(); }
+  finally { busy = false; }
+}
+$('replay').onchange = () => choose().catch(showError);
+$('camera').onchange = () => {
+  dirty = true;
+  const labels = {orbit:'Recorded robot motion · fixed world camera',hand:'Hand close-up · fixed world camera; motion is not magnified',head_left:'Calibrated head view · wrist movement may be outside the image',camera_arm:'Simulated wrist camera · physical optics unverified'};
+  $('viewLabel').textContent = labels[$('camera').value];
+};
+$('frame').oninput = () => { stop(); dirty = true; };
+$('play').onclick = () => {
+  if (!ready || times.length <= 1) return;
+  if (playing) { stop(); return; }
+  if (+$('frame').value >= times.length - 1) { $('frame').value = 0; dirty = true; }
+  recordingOrigin = times[+$('frame').value]; wallOrigin = performance.now();
+  playing = true; $('play').textContent = 'Pause recording'; clock();
+};
+$('reset').onclick = () => { stop(); $('frame').value = 0; dirty = true; };
+$('simulation').onpointerdown = event => {
+  if (!['orbit','hand'].includes($('camera').value)) return;
+  drag = {x:event.clientX,y:event.clientY}; $('simulation').setPointerCapture(event.pointerId);
+};
+$('simulation').onpointermove = event => {
+  if (!drag) return;
+  azimuth = (azimuth + (event.clientX - drag.x) * .4 + 360) % 360;
+  elevation = Math.max(-89, Math.min(-5, elevation + (event.clientY - drag.y) * .3));
+  drag = {x:event.clientX,y:event.clientY}; dirty = true;
+};
+function release() { drag = null; }
+for (const event of ['pointerup','pointercancel','lostpointercapture']) $('simulation').addEventListener(event, release);
+window.addEventListener('blur', release);
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stop(); release(); } });
+function showError(error) { $('status').textContent = error.message; $('status').className = 'error'; }
+setInterval(() => {
+  if (playing && ready) {
+    const desiredTime = recordingOrigin + (performance.now() - wallOrigin) / 1000;
+    const next = frameAtTime(times, desiredTime);
+    if (next !== +$('frame').value) { $('frame').value = next; dirty = true; }
+    if (desiredTime >= times[times.length - 1]) stop();
+  }
+  render();
+}, 40);
+(async () => {
+  state = await json('/api/state');
+  state.entries.forEach((entry,index) => {
+    const option = document.createElement('option'); option.value = index; option.textContent = entry.label;
+    $('replay').appendChild(option);
+  });
+  const teacher = state.entries.findIndex(entry => entry.key.startsWith('teacher:') && entry.frames > 1);
+  const motion = state.entries.findIndex(entry => entry.frames > 1);
+  $('replay').value = Math.max(0, teacher >= 0 ? teacher : motion);
+  const media = document.createElement('video');
+  const format = !media.canPlayType('video/mp4; codecs="avc1.640028"') && state.video_webm_available ? 'webm' : 'mp4';
+  $('videoLink').href = '/video.' + format;
+  $('videoLink').textContent = 'Watch / download ' + format.toUpperCase();
+  $('videoLink').hidden = !state.video_available && !state.video_webm_available;
+  $('audit').textContent = JSON.stringify({audit:state.audit,depth:state.depth,proposed_start:state.proposed_start},null,2);
+  await choose();
+})().catch(showError);
+</script>
+</body>
+</html>

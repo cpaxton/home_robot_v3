@@ -1,0 +1,86 @@
+{
+  "format": "herman-replay-video-v1",
+  "video": "herman-wave-20261117-v3-comparison.mp4",
+  "fps": 20,
+  "frames": 500,
+  "duration_s": 25.0,
+  "resolution": [
+    1536,
+    768
+  ],
+  "hardware_motion_commands_sent": 0,
+  "simulation_steps": 0,
+  "motion_magnified": false,
+  "ended_recordings": "last active frame frozen; not simulated stopping",
+  "source_report_sha256": "844759c855cdc15f99672a00a916f2af949cb39d497abb72affa6798fd574187",
+  "source_artifacts_sha256": "cd0b0a8df6effe8c56e2c8980006a8d03434254705cdea6450aa9b198e13067c",
+  "sha256": "5b9799f7c848d405a68a304a6e2f06675e510787f78a65e2d3e7e80802391bac",
+  "source_files": {
+    "herman_video.py": "cc8e1a31803d447a62da068a471574759006ae1aba843fffe360d83a345f68de",
+    "herman_rehearsal.py": "293a3b2cce25e7f863e6a33abfc91ea9f8165426c751a332fac09e6d0581b394"
+  },
+  "webm": {
+    "sha256": "2352e7541ba53b68396d65dd5cc600a340bd2a29507f3a7e87112bdba91822ff",
+    "codec": "vp9",
+    "duration_s": 25,
+    "transcode": "ffmpeg -threads 1 -i MP4 -an -c:v libvpx-vp9 -threads 1 -deadline realtime -cpu-used 8 -crf 32 -b:v 0 WEBM"
+  },
+  "mp4_verified": {
+    "codec": "h264",
+    "width": 1536,
+    "height": 768,
+    "frames": 500,
+    "duration_s": 25,
+    "complete_decode_exit_code": 0
+  },
+  "browser": {
+    "format": "herman-playback-browser-v2",
+    "hardware_motion_enabled": false,
+    "checks": [
+      "moving teacher and orbit selected by default",
+      "decoded image pixels change during Play",
+      "400ms network latency preserves wall-clock playback",
+      "ended recording restarts on Play",
+      "static capture clearly disables playback",
+      "hand closeup and target axes render",
+      "browser-selected video decodes, plays and seeks in Chromium",
+      "mobile layout without overflow"
+    ],
+    "defaults": {
+      "index": 1,
+      "camera": "orbit",
+      "enabled": true,
+      "video": true
+    },
+    "slow_network": {
+      "desired": 2.349999999999852,
+      "displayed": 1.7999999999999126,
+      "playing": true
+    },
+    "video": {
+      "duration": 25,
+      "width": 1536,
+      "height": 768,
+      "error": null
+    },
+    "native_video_url": "http://localhost:8771/video.webm",
+    "pixel_sha256": [
+      "6daeda776537c9e372ee27c1e5d54bbf79ac43005e04d39e43e5b8f400ac4474",
+      "30e665342566831d5f91cab3defd71c6c4512ef0a00957a6236e0315c11abb3b"
+    ]
+  },
+  "tests": {
+    "tests": "19",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "junit_sha256": "fece1afffc0e24faacde2c8f7275e6542387215d3969b09e5cd6107a56224a67"
+  },
+  "viewer_sources": {
+    "src/emet/visualization/herman_rehearsal.py": "b432c221fcac19aa07a853e8fe8672d9c831eb9da9a6c712f78183913cbca546",
+    "src/emet/visualization/herman_rehearsal.html": "b2c1c387afc780b25c3e92fe1dba81b95e6208f5d1b0b0f0f507612755440a75",
+    "src/test/visualization/test_herman_rehearsal.py": "749954dd6db11ecfd940c173acb280be27ac8eb0a64e481cd95e4b880606d740"
+  },
+  "producer_snapshots_preserved_under_ignored_logs": true,
+  "producer_snapshot_note": "MP4 created before the HTTP concurrency fix; producer files with the source_files hashes are retained in logs/recovery/herman-playback-v1/render-source. Renderer geometry and recorded states were not changed."
+}

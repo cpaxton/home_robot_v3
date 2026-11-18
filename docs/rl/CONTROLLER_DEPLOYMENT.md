@@ -19,6 +19,12 @@ The viewer and live console now run as transient user services, surviving the
 chat tool session. They are not installed for automatic reboot startup. See that
 report for service status, SSH forwarding and current hardware blockers.
 
+The replay now defaults to a moving teacher recording and external camera, with
+visible hand axes and a close-up view. **Watch / download** opens the 25-second
+comparison (MP4 or WebM). Concurrent HTTP plus one render worker fixes browser
+preconnection stalls; playback follows recorded time over SSH. These remain
+recordings, with no robot motion endpoint.
+
 ## Command and feedback path
 
 ```mermaid
