@@ -582,5 +582,7 @@
     "minimum_local_position_excursion_m": 0.05,
     "minimum_rotation_excursion_rad": 0.35,
     "mode": "either"
-  }
+  },
+  "general_distribution": "broad-joint-offsets-v1",
+  "general_settling_budget_s": 6.0
 }

@@ -141,6 +141,59 @@ def test_preflight_requires_exact_sources_manifest_and_population(tmp_path, monk
             require_preflight(write(tmp_path, bad, "report.json"), path, 0)
 
 
+def test_v2_preflight_binds_every_motion_family_and_rejects_unsafe_training(tmp_path, monkeypatch):
+    import emet.rl.manipulation.arm_spline_benchmark as benchmark
+    import emet.rl.manipulation.motion_distribution as distribution
+    from emet.rl.manipulation.arm_splines import motion_manifest
+
+    spec = motion_manifest(4, 4)
+    path = write(tmp_path, spec)
+    monkeypatch.setattr(benchmark, "source_hashes", lambda: {"source": "one"})
+    monkeypatch.setattr(benchmark, "source_state", lambda root: {"state": "one"})
+    pools = distribution.preflight_pools()
+
+    def row(case):
+        return {
+            "case": case,
+            "admitted": True,
+            "stop_confirmed": True,
+            "success": True,
+            "invalid_physics": False,
+            "metrics": {"unsafe_contact": False, "wheel_lift": False, "invalid_physics": False},
+        }
+
+    good = {
+        "format": "arm-spline-preflight-v1",
+        "complete": True,
+        "manifest_sha256": digest(spec),
+        "sources": {"source": "one"},
+        "source_state": {"state": "one"},
+        "level": 0,
+        "results": {"teacher": [row(c) for c in spec["cases"] if c["level"] == 0]},
+        "general_teacher": {k: [row(c) for c in cases] for k, cases in pools.items()},
+    }
+    assert require_preflight(write(tmp_path, good, "report.json"), path, 0) == good
+    for family in pools:
+        for mutation in ("missing", "identity", "stop", "unsafe", "missing_flags", "failure_rate"):
+            bad = copy.deepcopy(good)
+            rows = bad["general_teacher"][family]
+            if mutation == "missing":
+                rows.pop()
+            elif mutation == "identity":
+                rows[0]["case"]["seed"] += 1
+            elif mutation == "stop":
+                rows[0]["stop_confirmed"] = False
+            elif mutation == "unsafe":
+                rows[0]["metrics"]["wheel_lift"] = True
+            elif mutation == "missing_flags":
+                rows[0]["metrics"].pop("invalid_physics")
+            else:
+                for r in rows:
+                    r["success"] = False
+            with pytest.raises(ValueError):
+                require_preflight(write(tmp_path, bad, "report.json"), path, 0)
+
+
 @pytest.mark.sim
 def test_seeded_reference_has_continuous_motion_bounds_and_no_live_state_writes():
     cases = [c for c in manifest(4, 4)["cases"] if c["level"] == 0 and c["split"] == "train"]

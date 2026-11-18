@@ -97,7 +97,7 @@ def tracking_readout(values, index, family):
     return "EE", position, float(np.rad2deg(angle))
 
 
-def render_cell(directory, row, index, path, *, fps, frame_count):
+def render_cell(directory, row, index, path, *, fps, frame_count, loop_shorter=False):
     process = encoder(path, CELL_W, CELL_H, fps)
     renderer = None
     motion = {"recorded": False, "joint_span_deg": row.get("measured_joint_span_deg")}
@@ -125,7 +125,9 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
             camera = mujoco.MjvCamera()
             mujoco.mjv_defaultCamera(camera)
             camera.lookat[:] = [0.07, 0, 0.16]
-            camera.distance = 0.70 if directory.name.startswith("arm_splines") else 0.90
+            camera.distance = (
+                0.70 if directory.name.startswith("arm_splines") or directory.name == "dense_arm" else 0.90
+            )
             camera.azimuth, camera.elevation = 225, -25
             option = mujoco.MjvOption()
             option.geomgroup[3] = 0
@@ -148,7 +150,11 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
                 label(canvas, "REJECTED / NO ROLLOUT", 15, 120, 0.5, (255, 100, 100))
                 label(canvas, str(row.get("code", "not admitted"))[:55], 10, 145, 0.3)
             else:
-                selected = frame_index(values["time_s"], now)
+                duration = float(values["time_s"][-1])
+                looping = bool(loop_shorter and row["success"] and duration > 0)
+                replay_number = int(now // duration) + 1 if looping else 1
+                local_time = now % duration if looping else now
+                selected = frame_index(values["time_s"], local_time)
                 if previous != selected:
                     data.qpos[:] = values["qpos"][selected]
                     data.qvel[:] = 0
@@ -175,15 +181,17 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
                     cached = renderer.render().copy()
                     previous = selected
                 canvas[24:264] = cached
-                ended = now > values["time_s"][-1] + 1 / fps
+                ended = not looping and now > values["time_s"][-1] + 1 / fps
                 kind, position, angle = tracking_readout(values, selected, directory.name)
-                detail = f"{now:04.1f}s {kind} {position:.1f}mm / {angle:.1f}deg"
+                detail = f"{local_time:04.1f}s {kind} {position:.1f}mm / {angle:.1f}deg"
                 label(canvas, detail, 8, 281, 0.34)
                 status = (
                     ("END " + str(row.get("code", "")))
                     if ended
                     else ("PASS" if row["success"] else "FAIL " + str(row.get("code", "see report")))
                 )
+                if replay_number > 1:
+                    status = f"REPLAY {replay_number} PASS"
                 label(canvas, status[:30], 220, 281, 0.27, (100, 235, 150) if row["success"] else (255, 120, 100))
             process.stdin.write(canvas.tobytes())
         process.stdin.close()
@@ -200,7 +208,7 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
             renderer.close()
 
 
-def render(output, family, *, fps=8):
+def render(output, family, *, fps=8, loop_shorter=False):
     if family not in FAMILIES or type(fps) is not int or not 1 <= fps <= 20:
         raise ValueError("known family and fps in 1..20 required")
     output = Path(output)
@@ -222,7 +230,9 @@ def render(output, family, *, fps=8):
         for index, row in enumerate(report["rows"]):
             tile = directory / f"tile-{index:02d}.mp4"
             tiles.append(tile)
-            motion.append(render_cell(directory, row, index, tile, fps=fps, frame_count=frame_count))
+            motion.append(
+                render_cell(directory, row, index, tile, fps=fps, frame_count=frame_count, loop_shorter=loop_shorter)
+            )
             print("RENDER", family, index, flush=True)
         head = np.full((HEADER, CELL_W * 4, 3), BG, dtype=np.uint8)
         label(head, "MARS | " + TITLES[family], 15, 26, 0.65)
@@ -235,7 +245,11 @@ def render(output, family, *, fps=8):
         )
         label(
             head,
-            "Cyan: hand target | orange: measured hand | blue: base target. Shorter records freeze at their final recorded state. Failures retained.",
+            (
+                "Cyan: hand target | orange: measured | blue: base. Short successful records REPLAY with a visible reset; failures stay frozen."
+                if loop_shorter
+                else "Cyan: hand target | orange: measured hand | blue: base target. Shorter records freeze at their final recorded state. Failures retained."
+            ),
             15,
             69,
             0.39,
@@ -338,6 +352,7 @@ def render(output, family, *, fps=8):
             "duration_s": frame_count / fps,
             "resolution": [4 * CELL_W, 4 * CELL_H + HEADER],
             "time_scale": 1,
+            "shorter_recordings": "replay_success_with_visible_reset" if loop_shorter else "freeze_final_state",
             "hardware_used": False,
             "simulation_steps_during_render": 0,
             "source_report_sha256": sha(report_path),
@@ -358,8 +373,13 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--family", choices=FAMILIES, required=True)
     parser.add_argument("--fps", type=int, default=8)
+    parser.add_argument(
+        "--loop-shorter",
+        action="store_true",
+        help="replay shorter successful records, clearly labelled; failed records freeze",
+    )
     args = parser.parse_args()
-    render(args.output, args.family, fps=args.fps)
+    render(args.output, args.family, fps=args.fps, loop_shorter=args.loop_shorter)
 
 
 if __name__ == "__main__":

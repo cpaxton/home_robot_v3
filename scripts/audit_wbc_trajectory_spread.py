@@ -64,6 +64,9 @@ def audit(directory, output):
             "median_motion_s": float(np.median([r["reference_motion_s"] for r in metrics])),
             "median_video_padding_s": float(np.median([r["video_padding_s"] for r in metrics])),
         }
+        if receipt.get("shorter_recordings") == "replay_success_with_visible_reset":
+            summary["video_motion_fraction"] = None
+            summary["video_presentation"] = "successful records replay with visible reset; physical duty unchanged"
         for name in ["world_hand", "base_relative_hand"]:
             if family == "base":
                 summary[name] = None
@@ -103,8 +106,9 @@ def audit(directory, output):
             if s["base_relative_hand"]
             else "inactive"
         )
+        video = f"{s['video_motion_fraction']:.1%}" if s["video_motion_fraction"] is not None else "labelled replays"
         lines.append(
-            f"| {name} | {s['reference_motion_fraction']:.1%} | {s['video_motion_fraction']:.1%} | {s['median_duration_s']:.2f} s | {excursion} |"
+            f"| {name} | {s['reference_motion_fraction']:.1%} | {video} | {s['median_duration_s']:.2f} s | {excursion} |"
         )
     (output / "summary.md").write_text("\n".join(lines) + "\n")
     return report

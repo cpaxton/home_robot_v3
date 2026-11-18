@@ -36,7 +36,9 @@ def load_curriculum(path):
     return suite
 
 
-def validate_change(change, arm_size):
+def validate_change(change, arm_size, *, arm_delta_limit=0.1):
+    if isinstance(arm_delta_limit, bool) or not np.isfinite(arm_delta_limit) or not 0 < arm_delta_limit <= 0.4:
+        raise ValueError("bounded explicit arm change limit required")
     if not isinstance(change, dict) or set(change) != {"travel_m", "turn_rad", "arm_delta", "dwell_s"}:
         raise ValueError("complete nominal goal-change specification required")
     try:
@@ -51,7 +53,7 @@ def validate_change(change, arm_size):
         or not np.isfinite(values).all()
         or abs(values[0]) > 0.2
         or abs(values[1]) > 0.5
-        or np.any(abs(values[2:-1]) > 0.1)
+        or np.any(abs(values[2:-1]) > arm_delta_limit)
         or not 0 <= values[-1] < 2
     ):
         raise ValueError("finite bounded goal-change geometry and dwell in [0,2) required")
@@ -106,6 +108,9 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
         reward_config=None,
         timing="legacy_v1",
         finish_after_hold=False,
+        spread_requirements=None,
+        change_arm_limit=0.1,
+        settling_budget_s=3.0,
     ):
         if robot not in PROFILES:
             raise ValueError("unsupported goal-change robot")
@@ -116,7 +121,10 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
         if any(c["mode"] not in {"coupled", "hand_free_base"} or "retarget" in c for c in cases):
             raise ValueError("nominal handoffs require hand-active cases without measured-state retargets")
         self.ready_for_steps = False
-        self.changes = {name: validate_change(spec, PROFILES[robot].arm_size) for name, spec in changes.items()}
+        self.changes = {
+            name: validate_change(spec, PROFILES[robot].arm_size, arm_delta_limit=change_arm_limit)
+            for name, spec in changes.items()
+        }
         super().__init__(
             robot,
             cases,
@@ -124,6 +132,8 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
             reward_config=reward_config,
             timing=timing,
             finish_after_hold=finish_after_hold,
+            spread_requirements=spread_requirements,
+            settling_budget_s=settling_budget_s,
         )
 
     def reset(self, *, seed=None, options=None):
@@ -144,7 +154,10 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
             if self.finish_after_hold:
                 from dataclasses import replace
 
-                horizon = float(np.ceil((self.switch_at + self.successor.end + 3.0) / e.profile.dt) * e.profile.dt)
+                horizon = float(
+                    np.ceil((self.switch_at + self.successor.end + self.settling_budget_s) / e.profile.dt)
+                    * e.profile.dt
+                )
                 e.config = replace(e.config, horizon=horizon)
             if self.switch_at + self.successor.end + e.config.terminal_hold_seconds > e.config.horizon:
                 raise ValueError("goal_change_exceeds_episode_horizon")

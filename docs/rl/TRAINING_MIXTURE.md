@@ -162,7 +162,10 @@ Hardware status is maintained separately in
 
 Inspect the actual curriculum in the [4×4 video and 3D coverage gallery](CURRICULUM_VISUALIZATION.md). It distinguishes teacher execution, train/audit cases and extra visualization-only examples.
 
-The frozen level-zero preflight is 48/48 teacher successes after 1,679 source-bound regressions. Active pilot output is `logs/manipulation/arm-splines-v1-restart`; the original run is preserved after a visualization-induced TAMP IPC timeout during critic warmup. Rendering is finished; do not freeze live IPC workers.
+The frozen v1 level-zero preflight is 48/48 teacher successes after 1,679
+source-bound regressions. The pilot at `logs/manipulation/arm-splines-v1-restart`
+has completed; its outcomes are below. The original interrupted run is preserved.
+Do not freeze live IPC workers for rendering.
 
 ## Motion-density audit and current decision
 
@@ -182,7 +185,21 @@ per-reference local/world hand excursion, path length and orientation travel.
 The opt-in v2 timing removes the artificial 3.9-second phase floor, and episodes
 can finish after their unchanged two-second measured quiet hold. The v2 arm
 candidate starts at larger amplitude with a minimum spread requirement and fresh
-seeds. It still needs teacher/source validation, and the ordinary hand/goal pools
-need broader arm motion before extending PPO. This is not solved by increasing
-the global coverage-box size or speeding up video playback. Preserve explicit
-fine-manipulation and hold cases instead of counting them as generic reaching.
+seeds. Its ordinary hand/goal pools now use deliberate larger arm offsets in
+independent 530M/540M and 550M/560M train/audit namespaces; FK determines their
+actual pose trajectories, and full-path geometry/spread admission can reject
+them without pruning the report. The physical-tick split stays **10% hand, 10%
+base, 10% goal changes, 20% splines, 50% unloaded TAMP**. Base-only cases and
+TAMP task scope are unchanged. A complete source-bound teacher preflight must
+validate all five families before more PPO. Preserve explicit fine-manipulation
+and hold cases instead of counting them as generic reaching. Raw trials,
+models and videos remain ignored; maintain this ledger and reproduction scripts
+instead of adding a large evidence directory for each iteration.
+
+The corrected v2 teacher preflight passes 70/70 across all five families, with
+70 confirmed stops. This corrects both the stale base-fixture tolerance and the
+teacher's independent-base limitation; see the [motion audit](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
+The new general settling ceiling is six seconds after the reference, including
+the two-second quiet hold, with immediate completion once that hold passes.
+There is no learned v2 result yet. Require a fresh full regression receipt before
+the bounded pilot and compare fixed source/final checkpoints on identical cases.

@@ -122,6 +122,8 @@ def motion_manifest(train_count=16, audit_count=8):
         reference_timing="bounded_v2",
         finish_after_hold=True,
         spread_requirements=SpreadRequirements().record(),
+        general_distribution="broad-joint-offsets-v1",
+        general_settling_budget_s=6.0,
         levels=[
             asdict(SplineLevel(0.30, 0.40, 0.04, initial_hold_s=0.2, maximum_duration_s=18)),
             asdict(SplineLevel(0.45, 0.40, 0.08, initial_hold_s=0.2, maximum_duration_s=24)),
@@ -147,7 +149,13 @@ def load_manifest(path):
         from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
 
         SpreadRequirements(**value["spread_requirements"])
-        if value.get("reference_timing") != "bounded_v2" or value.get("finish_after_hold") is not True:
+        if (
+            value.get("reference_timing") != "bounded_v2"
+            or value.get("finish_after_hold") is not True
+            or value.get("general_distribution") != "broad-joint-offsets-v1"
+            or type(value.get("general_settling_budget_s")) not in (int, float)
+            or not 2 <= value["general_settling_budget_s"] <= 15
+        ):
             raise ValueError("v2 requires bounded timing and quiet-hold completion")
     levels = tuple(SplineLevel(**v) for v in value["levels"])
     if not levels or len(levels) > 3:
@@ -548,9 +556,21 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
     if type(level) is not int or not 0 <= level < len(spec["levels"]):
         raise ValueError("declared curriculum level required")
     cases = json.loads((root / "paper/data/whole_body_control/long_finetune_v1/cases.json").read_text())
+    broad = spec["format"] == "mars-arm-splines-v2"
+    if broad:
+        from emet.rl.manipulation.motion_distribution import general_cases
+
+        cases = general_cases()
     general = [c for c in cases if c["split"] == "train"]
     goals = load_curriculum(root / "configs/benchmarks/mars_goal_changes_v1.json")
     goal_cases = [c for c in goals["robots"]["innate_mars"] if c["split"] == "train"]
+    changes = {c["id"]: goals["goal_changes"][c["id"]] for c in goal_cases}
+    if broad:
+        from emet.rl.manipulation.motion_distribution import goal_cases as broad_goals
+
+        pool, all_changes = broad_goals()
+        goal_cases = [c for c in pool if c["split"] == "train"]
+        changes = {c["id"]: all_changes[c["id"]] for c in goal_cases}
     development, _ = load_development()
     timing = spec.get("reference_timing", "legacy_v1")
     finish = spec.get("finish_after_hold", False)
@@ -564,17 +584,22 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
                 reward_config=reward_config,
                 timing=timing,
                 finish_after_hold=finish,
+                spread_requirements=spec.get("spread_requirements") if not base_only else None,
+                settling_budget_s=spec.get("general_settling_budget_s", 3.0),
             )
             environments[name] = env
             env.unwrapped.config = replace(env.unwrapped.config, wheel_feedback_base_only_gains=(0.0, 0.5))
         environments["goal_changes"] = GoalChangeTrackingEnv(
             "innate_mars",
             goal_cases,
-            changes={c["id"]: goals["goal_changes"][c["id"]] for c in goal_cases},
+            changes=changes,
             suite_path=COARSE_SUITE,
             reward_config=reward_config,
             timing=timing,
             finish_after_hold=finish,
+            spread_requirements=spec.get("spread_requirements"),
+            change_arm_limit=0.4 if broad else 0.1,
+            settling_budget_s=spec.get("general_settling_budget_s", 3.0),
         )
         goal_env = environments["goal_changes"].unwrapped
         goal_env.config = replace(goal_env.config, wheel_feedback_base_only_gains=(0.0, 0.5))

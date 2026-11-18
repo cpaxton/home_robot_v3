@@ -31,9 +31,14 @@ class TaskPoseTeacherConfig:
     position_gain_per_s: float = 4.0
     orientation_gain_per_s: float = 4.0
     rotation_length_m_per_rad: float = 1.0
+    coupled_base_tracking: bool = False
 
     def __post_init__(self):
+        if type(self.coupled_base_tracking) is not bool:
+            raise ValueError("coupled base tracking must be a boolean")
         for name, value in asdict(self).items():
+            if name == "coupled_base_tracking":
+                continue
             if isinstance(value, bool) or not isinstance(value, Real) or not np.isfinite(value) or value <= 0:
                 raise ValueError("teacher gains and rotation length must be positive and finite")
             object.__setattr__(self, name, float(value))
@@ -156,11 +161,12 @@ def task_pose_teacher_action(control, *, config=None):
                     ]
                 )
     twist = feedforward + feedback - external_twist
-    if p.wheel_bodies and not c.base_mask.all() and c.hand_mask:
-        # A partially or wholly unspecified base can supply the task directions
-        # missing from a five-DOF arm. Include differential-drive forward/yaw
-        # motion in the same instantaneous solve. No inactive base target is
-        # consulted, and this remains a teacher, never an actor constraint.
+    if p.wheel_bodies and c.hand_mask and (not c.base_mask.all() or config.coupled_base_tracking):
+        # A partially or wholly unspecified base can supply task directions
+        # missing from a five-DOF arm. The opt-in coupled baseline also keeps
+        # this authority for full base goals: freezing a coarsely settled base
+        # can leave a hand residual the arm cannot correct by itself. All active
+        # base coordinates remain lower-weight objectives in the solve below.
         yaw = c.base_pose()[2]
         heading = np.array([np.cos(yaw), np.sin(yaw), 0.0])
         pivot = c.data.xpos[c.base] + c.data.xmat[c.base].reshape(3, 3) @ c.axle_offset

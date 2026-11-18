@@ -9,7 +9,7 @@
 <div class="row"><canvas id="view" width="1100" height="750"></canvas><div><h3>Visible coverage</h3><pre id="stats"></pre><h3>Posture / level counts</h3><pre id="postures"></pre><p>Color is the motion family. Novel base/TAMP examples are explicitly visualization-only. Audit targets never enter PPO.</p></div></div>
 <p id="legend"></p><script id="data" type="application/json">__DATA__</script>
 <script>
-const report=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id),families=Object.keys(report.families),colors=['#65d4e8','#ffbf63','#c58cff','#76e49c','#ed8cc5','#7eabff','#ef816e'];let az=.7,el=.4,zoom=1,drag=null;
+const report=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id),families=Object.keys(report.families),colors=['#65d4e8','#ffbf63','#c58cff','#76e49c','#ed8cc5','#7eabff','#ef816e','#dedb66'];let az=.7,el=.4,zoom=1,drag=null;
 for(const f of families){let o=document.createElement('option');o.value=f;o.textContent=f;$('family').appendChild(o)}
 $('legend').textContent=families.map((f,i)=>`${i+1}: ${f}`).join(' | ');
 function points(){return report.rows.filter(r=>r.hand&&($('family').value==='all'||r.family===$('family').value)&&($('split').value==='all'||r.case.split===$('split').value))}

@@ -204,3 +204,79 @@ def test_mixture_distinguishes_motion_quiet_and_missing_tick_data(motion, expect
     env.step(np.zeros(1))
     row = env.ledger()["one"]
     assert (row["reference_motion_ticks"], row["reference_quiet_ticks"], row["reference_unknown_ticks"]) == expected
+
+
+def test_broad_general_samples_are_seeded_and_leave_old_pool_unchanged():
+    import json
+
+    from emet.rl.manipulation.motion_distribution import ROOT, general_cases, goal_cases
+
+    source = ROOT / "paper/data/whole_body_control/long_finetune_v1/cases.json"
+    before = source.read_bytes()
+    old = json.loads(before)
+    new = general_cases()
+    assert general_cases() == new and source.read_bytes() == before
+    hand_cases = [c for c in new if c["mode"] != "base_only"]
+    assert len(hand_cases) == 16
+    assert all(0.28 <= abs(c["arm_delta"][0]) <= 0.38 for c in hand_cases)
+    assert not {c["seed"] for c in hand_cases} & {c["seed"] for c in old}
+    assert [c for c in old if c["mode"] == "base_only"] == [c for c in new if c["mode"] == "base_only"]
+    goals, changes = goal_cases()
+    assert len(goals) == 16
+    for c in goals:
+        np.testing.assert_allclose(changes[c["id"]]["arm_delta"], -np.asarray(c["arm_delta"]))
+
+
+def test_large_handoff_requires_explicit_bounded_opt_in():
+    from emet.rl.manipulation.goal_change_tracking import validate_change
+    from emet.rl.manipulation.motion_distribution import goal_cases
+
+    _, changes = goal_cases()
+    change = next(iter(changes.values()))
+    with pytest.raises(ValueError, match="bounded"):
+        validate_change(change, 5)
+    assert validate_change(change, 5, arm_delta_limit=0.4) == change
+    for limit in (True, 0, 0.5, float("nan")):
+        with pytest.raises(ValueError, match="bounded"):
+            validate_change(change, 5, arm_delta_limit=limit)
+
+
+@pytest.mark.sim
+def test_broader_general_hand_reference_exceeds_initial_arm_contract():
+    from emet.rl.manipulation.motion_distribution import general_cases, make_reference_env
+    from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
+
+    case = next(c for c in general_cases() if c["mode"] != "base_only")
+    env = make_reference_env("hand", [case], SpreadRequirements().record())
+    try:
+        _, info = env.reset()
+        local = info["trajectory_spread"]["base_relative_hand"]
+        assert local["maximum_excursion_m"] >= 0.05 or local["rotation_excursion_rad"] >= 0.35
+        assert local["maximum_excursion_m"] > 0.003 or local["rotation_excursion_rad"] > 0.02
+        assert env.unwrapped.control.task_trajectory.end < 3.9
+    finally:
+        env.close()
+
+
+@pytest.mark.sim
+@pytest.mark.parametrize("index", [0, 1])
+def test_broad_coupled_teacher_tracks_hand_and_holds_base_region(index):
+    from emet.rl.manipulation.motion_distribution import preflight_pools, teacher_preflight
+    from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
+
+    case = preflight_pools()["hand"][index]
+    row = teacher_preflight({"hand": [case]}, SpreadRequirements().record())["hand"][0]
+    assert row["success"] and row["stop_confirmed"]
+    assert row["metrics"]["ee_position_error"] < 0.003
+    assert row["metrics"]["ee_orientation_error"] < 0.02
+    assert row["metrics"]["base_goal_error"] < 0.05
+    assert row["metrics"]["settled_seconds"] >= 2
+    assert not any(row["metrics"][k] for k in ("unsafe_contact", "invalid_physics", "wheel_lift"))
+
+
+@pytest.mark.parametrize("budget", [True, 1.99, 16, float("nan"), "6"])
+def test_settling_budget_is_explicit_and_bounded(budget):
+    from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv
+
+    with pytest.raises(ValueError, match="settling budget"):
+        CoupledTrackingEnv("innate_mars", settling_budget_s=budget)

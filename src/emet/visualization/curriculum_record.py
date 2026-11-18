@@ -71,6 +71,17 @@ def archive_case(e, frames, path, row, planned=None):
 
 
 def regular_environment(family, cases):
+    if family == "dense_arm":
+        from emet.rl.manipulation.arm_splines import SplineLevel, load_manifest
+
+        spec = load_manifest(ROOT / "configs/benchmarks/mars_arm_splines_v2.json")
+        return ArmSplineTrackingEnv(
+            cases,
+            levels=tuple(SplineLevel(**v) for v in spec["levels"]),
+            timing=spec["reference_timing"],
+            finish_after_hold=spec["finish_after_hold"],
+            spread_requirements=spec["spread_requirements"],
+        )
     if family.startswith("arm_splines_"):
         return ArmSplineTrackingEnv(cases)
     if family == "goal_changes":

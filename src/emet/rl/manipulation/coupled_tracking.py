@@ -7,6 +7,7 @@ kinematics; sampled admission and teacher rollouts do not certify hardware.
 
 import argparse
 import json
+from numbers import Real
 from pathlib import Path
 
 import gymnasium as gym
@@ -393,7 +394,16 @@ class CoupledTrackingEnv(gym.Wrapper):
     """Reusable general training share; task/case metadata stays outside the actor."""
 
     def __init__(
-        self, robot, cases=None, *, suite_path=SUITE, reward_config=None, timing="legacy_v1", finish_after_hold=False
+        self,
+        robot,
+        cases=None,
+        *,
+        suite_path=SUITE,
+        reward_config=None,
+        timing="legacy_v1",
+        finish_after_hold=False,
+        spread_requirements=None,
+        settling_budget_s=3.0,
     ):
         from gymnasium import spaces
 
@@ -405,6 +415,19 @@ class CoupledTrackingEnv(gym.Wrapper):
         if timing not in {"legacy_v1", "bounded_v2"} or type(finish_after_hold) is not bool:
             raise ValueError("declared reference timing and boolean episode completion required")
         self.timing, self.finish_after_hold = timing, finish_after_hold
+        if (
+            isinstance(settling_budget_s, (bool, np.bool_))
+            or not isinstance(settling_budget_s, Real)
+            or not np.isfinite(settling_budget_s)
+            or not 2 <= settling_budget_s <= 15
+        ):
+            raise ValueError("finite settling budget in [2,15] seconds required")
+        self.settling_budget_s = float(settling_budget_s)
+        from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
+
+        self.spread_requirements = (
+            SpreadRequirements(**spread_requirements) if spread_requirements is not None else None
+        )
         self.episode_closed = True
         suite = load_suite(suite_path)
         from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
@@ -476,6 +499,10 @@ class CoupledTrackingEnv(gym.Wrapper):
             raise ValueError("coupled_reference_rejected:" + str(self.admission["reason"]))
         e.reach_hold_trial = False
         e.fixed_base_trial = False
+        # The reset uses a fixed-base hold fixture. Once that fixture is no
+        # longer the task, the servo must use the same region as the scorer;
+        # otherwise its stale 5 mm tolerance silently overrides the 5 cm task.
+        e.control.base_xy_tolerance = e.active_base_xy_tolerance
         e.control.pose_only_targets = True
         e.set_task_trajectory(reference)
         e.control.history = None
@@ -488,10 +515,18 @@ class CoupledTrackingEnv(gym.Wrapper):
             hand_mask=reference.hand_mask,
             base_mask=reference.base_mask,
         )
+        if (
+            self.spread_requirements is not None
+            and reference.hand_mask
+            and not self.spread_requirements.accepts(self.reference_spread)
+        ):
+            e.control.stop()
+            raise ValueError("ordinary_hand_reference_has_insufficient_spread")
         if self.finish_after_hold:
             from dataclasses import replace
 
-            e.config = replace(e.config, horizon=float(np.ceil((reference.end + 3.0) / e.profile.dt) * e.profile.dt))
+            horizon = float(np.ceil((reference.end + self.settling_budget_s) / e.profile.dt) * e.profile.dt)
+            e.config = replace(e.config, horizon=horizon)
         self.episode_closed = False
         self.retarget_at = reference.end * case["retarget"]["at_fraction"] if "retarget" in case else None
         self.retargeted = False
@@ -527,7 +562,10 @@ class CoupledTrackingEnv(gym.Wrapper):
             if self.finish_after_hold:
                 from dataclasses import replace
 
-                horizon = float(np.ceil((e.steps * e.profile.dt + reference.end + 3.0) / e.profile.dt) * e.profile.dt)
+                horizon = float(
+                    np.ceil((e.steps * e.profile.dt + reference.end + self.settling_budget_s) / e.profile.dt)
+                    * e.profile.dt
+                )
                 e.config = replace(e.config, horizon=horizon)
             self.retargeted = True
         motion = reference_velocity(e.control)

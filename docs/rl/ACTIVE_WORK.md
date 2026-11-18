@@ -51,10 +51,16 @@ cases pass below 2 mm; the complete level-zero teacher and source-bound tests
 have now passed for frozen `614dfcd6`: see the current launch/restart status
 below. No new actor improvement is claimed. [Protocol](../experiments/mars_arm_splines_20261117.md).
 
-**Curriculum visualization is complete:** seven checked 4×4 teacher videos,
+**Baseline curriculum visualization is complete:** seven checked 4×4 teacher videos,
 112 distinct displayed trials, all 144 spline targets plus existing families in
 a 208-path 3D coverage gallery. Small splines 16/16, medium 14/16, full 12/16;
 these are teacher outcomes, not new actor scores. [Viewer and measured results](../experiments/mars_curriculum_visualization_20261117.md).
+
+An eighth, larger-motion v2 candidate video now passes **16/16 teacher trials**.
+Median local hand excursion is 80.5 mm and reference-motion duty is 86.2%.
+Shorter successes replay with a visible reset at real-time speed; failures remain
+visible. The expanded coverage gallery contains 224 paths (208 hand-active).
+Media, raw trial tables and model snapshots remain ignored under `logs/`.
 
 **Completed spline baseline:** frozen `614dfcd6` passed 1,679 regressions and
 48/48 teacher preflight cases. The 65,536-decision restart completed; its paired
@@ -67,8 +73,10 @@ pilot and paired evaluation are complete: both actors 0/48, with 47/48 and
 `logs/eval/arm-spline-paired-v1-restart`. Within-episode auditing found only
 0.4 mm median local hand excursion in the ordinary hand pool and 3.9/25 s
 of target motion for ordinary episodes. Opt-in bounded v2 timing, quiet-hold
-completion and minimum-spread sampling are implemented; new candidate validation
-precedes further training. [Metrics](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
+completion and minimum-spread sampling are implemented. V2 also widens ordinary
+hand and goal-change arm offsets rather than letting base travel supply all hand
+motion. Full-family candidate preflight precedes further training.
+[Metrics](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
 
 **Main integration:** current main `d86017ca` is integrated with semantic
 preservation of unloaded TAMP scopes through grasp alignment/fallback search,
@@ -76,6 +84,27 @@ checked base approaches, observed verification and measured stopping. Runtime
 `command_client` copies are synchronized. Integration/recheck runs cover 765
 distinct passing cases; this is not a new full frozen training receipt. The
 session-start abort now preserves `SystemExit` before guard creation.
+
+**Expanded-curriculum debugging:** general reset now synchronizes the servo's
+base tolerance with the task after leaving the fixed-base fixture (previously
+5 mm vs a declared 5 cm). The v2 general teacher opts into coupled base/arm
+feedback so relaxing base precision does not strand an underactuated arm. Its
+finite six-second settling ceiling includes the unchanged two-second measured
+quiet hold; episodes end as soon as that hold passes. Both-robot tolerance,
+coupled teacher, source-bound preflight and media regressions cover these
+changes. The corrected candidate teacher rerun passes **70/70**, all admitted
+with confirmed stops: splines 24/24, ordinary hand 16/16, base 8/8, goal changes
+16/16, unloaded TAMP 6/6. All 170 current focused tests pass, including the local
+HTTP test rerun with loopback permission. These do not replace a fresh full
+training regression receipt. Next run the frozen full suite, then a bounded
+65,536-decision pilot with paired source/final evaluations; no promotion or
+hardware motion is implied.
+
+Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
+saved, each verified by bit-exact decompression before removing its raw tar.
+Checkpoints, recordings, failed trials and archived source contents are retained.
+Restore paths and original hashes are in ignored
+`logs/recovery/trajectory-spread-v1/source-archive-compression.json`.
 
 ## One controller owner and development worktree
 

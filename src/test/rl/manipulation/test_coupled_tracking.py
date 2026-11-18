@@ -106,6 +106,7 @@ def test_coarse_general_reward_has_no_in_region_heading_precision_pressure(robot
         env.reset()
         e, c = env.unwrapped, env.unwrapped.control
         assert e.config.base_xy_tolerance == 0.05
+        assert c.base_xy_tolerance == e.active_base_xy_tolerance == 0.05
         assert e.config.hand_position_tolerance == 0.003
         c.base_goal = c.base_pose().copy()
         action, motion = np.zeros(e.profile.action_size), np.zeros(9)

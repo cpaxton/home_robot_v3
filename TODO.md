@@ -67,8 +67,12 @@
 - [x] Render seven checked 4×4 teacher curriculum videos and full 208-path
       coverage (all 144 spline identities), with interactive 3D filters/orbit.
       [Viewer, results and scope](docs/experiments/mars_curriculum_visualization_20261117.md).
-- [ ] Finish full teacher preflight, bounded spline PPO and paired regression
-      comparisons, including the frozen elbow/wrist wave.
+- [x] Finish the v1 teacher preflight and bounded spline PPO: 48/48 teacher,
+      but both source/final actors 0/48. Preserve failures and reject promotion.
+- [ ] Validate the wider v2 hand/spline/handoff distribution and corrected
+      coupled teacher before another PPO pilot. Track per-episode local hand
+      spread and moving/quiet physical ticks; preserve the frozen wave and
+      fine TAMP cases. [Current decision](docs/rl/ACTIVE_WORK.md).
 - [ ] Add admitted Herman-like posture/hold/handoff cases to a bounded training
       distribution with separate held-out poses. Current staged teacher is 6/6,
       both actors 0/6; improve quiet holds and prevent base wandering before

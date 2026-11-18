@@ -8,7 +8,7 @@ from emet.rl.manipulation.arm_splines import load_manifest
 from emet.rl.manipulation.goal_change_tracking import load_curriculum
 
 ROOT = Path(__file__).resolve().parents[3]
-FAMILIES = ("hand", "base", "goal_changes", "arm_splines_l0", "arm_splines_l1", "arm_splines_l2", "tamp")
+FAMILIES = ("hand", "base", "goal_changes", "arm_splines_l0", "arm_splines_l1", "arm_splines_l2", "tamp", "dense_arm")
 TITLES = {
     "hand": "General hand + base tracking",
     "base": "Base position + heading",
@@ -17,6 +17,7 @@ TITLES = {
     "arm_splines_l1": "Random arm splines | medium",
     "arm_splines_l2": "Random arm splines | full",
     "tamp": "TAMP unloaded approach / grasp pose",
+    "dense_arm": "Larger arm motions | bounded v2 candidate",
 }
 
 
@@ -41,9 +42,10 @@ def cases_for(family):
                 cases.append(case)
     elif family == "goal_changes":
         cases = load_curriculum(ROOT / "configs/benchmarks/mars_goal_changes_v1.json")["robots"]["innate_mars"]
-    elif family.startswith("arm_splines_"):
-        level = int(family[-1])
-        pool = load_manifest(ROOT / "configs/benchmarks/mars_arm_splines_v1.json")["cases"]
+    elif family.startswith("arm_splines_") or family == "dense_arm":
+        level = 0 if family == "dense_arm" else int(family[-1])
+        name = "mars_arm_splines_v2.json" if family == "dense_arm" else "mars_arm_splines_v1.json"
+        pool = load_manifest(ROOT / "configs/benchmarks" / name)["cases"]
         cases = [c for c in pool if c["level"] == level and c["split"] == "train"][:8]
         cases += [c for c in pool if c["level"] == level and c["split"] == "audit"][:8]
     else:

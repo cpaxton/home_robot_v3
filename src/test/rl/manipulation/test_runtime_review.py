@@ -90,6 +90,9 @@ def test_spatial_feedback_has_separate_gains_and_explicit_task_metric():
     defaults = TaskPoseTeacherConfig()
     np.testing.assert_array_equal(defaults.feedback_twist([1, 2, 3], [4, 5, 6]), 4 * np.arange(1, 7))
     assert defaults.rotation_length_m_per_rad == 1
+    assert not defaults.coupled_base_tracking
+    with pytest.raises(ValueError, match="boolean"):
+        TaskPoseTeacherConfig(coupled_base_tracking=1)
 
 
 @pytest.mark.parametrize("bad", [0, -1, float("nan"), float("inf"), True, "0.2"])
@@ -233,6 +236,24 @@ def test_default_teacher_config_preserves_action_and_metric_changes_are_bounded(
     for length in (0.1, 1, 2):
         action = task_pose_teacher_action(c, config=TaskPoseTeacherConfig(rotation_length_m_per_rad=length))
         assert np.isfinite(action).all() and np.max(abs(action)) <= 1
+
+
+@pytest.mark.sim
+def test_opt_in_coupled_teacher_keeps_base_in_hand_solve(environment, monkeypatch):
+    c = environment.control
+    hand = c.ee_pose().copy()
+    hand[:3] += [0.002, 0.001, 0]
+    c.set_pose_targets(c.base_pose(), [True] * 3, hand, True)
+    before = {k: getattr(c.data, k).copy() for k in ("qpos", "qvel", "ctrl")}
+
+    def independent_base_servo():
+        pytest.fail("coupled teacher must solve the base with the hand")
+
+    monkeypatch.setattr(c, "base_feedback", independent_base_servo)
+    action = task_pose_teacher_action(c, config=TaskPoseTeacherConfig(coupled_base_tracking=True))
+    assert action.shape == (8,) and np.isfinite(action).all() and np.max(abs(action)) <= 1
+    for key, value in before.items():
+        np.testing.assert_array_equal(getattr(c.data, key), value)
 
 
 @pytest.mark.sim

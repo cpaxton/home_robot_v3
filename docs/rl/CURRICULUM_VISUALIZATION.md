@@ -1,11 +1,16 @@
 # Curriculum videos and target coverage
 
-The Mars curriculum now has seven **4×4 videos**, one for each motion family:
+The Mars curriculum has seven baseline **4×4 videos**, one for each motion family:
 ordinary hand/base tracking, base-only tracking, goal changes, three random
 arm-spline levels, and unloaded TAMP approach/grasp-pose execution. Level zero is the initial spline training level; medium/full are later stages
 shown for inspection, not a claim that the current run samples them. The videos
-show actual analytic-teacher simulation, not joint-witness animation, target
-markers alone, or a learned-policy performance claim. Playback is real time.
+show actual analytic-teacher simulation. An eighth video, **Larger arm motions |
+bounded v2 candidate**, compares a broader arm distribution with shorter holds.
+All videos show teacher execution, not learned-policy performance. Playback is
+real time; the candidate video explicitly replays shorter successful recordings
+with a visible reset instead of leaving their tiles frozen. Replays are not new
+trials or continuous trajectories. Failed trials still freeze at their terminal
+recorded state.
 
 Each tile has a distinct case/seed identity, split, actual robot, target/measured
 hand axes, base goal direction and hand tracking error. Failed teacher cases
@@ -48,12 +53,15 @@ eight/ten examples are explicitly **visualization-only**, in a separate 480M
 seed namespace. They never enter the optimizer. Spline videos each show eight
 train/eight audit cases, covering all four reset postures at each level.
 
-Coverage export samples **all 144 declared spline cases**, including those
+Coverage export samples **all 144 baseline spline cases**, including those
 outside the videos. Rejected identities remain in `coverage.json`. General and
 TAMP paths come from recordings: general paths include the full announced
 reference (both stages for goal changes); TAMP coverage includes executed
 unloaded-prefix goals only. Neither failed nor unexecuted plans are silently
-converted into successful robot motion.
+converted into successful robot motion. With the sixteen v2 candidate paths,
+the current gallery contains **224 paths, 208 with active hand targets**. Its
+global span still mixes reset postures; use local excursion below to assess
+whether an individual episode exercises the arm.
 
 The 3D view and standalone PNG/SVG show hand position paths, sparse orientation
 axes, and base paths. Base-only hand masks are false; their passive hand sweeps do not count toward
@@ -105,6 +113,20 @@ player, not only an encoder return code. Keep all videos, binary models,
 recordings and compressed traces under ignored `logs/`; commit scripts, docs
 and compact numeric evidence only.
 
+Generate the additional candidate without replacing baseline recordings:
+
+```bash
+taskset -c 15 .venv/bin/python scripts/render_wbc_curriculum.py \
+  --output logs/eval/curriculum-videos-v1 --family dense_arm --loop-shorter
+```
+
+Its sixteen teacher trials all succeed. Median local hand excursion increases
+from 33.5 mm in baseline small splines to **80.5 mm**, and physical time with a
+moving reference increases from 66.5% to **86.2%**. This is a different
+distribution, not a timing-only comparison or a new actor result. Conservative
+derivative bounds can still make larger paths slow; the speed, acceleration
+and jerk caps have not been raised.
+
 [Generated videos, measured coverage and validation results](../experiments/mars_curriculum_visualization_20261117.md).
 
 ## Per-trajectory spread and dead-time audit
@@ -141,14 +163,49 @@ but do not prove the sole cause of policy failure.
 
 Opt-in `bounded_v2` timing derives duration directly from the same conservative
 velocity/acceleration/jerk bounds. `finish_after_hold` ends a general episode
-after its unchanged two-second measured quiet hold, with a three-second
-post-reference settling deadline; goal-change episodes cannot finish before
-their successor. V1 behavior remains available for comparison.
+after its unchanged two-second measured quiet hold; goal-change episodes cannot
+finish before their successor. The v2 general candidate declares a six-second
+post-reference ceiling, including that quiet hold. It ends immediately after
+successful settling rather than padding every episode to the ceiling. Spline
+cases keep their three-second ceiling. Legacy reference timing remains available
+for comparison.
 
 The candidate `mars_arm_splines_v2.json` samples larger arm excursions, uses
 independent seeds, a 0.2-second initial hold, and rejects paths below both 5 cm
 base-relative hand excursion and 0.35 rad orientation excursion. This allows
 intentional orientation-only motion without accepting no-ops. It is a candidate,
-not a newly qualified policy. Ordinary hand cases still need broader arm motion;
-fine TAMP insertions and explicit hold tasks should remain separate. Per-family
-moving/quiet/unknown physical ticks now appear in the training ledger and W&B.
+not a newly qualified policy. V2 also replaces the ordinary hand and goal-change
+pools with seeded, larger joint offsets whose hand targets are generated by FK;
+base-only and unloaded TAMP cases stay explicit. Both nominal handoff stages are
+geometry-admitted before execution, and the hand-active references must meet the
+same local spread requirement. Fine TAMP insertions and explicit hold tasks
+remain separate. Per-family moving/quiet/unknown physical ticks now appear in
+the training ledger and W&B. The preflight requires exact canonical identities
+and source binding for every family before a v2 training launch.
+
+The first expanded preflight retained all 70 cases and confirmed all stops, but
+only 4/16 ordinary hand, 1/8 base and 5/16 goal-change cases succeeded (splines
+24/24, unloaded TAMP 6/6). A three-second ceiling starved some two-second holds.
+Diagnostics also exposed a stale 5 mm fixture tolerance in the base servo after
+the task switched to a 5 cm region. Correcting that mismatch alone can leave
+3–4 mm hand residuals: a stopped base removes a direction the five-joint arm
+needs. The v2 general teacher therefore opts into a joint base/arm Jacobian
+solve even with all base coordinates specified. Active base coordinates remain
+lower-weight objectives; the precise hand contract and native motion guards
+remain unchanged. This is an explicit analytic baseline option, not an actor
+fallback. Default TAMP/runtime teacher configuration retains its existing solve.
+
+The corrected full preflight passes **70/70**, with 70 confirmed stops: 24 arm
+splines, 16 ordinary hand cases, 8 base cases, 16 handoffs and 6 unloaded TAMP
+commands. Its canonical source/identity readiness check passes. The report is
+kept under `logs/eval/motion-density-v2-coupled-preflight/`; the earlier failed
+preflight remains under `logs/eval/motion-density-v2-full-preflight/`. This
+validates the teacher distribution, not the learned policy or hardware safety.
+
+Reproduce it with one numerical worker:
+
+```bash
+taskset -c 15 .venv/bin/python -m emet.rl.manipulation.arm_spline_benchmark \
+  --manifest configs/benchmarks/mars_arm_splines_v2.json --level 0 --teacher \
+  --output logs/eval/motion-density-v2-coupled-preflight
+```

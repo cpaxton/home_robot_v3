@@ -102,6 +102,21 @@ def require_preflight(path, manifest_path, level):
         r["metrics"]["unsafe_contact"] or r["metrics"]["wheel_lift"] for r in train
     ):
         raise ValueError("teacher training distribution is not reliable enough for this curriculum level")
+    if spec["format"] == "mars-arm-splines-v2":
+        from emet.rl.manipulation.motion_distribution import preflight_pools
+
+        for family, cases in preflight_pools().items():
+            rows = report.get("general_teacher", {}).get(family, [])
+            if [r.get("case") for r in rows] != cases or any(
+                not r.get("admitted") or r.get("stop_confirmed") is not True for r in rows
+            ):
+                raise ValueError("complete canonical v2 family preflight required: " + family)
+            train = [r for r in rows if r["case"]["split"] == "train"]
+            if sum(r["success"] for r in train) / len(train) < 0.85 or any(
+                any(r["metrics"].get(k, True) for k in ("unsafe_contact", "wheel_lift", "invalid_physics"))
+                for r in train
+            ):
+                raise ValueError("teacher family is not ready for training: " + family)
     return report
 
 
@@ -190,6 +205,13 @@ def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
                 report["results"][name].append(row)
                 save(output / "report.json", report)
                 print(name, case["id"], row["success"], row["code"], flush=True)
+        if teacher and spec["format"] == "mars-arm-splines-v2":
+            from emet.rl.manipulation.motion_distribution import preflight_pools, teacher_preflight
+
+            report["general_teacher"] = teacher_preflight(
+                preflight_pools(), spec["spread_requirements"], settling_budget_s=spec["general_settling_budget_s"]
+            )
+            save(output / "report.json", report)
         if source_hashes() != sources or source_state(ROOT) != bound_state:
             raise RuntimeError("sources changed during spline benchmark")
         report["complete"] = True

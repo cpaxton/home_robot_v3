@@ -14,7 +14,7 @@ from emet.visualization.curriculum_record import record, sha
 from emet.visualization.curriculum_video import render
 
 
-def run(output, families, *, fps=8, resume=False):
+def run(output, families, *, fps=8, resume=False, loop_shorter=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     state = {
@@ -61,7 +61,7 @@ def run(output, families, *, fps=8, resume=False):
                 ):
                     raise ValueError("changed render; use a fresh output directory")
             else:
-                render(output, family, fps=fps)
+                render(output, family, fps=fps, loop_shorter=loop_shorter)
             publish(output)
         update("coverage")
         export(output)
@@ -80,6 +80,7 @@ def main():
     parser.add_argument("--family", action="append", choices=FAMILIES)
     parser.add_argument("--fps", type=int, default=8)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--loop-shorter", action="store_true")
     args = parser.parse_args()
     families = args.family or (
         "arm_splines_l0",
@@ -90,7 +91,7 @@ def main():
         "goal_changes",
         "tamp",
     )
-    run(args.output, families, fps=args.fps, resume=args.resume)
+    run(args.output, families, fps=args.fps, resume=args.resume, loop_shorter=args.loop_shorter)
 
 
 if __name__ == "__main__":

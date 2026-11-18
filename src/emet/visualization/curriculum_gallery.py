@@ -26,6 +26,7 @@ def publish(directory):
         "videos": [],
         "coverage_available": False,
         "assets": {},
+        "expected_videos": len(FAMILIES),
     }
     audit_path = directory / "trajectory-spread.json"
     motion = json.loads(audit_path.read_text())["families"] if audit_path.exists() else {}
