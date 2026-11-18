@@ -60,6 +60,19 @@ flowchart LR
 | **No LLM** | `--no-llm` | Letter commands: `E` explore, `M` pick+place, `Q` question, `P` picture, `FIND x` / `find x`. |
 | **Scripted** | `-c` / `--command` | Run one or more turns non-interactively, then exit. **Discord is disabled** automatically (pass `--no-discord` in scripts to silence the warning). |
 
+### Inference and result contracts
+
+CHAT binds each model's accepted call keywords before inference. Requested
+camera/native-tool inputs must be supported by the selected client. Internal
+inference errors, including `TypeError`, propagate after one invocation;
+CHAT does not retry by dropping tools, images or history arguments. Clients
+accepting arbitrary keyword arguments own their validation.
+
+Tool continuation uses retained structured receipts. Legacy prose is marked
+`unverified_result`; text such as “Done.” is not proof of action success.
+Missing-image and scan failures return explicit outcomes. See the
+[architecture](agent_architecture.md) and [contracts](agent_tool_contracts.md).
+
 ### VLM history and shared inference
 
 `OpenaiVLLMClient.generate_multimodal()` clears history by default
@@ -162,7 +175,7 @@ Do **not** put the 8B VL on every chat turn as the router — that made “what 
 - **`PYTORCH_ALLOC_CONF`**: `emet run agent` sets `expandable_segments:True` before CUDA init unless you already exported `PYTORCH_ALLOC_CONF`.
 - **Larger text**: `--llm qwen35-9B` when you want a stronger text router (still not a substitute for `--eqa` vision).
 - **Vision**: Camera→chat VL is **off by default** (use **`--vl-include-camera`** to enable). Vision questions should use `describe_scene` / `send_image` with **`--eqa`** for the smart captioner.
-- **`describe_scene`** (“what can you see?”): **caption the current head image** with the EQA VLM when `--eqa` is on, then **ground with scene-graph / map** labels if available. No auto look-around or explore — use `look_around` / `explore` / `scan_environment` for that. Without `--eqa`, Discord presets fall back to curated detector text (`describe_use_detector_fallback: true`). Always attaches **live head RGB**; usable named object crops may be attached as extras.
+- **`describe_scene`** (“what can you see?”): **caption the current head image** with the EQA VLM when `--eqa` is on, then **ground with scene-graph / map** labels if available. No auto look-around or explore — use `look_around` / `explore` / `scan_environment` for that. Without `--eqa`, Discord presets fall back to curated detector text (`describe_use_detector_fallback: true`). Captions and attaches the **same owned head RGB-D capture**; live updates during inference do not replace the photo. Acquisition freshness remains independently unverified. Stored object crops use `send_object_image`.
 - **YoloE thresholds (two knobs):** `detection.confidence_threshold` (~0.02) is for **instance/graph candidate proposals** (high recall). Raising it can hurt find/graph coverage — only change with task metrics. Chat-only tightening uses `detection.describe_confidence_threshold` (default 0.30) when `describe_use_detector_fallback: true`; that does **not** change mapping.
 - **RGB size**: ``eqa.vl_image_max_side`` (default **512**) downsamples frames before VL / `describe_scene`. Optional ``eqa.vl_image_max_pixels``. Override with ``--set eqa.vl_image_max_side=384``.
 - **`--max-tokens`**: default **256** (tool JSON is short; large values make HF generate crawl).

@@ -28,13 +28,13 @@ on the active communication integrations.
 
 | Tool | Main inputs | Effect | Contract |
 | --- | --- | --- | --- |
-| `describe_scene` | optional pan/tilt | Caption, or explicit head motion/capture | No args: caption without motion. Angles: measured stationary gaze, no extra caption call; arguments appear only with a qualified head contract. |
+| `describe_scene` | optional pan/tilt | Caption, or explicit head motion/capture | No args: caption and attach the same owned head snapshot without motion; freshness is independently unverified. Angles: measured stationary gaze, no extra caption call; arguments appear only with a qualified head contract. |
 | `ground_object` | complete object query | RGB-D perception and object admission | Uses the decision's owned snapshot. Returns world geometry or explicit failure, never a retrieval-anchor fallback. |
 | `query_memory` | question | Read memory/model inference | Answer about recorded evidence; not a fresh visibility or localization receipt. |
 | `query_scene_graph` | question | Read memory/model inference | GraphEQA when configured, otherwise open-vocabulary graph; overlaps query_memory but retains different fallback paths. |
 | `list_scene_relations` | none | Read graph | Recorded relations and identities; no new observation or physical feasibility proof. |
 | `send_image` | none | Head photo/delivery | Current available head image; no promised camera motion or independent acquisition freshness. |
-| `take_picture` | none | Local head-photo capture | Local capture/storage, not a caption or guaranteed remote delivery. |
+| `take_picture` | none | Local capture command and head photo | Runs the configured local capture command and queues an available head frame for the reply. Missing frame is an explicit failure; local persistence and remote delivery are not inferred from executor liveness. |
 | `send_object_image` | object label | Stored crop/delivery | Historical object crop, explicitly different from a live head image. |
 | `aim_arm_at` | object label | Arm/kinematic camera aim | Requires controller support; inspect failure. This legacy aim skill does not authorize pickup/contact. |
 | `take_ee_picture` | none | Wrist photo | Requires successful prior arm aim in the session. Missing/dark stream cannot be substituted with an invented image. |
@@ -98,6 +98,22 @@ on the active communication integrations.
 EQA can additionally bind the same `observe_floor`, `rotate_base` and
 `move_forward` contracts when the adapter/controller supports them. Runtime
 limits and the actual advertised pack remain the source of truth.
+
+## Result handling
+
+CHAT retains typed outcomes through dispatch, TAMP continuation and historical
+summaries. Prompt/log text is a rendering, not an execution receipt to parse
+again. Session continuation and task success are independent. `send_image`,
+`take_picture`, `scan_environment` and `explore` return explicit outcomes;
+missing frames, interrupted scans and rejected exploration remain failures.
+Legacy prose receives `unverified_result`, never success inferred from wording.
+Unknown legacy results are recorded as unknown in the opt-in attempt ledger.
+Versioned TAMP and relative-motion results retain their stricter envelope checks.
+Their nested receipt data is copied at admission, so later provider updates cannot
+rewrite retained progress. A typed wrapper whose success flag disagrees with its
+embedded receipt is rejected; partial execution cannot become a successful
+continuation. Rotate-only refusals retain their versioned reason and recovery
+instruction through dispatch.
 
 ## Evidence boundaries
 

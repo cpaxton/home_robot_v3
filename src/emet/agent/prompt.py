@@ -53,8 +53,9 @@ Choose one next action at a time when later actions depend on its outcome.
 
 Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
 go_home, hand_over, quit). Prefer "message": "" — the turn ends after the action.
-For photos the user should *see*, use send_image or describe_scene (not take_picture alone —
-those only capture locally and produce no Discord reply). Never call take_ee_picture without a
+For photos the user should *see*, prefer send_image or describe_scene. take_picture also
+runs the local capture command and queues an available photo; missing camera data remains
+failure. Never call take_ee_picture without a
 prior successful aim_arm_at in this session (it will refuse). Prefer moving/reorienting the
 head with explicit describe_scene pan/tilt or the validated base tools for a new view.
 
@@ -159,11 +160,13 @@ def build_agent_system_prompt(
     tools_block = get_tool_descriptions_for_prompt(tools)
     prompt = f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"
     if env_base_rotate_only():
+        from emet.agent.tool_policy import ROTATE_ONLY_BLOCKED_TOOLS
+
+        blocked_names = ", ".join(ROTATE_ONLY_BLOCKED_TOOLS)
         prompt += (
             "\n\n# Base motion safety (EMET_BASE_ROTATE_ONLY)\n"
             "XY drive is DISABLED (robot tethered / plugged in). "
-            "Do NOT call explore, move_forward, find_objects, go_home, pick_place, "
-            "execute_pick_place_plan, or hand_over. "
+            f"Do NOT call {blocked_names}. "
             "If the user asks to drive or move forward, reply with tool_calls [] and explain you can "
             "only rotate in place, scan, or describe until drive is re-enabled. "
             "Allowed motion: rotate_base, face_toward, scan_environment.\n"

@@ -37,7 +37,10 @@ not force agentic verification. Offline chat does not build the robot tool pack.
 | Tool interface | [`agent/tool.py`](../src/emet/agent/tool.py) | Standard-library-only `Tool` value object, API schema serialization and prompt tool rendering. Original imports from `agent.tools` remain supported. |
 | Metadata | [`agent/skills/specs.py`](../src/emet/agent/skills/specs.py) | Names, descriptions, JSON argument schemas, `returns_info`, EQA submode membership, head-limit schema specialization. |
 | Mode binding | [`agent/skills/registry.py`](../src/emet/agent/skills/registry.py), [`skills/eqa.py`](../src/emet/agent/skills/eqa.py) | Bind CHAT closures or EQA executor methods. EQA adds floor/base skills only for declared controller capabilities. |
-| CHAT handlers | [`agent/tools.py`](../src/emet/agent/tools.py) | Bind specs to session closures. Implement tool effects, queue reply images, delegate geometry/motion/manipulation to backend APIs. Construction does not initialize models or probe live robot properties. |
+| CHAT handlers | [`agent/tools.py`](../src/emet/agent/tools.py), [`agent/chat_tamp.py`](../src/emet/agent/chat_tamp.py) | Bind specs to session closures; the dedicated TAMP binder owns task adapter/input routing. Shared graph-query plumbing retains each tool's fallback order. Construction does not initialize models or probe live robot properties. |
+| Inference binding | [`agent/llm_call.py`](../src/emet/agent/llm_call.py) | Bind supported call keywords once per client. Requested image/native-tool inputs must be supported; inference exceptions propagate without capability-probing retries. |
+| Capability restrictions | [`agent/tool_policy.py`](../src/emet/agent/tool_policy.py) | One rotate-only restriction list drives handler refusals, unknown-tool dispatch feedback and prompt text. |
+| Tool receipts | [`agent/tool_outcome.py`](../src/emet/agent/tool_outcome.py) | `DispatchResult` retains typed outcomes alongside prompt/log messages. Continuation and historical summaries consume outcomes directly. |
 | Prompt/parser | [`agent/prompt.py`](../src/emet/agent/prompt.py) | CHAT identity, tool rendering and JSON response parsing. Parsing is not physical action validation. |
 | Decision image | [`agent/camera_snapshot.py`](../src/emet/agent/camera_snapshot.py) | Own the RGB-D, calibration, pose and identity behind one coordinator decision; `ground_object` uses this snapshot when supplied. |
 | CHAT task continuation | `agent/tamp_dialogue.py`, `tamp_session.py`, `tamp_world.py` | Bounded cross-turn historical summaries, serial task calls, and invalidation around world/view changes. |
@@ -68,10 +71,27 @@ policies. Supported controllers can add `observe_floor`, `rotate_base` and
 `grounded_v2` also specializes selected descriptions and frontier arguments.
 Read the actual session schemas rather than deriving support from a static count.
 
-CHAT's `returns_info` determines whether a result is fed back for a follow-up
-model response. It does not signal execution success. Legacy command mappings
+CHAT's `returns_info` requests a follow-up model response for successful
+information tools. Failed or unverified outcomes also request feedback, including
+an action-only handler with no receipt. It does not signal execution success. Legacy command mappings
 (`say`, gestures, `go_home`, `hand_over`, `quit`) and direct functions both use
 `Tool`; the dispatcher preserves ordering and applies TAMP batch-stop rules.
+`DispatchResult.continue_running` reports session liveness separately from each
+outcome's `ok` and machine status. Existing three-value dispatcher unpacking is
+supported; the runtime uses `outcomes` for continuation/history without parsing
+its own rendered strings. Historical helper callers can still supply rendered
+messages, decoded only at that compatibility boundary.
+
+Capture, scan and exploration handlers return explicit outcomes. Legacy prose
+has `status=unverified_result` and cannot establish action success, even if it
+says “Done.”; opt-in ledger rows record such results as unknown. Existing
+versioned TAMP and relative-motion envelopes keep their validation contracts.
+Versioned receipts own their nested data and reject disagreement between wrapper
+success and envelope status/code. Historical summaries cannot inherit a provider's
+later mutations. Adapter caches also belong to their exact client; bound-method
+callbacks are rebound without writing to shared function metadata.
+The TAMP binder resolves mode, input provenance and adapters at call time;
+extraction does not cache authorization or enable observed execution.
 
 ## One decision and its evidence
 
@@ -92,6 +112,11 @@ sequenceDiagram
     L-->>U: Reply / scored result
 ```
 
+No-argument CHAT `describe_scene` owns one RGB-D snapshot and passes it to the
+caption controller. Photo delivery uses that same capture even if live buffers
+change during inference. This is capture consistency, not independently verified
+acquisition freshness. Explicit head aiming retains its measured inspection path.
+
 Capture, visual assessment, geometry admission and movement are distinct events.
 For example, CHAT `describe_scene` with explicit angles produces a measured head
 inspection; the next camera-enabled decision retains its own RGB-D snapshot.
@@ -111,7 +136,7 @@ their pinned source and settings.
 ## Updating or extending tools
 
 1. Change metadata in `skills/specs.py`; keep stable names needed by traces.
-2. Bind the CHAT handler in `tools.py`, or EQA handler through its executor.
+2. Bind the CHAT handler in `tools.py` (task handlers in `chat_tamp.py`), or an EQA handler through its executor.
    Keep geometry/motion/planning validation in the existing backend API.
 3. Apply runtime advertisement changes where the mode's session is assembled.
    Do not confuse a registry entry with a capability guarantee.
@@ -133,6 +158,6 @@ relative-motion and TAMP tests check the corresponding execution contracts.
 These checks do not establish live robot or model task success.
 
 The remaining large CHAT handler and runtime modules contain substantial backend
-integration. Further splits should follow real ownership boundaries (perception,
-navigation, task adapters) while retaining one spec registry and one dispatcher;
-adding a second registry or another recovery policy would increase review cost.
+integration. The task binder and inference adapter now have separate owners.
+Further splits should follow perception/navigation/session boundaries while
+retaining one spec registry and one dispatcher.

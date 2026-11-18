@@ -21,8 +21,9 @@ memory and skill interfaces do not make these controllers interchangeable.
 \texttt{agent/loop.py} owns the CHAT session and ordered dispatch.
 \texttt{agent/tool.py} provides the lightweight tool value object and schema/prompt
 rendering. \texttt{agent/skills/specs.py} owns both modes' canonical metadata;
-CHAT binds it to closures in \texttt{agent/tools.py}, while EQA binds it to its
-executor. Metadata is not repeated in CHAT handler declarations.
+CHAT binds it to observation/navigation closures in \texttt{agent/tools.py}
+and task closures in \texttt{agent/chat\_tamp.py}, while EQA binds it to its
+executor. Shared restrictions drive binding, dispatch feedback and prompt text. Metadata is not repeated in CHAT handler declarations.
 Figure~\ref{fig:agent_tool_architecture} shows these boundaries. The repository
 \path{docs/agent_architecture.md} maps descendants to their owners, and
 \path{docs/agent_tool_contracts.md} records each tool's inputs, effects and limits.
@@ -94,7 +95,9 @@ catalog and optional shared tools are in Appendix~\ref{app:agentic_tools}.}
 \end{table}
 
 \paragraph{Observation and motion contracts.}
-\texttt{describe\_scene} without arguments captions the current head view;
+\texttt{describe\_scene} without arguments passes one owned RGB-D capture
+through captioning and photo delivery, so live buffer updates cannot replace the
+described image. This consistency does not establish acquisition freshness;
 explicit capability-qualified pan/tilt requests measured stationary gaze without
 an additional caption call. \texttt{ground\_object} uses the owned RGB-D snapshot
 behind the coordinator's decision, retaining capture identity, calibration and
@@ -117,6 +120,17 @@ fresh measured geometry. Ordered lift/orient/extend pregrasp avoids falling back
 to a simultaneous arm sweep when the ordered route is blocked.
 
 \paragraph{Structured outcomes govern continuation.}
+CHAT retains typed tool outcomes for continuation and historical summaries;
+prompt/log strings are renderings, rather than receipts parsed again by those
+consumers. Versioned receipts own nested provider data and reject a wrapper
+whose success flag disagrees with its embedded outcome. Session liveness is
+independent from action success. Missing frames,
+interrupted scans and rejected exploration carry explicit outcomes. Legacy prose
+is unverified, even when its wording suggests completion. A signature-aware
+client adapter binds supported inference arguments; internal model exceptions do
+not trigger capability-probing retries that discard requested tools or images.
+These implementation changes do not revise archived measurements.
+
 Versioned JSON reports status, public failure code, recovery instruction and
 opaque one-shot handles. Execution rejects changed scene/robot identity and
 state, verifies each operator's effects and protected goals, and checks final
