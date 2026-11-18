@@ -27,6 +27,8 @@ def publish(directory):
         "coverage_available": False,
         "assets": {},
     }
+    audit_path = directory / "trajectory-spread.json"
+    motion = json.loads(audit_path.read_text())["families"] if audit_path.exists() else {}
     for family in FAMILIES:
         path = directory / (family + "-video.json")
         if not path.exists():
@@ -38,9 +40,10 @@ def publish(directory):
             if Path(name).name != name or Path(name).suffix not in TYPES or sha(directory / name) != digest:
                 raise ValueError("unbound curriculum media")
             catalog["assets"][name] = digest
-        catalog["videos"].append(
-            {k: row[k] for k in ("family", "title", "controller", "duration_s", "resolution", "summary")}
-        )
+        item = {k: row[k] for k in ("family", "title", "controller", "duration_s", "resolution", "summary")}
+        if family in motion:
+            item["motion_summary"] = motion[family]
+        catalog["videos"].append(item)
     if (directory / "coverage.json").exists():
         coverage = json.loads((directory / "coverage.json").read_text())
         catalog.update(coverage_available=True, coverage_summary=coverage["summary"])

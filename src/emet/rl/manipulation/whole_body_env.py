@@ -100,6 +100,8 @@ class ControlStepMixture(gym.Env):
         self.weights = w / w.sum()
         self.ticks = np.zeros(len(w), dtype=np.int64)
         self.episodes = np.zeros(len(w), dtype=np.int64)
+        self.reference_motion_ticks = np.zeros(len(w), dtype=np.int64)
+        self.reference_unknown_ticks = np.zeros(len(w), dtype=np.int64)
         self.active = None
         self.finished = True
         first = next(iter(self.environments.values()))
@@ -116,6 +118,11 @@ class ControlStepMixture(gym.Env):
                 "control_ticks": int(self.ticks[i]),
                 "episodes": int(self.episodes[i]),
                 "requested_fraction": float(self.weights[i]),
+                "reference_motion_ticks": int(self.reference_motion_ticks[i]),
+                "reference_quiet_ticks": int(
+                    self.ticks[i] - self.reference_motion_ticks[i] - self.reference_unknown_ticks[i]
+                ),
+                "reference_unknown_ticks": int(self.reference_unknown_ticks[i]),
             }
             for i, name in enumerate(self.names)
         }
@@ -137,7 +144,18 @@ class ControlStepMixture(gym.Env):
         ticks = info.get("elapsed_control_ticks", 1)
         if isinstance(ticks, bool) or int(ticks) != ticks or ticks <= 0:
             raise ValueError("positive integer physical control ticks required")
+        moving = info.get("reference_motion_ticks")
+        if moving is not None and (
+            isinstance(moving, (bool, np.bool_))
+            or not isinstance(moving, (int, np.integer))
+            or not 0 <= moving <= ticks
+        ):
+            raise ValueError("reference motion ticks must be an integer within elapsed ticks")
         self.ticks[self.active] += int(ticks)
+        if moving is None:
+            self.reference_unknown_ticks[self.active] += int(ticks)
+        else:
+            self.reference_motion_ticks[self.active] += int(moving)
         self.finished = terminated or truncated
         return (
             obs,

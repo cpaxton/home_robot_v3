@@ -70,7 +70,9 @@ def nominal_successor(control, first, case, change):
     view = copy.copy(control)
     view.data = first.fk.data
     successor = CoupledReference(
-        view, {**case, "travel_m": change["travel_m"], "turn_rad": change["turn_rad"], "arm_delta": change["arm_delta"]}
+        view,
+        {**case, "travel_m": change["travel_m"], "turn_rad": change["turn_rad"], "arm_delta": change["arm_delta"]},
+        timing=first.timing,
     )
     before, after = first.sample(first.end), successor.sample(0)
     base_difference = np.asarray(before[0]) - after[0]
@@ -94,7 +96,17 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
     observation contains its goals before the actor chooses the next action.
     """
 
-    def __init__(self, robot, cases, *, changes, suite_path=COARSE_SUITE, reward_config=None):
+    def __init__(
+        self,
+        robot,
+        cases,
+        *,
+        changes,
+        suite_path=COARSE_SUITE,
+        reward_config=None,
+        timing="legacy_v1",
+        finish_after_hold=False,
+    ):
         if robot not in PROFILES:
             raise ValueError("unsupported goal-change robot")
         if not isinstance(changes, dict):
@@ -105,7 +117,14 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
             raise ValueError("nominal handoffs require hand-active cases without measured-state retargets")
         self.ready_for_steps = False
         self.changes = {name: validate_change(spec, PROFILES[robot].arm_size) for name, spec in changes.items()}
-        super().__init__(robot, cases, suite_path=suite_path, reward_config=reward_config)
+        super().__init__(
+            robot,
+            cases,
+            suite_path=suite_path,
+            reward_config=reward_config,
+            timing=timing,
+            finish_after_hold=finish_after_hold,
+        )
 
     def reset(self, *, seed=None, options=None):
         self.ready_for_steps = False
@@ -122,6 +141,11 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
             if not admission["accepted"]:
                 raise ValueError("goal_change_reference_rejected:" + str(admission["reason"]))
             self.switch_at = float(np.ceil((first.end + change["dwell_s"]) / e.profile.dt - 1e-10) * e.profile.dt)
+            if self.finish_after_hold:
+                from dataclasses import replace
+
+                horizon = float(np.ceil((self.switch_at + self.successor.end + 3.0) / e.profile.dt) * e.profile.dt)
+                e.config = replace(e.config, horizon=horizon)
             if self.switch_at + self.successor.end + e.config.terminal_hold_seconds > e.config.horizon:
                 raise ValueError("goal_change_exceeds_episode_horizon")
             self.episode_origin = float(e.data.time)
@@ -133,8 +157,22 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
                 "anchor": "first_nominal_endpoint",
                 "announced": "at_switch_not_in_prior_preview",
             }
+            from emet.rl.manipulation.trajectory_metrics import trajectory_spread
+
+            times = np.r_[first.times, self.switch_at + self.successor.times]
+            base = np.vstack([first.base, self.successor.base])
+            hand = np.vstack([first.hand, self.successor.hand])
+            unique = np.r_[True, np.diff(times) > 1e-10]
+            self.reference_spread = trajectory_spread(
+                times[unique], hand[unique], base[unique], hand_mask=first.hand_mask, base_mask=first.base_mask
+            )
             self.ready_for_steps = True
-            return observation, {**info, "goal_change": self.change_record.copy(), "goal_change_delivered": False}
+            return observation, {
+                **info,
+                "goal_change": self.change_record.copy(),
+                "goal_change_delivered": False,
+                "trajectory_spread": self.reference_spread,
+            }
         except Exception:
             self.unwrapped.control.stop()
             raise
@@ -164,3 +202,6 @@ class GoalChangeTrackingEnv(CoupledTrackingEnv):
             truncated,
             {**info, "goal_change": self.change_record.copy(), "goal_change_delivered": self.change_delivered},
         )
+
+    def may_finish_reference(self):
+        return self.change_delivered

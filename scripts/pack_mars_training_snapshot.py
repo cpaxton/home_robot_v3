@@ -26,6 +26,8 @@ REQUIRED = (
     "src/emet/rl/test_drive.html",
     "configs/benchmarks/mars_goal_changes_v1.json",
     "configs/benchmarks/mars_arm_splines_v1.json",
+    "configs/benchmarks/mars_arm_splines_v2.json",
+    "scripts/audit_wbc_trajectory_spread.py",
     "src/emet/rl/manipulation/arm_spline_gallery.html",
     "src/emet/visualization/curriculum_gallery.html",
     "src/emet/visualization/curriculum_coverage.html",

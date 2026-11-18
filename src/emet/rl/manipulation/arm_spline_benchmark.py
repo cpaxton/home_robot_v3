@@ -60,6 +60,7 @@ def episode(env, case, policy=None):
         "rejections": initial["spline_rejections"],
         "peak_path_error": info["spline_peak_path_error"],
         "joint_limit_push_ticks": info["joint_limit_push_ticks"],
+        "trajectory_spread": initial.get("trajectory_spread"),
         "metrics": {
             k: metrics[k]
             for k in (
@@ -116,7 +117,13 @@ def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
     sources = source_hashes()
     bound_state = source_state(ROOT)
     levels = tuple(SplineLevel(**v) for v in spec["levels"])
-    env = ArmSplineTrackingEnv(selected, levels=levels)
+    env = ArmSplineTrackingEnv(
+        selected,
+        levels=levels,
+        timing=spec.get("reference_timing", "legacy_v1"),
+        finish_after_hold=spec.get("finish_after_hold", False),
+        spread_requirements=spec.get("spread_requirements"),
+    )
     report = {
         "format": "arm-spline-preflight-v1",
         "manifest_sha256": digest(spec),
@@ -146,6 +153,7 @@ def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
                         "admission": env.admission,
                         "rejections": env.rejections.copy(),
                         "certificate": reference.certificate,
+                        "trajectory_spread": reference.spread,
                         "time_s": reference.times[indices].tolist(),
                         "hand": reference.hand[indices].tolist(),
                     }

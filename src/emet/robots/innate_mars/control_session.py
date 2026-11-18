@@ -56,7 +56,9 @@ class GuardedControlSession:
             if np.linalg.norm(twist[:3]) >= 0.03 or np.linalg.norm(twist[3:]) >= 0.05:
                 raise ValueError("base must be stationary before starting a session")
         except SystemExit:
-            self.fault = self.guard.fault
+            # Feedback/age validation can abort before the boundary exists.
+            # Preserve that original termination and latch a nonempty fault.
+            self.fault = getattr(self.guard, "fault", None) or "session start aborted"
             raise
         except Exception as exc:
             self.fault = str(exc)

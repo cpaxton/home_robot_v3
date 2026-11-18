@@ -166,6 +166,7 @@ def train(args):
                     "spline_peak_path_error",
                     "joint_limit_push_ticks",
                     "spline_rejections",
+                    "trajectory_spread",
                 )
             }
             with (output / "episodes.jsonl").open("a") as stream:
@@ -197,11 +198,17 @@ def train(args):
             with (output / "updates.jsonl").open("a") as stream:
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
             if run:
+                motion_log = {}
+                for name, item in env.ledger().items():
+                    known = item["reference_motion_ticks"] + item["reference_quiet_ticks"]
+                    if known:
+                        motion_log[f"family/{name}/reference_motion_fraction"] = item["reference_motion_ticks"] / known
                 run.log(
                     {
                         "decisions": row["decisions"],
                         "control_ticks": ticks,
                         **{f"reward/{i}": float(v) for i, v in enumerate(rollout["rewards"].mean(0))},
+                        **motion_log,
                     },
                     step=row["decisions"],
                 )

@@ -59,6 +59,26 @@ def test_disabled_or_incomplete_driver_never_writes():
     assert not d.writes
 
 
+@pytest.mark.parametrize("stage", ["feedback", "age"])
+def test_session_start_preserves_abort_before_guard_creation(monkeypatch, stage):
+    driver = Driver()
+    session = GuardedControlSession(driver=driver, profile=MARS, enabled=True)
+    original = SystemExit(2)
+
+    def abort(*args):
+        raise original
+
+    monkeypatch.setattr(
+        driver if stage == "feedback" else session, "feedback" if stage == "feedback" else "_age", abort
+    )
+    with pytest.raises(SystemExit) as raised:
+        session.start()
+    assert raised.value is original and session.guard is None
+    assert session.fault == "session start aborted" and not driver.writes
+    with pytest.raises(RuntimeError, match="restarted"):
+        session.start()
+
+
 def test_profile_acceleration_and_target_limits_apply_before_dispatch():
     d = Driver()
     s = GuardedControlSession(driver=d, profile=MARS, enabled=True)

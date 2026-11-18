@@ -17,7 +17,6 @@ from scipy.spatial.transform import Rotation
 
 from emet.rl.manipulation.carry_benchmark import digest
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
-from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
 from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -248,7 +247,10 @@ def reference_support_margin(model, data, profile):
 class CoupledReference(TaskPoseTrajectory):
     """Continuous FK hand target on a differential-drive axle arc and arm path."""
 
-    def __init__(self, control, case):
+    def __init__(self, control, case, *, timing="legacy_v1"):
+        from emet.rl.manipulation.reference_timing import retime_derivative_bounds
+
+        self.timing = timing
         self.fk = TaskFrameFK(control.model, control.data, control)
         self.case = dict(case)
         self.start_base = control.base_pose().copy()
@@ -281,18 +283,7 @@ class CoupledReference(TaskPoseTrajectory):
         speed = np.r_[p.base_speed, p.base_yaw_speed, p.speed]
         accel = np.r_[p.base_acceleration, p.base_yaw_acceleration, p.acceleration]
         jerk = 4 * accel
-        scale = 1.0
-        for _ in range(20):
-            path, _ = compile_joint_path([[0.0], [1.0]], [1 / scale], [1 / scale**2], [1 / scale**3])
-            v, a, j = (float(x[0]) for x in polynomial_peaks(path.segments[0]))
-            bounds = np.array([q1 * v, q2 * v * v + q1 * a, q3 * v**3 + 3 * q2 * v * a + q1 * j])
-            ratios = np.max(bounds / np.array([speed, accel, jerk]), axis=1)
-            factor = max(ratios[0], np.sqrt(ratios[1]), np.cbrt(ratios[2]))
-            if factor <= 1 + 1e-9:
-                break
-            scale *= factor * 1.01
-        else:
-            raise ValueError("cannot time-scale the coupled reference")
+        path, bounds = retime_derivative_bounds(q1, q2, q3, speed, accel, jerk, mode=timing)
         self.path = path
         self.certificate = {
             "speed": speed.tolist(),
@@ -304,6 +295,7 @@ class CoupledReference(TaskPoseTrajectory):
             else "differential_drive_hand_nullspace_cubic_witness",
             "jerk_limit_source": "experimental_4_times_acceleration",
             "dynamic_feasibility_verified": False,
+            **({"timing": timing} if timing != "legacy_v1" else {}),
         }
         times = np.r_[np.arange(0, path.end, p.dt), path.end]
         base, hand = zip(*(self._sample(t) for t in times), strict=True)
@@ -400,7 +392,9 @@ def admit_reference(env, reference):
 class CoupledTrackingEnv(gym.Wrapper):
     """Reusable general training share; task/case metadata stays outside the actor."""
 
-    def __init__(self, robot, cases=None, *, suite_path=SUITE, reward_config=None):
+    def __init__(
+        self, robot, cases=None, *, suite_path=SUITE, reward_config=None, timing="legacy_v1", finish_after_hold=False
+    ):
         from gymnasium import spaces
 
         from emet.rl.manipulation.observation_layout import history_layout
@@ -408,6 +402,10 @@ class CoupledTrackingEnv(gym.Wrapper):
 
         if robot not in {"innate_mars", "stretch"}:
             raise ValueError("unsupported coupled robot")
+        if timing not in {"legacy_v1", "bounded_v2"} or type(finish_after_hold) is not bool:
+            raise ValueError("declared reference timing and boolean episode completion required")
+        self.timing, self.finish_after_hold = timing, finish_after_hold
+        self.episode_closed = True
         suite = load_suite(suite_path)
         from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
 
@@ -472,7 +470,7 @@ class CoupledTrackingEnv(gym.Wrapper):
         raw, info = e.reset(seed=case["seed"])
         if info.get("initialization_failed"):
             raise ValueError("coupled_initialization_failed")
-        reference = CoupledReference(e.control, case)
+        reference = CoupledReference(e.control, case, timing=self.timing)
         self.admission = admit_reference(e, reference)
         if not self.admission["accepted"]:
             raise ValueError("coupled_reference_rejected:" + str(self.admission["reason"]))
@@ -481,6 +479,20 @@ class CoupledTrackingEnv(gym.Wrapper):
         e.control.pose_only_targets = True
         e.set_task_trajectory(reference)
         e.control.history = None
+        from emet.rl.manipulation.trajectory_metrics import trajectory_spread
+
+        self.reference_spread = trajectory_spread(
+            reference.times,
+            reference.hand,
+            reference.base,
+            hand_mask=reference.hand_mask,
+            base_mask=reference.base_mask,
+        )
+        if self.finish_after_hold:
+            from dataclasses import replace
+
+            e.config = replace(e.config, horizon=float(np.ceil((reference.end + 3.0) / e.profile.dt) * e.profile.dt))
+        self.episode_closed = False
         self.retarget_at = reference.end * case["retarget"]["at_fraction"] if "retarget" in case else None
         self.retargeted = False
         self.meter = RewardMeter(
@@ -494,29 +506,45 @@ class CoupledTrackingEnv(gym.Wrapper):
             "coupled_admission": self.admission,
             "reward_contract": self.meter.record(),
             "reference_sha256": digest(reference.record()),
+            "trajectory_spread": self.reference_spread,
         }
 
     def step(self, action):
         from emet.rl.manipulation.whole_body_observation import reference_velocity
 
         e = self.unwrapped
+        if self.episode_closed or e.control.stopped:
+            raise RuntimeError("reset an active coupled episode before stepping")
         if self.retarget_at is not None and not self.retargeted and e.control.trajectory_elapsed() >= self.retarget_at:
             updated = {**self.case, "travel_m": self.case["retarget"]["travel_m"]}
             updated.pop("retarget")
-            reference = CoupledReference(e.control, updated)
+            reference = CoupledReference(e.control, updated, timing=self.timing)
             admission = admit_reference(e, reference)
             if not admission["accepted"]:
                 e.control.stop()
                 raise ValueError("coupled_retarget_rejected:" + str(admission["reason"]))
             e.set_task_trajectory(reference)
+            if self.finish_after_hold:
+                from dataclasses import replace
+
+                horizon = float(np.ceil((e.steps * e.profile.dt + reference.end + 3.0) / e.profile.dt) * e.profile.dt)
+                e.config = replace(e.config, horizon=horizon)
             self.retargeted = True
         motion = reference_velocity(e.control)
+        from emet.rl.manipulation.trajectory_metrics import reference_is_moving
+
         self.meter.before_step()
         raw, _, done, truncated, info = e.step(action)
         rewards = self.meter.tick(action, motion)
         success = bool(info.get("is_success", False))
+        native_done, native_truncated = bool(done), bool(truncated)
+        early_success = bool(self.finish_after_hold and success and self.may_finish_reference())
+        if early_success and not (done or truncated):
+            e.control.stop()
+            done = True
         if done or truncated:
             rewards[0] += self.meter.terminal_bonus(success)
+            self.episode_closed = True
         return (
             self.observe(raw),
             float(rewards.sum()),
@@ -524,11 +552,12 @@ class CoupledTrackingEnv(gym.Wrapper):
             False,
             {
                 **info,
-                "native_terminated": bool(done),
-                "native_truncated": bool(truncated),
+                "native_terminated": native_done,
+                "native_truncated": native_truncated,
                 "episode_contract": "finite_tracking_deadline_v1",
                 "reward_groups": rewards,
                 "elapsed_control_ticks": 1,
+                "reference_motion_ticks": int(reference_is_moving(motion)),
                 "primitive_success": success,
                 "full_pick_place_success": False,
                 "case_id": self.case["id"],
@@ -537,8 +566,14 @@ class CoupledTrackingEnv(gym.Wrapper):
                 "coupled_admission": self.admission,
                 "reward_terms": self.meter.last_terms.copy(),
                 "reward_contract": self.meter.record(),
+                "reference_timing": self.timing,
+                "ended_after_quiet_hold": early_success,
+                "trajectory_spread": self.reference_spread,
             },
         )
+
+    def may_finish_reference(self):
+        return True
 
 
 def main():

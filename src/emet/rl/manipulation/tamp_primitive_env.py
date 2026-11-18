@@ -105,6 +105,7 @@ def _worker(
                 self.pending, self.ticks = False, 0
                 self.reward = np.zeros(3, dtype=np.float32)
                 self.tick_rewards = []
+                self.motion_ticks = 0
                 self.meter = RewardMeter(env, config=reward_config)
                 self.start = float(env.data.time)
                 self.motion = np.zeros(9, dtype=np.float32)
@@ -129,6 +130,7 @@ def _worker(
                     "reward_terms": self.meter.last_terms.copy(),
                     "reward_contract": self.meter.record(),
                     "elapsed_control_ticks": max(1, self.ticks),
+                    "reference_motion_ticks": self.motion_ticks,
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
                     "primitive": primitive,
                     "planning_scope": planning_scope,
@@ -151,6 +153,7 @@ def _worker(
                 self.reward[:] = 0
                 self.tick_rewards.clear()
                 self.ticks = 0
+                self.motion_ticks = 0
                 self.pending = True
                 self.motion = reference_velocity(env.control)
                 if trace_path is not None:
@@ -168,7 +171,14 @@ def _worker(
 
             def after_step(self):
                 if self.pending:
+                    from emet.rl.manipulation.trajectory_metrics import reference_is_moving
+                    from emet.rl.manipulation.whole_body_observation import reference_velocity
+
                     motion = np.zeros(9) if env.control.holding or env.control.stopped else self.motion
+                    current = (
+                        np.zeros(9) if env.control.holding or env.control.stopped else reference_velocity(env.control)
+                    )
+                    self.motion_ticks += int(reference_is_moving(current))
                     reward = self.meter.tick(env.control.last_action.copy(), motion)
                     self.reward += reward
                     self.tick_rewards.append(reward.copy())
@@ -291,6 +301,7 @@ def _worker(
             "code": reason,
             "stop_confirmed": robot.stop_confirmed,
             "elapsed_control_ticks": max(1, bridge.ticks),
+            "reference_motion_ticks": bridge.motion_ticks,
             "reward_group_ticks": np.asarray(bridge.tick_rewards, dtype=np.float32),
             "actor_action_applied": bridge.pending,
             "reward_terms": bridge.meter.last_terms.copy(),

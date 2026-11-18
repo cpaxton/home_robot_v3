@@ -106,3 +106,49 @@ recordings and compressed traces under ignored `logs/`; commit scripts, docs
 and compact numeric evidence only.
 
 [Generated videos, measured coverage and validation results](../experiments/mars_curriculum_visualization_20261117.md).
+
+## Per-trajectory spread and dead-time audit
+
+The global coverage box mixes reset postures. Inspect **within-episode** motion
+as well: maximum excursion and path length, orientation excursion/travel, and
+hand spread relative to the commanded SE(2) base. A moving base must not count
+as arm movement; a return-to-start path must not count as zero movement.
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/audit_wbc_trajectory_spread.py \
+  --recordings logs/eval/curriculum-videos-v1 \
+  --output logs/eval/trajectory-spread-v1
+```
+
+The existing gallery now shows these statistics. The audit preserves failed
+trials and distinguishes physical reference motion from extra frozen video
+padding. Raw reports remain ignored under `logs/`.
+
+| Family | Physical time with moving target | Median base-relative hand excursion |
+| --- | ---: | ---: |
+| Ordinary hand | 16.5% | 0.4 mm |
+| Base-only | 15.6% | Inactive hand |
+| Goal changes | 31.0% | 7.6 mm |
+| Small splines | 66.5% | 33.5 mm |
+| Medium splines | 76.9% | 77.9 mm |
+| Full splines | 77.6% | 135.0 mm |
+| Unloaded TAMP prefix | 53.1% | 24.5 mm |
+
+Ordinary cases move for approximately 3.9 of 25 seconds. A normalized phase
+retimer also imposed a 3.9-second floor even for tiny arm paths. These are setup
+issues, not merely slow video playback; they plausibly underweight arm tracking
+but do not prove the sole cause of policy failure.
+
+Opt-in `bounded_v2` timing derives duration directly from the same conservative
+velocity/acceleration/jerk bounds. `finish_after_hold` ends a general episode
+after its unchanged two-second measured quiet hold, with a three-second
+post-reference settling deadline; goal-change episodes cannot finish before
+their successor. V1 behavior remains available for comparison.
+
+The candidate `mars_arm_splines_v2.json` samples larger arm excursions, uses
+independent seeds, a 0.2-second initial hold, and rejects paths below both 5 cm
+base-relative hand excursion and 0.35 rad orientation excursion. This allows
+intentional orientation-only motion without accepting no-ops. It is a candidate,
+not a newly qualified policy. Ordinary hand cases still need broader arm motion;
+fine TAMP insertions and explicit hold tasks should remain separate. Per-family
+moving/quiet/unknown physical ticks now appear in the training ledger and W&B.

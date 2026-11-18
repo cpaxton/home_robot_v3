@@ -16,7 +16,6 @@ from scipy.interpolate import CubicSpline
 from emet.rl.manipulation.carry_benchmark import digest
 from emet.rl.manipulation.coupled_tracking import admit_reference, spline_bounds
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
-from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
 from emet.rl.manipulation.observation_layout import history_layout
 from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 from emet.rl.manipulation.whole_body_observation import (
@@ -35,6 +34,7 @@ ANCHORS = {
 }
 MIXTURE = {"hand": 0.10, "base": 0.10, "goal_changes": 0.10, "arm_splines": 0.20, "tamp": 0.50}
 NAMESPACES = {"train": 460_000_000, "audit": 470_000_000}
+V2_NAMESPACES = {"train": 510_000_000, "audit": 520_000_000}
 
 
 @dataclass(frozen=True)
@@ -108,21 +108,55 @@ def manifest(train_count=32, audit_count=16):
     }
 
 
+def motion_manifest(train_count=16, audit_count=8):
+    """Candidate wider-motion curriculum; teacher validation precedes PPO.
+
+    Independent v2 identities preserve the v1 comparison. Amplitude increases
+    before the last stage raises speed; fine TAMP insertion remains separate.
+    """
+    from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
+
+    value = manifest(train_count, audit_count)
+    value.update(
+        format="mars-arm-splines-v2",
+        reference_timing="bounded_v2",
+        finish_after_hold=True,
+        spread_requirements=SpreadRequirements().record(),
+        levels=[
+            asdict(SplineLevel(0.30, 0.40, 0.04, initial_hold_s=0.2, maximum_duration_s=18)),
+            asdict(SplineLevel(0.45, 0.40, 0.08, initial_hold_s=0.2, maximum_duration_s=24)),
+            asdict(SplineLevel(0.55, 0.60, 0.12, initial_hold_s=0.2, maximum_duration_s=24)),
+        ],
+    )
+    for case in value["cases"]:
+        case["id"] = case["id"].replace("arm-splines-v1", "arm-splines-v2")
+        case["seed"] += V2_NAMESPACES[case["split"]] - NAMESPACES[case["split"]]
+    return value
+
+
 def load_manifest(path):
     value = json.loads(Path(path).read_text())
     if (
-        value.get("format") != "mars-arm-splines-v1"
+        value.get("format") not in {"mars-arm-splines-v1", "mars-arm-splines-v2"}
         or value.get("robot") != "innate_mars"
         or value.get("training_mix") != MIXTURE
         or value.get("reset_anchors_rad") != ANCHORS
     ):
         raise ValueError("versioned Mars arm-spline mixture required")
+    if value["format"] == "mars-arm-splines-v2":
+        from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
+
+        SpreadRequirements(**value["spread_requirements"])
+        if value.get("reference_timing") != "bounded_v2" or value.get("finish_after_hold") is not True:
+            raise ValueError("v2 requires bounded timing and quiet-hold completion")
     levels = tuple(SplineLevel(**v) for v in value["levels"])
     if not levels or len(levels) > 3:
         raise ValueError("one to three declared curriculum levels required")
     ids, seeds, populations = set(), set(), set()
     for case in value["cases"]:
         validate_case(case, levels)
+        if not case["id"].startswith("mars:arm-splines-" + value["format"].rsplit("-", 1)[-1] + ":"):
+            raise ValueError("case identity version differs from manifest")
         split, level, seed = case["split"], case["level"], case["seed"]
         if case["id"] in ids or seed in seeds:
             raise ValueError("disjoint spline identities and seeds required")
@@ -138,17 +172,19 @@ def validate_case(case, levels):
     if not isinstance(case, dict) or set(case) != {"id", "seed", "split", "level", "posture"}:
         raise ValueError("complete seeded spline case required")
     split, level, seed = case["split"], case["level"], case["seed"]
+    version = "v2" if isinstance(case["id"], str) and case["id"].startswith("mars:arm-splines-v2:") else "v1"
+    namespaces = V2_NAMESPACES if version == "v2" else NAMESPACES
     if (
         not isinstance(split, str)
         or split not in NAMESPACES
         or type(level) is not int
         or not 0 <= level < len(levels)
         or type(seed) is not int
-        or not NAMESPACES[split] + level * 10000 <= seed < NAMESPACES[split] + (level + 1) * 10000
+        or not namespaces[split] + level * 10000 <= seed < namespaces[split] + (level + 1) * 10000
         or not isinstance(case["posture"], str)
         or case["posture"] not in ANCHORS
         or not isinstance(case["id"], str)
-        or not case["id"].startswith(f"mars:arm-splines-v1:{split}:l{level}:")
+        or not case["id"].startswith(f"mars:arm-splines-{version}:{split}:l{level}:")
     ):
         raise ValueError("disjoint split/level identity and posture required")
 
@@ -174,7 +210,10 @@ class ArmSplineReference(TaskPoseTrajectory):
     chain-rule bounds constrain velocity, acceleration and jerk throughout.
     """
 
-    def __init__(self, control, points, level):
+    def __init__(self, control, points, level, *, timing="legacy_v1"):
+        from emet.rl.manipulation.reference_timing import retime_derivative_bounds
+        from emet.rl.manipulation.trajectory_metrics import trajectory_spread
+
         if control.profile.robot != "innate_mars":
             raise ValueError("arm-spline posture sampling currently supports Mars")
         points = np.asarray(points, float)
@@ -196,18 +235,7 @@ class ArmSplineReference(TaskPoseTrajectory):
         speed = np.asarray(p.speed) * level.speed_fraction
         acceleration = np.asarray(p.acceleration) * 0.5
         jerk = 4 * acceleration
-        scale = 1.0
-        for _ in range(20):
-            path, _ = compile_joint_path([[0.0], [1.0]], [1 / scale], [1 / scale**2], [1 / scale**3])
-            v, a, j = (float(x[0]) for x in polynomial_peaks(path.segments[0]))
-            bounds = np.array([q1 * v, q2 * v * v + q1 * a, q3 * v**3 + 3 * q2 * v * a + q1 * j])
-            ratios = np.max(bounds / np.array([speed, acceleration, jerk]), axis=1)
-            factor = max(ratios[0], np.sqrt(ratios[1]), np.cbrt(ratios[2]))
-            if factor <= 1 + 1e-9:
-                break
-            scale *= factor * 1.01
-        else:
-            raise ValueError("spline timing did not converge")
+        path, bounds = retime_derivative_bounds(q1, q2, q3, speed, acceleration, jerk, mode=timing)
         self.path = path
         duration = self.initial_hold_s + path.end
         if duration > level.maximum_duration_s:
@@ -225,6 +253,7 @@ class ArmSplineReference(TaskPoseTrajectory):
             "base_physically_welded": False,
             "initial_hold_s": self.initial_hold_s,
             "dynamic_feasibility_verified": False,
+            **({"timing": timing} if timing != "legacy_v1" else {}),
         }
         times = np.r_[np.arange(0, duration, p.dt), duration]
         hands = [self.fk(*self.coordinates(t)) for t in times]
@@ -237,6 +266,9 @@ class ArmSplineReference(TaskPoseTrajectory):
             hands,
             np.full(len(times), control.grip_reference),
             base_mask=[True] * 3,
+        )
+        self.spread = trajectory_spread(
+            self.times, self.hand, self.base, joints=np.array([self.coordinates(t)[1] for t in times])
         )
 
     def coordinates(self, time):
@@ -298,7 +330,25 @@ class ArmSplinePlant(ManipulationEnv):
 
 
 class ArmSplineTrackingEnv(gym.Wrapper):
-    def __init__(self, cases, *, levels=LEVELS, reward_config=None, maximum_attempts=64):
+    def __init__(
+        self,
+        cases,
+        *,
+        levels=LEVELS,
+        reward_config=None,
+        maximum_attempts=64,
+        timing="legacy_v1",
+        finish_after_hold=False,
+        spread_requirements=None,
+    ):
+        from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
+
+        if timing not in {"legacy_v1", "bounded_v2"} or type(finish_after_hold) is not bool:
+            raise ValueError("declared timing and quiet-hold completion required")
+        self.timing, self.finish_after_hold = timing, finish_after_hold
+        self.spread_requirements = (
+            SpreadRequirements(**spread_requirements) if spread_requirements is not None else None
+        )
         if not cases or type(maximum_attempts) is not int or not 1 <= maximum_attempts <= 64:
             raise ValueError("seeded cases and bounded sampling attempts required")
         self.cases = [dict(c) for c in cases]
@@ -367,7 +417,11 @@ class ArmSplineTrackingEnv(gym.Wrapper):
             if rng.random() < 0.5:
                 points[-1] = initial
             try:
-                reference = ArmSplineReference(e.control, points, level)
+                reference = ArmSplineReference(e.control, points, level, timing=self.timing)
+                if self.spread_requirements is not None and not self.spread_requirements.accepts(reference.spread):
+                    raise ValueError(
+                        "insufficient_pose_excursion:" + json.dumps(reference.spread["base_relative_hand"])
+                    )
                 admission = admit_reference(e, reference)
                 if not admission["accepted"]:
                     raise ValueError(str(admission["reason"]))
@@ -396,6 +450,7 @@ class ArmSplineTrackingEnv(gym.Wrapper):
                 "reference_sha256": digest(reference.record()),
                 "spline_certificate": reference.certificate,
                 "reward_contract": self.meter.record(),
+                "trajectory_spread": reference.spread,
             }
         e.control.stop()
         raise ValueError("arm_spline_sampling_exhausted:" + json.dumps(self.rejections))
@@ -410,6 +465,8 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         near_lower = joints <= e.control.limits[:, 0] + 0.02
         self.limit_push_ticks += int(np.any((near_upper & (requested > 0)) | (near_lower & (requested < 0))))
         motion = reference_velocity(e.control)
+        from emet.rl.manipulation.trajectory_metrics import reference_is_moving
+
         self.meter.before_step()
         raw, _, done, truncated, info = e.step(action)
         rewards = self.meter.tick(action, motion)
@@ -421,6 +478,11 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         success = bool(
             info.get("is_success") and phase >= self.reference.end and np.all(self.peak_path_error <= [0.003, 0.02])
         )
+        native_done, native_truncated = bool(done), bool(truncated)
+        early_hold = bool(self.finish_after_hold and info.get("is_success") and phase >= self.reference.end)
+        if early_hold and not (done or truncated):
+            e.control.stop()
+            done = True
         if done or truncated:
             rewards[0] += self.meter.terminal_bonus(success)
             self.ready = False
@@ -439,16 +501,19 @@ class ArmSplineTrackingEnv(gym.Wrapper):
                 "case_id": self.case["id"],
                 "arm_spline_case": self.case.copy(),
                 "spline_rejections": self.rejections.copy(),
-                "native_terminated": bool(done),
-                "native_truncated": bool(truncated),
+                "native_terminated": native_done,
+                "native_truncated": native_truncated,
                 "episode_contract": "finite_tracking_deadline_v1",
                 "reward_groups": rewards,
                 "reward_terms": self.meter.last_terms.copy(),
                 "elapsed_control_ticks": 1,
+                "reference_motion_ticks": int(reference_is_moving(motion)),
                 "primitive_success": success,
                 "full_pick_place_success": False,
                 "spline_peak_path_error": self.peak_path_error.tolist(),
                 "joint_limit_push_ticks": self.limit_push_ticks,
+                "trajectory_spread": self.reference.spread,
+                "ended_after_quiet_hold": early_hold,
             },
         )
 
@@ -487,6 +552,8 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
     goals = load_curriculum(root / "configs/benchmarks/mars_goal_changes_v1.json")
     goal_cases = [c for c in goals["robots"]["innate_mars"] if c["split"] == "train"]
     development, _ = load_development()
+    timing = spec.get("reference_timing", "legacy_v1")
+    finish = spec.get("finish_after_hold", False)
     environments = {}
     try:
         for name, base_only in (("hand", False), ("base", True)):
@@ -495,6 +562,8 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
                 [c for c in general if (c["mode"] == "base_only") == base_only],
                 suite_path=COARSE_SUITE,
                 reward_config=reward_config,
+                timing=timing,
+                finish_after_hold=finish,
             )
             environments[name] = env
             env.unwrapped.config = replace(env.unwrapped.config, wheel_feedback_base_only_gains=(0.0, 0.5))
@@ -504,6 +573,8 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
             changes={c["id"]: goals["goal_changes"][c["id"]] for c in goal_cases},
             suite_path=COARSE_SUITE,
             reward_config=reward_config,
+            timing=timing,
+            finish_after_hold=finish,
         )
         goal_env = environments["goal_changes"].unwrapped
         goal_env.config = replace(goal_env.config, wheel_feedback_base_only_gains=(0.0, 0.5))
@@ -519,6 +590,9 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
             [c for c in spec["cases"] if c["split"] == "train" and c["level"] == level],
             levels=tuple(SplineLevel(**v) for v in spec["levels"]),
             reward_config=reward_config,
+            timing=timing,
+            finish_after_hold=finish,
+            spread_requirements=spec.get("spread_requirements"),
         )
         environments["arm_splines"] = splines
         return training_mixture({k: v for k, v in environments.items() if k != "arm_splines"}, splines)

@@ -122,6 +122,8 @@ def source_state(root):
             root / "configs/benchmarks/mars_whole_body_v2_development.json",
             root / "configs/benchmarks/mars_goal_changes_v1.json",
             root / "configs/benchmarks/mars_arm_splines_v1.json",
+            root / "configs/benchmarks/mars_arm_splines_v2.json",
+            root / "scripts/audit_wbc_trajectory_spread.py",
             root / "src/emet/rl/manipulation/arm_spline_gallery.html",
             root / "paper/data/whole_body_control/long_finetune_v1/cases.json",
             root / "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
