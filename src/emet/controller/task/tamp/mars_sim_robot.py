@@ -157,9 +157,14 @@ class MarsSimRobot:
         from emet.rl.contact import solved_contact_force
 
         table = self.model.body(support or self.placement_support).id
+        contacts = self.data.contact
+        count = min(int(self.data.ncon), len(contacts))
+        geoms = contacts.geom[:count].copy()
+        frame_z = contacts.frame[:count, 2].copy()
+        geom_bodyid = np.asarray(self.model.geom_bodyid).copy()
         load = 0.0
-        for i, c in enumerate(self.data.contact[: self.data.ncon]):
-            if set(self.model.geom_bodyid[c.geom]) == {self.payload, table} and abs(c.frame[2]) > 0.8:
+        for i in range(count):
+            if set(geom_bodyid[geoms[i]]) == {self.payload, table} and abs(frame_z[i]) > 0.8:
                 load += solved_contact_force(self.model, self.data, i)[0]
         return load
 

@@ -99,11 +99,12 @@ class NativeTableTransferProvider(RegionTransferProvider):
                 if not any(np.all(box[0] >= p[0, :2]) and np.all(box[1] <= p[1, :2]) for p in surfaces):
                     raise ValueError('task_region_outside_support')
             locations, footprints = [], []
+            scratch_geoms = scratch.contact.geom[: scratch.ncon].copy()
             for role, bid in self._object_ids.items():
                 joint = int(model.body_jntadr[bid])
                 dof = int(model.jnt_dofadr[joint])
-                contacts = {int(other) for c in scratch.contact if bid in model.geom_bodyid[c.geom]
-                            for other in model.geom_bodyid[c.geom] if other != bid}
+                contacts = {int(other) for g in scratch_geoms if bid in model.geom_bodyid[g]
+                            for other in model.geom_bodyid[g] if other != bid}
                 if (self._support_id not in contacts or contacts & self._robot_ids
                         or np.linalg.norm(scratch.qvel[dof:dof+3]) > .01
                         or np.linalg.norm(scratch.qvel[dof+3:dof+6]) > .1):

@@ -20,13 +20,14 @@ def goal_predicates(robot, goals):
     table = robot.model.body('table').id
     fingertips = {robot.model.body(name).id for name in ('rubber_tip_left', 'rubber_tip_right')}
     rows = {}
+    scratch_geoms = scratch.contact.geom[: scratch.ncon].copy()
     for name, region in goals.items():
         body = robot.model.body(name)
         bounds = np.asarray(placements[name]['bounds'])[:, :2]
         region = np.asarray(region)
         inside = bool(np.all(bounds[0] >= region[0] - .005) and np.all(bounds[1] <= region[1] + .005))
-        touched = {int(other) for c in scratch.contact if body.id in robot.model.geom_bodyid[c.geom]
-                   for other in robot.model.geom_bodyid[c.geom] if other != body.id}
+        touched = {int(other) for g in scratch_geoms if body.id in robot.model.geom_bodyid[g]
+                   for other in robot.model.geom_bodyid[g] if other != body.id}
         supported = table in touched and not fingertips.intersection(touched)
         dof = robot.model.jnt_dofadr[body.jntadr[0]]
         settled = bool(np.linalg.norm(scratch.qvel[dof:dof+3]) <= .01

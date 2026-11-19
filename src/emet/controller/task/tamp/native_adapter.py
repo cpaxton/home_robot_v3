@@ -614,8 +614,13 @@ class NativeTableAdapter:
             mujoco.mj_copyData(scratch, self.model, self.data)
             mujoco.mj_collision(self.model, scratch)
             oid = self.model.body(plan.object_body).id
-            contacts = {self.model.body(self.model.geom_bodyid[c.geom2 if self.model.geom_bodyid[c.geom1] == oid else c.geom1]).name
-                        for c in scratch.contact[:scratch.ncon] if oid in self.model.geom_bodyid[c.geom]}
+            scratch_geoms = scratch.contact.geom[: scratch.ncon].copy()
+            scratch_bodyid = np.asarray(self.model.geom_bodyid).copy()
+            contacts = {
+                self.model.body(scratch_bodyid[g[1] if scratch_bodyid[g[0]] == oid else g[0]]).name
+                for g in scratch_geoms
+                if oid in scratch_bodyid[g]
+            }
             if released:
                 entry = placements_from_mujoco_model(self.model, scratch)[plan.object_body]
                 error = np.linalg.norm(np.asarray(entry['pos'])[:2]-plan.goal[:2])

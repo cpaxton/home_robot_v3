@@ -461,9 +461,10 @@ def wait_native_open(executor):
         mujoco.mj_collision(ex.model, scratch)
         objects = body_subtree(ex.model, released.obj)
         tips = {ex.model.body(n).id for n in ("rubber_tip_left", "rubber_tip_right")}
+        scratch_geoms = scratch.contact.geom[: scratch.ncon].copy()
         touching = any(
-            objects.intersection(ex.model.geom_bodyid[c.geom]) and tips.intersection(ex.model.geom_bodyid[c.geom])
-            for c in scratch.contact
+            objects.intersection(ex.model.geom_bodyid[g]) and tips.intersection(ex.model.geom_bodyid[g])
+            for g in scratch_geoms
         )
         arrived = all(
             abs(float(ex.data.qpos[ex.model.joint(name).qposadr[0]]) - target)
@@ -472,8 +473,8 @@ def wait_native_open(executor):
         )
         support = body_subtree(ex.model, released.support)
         supported = any(
-            objects.intersection(ex.model.geom_bodyid[c.geom]) and support.intersection(ex.model.geom_bodyid[c.geom])
-            for c in scratch.contact
+            objects.intersection(ex.model.geom_bodyid[g]) and support.intersection(ex.model.geom_bodyid[g])
+            for g in scratch_geoms
         )
         dof = int(ex.model.jnt_dofadr[ex.model.body(released.obj).jntadr[0]])
         settled = (

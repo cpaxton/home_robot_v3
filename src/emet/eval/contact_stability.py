@@ -65,11 +65,14 @@ class ContactTrace:
             relative[:3, :3] = rotation @ payload.xmat.reshape(3, 3)
             relative[:3, 3] = rotation @ (payload.xpos - ee.xpos)
             contacts = []
-            for contact in scratch.contact:
-                bodies = self.model.geom_bodyid[contact.geom]
+            scratch_geoms = scratch.contact.geom.copy()
+            scratch_dists = scratch.contact.dist.copy()
+            geom_bodyid = np.asarray(self.model.geom_bodyid).copy()
+            for i in range(len(scratch_geoms)):
+                bodies = geom_bodyid[scratch_geoms[i]]
                 if body.id in bodies:
                     contacts.append({'bodies': [self.model.body(int(b)).name for b in bodies],
-                                     'distance_m': float(contact.dist)})
+                                     'distance_m': float(scratch_dists[i])})
             event.update(qpos=data.qpos.tolist(), qvel=data.qvel.tolist(),
                          object_position_m=payload.xpos.tolist(), object_rotation=payload.xmat.reshape(3, 3).tolist(),
                          relative_pose=relative.tolist(), contacts=contacts)

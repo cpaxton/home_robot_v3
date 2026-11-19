@@ -1467,13 +1467,33 @@ class ManipulationEnv(gym.Env):
         from emet.rl.contact import solved_contact_force
 
         table = self.model.body("table").id
-        count = min(int(self.data.ncon), len(self.data.contact))
+        contacts = self.data.contact
+        count = min(int(self.data.ncon), len(contacts))
         bodies = self.model.geom_bodyid.copy()
+        # Snapshot the active scalar contact arrays once; never construct
+        # individual C-backed contact objects (the binding's contact slice/
+        # iterator has crashed in long mixed rollouts — see current_contact_force).
+        geom1 = contacts.geom1[:count].copy()
+        geom2 = contacts.geom2[:count].copy()
+        frame_z = contacts.frame[:count, 2].copy()
+        addresses = contacts.efc_address[:count].copy()
+        dimensions = contacts.dim[:count].copy()
+        excludes = contacts.exclude[:count].copy()
+        friction = contacts.friction[:count].copy()
+        forces = np.asarray(self.data.efc_force).copy()
         total = 0.0
         for index in range(count):
-            c = self.data.contact[index]
-            if set(bodies[[c.geom1, c.geom2]]) == {self.payload, table} and abs(c.frame[2]) > 0.8:
-                total += solved_contact_force(self.model, self.data, index)[0]
+            if set(bodies[[geom1[index], geom2[index]]]) == {self.payload, table} and abs(frame_z[index]) > 0.8:
+                total += solved_contact_force(
+                    self.model,
+                    self.data,
+                    index,
+                    efc_address=addresses[index],
+                    dim=dimensions[index],
+                    exclude=excludes[index],
+                    efc_force=forces,
+                    friction=friction[index],
+                )[0]
         return total
 
     def _hand_pose_error(self, pose=None):

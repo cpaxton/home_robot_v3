@@ -119,19 +119,23 @@ class ReactiveController:
                 for geom in range(c.model.ngeom)
                 if c.model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_PLANE
             }
-            for index in range(min(int(c.data.ncon), len(c.data.contact))):
-                contact = c.data.contact[index]
-                if (contact.geom1 == support and contact.geom2 in floor_geoms) or (
-                    contact.geom2 == support and contact.geom1 in floor_geoms
+            contacts = c.data.contact
+            count = min(int(c.data.ncon), len(contacts))
+            geom1 = contacts.geom1[:count].copy()
+            geom2 = contacts.geom2[:count].copy()
+            dists = contacts.dist[:count].copy()
+            for index in range(count):
+                if (geom1[index] == support and geom2[index] in floor_geoms) or (
+                    geom2[index] == support and geom1[index] in floor_geoms
                 ):
                     continue
-                if contact.dist < -0.001 and (contact.geom1 in robot or contact.geom2 in robot):
+                if dists[index] < -0.001 and (geom1[index] in robot or geom2[index] in robot):
                     self.outcome = (
                         "failed",
                         {
                             "failure": "forbidden collision",
-                            "geoms": [c.model.geom(contact.geom1).name, c.model.geom(contact.geom2).name],
-                            "penetration_m": float(-contact.dist),
+                            "geoms": [c.model.geom(geom1[index]).name, c.model.geom(geom2[index]).name],
+                            "penetration_m": float(-dists[index]),
                         },
                     )
                     self.stop()

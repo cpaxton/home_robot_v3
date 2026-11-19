@@ -143,9 +143,11 @@ def final_predicates(robot, admission, *, support_body="destination"):
     dof = env.model.body(env.payload).dofadr[0]
     velocity = env.data.qvel[dof : dof + 6].copy()
     fingers = {env.model.body(name).id for name in env.profile.finger_bodies}
+    geoms = env.data.contact.geom[: env.data.ncon].copy()
+    geom_bodyid = np.asarray(env.model.geom_bodyid).copy()
     finger_contact = any(
-        env.payload in env.model.geom_bodyid[c.geom] and bool(fingers & set(env.model.geom_bodyid[c.geom]))
-        for c in env.data.contact[: env.data.ncon]
+        env.payload in geom_bodyid[geoms[i]] and bool(fingers & set(geom_bodyid[geoms[i]]))
+        for i in range(len(geoms))
     )
     base_error = robot.servo.base_goal - robot.servo.base_pose()
     heading_error = np.arctan2(np.sin(base_error[2]), np.cos(base_error[2]))

@@ -256,12 +256,18 @@ def _run_case(
                         boundary = retreat.segments[1].start
                         if command_time >= boundary and lift_retreat_start is None:
                             touching = False
-                            for contact in env.data.contact[: env.data.ncon]:
-                                a, b = (int(env.model.geom_bodyid[g]) for g in (contact.geom1, contact.geom2))
+                            contacts = env.data.contact
+                            count = min(int(env.data.ncon), len(contacts))
+                            geom1 = contacts.geom1[:count].copy()
+                            geom2 = contacts.geom2[:count].copy()
+                            dists = contacts.dist[:count].copy()
+                            geom_bodyid = np.asarray(env.model.geom_bodyid).copy()
+                            for i in range(count):
+                                a, b = int(geom_bodyid[geom1[i]]), int(geom_bodyid[geom2[i]])
                                 other = b if a == env.payload else a if b == env.payload else None
                                 if (
                                     other is not None
-                                    and contact.dist < 0
+                                    and dists[i] < 0
                                     and any(env.monitor._descendant(other, finger) for finger in env.monitor.fingers)
                                 ):
                                     touching = True

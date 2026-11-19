@@ -115,7 +115,11 @@ def route_control(model, data):
     def valid(pose):
         data.qpos[:] = pose
         mujoco.mj_forward(model, data)
-        collision = obstacle >= 0 and any({c.geom1, c.geom2} == {footprint, obstacle} for c in data.contact)
+        geom1 = data.contact.geom1[: data.ncon].copy()
+        geom2 = data.contact.geom2[: data.ncon].copy()
+        collision = obstacle >= 0 and any(
+            {int(g1), int(g2)} == {footprint, obstacle} for g1, g2 in zip(geom1, geom2)
+        )
         space.last_validity = {"reason": "occupied_footprint" if collision else "ok"}
         return not collision
 

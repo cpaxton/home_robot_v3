@@ -86,11 +86,13 @@ def bind_loaded_payload(adapter, plan, *, rebind=True):
         mujoco.mj_kinematics(adapter.model, scratch)
         mujoco.mj_collision(adapter.model, scratch)
         obj, ee = scratch.body(plan.object_body), scratch.body(executor.ee_body)
+        scratch_geoms = scratch.contact.geom[: scratch.ncon].copy()
+        geom_bodyid = np.asarray(adapter.model.geom_bodyid).copy()
         touched = {
             int(b)
-            for c in scratch.contact
-            if obj.id in adapter.model.geom_bodyid[c.geom]
-            for b in adapter.model.geom_bodyid[c.geom]
+            for g in scratch_geoms
+            if obj.id in geom_bodyid[g]
+            for b in geom_bodyid[g]
             if b != obj.id
         }
         tips = {adapter.model.body(n).id for n in ("rubber_tip_left", "rubber_tip_right")}

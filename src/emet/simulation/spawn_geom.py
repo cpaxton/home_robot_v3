@@ -629,9 +629,11 @@ def worst_robot_nonfloor_contact_dist(
     robot_bodies = _bodies_descending_from(model, base_bid)
     mujoco.mj_collision(model, data)
     worst = 1.0
+    geom1 = data.contact.geom1[: data.ncon].copy()
+    geom2 = data.contact.geom2[: data.ncon].copy()
+    dists = data.contact.dist[: data.ncon].copy()
     for i in range(data.ncon):
-        c = data.contact[i]
-        g1, g2 = int(c.geom1), int(c.geom2)
+        g1, g2 = int(geom1[i]), int(geom2[i])
         r1 = _geom_body_is_robot(model, g1, robot_bodies)
         r2 = _geom_body_is_robot(model, g2, robot_bodies)
         if not r1 and not r2:
@@ -640,7 +642,7 @@ def worst_robot_nonfloor_contact_dist(
             continue
         if g1 == floor_gid or g2 == floor_gid:
             continue
-        dist = float(c.dist)
+        dist = float(dists[i])
         if dist < worst:
             worst = dist
     return worst
@@ -668,9 +670,11 @@ def format_spawn_contact_report(
         f"{worst_robot_nonfloor_contact_dist(model, data, base_body_name=base_body_name, floor_geom_name=floor_geom_name):.4f}"
     ]
     n = 0
+    geom1 = data.contact.geom1[: data.ncon].copy()
+    geom2 = data.contact.geom2[: data.ncon].copy()
+    dists = data.contact.dist[: data.ncon].copy()
     for i in range(data.ncon):
-        c = data.contact[i]
-        g1, g2 = int(c.geom1), int(c.geom2)
+        g1, g2 = int(geom1[i]), int(geom2[i])
         r1 = _geom_body_is_robot(model, g1, robot_bodies)
         r2 = _geom_body_is_robot(model, g2, robot_bodies)
         if not r1 and not r2:
@@ -679,7 +683,7 @@ def format_spawn_contact_report(
             continue
         if g1 == floor_gid or g2 == floor_gid:
             continue
-        dist = float(c.dist)
+        dist = float(dists[i])
         if dist > dist_report_threshold:
             continue
         n1 = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g1) or f"geom{g1}"

@@ -27,8 +27,11 @@ def verify_collision_kernel(model, data):
     """Compare the optimized rigid pass to the full pipeline on a fixture state."""
 
     def contacts():
+        # Snapshot scalar arrays; never iterate C-backed contact struct objects.
+        geoms = data.contact.geom[: data.ncon].copy()
+        dists = data.contact.dist[: data.ncon].copy()
         return np.asarray(
-            sorted((int(c.geom[0]), int(c.geom[1]), float(c.dist)) for c in data.contact[: data.ncon])
+            sorted((int(g[0]), int(g[1]), float(d)) for g, d in zip(geoms, dists))
         ).reshape(-1, 3)
 
     start = time.monotonic()
@@ -91,8 +94,12 @@ class MujocoSceneCollisionChecker:
         if self.payload_body is not None:
             self.configuration_collides(model, scratch)
             payload = body_subtree(model, self.payload_body)
-            for contact in scratch.contact[: scratch.ncon]:
-                geoms = tuple(int(g) for g in contact.geom)
+            geoms_all = scratch.contact.geom[: scratch.ncon].copy()
+            dists = scratch.contact.dist[: scratch.ncon].copy()
+            frame_z = scratch.contact.frame[: scratch.ncon, 2].copy()
+            pos_z = scratch.contact.pos[: scratch.ncon, 2].copy()
+            for index in range(len(geoms_all)):
+                geoms = tuple(int(g) for g in geoms_all[index])
                 bodies = [int(model.geom_bodyid[g]) for g in geoms]
                 if sum(b in payload for b in bodies) != 1:
                     continue
@@ -103,12 +110,12 @@ class MujocoSceneCollisionChecker:
                         static = False
                         break
                     parent = int(model.body_parentid[parent])
-                depth = float(contact.dist)
+                depth = float(dists[index])
                 normal_sign = 1 if bodies[1] in payload else -1
                 if (
                     not static
                     or not -0.002 <= depth < -self.penetration_tolerance_m
-                    or normal_sign * float(contact.frame[2]) < 0.95
+                    or normal_sign * float(frame_z[index]) < 0.95
                 ):
                     continue
                 key = frozenset(geoms)
@@ -116,7 +123,7 @@ class MujocoSceneCollisionChecker:
                 if old is None or depth < old["minimum_distance_m"]:
                     contacts[key] = {
                         "minimum_distance_m": depth,
-                        "height_m": float(contact.pos[2]),
+                        "height_m": float(pos_z[index]),
                         "normal_sign": normal_sign,
                     }
         self._support_departure = contacts
@@ -186,27 +193,31 @@ class MujocoSceneCollisionChecker:
         # their body IDs and penetration depths in bulk; only relevant contacts
         # need Python name/pair resolution. The geometry and exclusions are
         # unchanged, including explicit MuJoCo contact pairs.
-        body_pairs = model.geom_bodyid[data.contact.geom[: data.ncon]]
+        geoms = data.contact.geom[: data.ncon].copy()
+        dists = data.contact.dist[: data.ncon].copy()
+        frame_z = data.contact.frame[: data.ncon, 2].copy()
+        pos_z = data.contact.pos[: data.ncon, 2].copy()
+        body_pairs = model.geom_bodyid[geoms]
         relevant = np.isin(body_pairs, list(watched)).any(axis=1)
-        relevant &= data.contact.dist[: data.ncon] < -self.penetration_tolerance_m
+        relevant &= dists < -self.penetration_tolerance_m
         for index in np.flatnonzero(relevant):
-            contact = data.contact[int(index)]
             a, b = map(int, body_pairs[index])
             pair = [model.body(a).name, model.body(b).name]
+            geom_pair = tuple(int(g) for g in geoms[index])
             if (
                 frozenset(pair) in self.allowed_pairs
-                or frozenset(int(g) for g in contact.geom) in self.allowed_geom_pairs
+                or frozenset(geom_pair) in self.allowed_geom_pairs
             ):
                 continue
-            departure = self._support_departure.get(frozenset(int(g) for g in contact.geom))
+            departure = self._support_departure.get(frozenset(geom_pair))
             if (
                 departure is not None
-                and float(contact.dist) >= departure["minimum_distance_m"] - 1e-7
-                and departure["normal_sign"] * float(contact.frame[2]) >= 0.95
-                and abs(float(contact.pos[2]) - departure["height_m"]) <= self.penetration_tolerance_m
+                and float(dists[index]) >= departure["minimum_distance_m"] - 1e-7
+                and departure["normal_sign"] * float(frame_z[index]) >= 0.95
+                and abs(float(pos_z[index]) - departure["height_m"]) <= self.penetration_tolerance_m
             ):
                 continue
-            self.last_contacts.append({"bodies": pair, "distance_m": float(contact.dist)})
+            self.last_contacts.append({"bodies": pair, "distance_m": float(dists[index])})
         return bool(self.last_contacts)
 
     def trajectory_collides(self, model, data, *, joint_names, arm_waypoints):

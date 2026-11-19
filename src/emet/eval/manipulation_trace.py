@@ -106,18 +106,22 @@ class ManipulationTrace:
         scored_execution = self.start_marker is None or Path(self.start_marker).is_file()
         checker = self.collision_audit if scored_execution else None
         if checker is not None:
-            for contact in data.contact[: data.ncon]:
-                a, b = (int(model.geom_bodyid[g]) for g in contact.geom)
+            geoms = data.contact.geom[: data.ncon].copy()
+            dists = data.contact.dist[: data.ncon].copy()
+            geom_bodyid = np.asarray(model.geom_bodyid).copy()
+            for i in range(len(geoms)):
+                a, b = int(geom_bodyid[geoms[i][0]]), int(geom_bodyid[geoms[i][1]])
                 pair = [model.body(a).name, model.body(b).name]
+                geom_pair = frozenset(int(g) for g in geoms[i])
                 if (
                     {a, b} & checker.robot_ids
                     and frozenset(pair) not in checker.allowed_pairs
-                    and frozenset(int(g) for g in contact.geom) not in checker.allowed_geom_pairs
-                    and contact.dist < -checker.penetration_tolerance_m
+                    and geom_pair not in checker.allowed_geom_pairs
+                    and dists[i] < -checker.penetration_tolerance_m
                 ):
                     if len(self.forbidden_contacts) < 100:
                         self.forbidden_contacts.append(
-                            {"time": float(data.time), "bodies": pair, "distance_m": float(contact.dist)}
+                            {"time": float(data.time), "bodies": pair, "distance_m": float(dists[i])}
                         )
         if data.time < self.next_time:
             return
@@ -127,8 +131,11 @@ class ManipulationTrace:
         contacts = []
         contact_evidence = []
         touched = set()
-        for index, contact in enumerate(data.contact[: data.ncon]):
-            a, b = (int(model.geom_bodyid[g]) for g in contact.geom)
+        geoms = data.contact.geom[: data.ncon].copy()
+        dists = data.contact.dist[: data.ncon].copy()
+        geom_bodyid = np.asarray(model.geom_bodyid).copy()
+        for index in range(len(geoms)):
+            a, b = int(geom_bodyid[geoms[index][0]]), int(geom_bodyid[geoms[index][1]])
             if a in self.target_ids and b not in self.target_ids:
                 other = b
             elif b in self.target_ids and a not in self.target_ids:
@@ -144,7 +151,7 @@ class ManipulationTrace:
             touched.add(other)
             contacts.append([model.body(a).name, model.body(b).name])
             contact_evidence.append(
-                {"bodies": contacts[-1], "distance_m": float(contact.dist), "normal_force_n": normal}
+                {"bodies": contacts[-1], "distance_m": float(dists[index]), "normal_force_n": normal}
             )
         obj = data.body(self.target)
         ee = data.body(self.ee)
