@@ -67,6 +67,12 @@ TASK_FAILURE_CODES = frozenset({
     "release_raise_limit",
     "visual_placement_not_verified", "scene_observation_stale", "scene_revision_changed",
     "payload_geometry_unknown", "payload_geometry_changed", "capture_motion_alignment_unknown", "robot_feedback_unqualified",
+    "object_pose_ambiguous", "object_observation_stale",
+    "capture_identity_mismatch", "capture_clock_changed", "capture_replayed",
+    "visual_evidence_incomplete", "gripper_geometry_unknown", "support_geometry_unknown",
+    "robot_material_identity_changed", "robot_material_geometry_unavailable", "robot_collision_envelope_unknown",
+    "target_contact_identity_changed", "gripper_contact_collision",
+    "gripper_close_geometry_unavailable", "stale_gripper_plan",
     "base_approach_unavailable", "base_approach_invalidated", "base_approach_failed",
     "navigation_cancellation_unconfirmed",
 })
@@ -202,6 +208,8 @@ def plan_data(plan, mode: str | None, plan_ref: str | None = None) -> dict[str, 
 
 def failure_code(message: str) -> str:
     """Translate internal machine reasons; never expose their free-form details."""
+    if message == 'object_state_unknown':
+        return 'observation_unavailable'
     if message in TASK_FAILURE_CODES:
         return message
     message = {
@@ -210,6 +218,8 @@ def failure_code(message: str) -> str:
         "gripper_close_command_failed": "execution_error",
         "gripper_hold_command_failed": "execution_error",
         "invalid_gripper_feedback": "invalid_measured_state",
+        "gripper_tracking_failed": "tracking_timeout",
+        "payload_attachment_outside_calibration": "payload_geometry_changed",
     }.get(message, message)
     # MCTS wraps a bounded grounding failure; preserve only its known code,
     # never arbitrary body identifiers or planner details from that wrapper.
@@ -249,6 +259,7 @@ def failure_code(message: str) -> str:
             ("tracking_failed", "tracking_timeout"),
             ("ik_failed", "ik_failed"),
             ("planning_failed", "planning_failed"),
+            ("gripper_close_path_failed", "planning_failed"),
             ("verify_failed", "verification_failed"),
             ("verification_failed", "verification_failed"),
         ):

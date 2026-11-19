@@ -23,6 +23,13 @@ from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceEx
 from emet.controller.manipulation.shape_pose import ShapePoseEvidence
 from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter, ObservedNativeSnapshot, ObservedNativeTask
 from emet.controller.task.tamp.transfer_provider import TransferRegion
+from emet.motion.observed_admission import CapturedRobotMaterial, ObservedMaterialAdmission, RobotGeometryBound
+from emet.motion.observed_background import ObservedBackground
+from emet.motion.observed_contact import ObservedTargetContact
+from emet.motion.observed_solids import WorldSolid
+from emet.motion.observed_support import fit_observed_support
+from emet.motion.observed_support_contact import ObservedSupportContact
+from emet.motion.observed_workspace import ObservedWorkspace
 from emet.motion.placement_geometry import PlacementScene, box_corners
 
 
@@ -150,6 +157,156 @@ def plan(system):
     return json.loads(system.tools['plan_pick_place'].func(object_name='block', receptacle_name='counter'))
 
 
+def support_snapshot(system):
+    from emet.controller.manipulation.native_scene import model_signature
+
+    task = next(iter(system.adapter.tasks.values()))
+    raw = system.source.snapshot
+    initial = raw(task.object_ref, task.support_ref)
+    ex = system.adapter.refine(task, initial)
+    pose = np.diag([1., -1., -1., 1.])
+    pose[2, 3] = 1.
+    k = np.array([[40., 0., 20.], [0., 40., 20.], [0., 0., 1.]])
+    obs = SimpleNamespace(rgb=np.zeros((40, 40, 3), np.uint8), depth=np.ones((40, 40)), camera_K=k,
+                          camera_pose=pose, received_monotonic=initial.frame.capture.received_monotonic)
+    patch = fit_observed_support(obs, np.ones((40, 40), bool),
+        observation_id=initial.frame.capture.observation_id, measurement_margin_m=.0001)
+    grid = ObservedWorkspace.from_depth(obs.depth, k, pose, workspace=[[-.3, -.3, -.025], [.3, .3, .225]],
+                                       resolution=.05, depth_margin_m=.0001)
+    # No contact query runs in these binding tests; legacy occupied cells remain
+    # unattributed so this fixture cannot accidentally establish support admission.
+    background = ObservedBackground(grid, np.where(grid.cells != 0, initial.frame.capture.earliest, np.nan),
+                                    'epoch', frozenset((initial.frame.capture.observation_id,)), initial.frame.capture)
+    material = CapturedRobotMaterial(initial.frame.capture, model_signature(ex.model), 'robot-calibration', 'epoch',
+        (WorldSolid('sphere', (.001,), initial.frame.robot_after.world_from_ee),), (0.,), 'robot-profile')
+    admission = ObservedMaterialAdmission(background, material, query_robot_geometry=lambda m, d, g:
+        RobotGeometryBound(WorldSolid.from_geom(m, d, g), g, model_signature(m), 'robot-calibration', 'robot-profile', 0.))
+    contact = ObservedSupportContact(task.object_ref, task.support_ref, 'epoch', 'support-calibration', patch,
+        initial.frame.capture, obs.depth, k, pose, np.ones((40, 40), bool), payload_motion_error_m=0.,
+        backing_depth_m=.02, backing_prior_id='fixture')
+    initial = replace(initial, scene=background.placement_scene(clock=lambda: system.clock[0]),
+                      support_bounds=patch.bounds, admission=admission, support_contact=contact)
+    ex.collision.admission, ex.collision.scene = admission, initial.scene
+    ex.collision.set_support_contact(contact)
+    return task, initial, ex, raw
+
+
+@pytest.mark.parametrize('change', ['calibration', 'mask', 'backing', 'missing'])
+def test_support_profile_change_stops_refresh_before_mutation_or_commands(system, change):
+    task, initial, ex, _ = support_snapshot(system)
+    contact = initial.support_contact
+    if change == 'calibration':
+        contact = replace(contact, calibration_id='changed')
+    elif change == 'mask':
+        mask = contact.support_mask.copy()
+        mask[0, 0] = False
+        contact = replace(contact, support_mask=mask)
+    elif change == 'backing':
+        contact = replace(contact, backing_depth_m=.03)
+    else:
+        contact = None
+    system.source.snapshot = lambda *_: replace(initial, support_contact=contact)
+    with pytest.raises(ObservationUnavailable, match='scene_changed_replan'):
+        system.adapter._refresh_checker(ex, task)
+    assert ex.collision.support_contact is initial.support_contact and system.calls == []
+    assert ex.collision.scene is initial.scene
+
+
+def test_support_binding_rejects_wrong_payload_and_bounds(system):
+    _, initial, _, _ = support_snapshot(system)
+    with pytest.raises(ValueError, match='invalid_observed_support_contact'):
+        replace(initial, support_contact=replace(initial.support_contact, object_ref='other'))
+    with pytest.raises(ValueError, match='invalid_observed_support_contact'):
+        replace(initial, support_bounds=initial.support_bounds + [0., 0., .01])
+
+
+def test_expired_support_is_no_actuation_even_with_fresh_payload_observation(system):
+    task, initial, _, raw = support_snapshot(system)
+    system.clock[0] += 3.
+    fresh = raw(task.object_ref, task.support_ref)
+    admission = ObservedMaterialAdmission(initial.admission.background,
+        replace(initial.admission.robot_material, capture=fresh.frame.capture),
+        query_robot_geometry=initial.admission.query_robot_geometry)
+    current = replace(initial, frame=fresh.frame, admission=admission)
+    system.source.snapshot = lambda *_: current
+    result = json.loads(system.tools['scene_tasks'].func())
+    assert result['status'] == 'error' and result['data']['execution_started'] is False
+    assert system.calls == []
+
+
+@pytest.mark.parametrize('change', ['pose', 'extent', 'uncertainty', 'capture', 'identity'])
+def test_contact_layer_must_enclose_same_captured_payload(system, change):
+    task = next(iter(system.adapter.tasks.values()))
+    initial = system.source.snapshot(task.object_ref, task.support_ref)
+    contact = ObservedTargetContact.from_frame(initial.frame, model_signature='robot',
+        calibration_id='geometry', fingertip_geom_ids=(0,), max_penetration_m=.002)
+    replace(initial, target_contact=contact)  # Correct constructor binds all bounds.
+    if change == 'pose':
+        pose = contact.target.world_from_local.copy()
+        pose[0, 3] += .1
+        contact = replace(contact, target=replace(contact.target, world_from_local=pose))
+    elif change == 'extent':
+        contact = replace(contact, target=replace(contact.target, vertices=contact.target.vertices/2))
+    elif change == 'uncertainty':
+        contact = replace(contact, target=replace(contact.target, offset_m=0.))
+    elif change == 'capture':
+        contact = replace(contact, capture=replace(contact.capture, observation_id='different'))
+    else:
+        contact = replace(contact, object_ref='another-object')
+    with pytest.raises(ValueError, match='invalid_observed_target_contact'):
+        replace(initial, target_contact=contact)
+    assert system.calls == []
+
+
+@pytest.mark.parametrize('change', ['calibration', 'fingers', 'penetration', 'missing'])
+def test_contact_profile_cannot_change_during_refresh(system, change):
+    task = next(iter(system.adapter.tasks.values()))
+    raw = system.source.snapshot
+    initial = raw(task.object_ref, task.support_ref)
+    ex = system.adapter.refine(task, initial)
+    from emet.controller.manipulation.native_scene import model_signature
+
+    def layer(frame):
+        return ObservedTargetContact.from_frame(frame, model_signature=model_signature(ex.model),
+            calibration_id='geometry', fingertip_geom_ids=(ex.collision.geom_ids[0],), max_penetration_m=.002)
+    initial = replace(initial, target_contact=layer(initial.frame))
+    ex.collision.set_target_contact(initial.target_contact)
+    def changed(*args):
+        snapshot = raw(*args)
+        contact = layer(snapshot.frame)
+        if change == 'calibration':
+            contact = replace(contact, calibration_id='changed')
+        elif change == 'fingers':
+            contact = replace(contact, fingertip_geom_ids=frozenset((ex.collision.geom_ids[0]+1,)))
+        elif change == 'penetration':
+            contact = replace(contact, max_penetration_m=.004)
+        else:
+            contact = None
+        return replace(snapshot, target_contact=contact)
+    system.source.snapshot = changed
+    with pytest.raises(ObservationUnavailable, match='target_contact_identity_changed'):
+        system.adapter._refresh_checker(ex, task)
+    assert ex.collision.target_contact is initial.target_contact and system.calls == []
+    assert ex.collision.received_monotonic == initial.frame.capture.received_monotonic
+
+
+def test_bounded_gripper_transport_timeout_is_possible_dispatch_and_consumes_plan(system):
+    planned = plan(system)
+    executor = system.adapter.plans[planned['data']['plan_ref']].executor
+    entered = []
+    def transport(q):
+        entered.append(q)
+        raise TimeoutError('private transport detail')
+    executor.command_gripper_joints = transport
+    executor.grasp_only = lambda *args, **kwargs: executor.command_gripper_joints(np.array([.01]))
+    result = system.adapter.execute(planned['data']['plan_ref'])
+    assert entered and result['status'] == 'partial' and result['code'] == 'command_outcome_unknown'
+    assert result['data']['execution_started'] and result['data']['completed_ops'] == []
+    assert system.calls == [] and 'private' not in json.dumps(result)
+    assert executor.command_gripper_joints is transport
+    assert system.adapter.execute(planned['data']['plan_ref'])['code'] == 'unknown_plan'
+
+
 @pytest.mark.parametrize('selector,accepted', [('stretch', True), (' Stretch ', True), ('   ', True), ('other', False)])
 def test_configured_observed_robot_selector_matches_primitive_and_task_discovery(system, selector, accepted):
     old = system.adapter
@@ -243,12 +400,13 @@ def test_empty_grasp_never_reaches_placement(system, shape):
     assert result['data']['completed_ops'] == []
 
 
-def test_motion_invalidates_observed_adapter_and_stored_handles(system):
+@pytest.mark.parametrize('tool_name, arguments', [('rotate_base', None), ('describe_scene', {'pan_rad': 0.})])
+def test_motion_invalidates_observed_adapter_and_stored_handles(system, tool_name, arguments):
     from emet.agent.tamp_world import task_world_change
 
     planned = plan(system)
     assert planned['status'] == 'ok', planned
-    with task_world_change('rotate_base', system.context):
+    with task_world_change(tool_name, system.context, arguments=arguments):
         pass
     assert system.adapter.plans == {} and system.state.invalid
     assert system.adapter.execute(planned['data']['plan_ref'])['code'] == 'unknown_plan'
@@ -288,6 +446,160 @@ def test_same_tools_execute_three_step_observed_swap(system):
     assert executed['status'] == 'ok' and executed['data']['completed_steps'] == 3, executed
     assert system.objects['opaque'][0] == pytest.approx(-.2, abs=.002)
     assert system.objects['other'][0] == pytest.approx(.2, abs=.002)
+
+
+@pytest.mark.parametrize('model', [PrimitiveModel('cylinder', (.02, .02)),
+    PrimitiveModel('sphere', (.02,)), PrimitiveModel('box', (.02, .02, .02))])
+def test_task_grounding_preserves_equivalent_shape_representatives(system, model):
+    from emet.controller.task.tamp.transfer_provider import TransferRegion
+
+    system.state.shape_model = model
+    raw = system.source.snapshot
+    if model.kind == 'box':
+        def snapshot(*args):
+            current = raw(*args)
+            pose = current.frame.payload.pose
+            matrix = pose.world_from_object.copy()
+            matrix[:3, :3] = Rotation.from_euler('z', system.state.generation*np.pi/2).as_matrix()
+            return replace(current, frame=replace(current.frame,
+                payload=replace(current.frame.payload, pose=replace(pose, world_from_object=matrix))))
+        system.source.snapshot = snapshot
+        def collect(obj, support, after):
+            system.clock[0] = max(system.clock[0], after) + .01
+            first = snapshot(obj, support).frame
+            system.clock[0] += .4
+            return first, snapshot(obj, support).frame
+        system.source.collect = collect
+    session = system.adapter.bind_regions((TransferRegion('left', ((-.28, -.08), (-.12, .08))),),
+        robot_profile_id='calibrated-robot', reset_id='fixture:1')
+    first = session.provider.snapshot()
+    second = session.provider.snapshot()
+    assert first.binding == second.binding
+    assert system.calls == []
+
+
+@pytest.mark.parametrize('fault', [TimeoutError('planning timeout'), TypeError('private refiner detail'),
+    None, {'status': 'ok', 'code': 'ok', 'data': {}}, {'status': 'ok', 'code': 'ok', 'data': {'plan_ref': 7}}])
+def test_observed_planning_failures_report_no_actuation(system, monkeypatch, fault):
+    from emet.controller.task.tamp.transfer_provider import TransferRegion
+
+    session = system.adapter.bind_regions((TransferRegion('left', ((-.28, -.08), (-.12, .08))),),
+        robot_profile_id='calibrated-robot', reset_id='fixture:1')
+    planned = session.plan('move block to left')
+    assert planned['status'] == 'ok'
+    def fail(**kwargs):
+        if isinstance(fault, Exception):
+            raise fault
+        return fault
+    monkeypatch.setattr(system.adapter, 'plan', fail)
+    executed = session.execute(planned['data']['plan_ref'])
+    assert executed['status'] == 'error' and executed['data']['execution_started'] is False
+    assert executed['data']['completed_steps'] == 0
+    assert executed['data']['failed_phase'] == 'preflight'
+    assert executed['data']['failed_step_execution_started'] is False
+    assert system.calls == []
+    assert 'private refiner detail' not in json.dumps(executed)
+
+
+def test_missing_dispatch_flag_after_execute_remains_possible_actuation(system, monkeypatch):
+    from emet.controller.task.tamp.api import response
+    from emet.controller.task.tamp.transfer_provider import TransferRegion
+
+    session = system.adapter.bind_regions((TransferRegion('left', ((-.28, -.08), (-.12, .08))),),
+        robot_profile_id='calibrated-robot', reset_id='fixture:1')
+    planned = session.plan('move block to left')
+    monkeypatch.setattr(system.adapter, 'plan', lambda **kwargs:
+        response('plan_pick_place', data={'plan_ref': 'returned-handle'}))
+    monkeypatch.setattr(system.adapter, 'execute', lambda ref:
+        response('execute_pick_place_plan', code='command_outcome_unknown', data={}))
+    executed = session.execute(planned['data']['plan_ref'])
+    assert executed['status'] == 'partial' and executed['data']['execution_started'] is True
+    assert executed['data']['failed_step_execution_started'] is True
+
+
+def test_unique_visual_frame_errors_reach_the_retention_provider(system):
+    raw = system.source.snapshot
+    def snapshot(*args):
+        current = raw(*args)
+        return replace(current, frame=replace(current.frame, position_error_m=.006, rotation_error_rad=.02))
+    system.source.snapshot = snapshot
+    planned = plan(system)
+    assert planned['status'] == 'ok', planned
+    ex = system.adapter.plans[planned['data']['plan_ref']].executor
+    evidence = ex.collision.provider.observe_payload('opaque')
+    assert evidence.position_error_m == .006 and evidence.rotation_error_rad == .02
+
+
+def test_canonical_payload_is_not_preinflated_and_region_keeps_pose_error(system):
+    raw = system.source.snapshot
+    def snapshot(*args):
+        current = raw(*args)
+        return replace(current, frame=replace(current.frame, position_error_m=.003))
+    system.source.snapshot = snapshot
+    result = system.adapter.plan(object_name='block', receptacle_name='counter',
+                                 placement_region=[[.1, -.011], [.14, .011]])
+    # The nominal footprint fits, but the possible footprint does not.
+    assert result['code'] == 'placement_region_unavailable', result
+    assert system.calls == []
+    result = plan(system)
+    assert result['status'] == 'ok', result
+    ex = system.adapter.plans[result['data']['plan_ref']].executor
+    evidence = ex.collision.provider.observe_payload('opaque')
+    np.testing.assert_array_equal(evidence.vertices_reference, snapshot('opaque', 'support').frame.payload.vertices_reference)
+    assert evidence.position_error_m == .003
+
+
+def test_visual_frame_cannot_downgrade_unique_payload_error_bounds(system):
+    raw = system.source.snapshot
+    def snapshot(*args):
+        current = raw(*args)
+        payload = replace(current.frame.payload, position_error_m=.006, rotation_error_rad=.03)
+        return replace(current, frame=replace(current.frame, payload=payload))
+    system.source.snapshot = snapshot
+    result = plan(system)
+    assert result['status'] == 'error' and result['code'] == 'object_pose_ambiguous'
+    assert system.calls == []
+
+
+@pytest.mark.parametrize('change', ['material_calibration', 'configuration_profile', 'epoch'])
+def test_capture_refresh_cannot_replace_the_pinned_material_profile(system, change):
+    from emet.controller.manipulation.native_scene import model_signature
+    from emet.motion.observed_admission import CapturedRobotMaterial, ObservedMaterialAdmission, RobotGeometryBound
+    from emet.motion.observed_background import ObservedBackground
+    from emet.motion.observed_solids import WorldSolid
+    from emet.motion.observed_workspace import ObservedWorkspace
+
+    task = next(iter(system.adapter.tasks.values()))
+    raw = system.source.snapshot
+    initial = raw(task.object_ref, task.support_ref)
+    ex = system.adapter.refine(task, initial)
+    signature = model_signature(ex.model)
+    def snapshot(frame_snapshot, *, changed=False):
+        capture = frame_snapshot.frame.capture
+        epoch = 'new-epoch' if changed and change == 'epoch' else 'epoch'
+        calibration = 'new-calibration' if changed and change == 'material_calibration' else 'calibration'
+        profile = 'new-profile' if changed and change == 'configuration_profile' else 'profile'
+        grid = ObservedWorkspace([-1.]*3, .2, np.ones((10, 10, 10), np.uint8))
+        background = ObservedBackground(grid, np.full(grid.cells.shape, capture.earliest), epoch,
+            frozenset((capture.observation_id,)), capture)
+        solids = tuple(WorldSolid.from_geom(ex.model, ex.data, g) for g in range(ex.model.ngeom))
+        material = CapturedRobotMaterial(capture, signature, calibration, epoch, solids,
+            (0.,)*len(solids), profile)
+        admission = ObservedMaterialAdmission(background, material,
+            query_robot_geometry=lambda m, d, g: RobotGeometryBound(WorldSolid.from_geom(m, d, g),
+                g, signature, calibration, profile, 0.))
+        return replace(frame_snapshot, scene=background.placement_scene(clock=system.adapter.clock), admission=admission)
+    initial = snapshot(initial)
+    ex.collision.admission, ex.collision.scene = initial.admission, initial.scene
+    ex.collision.scene_revision = initial.scene_revision
+    ex.collision.received_monotonic = initial.frame.capture.received_monotonic
+    current = snapshot(raw(task.object_ref, task.support_ref), changed=True)
+    system.source.snapshot = lambda *args: current
+    with pytest.raises(ObservationUnavailable, match='robot_material_identity_changed'):
+        system.adapter._refresh_checker(ex, task)
+    assert ex.collision.admission is initial.admission and ex.collision.scene is initial.scene
+    assert ex.collision.received_monotonic == initial.frame.capture.received_monotonic
+    assert system.calls == []
 
 
 def test_unknown_region_space_is_not_offered_as_free(system):

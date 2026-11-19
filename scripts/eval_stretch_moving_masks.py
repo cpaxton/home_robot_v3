@@ -35,15 +35,16 @@ class CameraContactRobot(contact.ContactRobot):
     output = None
     instances = []
     view = "head"
+    head_pose = (-1.57, -0.7)
 
     def __init__(self, model, object_body, **kwargs):
         self.renderer, self.tracker, self.rows, self.frames = None, None, [], []
         self.last_capture, self.next_sim_capture = 0.0, 0.0
         super().__init__(model, object_body, **kwargs)
         # Standard motor commands orient the camera before the diagnostic begins.
-        self.commands.append({"sim_time": float(self.data.time), "head": [-1.57, -0.7]})
-        self.data.ctrl[model.actuator("head_pan").id] = -1.57
-        self.data.ctrl[model.actuator("head_tilt").id] = -0.7
+        self.commands.append({"sim_time": float(self.data.time), "head": list(self.head_pose)})
+        self.data.ctrl[model.actuator("head_pan").id] = self.head_pose[0]
+        self.data.ctrl[model.actuator("head_tilt").id] = self.head_pose[1]
         self.step(1.0)
         self.rgb_camera, self.depth_camera = (
             (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth)

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "base_checkpoint": "bab3a405",
+  "scope": "same-capture geometry and visual-effect input assembly; no manipulation transfer",
+  "raw_root": ".tamp-runs/observed-frame-20261117",
+  "observed_task_success_assessed": false,
+  "execution_qualified": false,
+  "live_job": "20261117_103125_b1bdb3",
+  "tracked_captures": 27,
+  "pause_windows_passed": 3,
+  "updates_during_pauses": [
+    8,
+    9,
+    9
+  ],
+  "assembled_visual_frames": 6,
+  "motors_per_frame": 8,
+  "gripper_volumes_per_frame": 11,
+  "profile": "configs/eval/observed_stretch_geometry_debug.json",
+  "profile_status": "simulation assumptions; not hardware qualification",
+  "final_job": "20261117_103516_d25f95",
+  "tests": {
+    "tests": 218,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "known_remaining_gates": [
+    "qualified observed background and robot/target material ownership",
+    "complete source/refiner and support/contact evidence",
+    "actual observed pick/place"
+  ]
+}

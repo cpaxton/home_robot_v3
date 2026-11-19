@@ -20,12 +20,14 @@ class EncoderKinematicEstimate:
     world_from_ee: np.ndarray
     motor_capture: object
     inferred_joint_names: tuple[str, ...]
+    world_from_base: np.ndarray
     # Joint coupling is a kinematic estimate, never individual motor readouts.
     gripper_geometry_qualified: bool = False
     execution_qualified: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, "world_from_ee", rigid_copy(self.world_from_ee))
+        object.__setattr__(self, "world_from_base", rigid_copy(self.world_from_base))
 
 
 def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
@@ -107,4 +109,4 @@ def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
         for j in range(model.njnt)
         if mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) not in assigned
     )
-    return EncoderKinematicEstimate(pose, motors, inferred)
+    return EncoderKinematicEstimate(pose, motors, inferred, world_from_root)

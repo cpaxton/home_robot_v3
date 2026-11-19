@@ -18,6 +18,8 @@ import mujoco
 import mujoco._enums
 import numpy as np
 
+from emet.controller.manipulation.capture_clock import local_monotonic_clock_id
+from emet.core.rgbd_registration import encode_registration
 from emet.simulation.depth_registration import rendered_camera_intrinsics
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
@@ -184,6 +186,7 @@ class MujocoServerCameraManagerSync:
     def _register_head_depth(self, imagery):
         from emet.simulation.depth_registration import register_depth, rendered_camera_intrinsics
 
+        imagery.head_depth_registration = None
         if imagery.cam_d435i_rgb is None or imagery.cam_d435i_depth is None:
             return
         model = self.mujoco_server.mjmodel
@@ -204,8 +207,19 @@ class MujocoServerCameraManagerSync:
         rgb_shape, depth_shape = imagery.cam_d435i_rgb.shape[:2], imagery.cam_d435i_depth.shape
         rgb_k = rendered_camera_intrinsics(model.cam_fovy[rgb_id], rgb_shape[1], rgb_shape[0])
         depth_k = rendered_camera_intrinsics(model.cam_fovy[depth_id], depth_shape[1], depth_shape[0])
-        imagery.cam_d435i_depth = register_depth(imagery.cam_d435i_depth, depth_k, rgb_k, transform, rgb_shape)
+        raw = imagery.cam_d435i_depth
+        imagery.cam_d435i_depth = register_depth(raw, depth_k, rgb_k, transform, rgb_shape)
         imagery.cam_d435i_K = rgb_k
+        if os.environ.get('EMET_SIM_RGBD_PROVENANCE', '0').strip().lower() in {'1', 'true', 'yes', 'on'}:
+            rgb_interval = (imagery.capture_intervals_ns or {}).get(StretchCameras.cam_d435i_rgb.name)
+            depth_interval = (imagery.capture_intervals_ns or {}).get(StretchCameras.cam_d435i_depth.name)
+            if rgb_interval is None or depth_interval is None:
+                raise ValueError('rgbd_registration_capture_interval_required')
+            imagery.head_depth_registration = encode_registration(
+                rgb=imagery.cam_d435i_rgb, raw_depth=raw, registered_depth=imagery.cam_d435i_depth,
+                depth_k=depth_k, rgb_k=rgb_k, rgb_from_depth=transform,
+                rgb_interval_ns=rgb_interval, depth_interval_ns=depth_interval,
+                clock_id=local_monotonic_clock_id())
 
     def _create_camera_renderer(self, for_camera: StretchCameras):
         settings = for_camera.initial_camera_settings

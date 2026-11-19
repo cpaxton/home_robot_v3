@@ -21,9 +21,10 @@ def provider_failure_code(error: Exception) -> str:
     if isinstance(error, BudgetExhausted):
         return "task_motion_budget_exhausted"
     if isinstance(error, ObservationUnavailable):
-        return ("stale_observation" if str(error) in {
-            "object_observation_stale", "joint_observation_stale", "stale_observation"
-        } else "observation_unavailable")
+        if str(error) in {"object_observation_stale", "joint_observation_stale", "stale_observation"}:
+            return "stale_observation"
+        code = failure_code(str(error))
+        return code if code != "operation_failed" else "observation_unavailable"
     code = failure_code(str(error))
     return code if code != "operation_failed" else "task_provider_failed"
 

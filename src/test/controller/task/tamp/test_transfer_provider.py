@@ -14,6 +14,20 @@ from emet.controller.task.tamp.task_session import TaskExecutionResult, TaskSess
 from emet.controller.task.tamp.transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
 
 
+@pytest.mark.parametrize('reason,expected', [
+    ('object_pose_ambiguous', 'object_pose_ambiguous'),
+    ('task_object_not_settled_on_support', 'task_object_not_settled_on_support'),
+    ('robot_material_identity_changed', 'robot_material_identity_changed'),
+    ('object_observation_stale', 'stale_observation'),
+    ('private model/path detail', 'observation_unavailable'),
+])
+def test_observation_failures_keep_only_public_actionable_codes(reason, expected):
+    from emet.controller.manipulation.native_inputs import ObservationUnavailable
+    from emet.controller.task.tamp.task_session import provider_failure_code
+
+    assert provider_failure_code(ObservationUnavailable(reason)) == expected
+
+
 def make_domain(*, lie=False):
     regions = tuple(TransferRegion(name, ((i*2., 0.), (i*2.+1., 1.)))
                     for i, name in enumerate(('left', 'right', 'buffer')))
@@ -537,3 +551,24 @@ def test_native_executor_timeout_is_not_misreported_as_preflight():
     assert result['status'] == 'partial'
     assert result['data']['execution_started'] is True
     assert result['data']['failed_phase'] == 'execution'
+
+
+@pytest.mark.parametrize('release_failed', [False, True])
+def test_release_refinement_calls_are_charged_to_episode_budget(release_failed):
+    domain, _ = native_probe_domain()
+    domain._ik_remaining = 20
+
+    def execute(ref):
+        # Initial motion refinement consumed five calls; release consumes seven
+        # more from that same retained primitive, even if opening is rejected.
+        domain.adapter.planning_ik_calls += 7
+        return {'status': 'partial' if release_failed else 'ok',
+                'code': 'no_plan_within_budget' if release_failed else 'ok',
+                'data': {'execution_started': True}}
+
+    domain.adapter.execute = execute
+    result = domain._transfer_native('beta', domain.regions['buffer'])
+    assert result.success is (not release_failed)
+    assert result.execution_started is True
+    assert domain._ik_remaining == 8
+    assert domain.adapter.planning_ik_calls == 12

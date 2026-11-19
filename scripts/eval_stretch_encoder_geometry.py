@@ -23,6 +23,7 @@ from prepare_observed_stretch_fixture import prepare
 
 from emet.controller.manipulation.gripper_geometry import bound_stretch_gripper
 from emet.controller.manipulation.stretch_encoder_kinematics import estimate_stretch_ee_from_encoders
+from emet.controller.manipulation.stretch_geometry import bound_stretch_robot
 from emet.motion.mujoco_collision import body_subtree
 from emet.motion.placement_geometry import box_corners
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
@@ -32,6 +33,7 @@ from emet.simulation.synchronized_capture import capture_scene_for_sensors, capt
 class AuditedContactRobot(contact.ContactRobot):
     instances = []
     envelope_model = None
+    envelope_scope = "gripper"
 
     def __init__(self, model, object_body, **kwargs):
         self.envelope_samples, self._next_envelope_time = [], 0.0
@@ -124,7 +126,17 @@ class AuditedContactRobot(contact.ContactRobot):
             camera_pose=np.array(sample["camera_poses"]["head"]),
         )
         estimate = estimate_stretch_ee_from_encoders(observation, self.envelope_model)
-        bound = bound_stretch_gripper(self.envelope_model, estimate)
+        bound = (
+            bound_stretch_robot(
+                self.envelope_model,
+                estimate,
+                now=observation.received_monotonic,
+                position_error_m=0.0,
+                rotation_error_rad=0.0,
+            )
+            if self.envelope_scope == "robot"
+            else bound_stretch_gripper(self.envelope_model, estimate)
+        )
         escape, violations = 0.0, []
         for name, lo, hi in bound.joint_intervals:
             value = float(probe.joint(name).qpos[0])
@@ -159,6 +171,11 @@ def main():
         action="store_true",
         help="Also score motor-conditioned whole-gripper bounds against separate simulator geometry.",
     )
+    parser.add_argument(
+        "--robot-envelope",
+        action="store_true",
+        help="Audit all collision geoms from eight motors and full passive-joint intervals.",
+    )
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
@@ -166,18 +183,19 @@ def main():
     rows = []
     scratch = TemporaryDirectory(prefix="emet-gripper-audit-")
     try:
-        if args.gripper_envelope:
+        if args.gripper_envelope or args.robot_envelope:
             prepare(scratch.name)
             AuditedContactRobot.envelope_model = mujoco.MjModel.from_xml_path(str(Path(scratch.name) / "stretch.xml"))
+        AuditedContactRobot.envelope_scope = "robot" if args.robot_envelope else "gripper"
         contact.ContactRobot = AuditedContactRobot
         for obj in ("object1", "object2"):
             result = contact.run_case(model, obj)
             (args.output / f"{obj}-control.json").write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
             row = {"object": obj, "control_passed": result["passed"], "audit": AuditedContactRobot.instances[-1].audit}
-            if args.gripper_envelope:
+            if args.gripper_envelope or args.robot_envelope:
                 samples = AuditedContactRobot.instances[-1].envelope_samples
                 (args.output / f"{obj}-envelope.json").write_text(json.dumps(samples, indent=2) + "\n")
-                row["gripper_envelope"] = {
+                row["robot_envelope" if args.robot_envelope else "gripper_envelope"] = {
                     "samples": len(samples),
                     "contact_samples": sum(s["target_contact"] for s in samples),
                     "max_corner_escape_m": max(s["max_corner_escape_m"] for s in samples),
@@ -198,7 +216,12 @@ def main():
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
     return (
         0
-        if all(r["control_passed"] and r.get("gripper_envelope", {}).get("max_corner_escape_m", 0) < 1e-8 for r in rows)
+        if all(
+            r["control_passed"]
+            and r.get("robot_envelope", r.get("gripper_envelope", {})).get("max_corner_escape_m", 0) < 1e-8
+            and (not args.robot_envelope or r["robot_envelope"]["samples_outside_declared_intervals"] == 0)
+            for r in rows
+        )
         else 1
     )
 

@@ -71,7 +71,9 @@ def test_clock_domain_change_requires_explicit_provider_reconnect():
 
 @pytest.mark.parametrize('executor_mapped', [False, True])
 @pytest.mark.parametrize('fails', [False, True])
-def test_navigation_dispatch_discards_old_and_during_motion_plans(executor_mapped, fails):
+@pytest.mark.parametrize('tool_name, arguments', [('explore', {}), ('describe_scene', {'pan_rad': 0.}),
+    ('describe_scene', {'tilt_rad': -.3}), ('describe_scene', {'pan_rad': 0., 'tilt_rad': 0.})])
+def test_navigation_dispatch_discards_old_and_during_motion_plans(executor_mapped, fails, tool_name, arguments):
     provider = RgbdTaskProvider()
     provider.update(points(), received_monotonic=100., image_timing=timing(10))
     state = TaskState(frozenset(), SceneBinding('a'*64, 'b'*64, 'boot', 'reset', 0))
@@ -81,7 +83,7 @@ def test_navigation_dispatch_discards_old_and_during_motion_plans(executor_mappe
     native = SimpleNamespace(lock=threading.RLock(), plans={'old': object()})
     context = {'observed_tamp_provider': provider, 'tamp_task_session': session,
                '_tamp_plans': primitive, '_native_tamp_adapter': native}
-    def move(*args):
+    def move(*args, **kwargs):
         assert provider.observe_tasks() == () and not session._plans
         assert primitive == {} and native.plans == {}
         provider.update(points(), received_monotonic=101., image_timing=timing(11))
@@ -93,9 +95,9 @@ def test_navigation_dispatch_discards_old_and_during_motion_plans(executor_mappe
                            to_executor=lambda args: [('explore', '')] if executor_mapped else [])
     if fails and executor_mapped:
         with pytest.raises(TimeoutError):
-            _dispatch_tool_calls([{'name': 'explore'}], {'explore': tool}, move, tamp_context=context)
+            _dispatch_tool_calls([{'name': tool_name, 'arguments': arguments}], {tool_name: tool}, move, tamp_context=context)
     else:
-        _dispatch_tool_calls([{'name': 'explore'}], {'explore': tool}, move, tamp_context=context)
+        _dispatch_tool_calls([{'name': tool_name, 'arguments': arguments}], {tool_name: tool}, move, tamp_context=context)
     assert provider.observe_tasks() == ()
     assert session.execute(ref)['code'] == 'unknown_plan'
     provider.update(points(), received_monotonic=102., image_timing=timing(11))
@@ -104,13 +106,15 @@ def test_navigation_dispatch_discards_old_and_during_motion_plans(executor_mappe
     assert provider.observe_tasks()
 
 
-def test_read_only_tool_does_not_invalidate_evidence():
+@pytest.mark.parametrize('arguments', [{}, {'pan_rad': None, 'tilt_rad': None}])
+def test_read_only_tool_does_not_invalidate_evidence(arguments):
     provider = RgbdTaskProvider()
     provider.update(points(), received_monotonic=100.)
-    tool = SimpleNamespace(func=lambda: 'view', returns_info=True, to_executor=lambda args: [])
-    _dispatch_tool_calls([{'name': 'describe_scene'}], {'describe_scene': tool}, Mock(),
+    tool = SimpleNamespace(func=Mock(return_value='view'), returns_info=True, to_executor=lambda args: [])
+    _dispatch_tool_calls([{'name': 'describe_scene', 'arguments': arguments}], {'describe_scene': tool}, Mock(),
                          tamp_context={'observed_tamp_provider': provider})
     assert provider.observe_tasks()
+    tool.func.assert_called_once_with(**arguments)
 
 
 def test_actual_processor_carries_capture_identity_and_preserves_cached_age(monkeypatch):

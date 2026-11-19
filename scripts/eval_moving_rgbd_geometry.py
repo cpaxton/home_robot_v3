@@ -53,7 +53,9 @@ def fixture(view):
       </worldbody></mujoco>''')
 
 
-def capture(model, data, renderer, *, camera="sensor", depth_camera=None, target_geom_id=None):
+def capture(
+    model, data, renderer, *, camera="sensor", depth_camera=None, target_geom_id=None, registration_evidence=None
+):
     start = time.monotonic()
     mujoco.mj_kinematics(model, data)
     mujoco.mj_camlight(model, data)
@@ -69,10 +71,17 @@ def capture(model, data, renderer, *, camera="sensor", depth_camera=None, target
     renderer.disable_depth_rendering()
     end = time.monotonic()
     k = rendered_camera_intrinsics(model.cam_fovy[camera_id], rgb.shape[1], rgb.shape[0])
-    if depth_camera is not None:
+    if depth_camera is not None or registration_evidence is not None:
         depth_k = rendered_camera_intrinsics(model.cam_fovy[depth_id], depth.shape[1], depth.shape[0])
         rgb_from_depth = np.linalg.inv(pose) @ camera_opencv_pose(model, data, depth_id)
-        depth = register_depth(depth, depth_k, k, rgb_from_depth, rgb.shape[:2])
+        if registration_evidence is None:
+            depth = register_depth(depth, depth_k, k, rgb_from_depth, rgb.shape[:2])
+        else:
+            raw_depth = depth.copy()
+            depth, provenance = register_depth(depth, depth_k, k, rgb_from_depth, rgb.shape[:2], return_provenance=True)
+            registration_evidence.update(
+                provenance, raw_depth=raw_depth, depth_K=depth_k, rgb_from_depth=rgb_from_depth
+            )
         renderer.update_scene(data, camera=camera)
     _, _, world = capture_arrays(SimpleNamespace(rgb=rgb, depth=depth, camera_K=k, camera_pose=pose))
     # Independent scorer channel; it is never supplied to the tracker.

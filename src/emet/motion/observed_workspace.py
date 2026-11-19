@@ -34,7 +34,9 @@ class ObservedWorkspace:
 
     @classmethod
     def from_depth(cls, depth, intrinsic, world_from_camera, *, workspace, resolution,
-                   depth_margin_m=.02, min_depth_m=.1, max_depth_m=5., max_cells=250_000):
+                   depth_margin_m=.02, min_depth_m=.1, max_depth_m=5., max_cells=250_000,
+                   chunk_cells=4096, max_output_bytes=64*1024**2, max_working_bytes=64*1024**2,
+                   build_stats=None):
         """Carve a cell only when its *entire* projection is in front of valid depth.
 
         Every pixel in the projected corner bounding rectangle must return a
@@ -43,7 +45,12 @@ class ObservedWorkspace:
         Workspace bounds must lie on this grid; no partial edge cells are added.
         Inputs use the same optical XYZ convention as ``Camera.depth_to_xyz``.
         """
-        depth, intrinsic, pose = np.asarray(depth, float), np.asarray(intrinsic, float), np.asarray(world_from_camera, float)
+        if any(type(v) is not int or v < 1 for v in
+               (chunk_cells, max_output_bytes, max_working_bytes)):
+            raise ValueError('invalid_observed_workspace_budget')
+        # Inspect existing arrays without converting the whole frame to float64.
+        depth = np.asarray(depth)
+        intrinsic, pose = np.asarray(intrinsic, float), np.asarray(world_from_camera, float)
         bounds = bounds_array(workspace)
         if (depth.ndim != 2 or not depth.size or intrinsic.shape != (3, 3) or pose.shape != (4, 4)
                 or not np.isfinite(intrinsic).all() or intrinsic[0, 0] <= 0 or intrinsic[1, 1] <= 0
@@ -55,43 +62,58 @@ class ObservedWorkspace:
                 or not np.isfinite(depth_margin_m) or depth_margin_m < 0
                 or not np.isfinite([min_depth_m, max_depth_m]).all() or not 0 < min_depth_m < max_depth_m):
             raise ValueError('invalid_observed_depth_geometry')
-        # Out-of-range values are unknown, including a finite overflow/sentinel.
-        depth = np.where(np.isfinite(depth) & (depth >= min_depth_m) & (depth <= max_depth_m), depth, 0.)
         count = (bounds[1] - bounds[0]) / resolution
         if np.any(count < 1) or not np.allclose(count, np.round(count), atol=1e-7, rtol=0):
             raise ValueError('workspace_must_align_to_grid')
         if np.prod(count) > max_cells:
             raise ValueError('observed_workspace_budget_exceeded')
         shape = np.round(count).astype(int)
-        ids = np.indices(shape).reshape(3, -1).T
-        centers = bounds[0] + (ids + .5) * resolution
-        corners = centers[:, None, :] + CORNERS[None] * resolution / 2
-        camera = (corners - pose[:3, 3]) @ pose[:3, :3]
-        in_front = np.all(camera[..., 2] > 0, axis=1)
-        projected = camera @ intrinsic.T
-        with np.errstate(divide='ignore', invalid='ignore'):
-            uv = projected[..., :2] / projected[..., 2:]
+        total = int(np.prod(shape))
+        # Includes immutable output conversion/validation, owned sensor buffers,
+        # and a conservative reserve for all geometry arrays in one batch.
+        working = 16*total + 3*depth.size*np.dtype(float).itemsize + 2048*min(chunk_cells, max(total, depth.size))
+        if total > max_output_bytes or working > max_working_bytes:
+            raise ValueError('observed_workspace_budget_exceeded')
+        # Budget rejection precedes conversion and full-frame sanitation too.
+        depth = np.asarray(depth, float)
+        # Out-of-range values are unknown, including finite overflow/sentinels.
+        depth = np.where(np.isfinite(depth) & (depth >= min_depth_m) & (depth <= max_depth_m), depth, 0.)
         cells = np.zeros(tuple(shape), dtype=np.uint8)
         height, width = depth.shape
-        for index in np.flatnonzero(in_front):
-            lo, hi = uv[index].min(0), uv[index].max(0)
-            if np.any(lo < -.5) or hi[0] >= width - .5 or hi[1] >= height - .5:
-                continue
-            low, high = np.floor(lo + .5).astype(int), np.floor(hi + .5).astype(int)
-            patch = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
-            if np.isfinite(patch).all() and np.all(patch > camera[index, :, 2].max() + depth_margin_m):
-                cells[tuple(ids[index])] = 1
+        for start in range(0, total, chunk_cells):
+            ids = np.column_stack(np.unravel_index(np.arange(start, min(total, start+chunk_cells)), tuple(shape)))
+            centers = bounds[0] + (ids + .5) * resolution
+            corners = centers[:, None, :] + CORNERS[None] * resolution / 2
+            camera = (corners - pose[:3, 3]) @ pose[:3, :3]
+            in_front = np.all(camera[..., 2] > 0, axis=1)
+            projected = camera @ intrinsic.T
+            with np.errstate(divide='ignore', invalid='ignore'):
+                uv = projected[..., :2] / projected[..., 2:]
+            for index in np.flatnonzero(in_front):
+                lo, hi = uv[index].min(0), uv[index].max(0)
+                if np.any(lo < -.5) or hi[0] >= width - .5 or hi[1] >= height - .5:
+                    continue
+                low, high = np.floor(lo + .5).astype(int), np.floor(hi + .5).astype(int)
+                patch = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
+                if np.isfinite(patch).all() and np.all(patch > camera[index, :, 2].max() + depth_margin_m):
+                    cells[tuple(ids[index])] = 1
         # Endpoint cells are occupied; a margin-neighbourhood remains unknown
         # because free carving already stops before each return by that margin.
-        y, x = np.indices(depth.shape)
-        valid = np.isfinite(depth) & (depth > 0)
-        z = depth[valid]
-        camera_points = np.column_stack(((x[valid] - intrinsic[0, 2]) * z / intrinsic[0, 0],
-                                         (y[valid] - intrinsic[1, 2]) * z / intrinsic[1, 1], z))
-        world = camera_points @ pose[:3, :3].T + pose[:3, 3]
-        inside = np.all((world >= bounds[0]) & (world < bounds[1]), axis=1)
-        endpoints = np.floor((world[inside] - bounds[0]) / resolution).astype(int)
-        cells[tuple(endpoints.T)] = 2
+        for start in range(0, depth.size, chunk_cells):
+            pixels = np.arange(start, min(depth.size, start+chunk_cells))
+            z = depth.ravel()[pixels]
+            valid = z > 0
+            y, x = np.divmod(pixels[valid], width)
+            z = z[valid]
+            camera_points = np.column_stack(((x - intrinsic[0, 2]) * z / intrinsic[0, 0],
+                                             (y - intrinsic[1, 2]) * z / intrinsic[1, 1], z))
+            world = camera_points @ pose[:3, :3].T + pose[:3, 3]
+            inside = np.all((world >= bounds[0]) & (world < bounds[1]), axis=1)
+            endpoints = np.floor((world[inside] - bounds[0]) / resolution).astype(int)
+            cells[tuple(endpoints.T)] = 2
+        if build_stats is not None:
+            build_stats.update(grid_cells=total, output_bytes=total, estimated_working_bytes=working,
+                               chunk_cells=chunk_cells, max_cells_per_batch=min(chunk_cells, total))
         return cls(bounds[0], resolution, cells)
 
     @classmethod
@@ -140,7 +162,8 @@ class ObservedWorkspace:
             attributed[values] = True
         missing = np.flatnonzero(occupied & ~attributed)
         owners['background'] = np.union1d(owners.get('background', []), missing).astype(int)
-        return ObservedOccupancyPartition(self, tuple((name, tuple(map(int, values))) for name, values in sorted(owners.items())))
+        return ObservedOccupancyPartition(self, tuple((name, tuple(map(int, values))) for name, values in sorted(owners.items())),
+                                          points, labels)
 
     def query_region(self, bounds):
         """Slices for all cells touching a closed query, or None outside the grid."""
@@ -174,6 +197,67 @@ class ObservedWorkspace:
 class ObservedOccupancyPartition:
     workspace: ObservedWorkspace
     owners: tuple[tuple[str, tuple[int, ...]], ...]
+    points_world: np.ndarray | None = None
+    point_labels: np.ndarray | None = None
+    qualified_refs: tuple[str, ...] = ()
+    self_material_profile: tuple[str, ...] | None = None
+    qualification_capture: object | None = None
+
+    def __post_init__(self):
+        if self.qualified_refs and (self.self_material_profile is None or self.qualification_capture is None):
+            raise ValueError('invalid_occupancy_provenance')
+        if self.points_world is None and self.point_labels is None:
+            return
+        points, labels = np.asarray(self.points_world, float), np.asarray(self.point_labels)
+        if (points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all()
+                or labels.shape != (len(points),) or labels.dtype.kind not in {'U', 'S'}):
+            raise ValueError('invalid_occupancy_provenance')
+        object.__setattr__(self, 'points_world', np.frombuffer(points.tobytes(), dtype=points.dtype).reshape(points.shape))
+        object.__setattr__(self, 'point_labels', np.frombuffer(labels.tobytes(), dtype=labels.dtype).reshape(labels.shape))
+
+    def qualify_robot_material(self, material, *, capture, now, point_error_m=0., robot_ref='robot'):
+        """Keep inconsistent self labels as background, before any exclusion.
+
+        A measured endpoint's entire error ball must fit captured inner material.
+        Labels alone, a shared voxel, and an outer model AABB are insufficient.
+        Missing point provenance cannot qualify exclusion of occupied cells.
+        """
+        from emet.controller.manipulation.native_inputs import ObservationUnavailable
+        from emet.motion.observed_admission import CapturedRobotMaterial
+
+        if (not isinstance(material, CapturedRobotMaterial) or material.capture != capture
+                or not np.isfinite(point_error_m) or point_error_m < 0 or robot_ref == 'background'
+                or (self.qualification_capture is not None and self.qualification_capture != capture)):
+            raise ValueError('invalid_self_material_qualification')
+        material.require(now=now, model_signature=material.model_signature, scene_epoch=material.scene_epoch)
+        if material.capture.calibration_id != capture.calibration_id:
+            raise ObservationUnavailable('capture_identity_mismatch')
+        owners = {ref: np.asarray(ids, int) for ref, ids in self.owners}
+        self_ids = owners.get(robot_ref, np.empty(0, int))
+        proved, invalid = np.empty(0, int), np.empty(0, int)
+        if self.points_world is not None:
+            points = self.points_world[self.point_labels == robot_ref]
+            indices = np.floor((points-self.workspace.origin)/self.workspace.resolution).astype(int)
+            ids = np.ravel_multi_index(indices.T, self.workspace.cells.shape)
+            qualified = np.zeros(len(points), bool)
+            for solid in material.inner_solids:
+                qualified |= solid.lower_distance(points) + point_error_m <= 0
+            proved, invalid = np.unique(ids[qualified]), np.unique(ids[~qualified])
+        # Every endpoint in a cell must be qualified, not just one matching point.
+        invalid = np.union1d(invalid, np.setdiff1d(self_ids, proved))
+        owners['background'] = np.union1d(owners.get('background', []), invalid).astype(int)
+        return ObservedOccupancyPartition(self.workspace,
+            tuple((ref, tuple(map(int, ids))) for ref, ids in sorted(owners.items())),
+            self.points_world, self.point_labels, tuple(sorted(set(self.qualified_refs) | {robot_ref})),
+            material.profile_identity, capture)
+
+    def unqualified_excluded_cells(self, excluded_refs):
+        """An unqualified foreground label cannot preserve historical free space."""
+        ids = [ids for ref, ids in self.owners if ref in set(excluded_refs) - set(self.qualified_refs)]
+        result = np.zeros(self.workspace.cells.size, bool)
+        for values in ids:
+            result[list(values)] = True
+        return result.reshape(self.workspace.cells.shape)
 
     def excluding(self, object_refs):
         """Remove only exclusive endpoints; the vacated cell becomes UNKNOWN.

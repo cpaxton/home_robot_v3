@@ -43,8 +43,16 @@ class GripperGeometryEnvelope:
     joint_intervals: tuple[tuple[str, float, float], ...]
     assumptions: tuple[str, ...]
     execution_qualified: bool = False
+    position_error_m: float = 0.0
+    rotation_error_rad: float = 0.0
 
     def __post_init__(self):
+        if (
+            not np.isfinite([self.position_error_m, self.rotation_error_rad]).all()
+            or self.position_error_m < 0
+            or not 0 <= self.rotation_error_rad <= np.pi
+        ):
+            raise ValueError("gripper_geometry_calibration_required")
         object.__setattr__(self, "bounds_world", _frozen(self.bounds_world))
         object.__setattr__(self, "world_from_ee", _frozen(self.world_from_ee))
         object.__setattr__(self, "motor_positions", _frozen(self.motor_positions))
@@ -66,7 +74,14 @@ class GripperGeometryEnvelope:
         ):
             raise ObservationUnavailable("gripper_geometry_changed")
         return tuple(
-            RobotPoseSample(estimate.world_from_ee, estimate.motor_capture.positions, t, self.bounds_world)
+            RobotPoseSample(
+                estimate.world_from_ee,
+                estimate.motor_capture.positions,
+                t,
+                self.bounds_world,
+                position_error_m=self.position_error_m,
+                rotation_error_rad=self.rotation_error_rad,
+            )
             for t in (capture.earliest, capture.latest)
         )
 
@@ -78,6 +93,8 @@ class GripperGeometryEnvelope:
             "joint_intervals": [list(item) for item in self.joint_intervals],
             "assumptions": list(self.assumptions),
             "execution_qualified": False,
+            "position_error_m": self.position_error_m,
+            "rotation_error_rad": self.rotation_error_rad,
         }
 
 
@@ -176,4 +193,6 @@ def bound_stretch_gripper(
             "calibrated_robot_geometry",
             "model_joint_limits" if not joint_intervals else "declared_intervals:" + str(calibration_id),
         ),
+        position_error_m=position_error_m,
+        rotation_error_rad=rotation_error_rad,
     )

@@ -10,6 +10,8 @@ A bounded static-scene assumption may extend its validity, never its timestamp.
 import hashlib
 import time
 from dataclasses import dataclass
+from functools import cached_property
+from types import MappingProxyType
 
 import numpy as np
 
@@ -47,6 +49,9 @@ class ObservedBackground:
     scene_epoch: str
     capture_ids: frozenset[str]
     latest_capture: CaptureInterval
+    self_material_profile: tuple[str, ...] | None = None
+    occupied_owners: tuple[tuple[str, tuple[int, ...]], ...] = ()
+    capture_history: tuple[CaptureInterval, ...] = ()
 
     def __post_init__(self):
         stamps = np.asarray(self.observed_monotonic, float)
@@ -59,30 +64,76 @@ class ObservedBackground:
         ):
             raise ValueError("invalid_background_evidence")
         object.__setattr__(self, "observed_monotonic", _frozen(stamps))
+        occupied = self.workspace.cells.ravel() == 2
+        owners = {}
+        for ref, ids in self.occupied_owners:
+            if not isinstance(ref, str) or not ref or any(type(i) is not int or not 0 <= i < occupied.size for i in ids):
+                raise ValueError('invalid_background_owners')
+            owners.setdefault(ref, set()).update(i for i in ids if occupied[i])
+        attributed = set().union(*owners.values()) if owners else set()
+        owners.setdefault('background', set()).update(set(map(int, np.flatnonzero(occupied))) - attributed)
+        object.__setattr__(self, 'occupied_owners', tuple(
+            (ref, tuple(sorted(ids))) for ref, ids in sorted(owners.items()) if ids))
+        history = {}
+        for capture in (*self.capture_history, self.latest_capture):
+            if (not isinstance(capture, CaptureInterval) or capture.observation_id not in self.capture_ids
+                    or capture.calibration_id != self.latest_capture.calibration_id
+                    or capture.latest > self.latest_capture.latest
+                    or (capture.observation_id in history and history[capture.observation_id] != capture)):
+                raise ValueError('invalid_background_capture_history')
+            history[capture.observation_id] = capture
+        if len(history) > 4096:
+            raise ValueError('invalid_background_capture_history')
+        object.__setattr__(self, 'capture_history', tuple(history[key] for key in sorted(history)))
 
     @classmethod
     def from_capture(
-        cls, partition: ObservedOccupancyPartition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None
+        cls, partition: ObservedOccupancyPartition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None,
+        robot_material=None, point_error_m=0.
     ):
-        capture.require(now=time.monotonic() if now is None else now)
+        now = time.monotonic() if now is None else now
+        capture.require(now=now)
+        excluded_refs = tuple(excluded_refs)
+        if robot_material is not None:
+            if robot_material.scene_epoch != scene_epoch:
+                raise ObservationUnavailable('background_epoch_or_capture_invalid')
+            partition = partition.qualify_robot_material(robot_material, capture=capture, now=now,
+                                                        point_error_m=point_error_m)
+        if partition.qualified_refs and (partition.qualification_capture != capture
+                or partition.self_material_profile[3] != scene_epoch):
+            raise ObservationUnavailable('background_epoch_or_capture_invalid')
         workspace = partition.excluding(excluded_refs)
         stamps = np.full(workspace.cells.shape, np.nan)
         stamps[workspace.cells != 0] = capture.earliest
-        return cls(workspace, stamps, scene_epoch, frozenset((capture.observation_id,)), capture)
+        return cls(workspace, stamps, scene_epoch, frozenset((capture.observation_id,)), capture,
+                   partition.self_material_profile, partition.owners)
 
-    def update(self, partition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None):
+    def update(self, partition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None,
+               robot_material=None, point_error_m=0.):
         """Fuse only an explicitly unchanged background; contradictions reject.
 
         Current self-only endpoints become unknown before fusion. Mixed owners
         retain environment occupancy, so self masking cannot erase an obstacle.
         The caller must discard this map and invalidate plans on scene changes.
         """
-        capture.require(now=time.monotonic() if now is None else now, after=self.latest_capture.latest)
+        now = time.monotonic() if now is None else now
+        capture.require(now=now, after=self.latest_capture.latest)
+        excluded_refs = tuple(excluded_refs)
+        if robot_material is not None:
+            if robot_material.scene_epoch != scene_epoch:
+                raise ObservationUnavailable('background_epoch_or_capture_invalid')
+            partition = partition.qualify_robot_material(robot_material, capture=capture, now=now,
+                                                        point_error_m=point_error_m)
+        if partition.qualified_refs and (partition.qualification_capture != capture
+                or partition.self_material_profile[3] != scene_epoch):
+            raise ObservationUnavailable('background_epoch_or_capture_invalid')
         if (
             scene_epoch != self.scene_epoch
             or capture.observation_id in self.capture_ids
             or capture.calibration_id != self.latest_capture.calibration_id
             or len(self.capture_ids) >= 4096
+            or (self.self_material_profile is not None and partition.self_material_profile is not None
+                and self.self_material_profile != partition.self_material_profile)
         ):
             raise ObservationUnavailable("background_epoch_or_capture_invalid")
         current = partition.excluding(excluded_refs)
@@ -97,18 +148,34 @@ class ObservedBackground:
         if np.any(contradiction):
             raise ObservationUnavailable("background_scene_changed")
         cells, stamps = old.cells.copy(), self.observed_monotonic.copy()
+        # An obstacle mislabelled as foreground must not disappear into a cached
+        # free cell. Only a capture-bound material proof can retain that cell's
+        # historical free evidence. Truly hidden cells keep their original age.
+        unqualified = partition.unqualified_excluded_cells(excluded_refs)
+        invalidated_free = unqualified & (current.cells == 0) & (old.cells == 1)
+        cells[invalidated_free] = 0
+        stamps[invalidated_free] = np.nan
         # Occluded cells retain their ORIGINAL acquisition age, never the new
         # foreground timestamp. known_free expires them after 2 s unless the
         # caller declares a bounded static-scene assumption. This fusion is not
         # robot ownership/contact admission; that remains the separate #245 gate.
         observed = current.cells != 0
         cells[observed], stamps[observed] = current.cells[observed], capture.earliest
+        # Occupied contributors accumulate. A fresh support label cannot erase
+        # an old obstacle in the same voxel or renew that contributor's age.
+        repeated_occupied = (old.cells == 2) & (current.cells == 2)
+        stamps[repeated_occupied] = self.observed_monotonic[repeated_occupied]
         return ObservedBackground(
             ObservedWorkspace(old.origin, old.resolution, cells),
             stamps,
             self.scene_epoch,
             self.capture_ids | {capture.observation_id},
             capture,
+            partition.self_material_profile or self.self_material_profile,
+            # Keep excluded contributors when a mixed cell remains occupied.
+            # __post_init__ removes metadata only for cells actually absent.
+            self.occupied_owners + partition.owners,
+            self.capture_history + (capture,),
         )
 
     @property
@@ -118,8 +185,26 @@ class ObservedBackground:
             + self.workspace.origin.tobytes()
             + np.float64(self.workspace.resolution).tobytes()
             + self.workspace.cells.tobytes()
+            + repr(self.occupied_owners).encode()
         )
         return "observed-background:" + digest.hexdigest()
+
+    @cached_property
+    def _exclusive_owners(self):
+        owners = dict(self.occupied_owners)
+        result = {}
+        for ref, own in owners.items():
+            exclusive = set(own)
+            for other, ids in owners.items():
+                if other != ref:
+                    exclusive.difference_update(ids)
+            result[ref] = frozenset(exclusive)
+        return MappingProxyType(result)
+
+    def exclusively_owned_cells(self, ref):
+        # The immutable owner layer changes only with a new background object.
+        # Avoid rebuilding large support sets at every dense path sample.
+        return self._exclusive_owners.get(ref, frozenset())
 
     def known_free(self, bounds, *, now, static_assumption=None, max_age_s=2.0):
         if not np.isfinite(max_age_s) or not 0 < max_age_s <= 2:

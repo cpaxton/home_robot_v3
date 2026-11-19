@@ -138,6 +138,8 @@ def test_bounded_release_protocol_and_constructor_wiring(runner, monkeypatch, tm
         "target_epsilon_m": 1e-6,
         "stable_interval_s": 0.1,
         "poll_interval_s": 0.05,
+        "lateral_offsets_m": [0.01, 0.02, 0.03],
+        "lateral_directions": [[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]],
     }
     assert "src/emet/motion/release.py" in protocol["source_sha256"]
     assert "src/emet/controller/manipulation/native_scene.py" in protocol["source_sha256"]

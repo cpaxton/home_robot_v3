@@ -28,7 +28,10 @@ from emet.controller.manipulation.observed_effects import (
 )
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
-from emet.motion.placement_geometry import PlacementScene, bounds_array, box_corners
+from emet.motion.observed_admission import ObservedMaterialAdmission
+from emet.motion.observed_contact import ObservedTargetContact
+from emet.motion.observed_support_contact import ObservedSupportContact
+from emet.motion.placement_geometry import PlacementScene, bounds_array
 
 from .api import failure_code, response
 
@@ -47,6 +50,9 @@ class ObservedNativeSnapshot:
     scene: PlacementScene
     scene_revision: str
     support_bounds: np.ndarray
+    admission: ObservedMaterialAdmission | None = None
+    target_contact: ObservedTargetContact | None = None
+    support_contact: ObservedSupportContact | None = None
 
     def __post_init__(self):
         bounds = bounds_array(self.support_bounds)
@@ -57,6 +63,32 @@ class ObservedNativeSnapshot:
         object.__setattr__(self, 'support_bounds', bounds)
         object.__setattr__(self, 'scene', PlacementScene(self.scene.boxes, source=self.scene.source,
             workspace=self.scene.workspace, known_free=self.scene.known_free))
+        if self.admission is not None:
+            if (not isinstance(self.admission, ObservedMaterialAdmission)
+                    or self.admission.scene_geometry_digest != self.scene.geometry_digest
+                    or self.admission.robot_material.capture != self.frame.capture):
+                raise ValueError('invalid_observed_admission')
+        if self.support_contact is not None:
+            contact = self.support_contact
+            if (not isinstance(contact, ObservedSupportContact) or self.admission is None
+                    or contact.object_ref != self.frame.payload.object_ref
+                    or contact.scene_epoch != self.admission.background.scene_epoch
+                    or not np.array_equal(contact.patch.bounds, bounds)):
+                raise ValueError('invalid_observed_support_contact')
+        if self.target_contact is not None:
+            contact, payload = self.target_contact, self.frame.payload
+            if not isinstance(contact, ObservedTargetContact):
+                raise ValueError('invalid_observed_target_contact')
+            world_from_reference = payload.pose.world_from_object
+            radius = np.linalg.norm(payload.vertices_reference, axis=1).max()
+            margin = pose_uncertainty_margin(radius, self.frame.position_error_m, self.frame.rotation_error_rad)
+            if ((contact.object_ref, contact.reference_id, contact.geometry_revision)
+                    != (payload.object_ref, payload.reference_id, payload.revision)
+                    or contact.capture != self.frame.capture or contact.target.kind != 'convex'
+                    or not np.array_equal(contact.target.vertices, payload.vertices_reference)
+                    or not np.array_equal(contact.target.world_from_local, world_from_reference)
+                    or contact.target.offset_m < margin):
+                raise ValueError('invalid_observed_target_contact')
 
 
 @dataclass
@@ -70,13 +102,22 @@ class ObservedStoredPlan:
 class _PayloadEnvelope:
     input_mode = 'observed'
 
-    def __init__(self, observe, initial):
+    def __init__(self, observe, initial, *, attachment_ee_positions=None, attachment_tracking_error_m=0.):
         self.observe, self.initial = observe, initial
         frame = initial.frame
-        vertices = frame.payload.vertices_reference
-        radius = np.linalg.norm(vertices, axis=1).max()
-        margin = pose_uncertainty_margin(radius, frame.position_error_m, frame.rotation_error_rad)
-        self.vertices = box_corners([vertices.min(0)-margin, vertices.max(0)+margin])
+        self.vertices = frame.payload.vertices_reference
+        ee = (frame.robot_after.world_from_ee[:3, 3][None] if attachment_ee_positions is None
+              else np.asarray(attachment_ee_positions, float).reshape(-1, 3))
+        radius = np.linalg.norm(self.vertices, axis=1).max()
+        lever = np.linalg.norm(frame.payload.pose.world_from_object[:3, 3]-ee, axis=1).max()+radius
+        self.lever_limit = lever+frame.position_error_m+attachment_tracking_error_m
+        self.robot_position = max(frame.robot_before.position_error_m, frame.robot_after.position_error_m)
+        self.robot_rotation = max(frame.robot_before.rotation_error_rad, frame.robot_after.rotation_error_rad)
+        # Per-capture EE error. Transport needs two captures; retention adds
+        # before/current once each. Angular displacement is included in metres.
+        self.attachment_error = pose_uncertainty_margin(self.lever_limit+self.robot_position,
+            self.robot_position+frame.alignment_error_m, self.robot_rotation+frame.alignment_error_rad)
+        self.attachment_rotation = self.robot_rotation+frame.alignment_error_rad
 
     def observe_payload(self, object_ref):
         current, initial = self.observe().frame, self.initial.frame
@@ -85,9 +126,16 @@ class _PayloadEnvelope:
                 or a.object_ref != object_ref or not np.array_equal(a.vertices_reference, b.vertices_reference)
                 or shape_identity(a.pose) != shape_identity(b.pose)
                 or current.position_error_m > initial.position_error_m
-                or current.rotation_error_rad > initial.rotation_error_rad):
+                or current.rotation_error_rad > initial.rotation_error_rad
+                or max(current.robot_before.position_error_m, current.robot_after.position_error_m) > self.robot_position
+                or max(current.robot_before.rotation_error_rad, current.robot_after.rotation_error_rad) > self.robot_rotation
+                or current.alignment_error_m > initial.alignment_error_m
+                or current.alignment_error_rad > initial.alignment_error_rad):
             raise ObservationUnavailable('payload_geometry_changed')
-        return PayloadGeometryEvidence(a.object_ref, a.reference_id, a.revision, self.vertices, a.pose, a.construction)
+        return PayloadGeometryEvidence(a.object_ref, a.reference_id, a.revision, self.vertices, a.pose, a.construction,
+            position_error_m=current.position_error_m, rotation_error_rad=current.rotation_error_rad,
+            attachment_error_m=self.attachment_error, attachment_rotation_error_rad=self.attachment_rotation,
+            attachment_lever_limit_m=self.lever_limit)
 
 
 class _CommandBoundary:
@@ -183,6 +231,11 @@ class ObservedNativeAdapter:
             raise ObservationUnavailable('payload_identity_mismatch')
         if self.source.current_revision() != snapshot.scene_revision:
             raise ObservationUnavailable('scene_revision_changed')
+        if snapshot.support_contact is not None:
+            if snapshot.support_contact.support_ref != task.support_ref:
+                raise ObservationUnavailable('support_geometry_unknown')
+            snapshot.support_contact.require(snapshot.admission.background, now=self.clock(),
+                                              static_assumption=snapshot.admission.static_assumption)
         return snapshot
 
     def discover(self, object_filter='', robot=''):
@@ -205,6 +258,28 @@ class ObservedNativeAdapter:
 
     def _refresh_checker(self, ex, task, *, allow_scene_change=True):
         snapshot = self._observe(task)
+        previous_admission = ex.collision.admission
+        if ((previous_admission is None) != (snapshot.admission is None)
+                or (previous_admission is not None
+                    and previous_admission.profile_identity != snapshot.admission.profile_identity)):
+            raise ObservationUnavailable('robot_material_identity_changed')
+        if snapshot.admission is not None:
+            snapshot.admission.require(now=self.clock(), model_signature=model_signature(ex.model),
+                                       capture_id=snapshot.frame.capture.observation_id)
+        old_contact, new_contact = ex.collision.target_contact, snapshot.target_contact
+        if ((old_contact is None) != (new_contact is None)
+                or (old_contact is not None and old_contact.profile_identity != new_contact.profile_identity)):
+            raise ObservationUnavailable('target_contact_identity_changed')
+        if new_contact is not None:
+            new_contact.require(now=self.clock(), model_signature=model_signature(ex.model),
+                                capture_id=snapshot.frame.capture.observation_id)
+        old_support, new_support = ex.collision.support_contact, snapshot.support_contact
+        if ((old_support is None) != (new_support is None)
+                or (old_support is not None and old_support.profile_identity != new_support.profile_identity)):
+            raise ObservationUnavailable('scene_changed_replan')
+        if new_support is not None:
+            new_support.require(snapshot.admission.background, now=self.clock(),
+                                static_assumption=snapshot.admission.static_assumption)
         if not allow_scene_change and (snapshot.scene_revision != ex.collision.scene_revision
                 or snapshot.scene.geometry_digest != ex.collision.scene.geometry_digest):
             raise ObservationUnavailable('scene_revision_changed')
@@ -215,6 +290,9 @@ class ObservedNativeAdapter:
         ex.collision.scene_revision = snapshot.scene_revision
         # This is the measured capture's original receive time, never 'now'.
         ex.collision.received_monotonic = snapshot.frame.capture.received_monotonic
+        ex.collision.admission = snapshot.admission
+        ex.collision.set_target_contact(new_contact)
+        ex.collision.set_support_contact(new_support)
         return snapshot
 
     def _certify(self, ex, task, region=None):
@@ -231,16 +309,19 @@ class ObservedNativeAdapter:
                         ex.collision.set_payload(ex.model, ex.data, task.object_ref, ex.ee_body)
                     if phase == 'retreat':
                         ex.collision.set_payload(ex.model, ex.data, None)
-                        _, error = ex.plan_gripper_open()
+                        with ex.collision.motion_phase('release'):
+                            _, error = ex.plan_gripper_open()
                         if error:
                             return error
-                    path, error = ex.plan_pose(point, rotation)
+                    with ex.collision.motion_phase(phase):
+                        path, error = ex.plan_pose(point, rotation)
+                    if error is None and phase == 'grasp' and ex.collision.target_contact is not None:
+                        _, error = ex.plan_gripper_close()
                     if error:
                         return error
                     if phase == 'place' and region is not None:
-                        ee = ex.data.body(ex.ee_body)
-                        vertices = ex.collision.payload.world_vertices(ee.xpos, ee.xmat)
-                        if np.any(vertices[:, :2].min(0) < region[0]) or np.any(vertices[:, :2].max(0) > region[1]):
+                        bounds = ex.collision.possible_payload_bounds(ex.model, ex.data)
+                        if np.any(bounds[0, :2] < region[0]) or np.any(bounds[1, :2] > region[1]):
                             return 'placement_region_unavailable'
                     paths.append(path)
                 if grasp:
@@ -300,7 +381,10 @@ class ObservedNativeAdapter:
                 if self._model_signature is not None and self._model_signature != signature:
                     raise ObservationUnavailable('scene_changed_replan')
                 self._model_signature = signature
-                ex.collision.provider = _PayloadEnvelope(lambda: self._observe(task), initial)
+                ex.collision.provider = _PayloadEnvelope(lambda: self._observe(task), initial,
+                    attachment_ee_positions=[targets[1][0] for targets in
+                        [ex.grasp_targets, *ex.grasp_target_options]],
+                    attachment_tracking_error_m=ex.position_tolerance_m)
                 ex.synchronize(ex.data)
                 initial_joints = ex.data.qpos.copy()
                 ex.observed_support_bounds = initial.support_bounds.copy()
@@ -376,7 +460,16 @@ class ObservedNativeAdapter:
     @staticmethod
     def _require_same_initial(initial, current):
         a, b = initial.frame.payload, current.frame.payload
-        if (initial.scene_revision != current.scene_revision
+        if ((initial.admission is None) != (current.admission is None)
+                or (initial.admission is not None and (
+                    initial.admission.profile_identity != current.admission.profile_identity))
+                or (initial.target_contact is None) != (current.target_contact is None)
+                or (initial.target_contact is not None and
+                    initial.target_contact.profile_identity != current.target_contact.profile_identity)
+                or (initial.support_contact is None) != (current.support_contact is None)
+                or (initial.support_contact is not None and
+                    initial.support_contact.profile_identity != current.support_contact.profile_identity)
+                or initial.scene_revision != current.scene_revision
                 or initial.frame.capture.calibration_id != current.frame.capture.calibration_id
                 or initial.scene.geometry_digest != current.scene.geometry_digest
                 or not np.array_equal(initial.support_bounds, current.support_bounds)
@@ -396,6 +489,7 @@ class ObservedNativeAdapter:
             started, completed, phase = False, [], 'preflight'
             ex, task = plan.executor, plan.task
             original_robot, original_command = ex.robot, ex.command_joints
+            original_gripper_command = ex.command_gripper_joints
 
             def mark():
                 nonlocal started
@@ -406,6 +500,10 @@ class ObservedNativeAdapter:
                 mark()
                 return original_command(q)
 
+            def gripper_command(q):
+                mark()
+                return original_gripper_command(q)
+
             try:
                 self._require_same_initial(plan.initial, self._observe(task))
                 if model_signature(ex.model) != self._model_signature:
@@ -414,6 +512,8 @@ class ObservedNativeAdapter:
                 if np.max(np.abs(ex.data.qpos - plan.joints)) > .01:
                     raise ObservationUnavailable('scene_changed_replan')
                 ex.robot, ex.command_joints = _CommandBoundary(self.robot, mark), command
+                if original_gripper_command is not None:
+                    ex.command_gripper_joints = gripper_command
                 for phase, action in (('grasp', lambda: ex.grasp_only('', object_gt_body=task.object_ref)),
                                       ('place', lambda: ex.place_only('', object_gt_body=task.object_ref))):
                     # Refresh foreground/background evidence before each skill;
@@ -438,3 +538,4 @@ class ObservedNativeAdapter:
                 return self._failure('execute_pick_place_plan', str(exc), started=started, completed=completed, phase=phase)
             finally:
                 ex.robot, ex.command_joints = original_robot, original_command
+                ex.command_gripper_joints = original_gripper_command

@@ -11,6 +11,8 @@ from emet.controller.manipulation.geometry_models import PrimitiveModel
 from emet.controller.manipulation.multiview_rgbd_tracking import MultiViewRgbdTracker, SynchronizedRgbdView
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
+from emet.controller.manipulation.robot_view_guard import RobotViewGuard
+from emet.motion.observed_solids import WorldSolid
 
 
 def view(capture, *, shift=(0.0, 0.0, 0.0), cap_only=False, missing=False, distractor=False, mixed=False):
@@ -65,6 +67,141 @@ def setup(**kwargs):
         **kwargs,
     )
     return track, clock
+
+
+def guarded(measured, *, center=(0.08, 0.0, 0.04)):
+    pose = np.eye(4)
+    pose[:3, 3] = center
+    points = measured.world.copy()
+    points[~(np.isfinite(measured.depth) & (measured.depth > 0))] = np.nan
+    guard = RobotViewGuard(
+        measured.capture,
+        measured.depth,
+        points,
+        measured.world,
+        (1,),
+        (WorldSolid("sphere", (0.005,), pose),),
+        "robot-model",
+        "declared-test-calibration",
+        "head-pair",
+        0.001,
+    )
+    return replace(measured, robot_guard=guard)
+
+
+def guarded_setup():
+    clock = [10.01]
+    first = CaptureInterval("first", 10.0, 10.001, 10.01, "clock")
+    measured, mask = view(first)
+    tracker = MultiViewRgbdTracker(
+        PrimitiveModel("cylinder", (0.02, 0.04)),
+        reference_view="head",
+        reference=guarded(measured),
+        mask=mask,
+        object_ref="opaque",
+        scene_epoch="scene",
+        clock=lambda: clock[0],
+        component_policy="complete_prior_union",
+        max_update_s=5.0,
+        max_evaluations=12000,
+    )
+    return tracker, clock
+
+
+def contaminated(capture, *, point=(0.08, 0.0, 0.04)):
+    measured, _ = view(capture)
+    rgb, depth, world = measured.rgb.copy(), measured.depth.copy(), measured.world.copy()
+    rgb[20, 20], depth[20, 20], world[20, 20] = [200, 40, 40], 1.0, point
+    return guarded(SynchronizedRgbdView(rgb, depth, world, capture))
+
+
+def test_robot_interference_rejects_whole_camera_and_keeps_other_measured_view():
+    tracker, clock = guarded_setup()
+    cap = CaptureInterval("second", 10.3, 10.301, 10.31, "clock")
+    clock[0] = 10.31
+    bad = contaminated(cap)
+    before = (bad.rgb.copy(), bad.depth.copy(), bad.world.copy())
+    result = tracker.update({"head": bad, "wrist": view(cap)[0]}, scene_epoch="scene")
+    assert [name for name, _ in result.masks] == ["wrist"]
+    assert dict(result.view_rejections)["head"] == "rgbd_robot_interference"
+    for original, current in zip(before, (bad.rgb, bad.depth, bad.world), strict=True):
+        np.testing.assert_array_equal(original, current)
+
+
+def test_all_view_interference_latches_loss_without_dropping_singleton_pixels():
+    tracker, clock = guarded_setup()
+    cap = CaptureInterval("second", 10.3, 10.301, 10.31, "clock")
+    clock[0] = 10.31
+    with pytest.raises(ObservationUnavailable, match="multiview_association_unknown"):
+        tracker.update({"head": contaminated(cap)}, scene_epoch="scene")
+    assert tracker.latest is None
+    assert dict(tracker.last_view_rejections)["head"] == "rgbd_robot_interference"
+    with pytest.raises(ObservationUnavailable, match="lost_reinitialize"):
+        tracker.update({"head": guarded(view(cap)[0])}, scene_epoch="scene")
+
+
+def test_nonrobot_foreign_point_still_invalidates_the_complete_union():
+    tracker, clock = guarded_setup()
+    cap = CaptureInterval("second", 10.3, 10.301, 10.31, "clock")
+    clock[0] = 10.31
+    with pytest.raises(ObservationUnavailable):
+        tracker.update({"head": contaminated(cap, point=(0.12, 0.0, 0.04)), "wrist": view(cap)[0]}, scene_epoch="scene")
+    assert tracker.latest is None
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["missing", "capture", "model", "calibration", "budget", "depth", "world", "position_budget", "rotation_budget"],
+)
+def test_interference_profile_or_capture_cannot_silently_change(change):
+    tracker, clock = guarded_setup()
+    cap = CaptureInterval("second", 10.3, 10.301, 10.31, "clock")
+    clock[0] = 10.31
+    measured = guarded(view(cap)[0])
+    guard = measured.robot_guard
+    if change == "missing":
+        guard = None
+    elif change == "capture":
+        guard = replace(guard, capture=replace(cap, observation_id="other"))
+    elif change == "model":
+        guard = replace(guard, model_signature="other")
+    elif change == "calibration":
+        guard = replace(guard, calibration_id="other")
+    elif change == "budget":
+        guard = replace(guard, point_error_m=0.002)
+    elif change == "position_budget":
+        guard = replace(guard, robot_position_error_m=0.001)
+    elif change == "rotation_budget":
+        guard = replace(guard, robot_rotation_error_rad=0.001)
+    elif change == "world":
+        measured = replace(measured, world=measured.world + 0.01)
+    else:
+        measured = replace(measured, depth=measured.depth + 0.01)
+    with pytest.raises(ObservationUnavailable, match="robot_view_"):
+        tracker.update({"head": replace(measured, robot_guard=guard)}, scene_epoch="scene")
+    assert tracker.latest is None
+
+
+def test_reachability_uses_maximum_elapsed_time_between_capture_intervals():
+    first = CaptureInterval("first", 10.0, 10.2, 10.21, "clock")
+    reference, mask = view(first)
+    clock = [10.21]
+    track = MultiViewRgbdTracker(
+        PrimitiveModel("cylinder", (0.02, 0.04)),
+        reference_view="head",
+        reference=reference,
+        mask=mask,
+        object_ref="opaque",
+        scene_epoch="scene",
+        clock=lambda: clock[0],
+        max_update_s=5.0,
+        max_evaluations=12000,
+    )
+    current = CaptureInterval("second", 10.3, 10.6, 10.61, "clock")
+    clock[0] = current.received_monotonic
+    result = track.update({"head": view(current, shift=(0.12, 0, 0))[0]}, scene_epoch="scene")
+    # .12 m is within .25 m/s * .6 s, but outside the incorrect minimum gap.
+    np.testing.assert_allclose(result.fit.poses[:, :3, 3], [[0.12, 0, 0]], atol=0.001)
 
 
 def test_handoff_to_wrist_preserves_reference_and_cannot_invent_per_view_pose():
@@ -136,34 +273,42 @@ def test_complete_prior_union_never_selects_a_subset_to_hide_foreign_geometry(fo
     assert track.latest is None
 
 
-@pytest.mark.parametrize('gap, admits_foreign', [(0.884, False), (1.342, True)])
+@pytest.mark.parametrize("gap, admits_foreign", [(0.884, False), (1.342, True)])
 def test_longer_capture_gap_cannot_hide_newly_reachable_foreign_pixels(gap, admits_foreign):
     clock = [10.01]
-    first = CaptureInterval('first', 10., 10.001, 10.01, 'clock')
+    first = CaptureInterval("first", 10.0, 10.001, 10.01, "clock")
     measured, object_mask = view(first)
     rgb, depth, world = (a.copy() for a in (measured.rgb, measured.depth, measured.world))
     # The image is unchanged between captures. A larger elapsed-time motion
     # envelope admits two same-colour background pixels outside the seed mask.
-    rgb[20, 20:22], depth[20, 20:22] = [200, 40, 40], 1.
-    world[20, 20:22] = [[.30, 0, .04], [.301, .003, .04]]
+    rgb[20, 20:22], depth[20, 20:22] = [200, 40, 40], 1.0
+    world[20, 20:22] = [[0.30, 0, 0.04], [0.301, 0.003, 0.04]]
     reference = SynchronizedRgbdView(rgb, depth, world, first)
-    track = MultiViewRgbdTracker(PrimitiveModel('cylinder', (.02, .04)),
-        reference_view='head', reference=reference, mask=object_mask,
-        object_ref='opaque', scene_epoch='scene', clock=lambda: clock[0],
-        component_policy='complete_prior_union', max_update_s=5., max_evaluations=12000)
+    track = MultiViewRgbdTracker(
+        PrimitiveModel("cylinder", (0.02, 0.04)),
+        reference_view="head",
+        reference=reference,
+        mask=object_mask,
+        object_ref="opaque",
+        scene_epoch="scene",
+        clock=lambda: clock[0],
+        component_policy="complete_prior_union",
+        max_update_s=5.0,
+        max_evaluations=12000,
+    )
     start = first.latest + gap
-    capture = CaptureInterval('second', start, start+.001, start+.01, 'clock')
+    capture = CaptureInterval("second", start, start + 0.001, start + 0.01, "clock")
     clock[0] = capture.received_monotonic
     current = replace(reference, capture=capture)
     if admits_foreign:
         with pytest.raises(ObservationUnavailable):
-            track.update({'head': current}, scene_epoch='scene')
+            track.update({"head": current}, scene_epoch="scene")
         assert track.latest is None
-        with pytest.raises(ObservationUnavailable, match='lost_reinitialize'):
-            track.update({'head': current}, scene_epoch='scene')
+        with pytest.raises(ObservationUnavailable, match="lost_reinitialize"):
+            track.update({"head": current}, scene_epoch="scene")
     else:
-        result = track.update({'head': current}, scene_epoch='scene')
-        np.testing.assert_array_equal(dict(result.masks)['head'], object_mask)
+        result = track.update({"head": current}, scene_epoch="scene")
+        np.testing.assert_array_equal(dict(result.masks)["head"], object_mask)
 
 
 @pytest.mark.parametrize("appearance_model", ["chromaticity", "neutral_specular"])

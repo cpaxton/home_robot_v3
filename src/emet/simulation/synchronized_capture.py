@@ -140,7 +140,24 @@ def robot_kinematic_signature(model, root_body="base_link"):
         kind, target = int(model.actuator_trntype[aid]), int(model.actuator_trnid[aid, 0])
         obj = mujoco.mjtObj.mjOBJ_JOINT if kind == mujoco.mjtTrn.mjTRN_JOINT else mujoco.mjtObj.mjOBJ_TENDON
         target_name = mujoco.mj_id2name(model, obj, target) if target >= 0 else None
-        motors.append((name, kind, target_name, model.actuator_gear[aid].tolist()))
+        terms = []
+        if kind == mujoco.mjtTrn.mjTRN_TENDON and target >= 0:
+            start, count = int(model.tendon_adr[target]), int(model.tendon_num[target])
+            for index in range(start, start + count):
+                wrap, object_id = int(model.wrap_type[index]), int(model.wrap_objid[index])
+                object_type = {
+                    int(mujoco.mjtWrap.mjWRAP_JOINT): mujoco.mjtObj.mjOBJ_JOINT,
+                    int(mujoco.mjtWrap.mjWRAP_SITE): mujoco.mjtObj.mjOBJ_SITE,
+                    int(mujoco.mjtWrap.mjWRAP_SPHERE): mujoco.mjtObj.mjOBJ_GEOM,
+                    int(mujoco.mjtWrap.mjWRAP_CYLINDER): mujoco.mjtObj.mjOBJ_GEOM,
+                }.get(wrap)
+                object_name = (
+                    mujoco.mj_id2name(model, object_type, object_id)
+                    if object_type is not None and object_id >= 0
+                    else None
+                )
+                terms.append((wrap, object_name, float(model.wrap_prm[index])))
+        motors.append((name, kind, target_name, model.actuator_gear[aid].tolist(), terms))
     return hashlib.sha256(json.dumps((body_rows, joints, cameras, motors), sort_keys=True).encode()).hexdigest()
 
 

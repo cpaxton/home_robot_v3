@@ -102,9 +102,11 @@ def test_stretch_full_client_preserves_capture_metadata(timed):
     }
     if timed:
         client._obs["head_cam_left/image_timing"] = timing
+        client._obs['rgbd_registration'] = {'schema_version': 1, 'source': 'test-sensor-packet'}
     with patch("emet.controller.zmq_client.time.sleep"):
         observation = client.get_observation()
     assert observation.image_timing == ({"head_cam_left": timing} if timed else {})
+    assert observation.rgbd_registration == (client._obs['rgbd_registration'] if timed else None)
 
 
 def test_capture_intervals_follow_pixels_and_keep_rgb_depth_separate():

@@ -149,6 +149,9 @@ spending an action. It does not select behavior using robot names.
   Failed movement or stale capture cannot produce successful inspection.
 - `describe_scene`/`look_around` remain available without head arguments. Floor
   inspection keeps its separate downward/depth requirements.
+- CHAT `describe_scene` with a non-null pan or tilt invalidates TAMP evidence and
+  handles before/after the possible head motion, including failure. Zero-valued
+  angles count as requests; caption-only and explicit null angles remain read-only.
 
 The implementation is [head observation](../src/emet/controller/dynamem/head_observation.py),
 [head capabilities](../src/emet/robots/head_capability.py),

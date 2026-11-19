@@ -309,6 +309,19 @@ Add new cross-cutting `EMET_*` variables here or in a topic-specific doc and lin
 
 ### Observed Stretch camera trials
 
+- `EMET_SIM_RGB_CODEC`: Stretch simulator full/servo RGB wire encoding, `jpeg`
+  (default) or `png` (lossless). Use PNG for metric RGBD appearance tracking when
+  JPEG chroma bleed would mix target/background colours. This changes image
+  transport only; camera projection, original timing, depth transport and robot
+  sensing are unchanged. PNG has different bandwidth/CPU costs. Other robot
+  publishers do not currently use this selector.
+- `EMET_SIM_RGBD_PROVENANCE`: `1` adds an optional JSON-compatible lossless
+  original head RGB/depth/registration packet to Stretch full observations.
+  Default `0`. The packet retains native camera grids, calibration, clock and
+  separate original RGB/depth intervals; it does not establish surface ownership
+  or synchronize asynchronous exposures. Missing acquisition intervals reject.
+  This diagnostic channel is not needed to use PNG RGB transport.
+
 - `EMET_STRETCH_HEAD_CAMERA_SCALE`: `1` (default, 424×240) or `2` (848×480).
   Renders native samples at the selected resolution for both head RGB and depth;
   intrinsics and registration use that projection. This does not upsample images

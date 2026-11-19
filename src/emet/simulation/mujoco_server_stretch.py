@@ -31,6 +31,7 @@ from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
 )
+from emet.simulation.rgb_encoding import encode_sim_rgb, sim_rgb_codec
 from emet.simulation.sim_manipulation import (
     parse_sim_set_body_pose_action,
     parse_sim_set_joint_qpos_action,
@@ -1190,8 +1191,9 @@ class MujocoZmqServer(BaseZmqServer):
         # Get the joint state
         positions, _, _ = self.get_joint_state()
 
-        # Make both into jpegs
-        rgb = compression.to_jpg(rgb)
+        # Encode RGB with the declared profile; retain the existing depth transport.
+        rgb_codec = sim_rgb_codec()
+        rgb = encode_sim_rgb(rgb, codec=rgb_codec)
         depth = compression.to_jp2(depth)
 
         if self._initial_xyt is None or not self._stretch_sim_publish_ok():
@@ -1212,7 +1214,9 @@ class MujocoZmqServer(BaseZmqServer):
         # Get the other fields from an observation
         message = {
             "rgb": rgb,
+            "rgb_codec": rgb_codec,
             "depth": depth,
+            "rgbd_registration": getattr(cam_data, 'head_depth_registration', None),
             "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "camera_K": self.head_K,
             "camera_pose": head_cam_world,
@@ -1312,9 +1316,10 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Compress the images
         compressed_ee_depth_image = compression.to_jp2(ee_depth_image)
-        compressed_ee_color_image = compression.to_jpg(ee_color_image)
+        rgb_codec = sim_rgb_codec()
+        compressed_ee_color_image = encode_sim_rgb(ee_color_image, codec=rgb_codec)
         compressed_head_depth_image = compression.to_jp2(head_depth_image)
-        compressed_head_color_image = compression.to_jpg(head_color_image)
+        compressed_head_color_image = encode_sim_rgb(head_color_image, codec=rgb_codec)
 
         # Get position info
         positions, _, _ = self.get_joint_state()

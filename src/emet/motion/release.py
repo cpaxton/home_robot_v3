@@ -10,6 +10,7 @@ No live object pose, contact tolerance or retention reference is changed.
 from __future__ import annotations
 
 import time
+from contextlib import nullcontext
 from copy import copy, deepcopy
 from dataclasses import dataclass
 
@@ -36,11 +37,19 @@ class ReleaseLimits:
     target_epsilon_m: float = 1e-6
     stable_interval_s: float = 0.1
     poll_interval_s: float = 0.05
+    # Bounded horizontal destination alternatives, tried only after every
+    # vertical correction fails to certify the full hand opening. Empty
+    # lateral_offsets_m disables the lateral fallback without weakening the
+    # existing vertical search.
+    lateral_offsets_m: tuple[float, ...] = (0.01, 0.02, 0.03)
+    lateral_directions: tuple[tuple[float, float], ...] = (
+        (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0),
+    )
 
     def __post_init__(self):
         values = [self.max_raise_m, self.max_drop_m, self.clearance_m, self.open_settle_timeout_s,
                   self.descent_step_m, self.height_axis_min_z, self.target_epsilon_m,
-                  self.stable_interval_s, self.poll_interval_s, *self.offsets_m]
+                  self.stable_interval_s, self.poll_interval_s, *self.offsets_m, *self.lateral_offsets_m]
         if (
             not np.isfinite(values).all()
             or min(values) < 0
@@ -52,6 +61,14 @@ class ReleaseLimits:
             or self.max_adjustments < 0
             or not self.offsets_m
             or tuple(sorted(set(self.offsets_m))) != self.offsets_m
+            or tuple(sorted(set(self.lateral_offsets_m))) != self.lateral_offsets_m
+            or len(self.lateral_offsets_m) > 3
+            or any(value <= 0 for value in self.lateral_offsets_m)
+            or (bool(self.lateral_offsets_m) and not self.lateral_directions)
+            or len(self.lateral_directions) > 4
+            or any(len(direction) != 2 or not np.isfinite(direction).all()
+                   or not np.isclose(np.linalg.norm(direction), 1.0, atol=1e-9)
+                   for direction in self.lateral_directions)
         ):
             raise ValueError("invalid_release_limits")
 
@@ -201,10 +218,12 @@ class ReleasePlan:
     released_checker: ReleasedFallChecker
     target_z: float
     gap_m: float
+    target_point: np.ndarray | None = None
+    lateral: tuple[float, float] | None = None
 
 
 def plan_release(executor, *, support, region, limits, initial_z, attempted=(), tracking_reserve_m=0.0,
-                 allow_adjustment=True):
+                 allow_adjustment=True, initial_xy=None):
     """Certify closed-arm motion, opening (including reserve) and retreat; no IO."""
     ex = executor
     if (
@@ -269,6 +288,13 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
     start = original[ex.qadr].copy()
     current = probe.data.body(ex.ee_body)
     current_point, current_rotation = current.xpos.copy(), current.xmat.reshape(3, 3).copy()
+    initial_xy = current_point[:2].copy() if initial_xy is None else np.asarray(initial_xy, dtype=float)
+    if initial_xy.shape != (2,) or not np.isfinite(initial_xy).all():
+        return None, 'invalid_release_limits'
+
+    def pose(point, rotation):
+        planner = getattr(ex, 'release_pose_planner', None)
+        return probe.plan_pose(point, rotation) if planner is None else planner(probe, point, rotation)
     height = model.joint(limits.height_joint)
     height_z = float(probe.data.xaxis[height.id, 2])
     if height.type[0] != mujoco.mjtJoint.mjJNT_SLIDE or height_z < limits.height_axis_min_z:
@@ -286,21 +312,39 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
         targets += [(current_point + [0, 0, tracking_reserve_m+delta], current_rotation)
                     for delta in limits.offsets_m]
     last = "no_plan_within_budget"
-    for index, (point, rotation) in enumerate(targets):
+    best, best_score, best_index = None, -float("inf"), None
+
+    def decision(index, stage, **detail):
+        ex.event(phase="release_candidate", candidate=index, stage=stage,
+                 initial_z=float(initial_z), tracking_reserve_m=float(tracking_reserve_m), **detail)
+
+    def repeated(point):
+        return any(np.asarray(old).shape == (3,)
+                   and np.allclose(np.asarray(point, dtype=float), np.asarray(old, dtype=float),
+                                   atol=limits.target_epsilon_m, rtol=0)
+                   for old in attempted)
+
+    def evaluate(index, point, rotation, lateral=None):
+        nonlocal last, best, best_score, best_index
+        point = np.asarray(point, dtype=float)
         target_z = float(point[2])
+        if lateral is not None and np.linalg.norm(point[:2] - initial_xy) > max(limits.lateral_offsets_m) + 1e-9:
+            decision(index, 'lateral_limit', requested_point=point.tolist())
+            return None
         if target_z > initial_z + limits.max_raise_m or (
-            index and (target_z < current_point[2]
-                       or any(abs(target_z - old) < limits.target_epsilon_m for old in attempted))
+            index and (target_z < current_point[2] or repeated(point))
         ):
-            continue
+            decision(index, "target_limit_or_repeat", requested_z=target_z)
+            return None
         probe.data.qpos[:] = original
         probe.collision = held_checker(ex.collision, measured)
         mujoco.mj_kinematics(model, probe.data)
         if index:
-            path, error = probe.plan_pose(np.asarray(point), np.asarray(rotation))
+            path, error = pose(point, np.asarray(rotation))
             if error:
                 last = error
-                continue
+                decision(index, "adjustment_ik", reason=error)
+                return None
             goal = probe.data.qpos[ex.qadr].copy()
             probe.data.qpos[:] = original
             direct = plan_arm_joint_path(
@@ -315,7 +359,8 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
             )
             if not direct.success:
                 last = f"release_adjustment_failed:{direct.reason}:{direct.detail}"
-                continue
+                decision(index, "adjustment_path", reason=last)
+                return None
             path = [start.copy(), goal.copy()]
             probe.data.qpos[ex.qadr] = goal
             mujoco.mj_kinematics(model, probe.data)
@@ -331,17 +376,24 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
                     break
             if not heights_valid:
                 last = 'release_raise_limit'
-                continue
+                decision(index, 'adjustment_height', reason=last)
+                return None
             probe.data.qpos[ex.qadr] = goal
             mujoco.mj_kinematics(model, probe.data)
             target_z = float(probe.data.body(ex.ee_body).xpos[2])
+            if lateral is not None and np.linalg.norm(probe.data.body(ex.ee_body).xpos[:2] - initial_xy) > max(limits.lateral_offsets_m) + 1e-9:
+                decision(index, 'lateral_limit', requested_point=point.tolist())
+                return None
         else:
             path = [start.copy()]
         set_private_payload(model, probe.data, ex.payload_body, ex.ee_body, measured)
         bounds = body_bounds(model, probe.data, body_subtree(model, ex.payload_body))
         patches = [np.asarray(p) for p in surfaces if bounds_fit(bounds, np.asarray(p), region, limits.max_drop_m)]
         if not patches:
-            continue
+            decision(index, "support_bounds", bounds=bounds.tolist(),
+                     surfaces=[np.asarray(p).tolist() for p in surfaces],
+                     region=None if region is None else region.tolist(), max_drop_m=limits.max_drop_m)
+            return None
         patch = max(patches, key=lambda p: p[1, 2])
         closed = probe.data.qpos.copy()
         # Both the commanded configuration and a lower delivered configuration
@@ -358,30 +410,92 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
                 body_bounds(model, probe.data, body_subtree(model, ex.payload_body)), patch, region, limits.max_drop_m
             ):
                 error = "no_plan_within_budget"
+                decision(index, "lowered_support_bounds", lower_by_m=float(lower_by),
+                         bounds=body_bounds(model, probe.data, payload_ids).tolist(), patch=patch.tolist())
                 break
             probe.collision = held_checker(ex.collision, measured)
             probe.collision.set_payload(model, probe.data, None)
             probe.collision.robot_ids |= body_subtree(model, ex.payload_body)
             _, error = probe.plan_gripper_open()
             if error:
+                decision(index, "opening", lower_by_m=float(lower_by), reason=error,
+                         contacts=list(probe.collision.last_contacts))
                 break
         if error:
             last = error
-            continue
+            return None
         probe.data.qpos[:] = closed
         for joint, value in ex.gripper_open_configuration.items():
             probe.data.qpos[int(model.joint(joint).qposadr[0])] = value
         mujoco.mj_kinematics(model, probe.data)
         dropped = ReleasedFallChecker(model, ex.collision, ex.payload_body, support, patch, region, limits)
         probe.collision = dropped
-        _, error = probe.plan_pose(*ex.place_targets[2])
+        retreat_target = ex.place_targets[2]
+        if lateral is not None:
+            # A lateral destination shift must shift the open-finger retreat with
+            # it, otherwise the fixed retreat target drags the hand back toward
+            # the obstacle that the lateral correction just cleared.
+            retreat_target = (np.asarray(retreat_target[0], dtype=float) + [lateral[0], lateral[1], 0.0],
+                              retreat_target[1])
+        _, error = pose(*retreat_target)
         if error:
             last = error
-            continue
-        return ReleasePlan(
-            path, held_checker(ex.collision, measured), dropped, target_z, float(bounds[0, 2] - patch[1, 2])
-        ), None
-    return None, last
+            decision(index, "retreat", reason=error, contacts=list(probe.collision.last_contacts))
+            return None
+        gap = float(bounds[0, 2] - patch[1, 2])
+        candidate = ReleasePlan(path, held_checker(ex.collision, measured), dropped, target_z, gap,
+                                point.copy(), lateral)
+        if index == 0:
+            # A certified measured pose needs no adjustment at all.
+            decision(index, "accepted", target_z=target_z, gap_m=gap)
+            return candidate
+        # Compare the already certified delivery interval, rather than taking
+        # the first pose with nearly zero lower-support margin. Both endpoint
+        # constraints and the existing raise/drop limits remain unchanged.
+        score = min(gap - reserve + 0.001, limits.max_drop_m - gap)
+        decision(index, "feasible", target_z=target_z, target_point=point.tolist(),
+                 lateral=None if lateral is None else list(lateral), gap_m=gap, support_slack_m=score)
+        if score > best_score:
+            best, best_score, best_index = candidate, score, index
+        return None
+
+    # Opening in place and moving with the object held have distinct checks.
+    accepted = evaluate(0, *targets[0])
+    if accepted is not None:
+        return accepted, None
+    if len(targets) > 1:
+        probe.data.qpos[:] = original
+        checker = held_checker(ex.collision, measured)
+        if checker.configuration_collides(model, probe.data):
+            reason = "arm_path_failed:invalid_start:collision"
+            decision(0, "adjustment_start", reason=reason, contacts=list(checker.last_contacts))
+            return None, reason
+    for index, (point, rotation) in enumerate(targets[1:], start=1):
+        evaluate(index, point, rotation)
+    if best is not None:
+        decision(best_index, "accepted", target_z=best.target_z, gap_m=best.gap_m, support_slack_m=best_score)
+        return best, None
+    vertical_last = last
+
+    # Phase 2: bounded horizontal destination alternatives inside the original
+    # goal region, certified with the same opening/retreat/fall checks. Only
+    # searched when no vertical correction certifies the whole hand opening.
+    if allow_adjustment:
+        lateral_index = len(targets)
+        for delta in limits.offsets_m:
+            for direction in limits.lateral_directions:
+                for magnitude in limits.lateral_offsets_m:
+                    lateral_index += 1
+                    lateral = (direction[0] * magnitude, direction[1] * magnitude)
+                    point = current_point + [lateral[0], lateral[1], tracking_reserve_m + delta]
+                    evaluate(lateral_index, point, current_rotation, lateral=lateral)
+    if best is not None:
+        decision(best_index, "accepted", target_z=best.target_z, gap_m=best.gap_m, support_slack_m=best_score)
+        return best, None
+    # Preserve the measured-pose/vertical rejection reason: unreachable lateral
+    # candidates in a limited arm must not mask the original opening/retreat
+    # verdict. Per-candidate lateral diagnostics remain in the event stream.
+    return None, vertical_last
 
 
 def refine_release(executor, *, support, region, limits):
@@ -389,6 +503,8 @@ def refine_release(executor, *, support, region, limits):
     ex = executor
     ex.synchronize(ex.data)
     initial_z = float(ex.data.body(ex.ee_body).xpos[2])
+    initial_xy = ex.data.body(ex.ee_body).xpos[:2].copy()
+    ex.release_lateral_shift = np.zeros(2)
     attempted = []
     command = ex.place_paths[1][-1] if ex.place_paths else None
     scratch = mujoco.MjData(ex.model)
@@ -402,23 +518,30 @@ def refine_release(executor, *, support, region, limits):
             scratch.qpos[ex.qadr] = command
             mujoco.mj_kinematics(ex.model, scratch)
             tracking_reserve = max(0.0, float(scratch.body(ex.ee_body).xpos[2] - ex.data.body(ex.ee_body).xpos[2]))
-        plan, error = plan_release(
-            ex,
-            support=support,
-            region=region,
-            limits=limits,
-            initial_z=initial_z,
-            attempted=attempted,
-            tracking_reserve_m=tracking_reserve,
-            allow_adjustment=len(attempted) < limits.max_adjustments,
-        )
+        planning_budget = getattr(ex, 'release_planning_budget', None) or nullcontext
+        with planning_budget():
+            plan, error = plan_release(
+                ex,
+                support=support,
+                region=region,
+                limits=limits,
+                initial_z=initial_z,
+                attempted=attempted,
+                tracking_reserve_m=tracking_reserve,
+                allow_adjustment=len(attempted) < limits.max_adjustments,
+                initial_xy=initial_xy,
+            )
         ex.event(
             phase="release_plan",
             accepted=plan is not None,
             reason=error,
             target_z=None if plan is None else plan.target_z,
+            target_point=None if plan is None else np.asarray(getattr(plan, 'target_point', None)).tolist(),
+            lateral=None if plan is None else getattr(plan, 'lateral', None),
             max_drop_m=limits.max_drop_m,
             tracking_reserve_m=tracking_reserve,
+            measured_ee=ex.data.body(ex.ee_body).xpos.tolist(),
+            adjustment_count=len(attempted),
         )
         if plan is None:
             return PhysicalMotionResult(False, error, "release")
@@ -429,12 +552,18 @@ def refine_release(executor, *, support, region, limits):
             return PhysicalMotionResult(True, "release_geometry_verified", "release")
         if len(attempted) >= limits.max_adjustments:
             break
-        attempted.append(plan.target_z)
+        attempted.append(plan.target_point)
         command = plan.prefix[-1]
         ex.collision = plan.checker
         result = ex._execute_path("release_adjustment", plan.prefix)
         if not result.success:
             return result
+        lateral = getattr(plan, 'lateral', None)
+        if lateral is not None:
+            # Execute the same shifted retreat that the candidate certified.
+            delta = np.r_[lateral, 0.0]
+            ex.place_targets = [(np.asarray(point) + delta, rotation) for point, rotation in ex.place_targets]
+            ex.release_lateral_shift += np.asarray(lateral)
     return PhysicalMotionResult(False, "no_plan_within_budget", "release")
 
 

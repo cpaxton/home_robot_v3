@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "scope": "Integration of main agent refactor with native/observed TAMP contracts; CPU native-state/provided-map sim control, no hardware/LLM/observed-only success claim.",
+  "branch_base": "8a627be1",
+  "incoming_main": "f1b7bb5b",
+  "resolved_conflicts": [
+    "TODO.md",
+    "src/emet/controller/manipulation/physical_pick_place.py",
+    "src/emet/controller/zmq_client.py"
+  ],
+  "integration_fix": "Explicit describe_scene gaze invalidates TAMP evidence/handles before and after possible motion; caption-only remains read-only.",
+  "reviewed_source_sha256": {
+    "src/emet/agent/loop.py": "40016f37de0b776a89ed093363d77a21368049338c90573c5bcf1bf20c798f32",
+    "src/emet/agent/tamp_world.py": "d0e89ef695fc1d1b57555e9abc63edea1916b8db966af645ed162248f744bf02",
+    "src/emet/agent/chat_tamp.py": "c0d61e9c0c4d86ddec37b805e45f267ed6ac6792bd93da3b7c4f33b0b8034e02",
+    "src/emet/agent/tool.py": "df97669a3c0ca387bca2e34a835f8fb4b90154c9895c9d74d8bef07b6a399591",
+    "src/emet/agent/tool_outcome.py": "cde04e9e7f8209d128e6331594acdac24b7b1d5c47bb20743e564d521c7ef39e",
+    "src/emet/agent/tamp_session.py": "70c6f31e617dfe41ee5a058f6ed5451907dcb3803f781e0268ddbbdf8b0f980e",
+    "src/emet/controller/manipulation/physical_pick_place.py": "0c6fc2daea75821383d68a01299106860ad9fc10fa0425578fec14277ddb066c",
+    "src/emet/controller/zmq_client.py": "bd8f739135a112dd8c40b276d4188dde918079abe413cebf5324b7955ad9643e",
+    "src/emet/controller/task/tamp/native_adapter.py": "e733bb03fcca119a1e550ad8c99c7ecae69a51f27f3e82dda36f3ff6a21dd91b",
+    "src/emet/controller/task/tamp/native_placement.py": "a7d8169c7e04a1539e731ca0f3445c3e2410987d08f75be410dc9f8987694747",
+    "src/emet/motion/release.py": "351834addd4bdf365647a9ea2b1d75942e300cdf6bbec4f0479a5c99b74d1880"
+  },
+  "tests": [
+    {
+      "job_id": "20261118_011459_c7af21",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/agent-tests",
+      "status": "invalid_test_selection"
+    },
+    {
+      "job_id": "20261118_011535_6d0313",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/agent-tests-corrected",
+      "status": "cancelled",
+      "reason": "Simulator integration tests unintentionally included; superseded by explicit no-sim unit pack plus separate controlled sim"
+    },
+    {
+      "job_id": "20261118_011814_b7fa88",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/gaze-contracts",
+      "status": "completed",
+      "tests": 164,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "f54784c8916fb9f59923e06434b5828e36339890bbb9c9ab9e37b9dc8e3b2489",
+      "passed": 163,
+      "note": "Optional Habitat client package not on initial Python path; final test imports its local source explicitly."
+    },
+    {
+      "job_id": "20261118_012006_065593",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/agent-unit",
+      "status": "completed",
+      "tests": 732,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4,
+      "junit_sha256": "91bb9b74a9a650ea5e204a303f1d33e3258acceed8bed031724b6376c61a2085",
+      "passed": 728
+    },
+    {
+      "job_id": "20261118_012006_10eb4b",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/gaze-final",
+      "status": "completed",
+      "tests": 164,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "3610d32cdbcab7aecadbac93d2236e6a32d62af17782fa7c297cf89a62d42824",
+      "passed": 164
+    },
+    {
+      "job_id": "20261118_011500_15edd0",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/native-tests",
+      "status": "completed",
+      "tests": 717,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "e0b176d13f09671ecee03ca5bb84a17cc9f5608934353647e5da77b6abe957e2",
+      "passed": 717
+    },
+    {
+      "job_id": "20261118_012757_f0301f",
+      "artifact_directory": ".tamp-runs/main-integration-20261118/agent-final",
+      "status": "completed",
+      "tests": 732,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4,
+      "junit_sha256": "027d3ae962c72ee1bffe504ba11f8829dd1249a5e1c9c8e26122a22b1f1b40e4",
+      "passed": 728
+    }
+  ],
+  "simulation": {
+    "job_id": "20261118_011535_be8c56",
+    "case": "cube_clutter",
+    "status": "passed",
+    "artifact_directory": ".tamp-runs/main-integration-20261118/clutter",
+    "runtime_sha256": {
+      "scripts/eval_mobile_mapped_contact.py": "bdafd7e5acb24d46c59c80911b9ea4cb912a938a1f21cc6324e1c7349640e744",
+      "src/emet/motion/release.py": "351834addd4bdf365647a9ea2b1d75942e300cdf6bbec4f0479a5c99b74d1880",
+      "src/emet/controller/task/tamp/native_revalidation.py": "e63426df2217463aeda00054ed9ce2ecf3b8611d3ef90b4b24e2fb53f2bd18dc",
+      "src/emet/controller/task/tamp/native_dispatch.py": "3cd9a713f15efa393870f350b754c191a43bfaf0e05bbe23bf0106f5eb64eccf",
+      "src/emet/controller/task/tamp/native_adapter.py": "e733bb03fcca119a1e550ad8c99c7ecae69a51f27f3e82dda36f3ff6a21dd91b",
+      "src/emet/controller/task/tamp/native_placement.py": "a7d8169c7e04a1539e731ca0f3445c3e2410987d08f75be410dc9f8987694747",
+      "src/emet/motion/local_scene_store.py": "5b80a4a69d8fc45245bca5c8d8d339b8b6f4dc58611e0468f1a1cf2988387d27"
+    },
+    "fixture_sha256": {
+      "stretch.xml": "0aa624ba1da90d7d8cacbfcfd76674fcc26f98f53cd42d3ae22ef545b59bea68",
+      "scene.xml": "285f243530aaf7fcde3e8056e3079d310ed94d708676ff009fa04af086b468bb",
+      "scene_environment.xml": "0a93dca69ebec53411d928cec023c16c47f4af41d967f1b89c3f0640d974ba5b",
+      "docking_station.xml": "4b60b870fd044cf06eda4bfc9f747217639830a3d4c2bbf242adf66797146509"
+    },
+    "manifest_sha256": "e9d61ebd8e1c3e97d9ac7710ed93686c42c0f48791b97ea6b61564caed70b094",
+    "passed": true,
+    "error": null,
+    "result_sha256": "2f6df5c231f3ece7c449ac319d1b75b91553bc173808be8d05f79ef93f40d80a",
+    "receipt": {
+      "tool": "execute_pick_place_plan",
+      "status": "ok",
+      "code": "ok",
+      "recovery": "none",
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "failed_stage": null,
+      "execution_started": true
+    },
+    "phase_wall_seconds": {
+      "navigate_to_source": 4.050329,
+      "map_source": 24.275704,
+      "plan_transfer": 478.529589,
+      "source_finalization": 24.158223,
+      "map_finalized_source": 24.157704,
+      "pick_carry_place": 413.636026,
+      "map_carry": 24.267587,
+      "loaded_carry": 132.946801,
+      "map_destination": 24.430753,
+      "map_released": 24.224907,
+      "navigate_away": 52.756151
+    },
+    "map_store": {
+      "loads": 5,
+      "unloads": 5,
+      "stale_rejections": 4,
+      "resident_bytes": 0,
+      "peak_resident_bytes": 24114174,
+      "load_seconds": 121.33737280999776
+    },
+    "released_object_drift_m": 0.0,
+    "prior_comparison": {
+      "record": "docs/experiments/lateral_release_20261118.json",
+      "prior_result_sha256": "8acc8c653450a14a37d56b3d812aab27ba2e50303107782f1c940cea5b82e937",
+      "commands_identical": true,
+      "prior_commands": 115,
+      "current_commands": 115,
+      "prior_command_sha256": "a8b09ca96cbda02349b5c836cb5406d85a98cda563c50ef7c1a92d98cb7cd85d",
+      "current_command_sha256": "a8b09ca96cbda02349b5c836cb5406d85a98cda563c50ef7c1a92d98cb7cd85d"
+    }
+  },
+  "paper": {
+    "job_id": "20261118_011814_8ebb1f",
+    "pages": 75,
+    "result": "built"
+  },
+  "historical_cohorts_unchanged": true,
+  "artifact_note": "Paths are local relative to the owning worktree, not a public archive. Raw traces, source snapshots and test reports remain there.",
+  "merge_commit": "2d90eec6"
+}

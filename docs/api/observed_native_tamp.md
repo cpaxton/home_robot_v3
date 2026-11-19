@@ -17,13 +17,19 @@ live RGBD source is not assembled or qualified by default. The usual RGBD
 `scene_tasks` provider remains read-only. This is not an observed-task benchmark,
 a contact-execution result, or a hardware sensor-availability claim.
 
-**Independent planning blocker:** a self-occluding head-camera depth map marks
-robot surfaces occupied and their interiors/occlusions unknown. The current
-collision checker requires every robot-geom AABB to be known free, so that raw
-map rejects the starting arm state. Even perfect robot endpoint segmentation
-leaves unknown cells; it does not certify free robot space. No self-occupancy
-or phase-specific robot/target/support-contact policy is implemented here.
-The adapter is an integration seam, not a working depth-only arm executor.
+**Raw-depth planning blocker:** a self-occluding head-camera map marks robot
+surfaces occupied and their interiors/occlusions unknown. The default checker
+requires complete known-free AABBs and rejects that start. The opt-in
+`ObservedMaterialAdmission` path now separates captured, calibrated robot
+material from newly swept space. It queries actual solids, erodes material by
+its supplied uncertainty, preserves environment occupancy, and requires measured
+free evidence outside that material. Candidate poses never construct ownership.
+Meshes require explicit solid declarations; hollow CAD/AABB volumes cannot be
+promoted to owned material. Source-backed raycast regressions cover the start,
+unknown shadow, measured prescan, false labels and original evidence ages.
+Phase-specific target/support policies now have opt-in implementations. Full
+Stretch uncertainty qualification and live source assembly remain required
+before claiming a complete observed transfer.
 Its synthetic transfer/swap fixture supplies `known_free=lambda _: True` to test
 tool orchestration. This is not evidence that a real self-occluding map admits
 those paths. This planning blocker is separate from moving-mask visibility loss.
@@ -35,11 +41,18 @@ those paths. This planning blocker is separate from moving-mask visibility loss.
 | `RigidRgbdTracker` | RGB feature correspondences, forward/backward optical flow, measured RGBD landmarks, RANSAC rigid fitting against a fixed reference | Lost masks/depth, repeated or insufficient texture, poor feature spread, inconsistent motion, replay, reference age >30 s; no global re-identification |
 | `MovingRgbdTracker` | Current whole measured appearance components and declared geometry/motion profile | Lost/ambiguous associations latch; diagnostic candidates, not calibrated global identity |
 | `MultiViewRgbdTracker` | Continuous head/wrist association within one source-synchronized capture; explicit complete-prior fragment and lighting profiles | Cached/misaligned views, global loss, competing or incompatible geometry; ideal shared-snapshot diagnostic, not hardware timing qualification |
-| `ObservedBackground` | Historical environment/free-space evidence after provenance exclusion, with original per-cell capture ages | Unknown self interiors stay unknown; contradictions require source invalidation; longer validity needs an explicit bounded static-scene assumption |
+| `RobotViewGuard` | Reject camera association if an original winning depth ray may hit motor-derived rigid tool/camera outer geometry | Rejection only: never trims pixels, labels self, frees cells or proves absence of interference outside its named scope |
+| `ContinuousRgbdSource` | Process original camera captures in a background producer independently of tool/LLM reads; publish immutable candidate/frame pairs | Stale, changed/replayed, lost or invalidated evidence stops the source; does not assemble the support/background/collision evidence required by `ObservedNativeAdapter` |
+| `RgbdCaptureGeometry` | Retain original camera calibration, motor-derived EE and conservative gripper volumes with each immutable RGBD view; assemble visual-effect frames | Mixed captures, changed geometry profiles and world-point mismatches reject; explicit simulation assumptions do not qualify hardware or a complete collision scene |
+| `ObservedBackground` | Historical environment/free-space evidence with original per-cell capture ages and geometry-qualified self exclusion | Unqualified excluded endpoints invalidate cached free cells; occupied evidence survives. False self labels remain environment when qualification is requested. Longer validity requires a bounded static-scene assumption |
 | `ShapePoseEvidence` | Explicit primitive solid equivalence with external pose-error bounds | Unknown material yaw remains unknown; generic unique-pose consumers reject |
 | `GripperGeometryEnvelope` | Full tool subtree over unmeasured joint intervals, anchored at motor-derived rigid EE | Conditional model bounds; no passive-joint sensor claim or full-arm certificate |
+| `StretchGeometryEnvelope` | Whole collidable robot over motor-conditioned telescope marginals and passive-joint intervals | Outer geometry only; mechanical limits and localization margins remain explicit assumptions, never inner material or free space |
 | `PayloadGeometryEvidence` | Complete conservative volume in an explicit tracked reference frame | No visible-point AABB promoted to a complete shape; geometry priors remain declared inputs |
-| `ObservedNativeCollisionChecker` | Robot-only FK, complete link/payload boxes, self collision and whole-volume known-free queries | Missing workspace, stale geometry, scene revisions, unresolved payload geometry |
+| `ObservedNativeCollisionChecker` | Robot-only FK, payload geometry and optional captured-material solid queries | Missing workspace, stale geometry, scene revisions, unresolved payload geometry or unqualified candidate bounds |
+| `CapturedRobotMaterial` / `RobotGeometryBound` | Immutable captured inner material and model/calibration/profile-bound candidate envelopes | Future-pose ownership, relocated/undersized links, clock/calibration changes and uncertain clearance shells |
+| `ObservedTargetContact` | Complete capture-bound target envelope, exact fingertip geom IDs and bounded penetration in named motion phases | Whole-body exemptions, deep penetration, vanishing target cores, stale/replaced profiles; never exempts environment or unknown space |
+| `ObservedSupportContact` | Original finite support depth/mask witness, explicit solid-layer/motion-error priors, bounded payload contact and fixed lift-departure floor | Mixed/unattributed cells, unknown space, robot contact, hidden backside without a solid prior, stale or replaced capture/calibration |
 | `VisualEffectFrame` | One tracked pose with capture interval, error bounds, bracketed robot feedback, full calibrated gripper volumes | Receive time alone, matching joint endpoints alone, missing alignment bounds, changing calibration, excessive uncertainty |
 | `ObservedVisualVerifier` | Fresh repeated visual lift and post-retreat placement effects | Height-only lift, static/slipped object, occlusion, replay, unsupported/outside/unsettled placement, gripper volume still near object |
 | `ObservedRegionTransferProvider` | Complete observed role/region predicates and the existing task search/session interface | Missing roles, unsupported/held objects, ambiguous occupancy, unknown destination space |
@@ -67,7 +80,95 @@ completes. This qualifies neither the live collision source nor hardware error
 bounds. Different real camera exposures require independently bounded alignment;
 the development producer uses one frozen simulator snapshot.
 
+The paired diagnostic now archives the same-snapshot eight motor positions,
+original depth image/intrinsics, depth-to-RGB transform, winning source pixel
+index and continuous projected UV. `register_depth(..., return_provenance=True)`
+returns these mappings alongside the unchanged aligned-depth image; holes use
+index `-1` and NaN UV, and equal-depth ties choose the first row-major source.
+Registration does not establish RGB/depth surface ownership. Camera world poses
+in this diagnostic are labelled simulator localization debug, not observed
+navigation or hardware calibration. `--capture-period-s` defaults to `0.25`;
+larger values delay real acquisitions without changing their timestamps or the
+tracker's existing 1.5-second maximum gap. Setup/processing may make actual gaps
+longer than that requested minimum. See the
+[November 16 progress and retained failures](../experiments/observed_transfer_progress_20261116.md).
+
+`bound_stretch_robot(model, estimate, now=..., position_error_m=...,
+rotation_error_rad=...)` consumes motor feedback and the estimated localized base
+pose. It intersects each telescope's mechanical interval with measured total
+extension and retains uncertain intermediate-link volumes. After checking serial
+ancestry and parallel axes, the distal rigid frame uses the measured sum; it does
+not claim the individual split is sensed. Wheels, passive fingers, rubber and the
+navigation-camera hinge retain their model intervals. Supplied pose errors dilate
+all output volumes. The motor/model signature includes named tendon terms and
+coefficients; changing that calibration invalidates the capture. These bounds
+cannot by themselves justify deleting robot-labelled depth endpoints.
+
+`scripts/eval_stretch_encoder_geometry.py --robot-envelope --output DIR` audits
+all collidable geometry against separate simulator state during native contact
+controls. `--gripper-envelope` retains the earlier tool-only scope. An outer-bound
+escape or whole-robot interval violation fails the robot audit; sampled
+containment still does not certify mechanical/hardware bounds or task execution.
+
 ## Provider assembly
+
+`SynchronizedRgbdView.geometry` optionally retains immutable `RgbdCaptureGeometry`.
+Its camera unprojection must match the view's world points. Motor feedback and
+gripper geometry must describe that exact original capture; a later robot read
+cannot substitute. Tracking pins camera/model/error profiles, and duplicate
+handling compares the retained geometry as well as pixels. `visual_frame(...)`
+uses the stored fit and robot brackets without reacquiring either.
+
+The explicit schema-1
+[`observed_stretch_geometry_debug.json`](../../configs/eval/observed_stretch_geometry_debug.json)
+supplies **simulation assumptions**, not measured hardware calibration or errors
+inferred from fit residuals. Only the ideal shared-snapshot simulator source can
+use its zero temporal-alignment term. Robot FK/localization errors remain
+nonzero and propagate separately through relative retention, rotation, EE lift
+height and retreat checks. Rotation uncertainty includes the EE-to-object lever
+arm. Gripper envelopes retain their pose-error budgets so they cannot silently
+be paired with another profile. Retreat reserves robot pose error conservatively,
+including when a source's boxes already contain a reserve; unproven separation
+is unknown, not evidence of actual contact. Historical references validate at
+the later of their original image receipt and robot bracket time, without retiming.
+
+The [coherent-frame integration record](../experiments/observed_visual_frames_20261117.md)
+separates live visual-frame assembly from the remaining background/material/
+contact-source/refiner and actual observed pick/place gates.
+
+The camera source has a separate candidate-level contract:
+`ContinuousRgbdSource(tracker, initial_views=..., read_views=...).start()` calls
+a bounded-I/O reader independently of consumers. `snapshot()` returns the current
+candidate and its original immutable views. `collect(after=..., min_span_s=.2,
+timeout_s=2.)` returns two fresh original captures strictly after the barrier.
+It skips stale history instead of retiming it. Identical retransmissions can have
+a later transport receipt, but retain the original published packet and freshness.
+Changed source intervals or contents under the same ID reject. Tracking loss,
+staleness and `invalidate()` latch; an explicit new reference/source is required.
+Call `close()` and successfully join the producer before closing its camera or
+client. A blocked reader produces a shutdown error, not a successful close.
+This source is not directly interchangeable with the full adapter source below.
+
+`RobotViewGuard.from_registered_depth(...)` binds a capture's original winning
+depth rays, RGB-grid unprojection, calibrated camera pair and explicit pose/error
+profile. Any possible rigid housing/camera interference rejects that entire
+camera; another synchronized camera may still supply valid evidence. Whole-view
+or all-view loss never silently restarts identity. Outer visual/convex geometry
+is used only for rejection. Passive fingers, other robot links, depth ownership
+and workspace free space remain unqualified by this guard.
+
+The [November 17 camera-source diagnostics](../experiments/observed_camera_source_20261117.md)
+preserve normal-cadence association failures as well as delayed-camera failures.
+Continuous processing is necessary plumbing, not a demonstrated fix for them.
+
+The subsequent [same-capture transport investigation](../experiments/observed_rgbd_transport_20261117.md)
+isolates the live first-update failure to JPEG RGB colour corruption: original
+RGB passes with either original or ordinary transported depth. An explicit
+lossless Stretch wire profile (`EMET_SIM_RGB_CODEC=png`, legacy JPEG default)
+then passes two stationary live camera diagnostics, including one without the
+optional raw-provenance channel. This closes that transport/cadence diagnostic,
+not the distinct private-snapshot robot-interference, collision-source or full
+observed-transfer gates. Sensor/model uncertainty budgets remain required.
 
 `ObservedNativeAdapter(robot, source=..., refine=..., tasks=...)` is deliberately
 explicit. `source.input_mode` must be `observed`.
@@ -91,6 +192,140 @@ nearby obstacles or declaring occluded space free. `ObservedWorkspace.from_depth
 provides conservative 3D depth carving, but **does not** perform that separation,
 fuse views, bound the whole object, or qualify sensor timing. These are remaining
 source-assembly requirements, not inferred behavior of the adapter.
+
+An explicitly configured snapshot may include `admission=ObservedMaterialAdmission(...)`.
+Its background geometry and captured robot material must match the snapshot and
+robot model. Each candidate `RobotGeometryBound` must contain the nominal geom
+plus the declared displacement and collision reserves; the checker validates
+its model, geom, calibration and configuration-profile identity. Every refresh
+keeps that profile pinned. Generic GT placement behavior is unchanged.
+
+An opt-in `target_contact=ObservedTargetContact.from_frame(...)` snapshot binds
+the complete payload prior and its external pose-error bounds to exact calibrated
+fingertip collision geoms. Supply the same policy when constructing the checker.
+Only grasp, close, lift, preplace, place and release permit bounded fingertip
+contact. Pregrasp and retreat retain ordinary clearance; wrist/housing geometry
+always retains it. Contact allowances cannot erase background occupancy or
+certify unknown space. A target with no provably nonempty eroded core rejects.
+After release the checker checks both the original release hypothesis and fresh
+visual target geometry, so a displaced object remains an obstacle during retreat.
+
+This policy requires an explicit `gripper_close_configuration` (finite motor
+joint targets) and `command_gripper_joints` mapping on the robot-only executor.
+Missing configuration returns `gripper_close_geometry_unavailable`. Planning
+certifies the sampled closing path before any skill dispatch; execution refreshes
+feedback and revalidates each segment, sends only its finite target, and requires
+measured arrival and settling. The sample increment and arrival tolerance are
+0.001 in model joint units (metres for slides, radians for hinges). Passive
+joint uncertainty still requires outer geometry bounds; a motor acknowledgement
+does not establish a grasp. The new command uses the same possible-dispatch
+receipt boundary as arm commands. Full-close presets remain on the legacy path.
+This is tested control plumbing, not qualification of a real Stretch closure,
+calibration, contact-force bound or live observed transfer. The local support
+policy below and a concrete live source/refiner still need live qualification.
+
+An optional `support_contact=ObservedSupportContact(...)` on both snapshot and
+checker binds one object/support instance to a finite `ObservedSupportPatch`,
+its exact historical capture, original depth, support mask, intrinsics/extrinsics
+and calibration ID. Source/profile replacement stops before command dispatch.
+Only the named payload during lift, place or release can use this contact policy;
+robot and wrist geometry retain their ordinary environment checks.
+
+`ObservedBackground` now preserves every contributor to retained occupied cells,
+including excluded foreground labels in mixed cells. Occupied updates union owners
+and retain their oldest acquisition age; missing legacy provenance is background.
+The ownership layer participates in the geometry revision. A newer foreground
+observation cannot relabel an old obstacle as support. An immutable bounded capture
+history pins the witness's complete original interval, not merely its ID.
+
+Support-only occupied cells can be refined by bounded subdivision against the
+original ray witness. The whole subquery must project into valid support pixels
+inside the finite measured footprint. Regions before the nearest possible return
+are measured free. Any refinement behind that return additionally requires
+`backing_depth_m` and a nonempty `backing_prior_id`: an explicitly qualified finite
+solid top layer covering the admitted band, including waived planning padding.
+Depth endpoints alone cannot establish that material. Missing backing leaves it
+blocked. Other/mixed occupied owners never consume this exception. A coarse
+unknown subvolume can be certified strictly in front of every original selected
+depth return, without changing its cell to free. Only an eligible shallow
+payload contact can additionally consume the finite backing-layer prior there:
+the material layer is continuous across voxel boundaries. A robot or noncontact
+query can use only the original free-ray proof, never the backing material.
+Missing pixel coverage, shadowed space and geometry behind the declared layer
+remain blocked. No occupancy cell becomes free because contact is allowed.
+
+The worst physical payload corner is checked against the uncertain **unit** plane
+with at most 1 mm penetration. Payload pose error and the mandatory explicit
+`payload_motion_error_m` remain in that physical bound; the latter must cover
+encoder/FK/base/retention displacement over the motion hypothesis. Zero is used
+only by declared ideal fixtures. Ordinary collision padding is separate and remains
+active against unrelated geometry. Lift cannot deepen beyond one measured initial
+clearance; IK/RRT query order cannot renew that floor. Budgets larger than the
+permitted contact depth can correctly prevent admission; these tests do not
+calibrate those budgets or justify relaxing the penetration limit.
+
+After release, both the frozen release hypothesis and current measured object
+geometry must pass. This does not prove settled support: the visual effect checker
+still requires fresh repeated post-retreat evidence. Missing/replaced current
+geometry stops execution, preserving possible-progress feedback after dispatch.
+
+`capture_arrays` now preserves depth precision during observed unprojection,
+avoiding the generic camera helper's float16 rounding at metre-scale distances.
+This removes extra numeric quantization; it does not improve sensor accuracy or
+resolve RGB/depth ownership. Historical tracking results are not rescored.
+See the [support mechanics evidence](../experiments/observed_support_contact_20261117.md).
+
+`ObservedBackground.from_capture/update(..., robot_material=...)` validates every
+self-labelled endpoint against captured inner material before excluding it.
+Missing or inconsistent proof preserves environment evidence. Without that
+qualification, excluded endpoints cannot retain old free status. Hidden cells
+without new endpoints retain their original age; a static assumption cannot
+restore cells invalidated by unqualified labels. See the
+[qualification plan and unfinished live gates](../plans/2026-11-18_tamp_agent_closeout.md).
+
+Payload records carry position/angular error bounds for unique rigid poses and
+shape equivalence alike. A visual frame must cover those bounds; attachment and
+current-capture uncertainty both contribute to retention. Planning-only failures
+return no-actuation receipts, while missing dispatch feedback after execution
+remains possible progress. Public ambiguity/calibration errors are finite codes;
+private provider exception details remain hidden.
+
+Canonical payload vertices are kept separate from pose uncertainty. Collision
+queries include object error once and the two EE captures' attachment error
+once each. Retention uses each capture's relative-pose bound once; angular
+displacement is already included in `attachment_error_m`. All candidate grasp
+levers contribute to the reserved attachment limit, which is checked at actual
+attachment and subsequent retention measurements. Requested placement regions
+must contain the physical uncertainty envelope, excluding ordinary clearance.
+Release and hypothetical-state restoration retain these bounds.
+
+`RgbdCaptureGeometry.from_stretch(..., original_rays=True)` requires original
+registration provenance matching the wire RGB, quantized depth, calibration and
+capture intervals. It retains the original raw-depth grid/K/pose for map carving
+and the exact winning original endpoints for RGB-associated tracking. Rounded
+RGB pixel centres are not substituted for the original depth rays. This opt-in
+path uses unquantized simulated sensor returns; it is a separate source profile
+from the millimetre wire-depth reconstruction, not a hardware accuracy claim.
+The cadence script exposes `--original-depth-rays`, requiring
+`--registration-audit`, `--robot-only-model` and `--geometry-profile`.
+
+The [mapped contact diagnostic](../experiments/mapped_contact_20261117.md) runs
+public tools with a provided simulated RGBD background scan and **privileged**
+native state. It is a separate assisted control, not observed-input acceptance.
+Native collision checkers accept optional conjunctive `additional_scene_checks`
+that return a strict boolean and receive the current checker/model/private data.
+Native contacts always win; held/opening/released-fall clones preserve the
+guards, so release planning cannot accidentally drop the collision map. Default
+native checks retain an empty guard tuple.
+
+The diagnostic's `--map-resolution` chooses 2 cm, 1 cm or 5 mm (default 5 mm);
+`--placement-region` takes JSON world-XY bounds. `--fault` selects an explicitly
+labelled occupied-map preflight control or loss of evidence after grasp. Raw
+artifacts stay in `.tamp-runs/`; the compact experiment index records outcomes.
+`ObservedEnvironmentAdmission` shares the strict environment/ray/support query
+engine without captured robot material. It cannot grant self ownership or pass
+the observed executor's material-admission type check.
+
 
 The initial grasp reference now requests a genuinely post-motion frame through
 `source.collect(..., after=barrier)`, just as lift/place verification does.
@@ -399,3 +634,191 @@ qualify the assumptions. The source must do that independently. Model bounds and
 Individual telescope-link uncertainty is still required for complete arm planning.
 
 See [rendered motion, contact audit, retained failures and videos](../experiments/observed_moving_geometry_20261029.md).
+
+## Bounded local collision-map lifecycle
+
+`ObservedWorkspace.from_depth` builds its projection geometry in batches
+(`chunk_cells=4096`) rather than allocating corners for the entire workspace.
+`max_cells` retains its existing 250,000 default. The additional defaults are
+`max_output_bytes=64*1024**2` and `max_working_bytes=64*1024**2`.
+Scalar budgets and estimated float conversion/sanitation costs are checked
+before full-frame conversion and grid allocation. Optional `build_stats` reports
+the cell/output count, conservative array-work estimate and maximum batch size.
+These are map-construction budgets, not a process-RSS limit: input owners,
+MuJoCo models, renderers and other application memory remain separate. Array-like
+inputs may already require storage when first inspected; callers should provide
+bounded sensor arrays. Chunking preserves the free/occupied/unknown proof,
+including missing returns and all pixels in each projected cell rectangle.
+
+`LocalSceneStore` is an opt-in owner of local collision evidence, separate from
+navigation mapping. Its defaults admit one scene with at most 64 MiB of counted
+retained storage. `load(key, builder, reserve_bytes=...)` retires older entries
+before building and checks the scene's deduplicated Python/NumPy storage before
+publication. The builder must bound its own scratch. Builders and consumers
+must not retain scenes outside their lease borrow; arbitrary external references
+and callback-owned allocations are not controlled by this store.
+
+Plans and collision hooks retain `LocalSceneLease`, an opaque weak reference and
+unique generation. Replacing even the same key invalidates old leases. Expired
+captures retire their scene; failed reacquisition leaves the old scene invalid.
+A borrow serializes a geometry query against eviction. Check the same expected
+lease again at command dispatch, and during ongoing control. Cancellation must
+remain available after retirement. This is evidence-lifetime enforcement, not a
+claim that the scene stayed unchanged: owners must explicitly invalidate on a
+scene change and clear their pending plan handles. Acquisition time is never
+renewed by a lease check.
+
+The development runner `scripts/eval_mobile_mapped_contact.py` exercises this
+lifecycle in simulated Stretch. It navigates unloaded, builds a source map,
+uses the public primitive tools, reacquires at a stopped loaded handoff, checks
+and executes loaded wheel transport, reacquires at the destination, places and
+retreats, then remaps the released object before navigating away. Only private
+planning data receives hypothetical poses; live base motion uses ordinary wheel
+velocity actuators. It retains the native adapter's existing 0.3 s endpoint
+stillness check; controller and release thresholds remain unchanged.
+Loaded sweeps preserve measured attachment, explicit grasp
+contact allowances and map hooks, and execution checks measured retention and
+arrival. The unchanged 5 mm/0.025 rad sweep spacing and 10 mm/0.05 rad tracking
+envelope are sampled checks, not continuous collision certificates.
+
+This runner explicitly uses native robot/object state, native full-scene geometry
+and a provided external RGBD scanner. Completely contained solids also face the
+local map's strict unknown-space checks; solids outside or straddling its bounds
+retain the declared native guard. This is an assisted integration control. It
+does not enable default OVMM loaded transport, qualify onboard-only mapping,
+run Habitat/RoboCasa, or establish a real-robot sensor/controller contract.
+The [mobile-map record](../experiments/local_map_mobile_20261117.md) separates
+those limits from the measured memory and task evidence.
+
+The native bounded release search now keeps an already certified measured pose
+without moving. If adjustment is required, it compares all existing finite
+candidates and maximizes the smaller support margin across the certified
+commanded/lowered delivery interval and the maximum drop bound. It retains the
+same raise/drop limits, sampled opening/retreat checks and two-adjustment budget.
+This reduces dependence on a first feasible pose with almost zero support margin;
+it does not certify future controller error from the measured tracking reserve.
+Internal `release_candidate` events distinguish IK/path, opening, support bounds,
+retreat and acceptance. Public tool codes and partial-execution receipts retain
+their existing schema; private geometry stays in evaluator logs.
+
+`scripts/eval_mobile_mapped_contact.py --case-config CASE.json` accepts declared
+initial conditions: `initial_base_x`, `initial_object_xy`,
+`initial_distractor_xy`, `placement_region`, `mobile`, `approach_m`, and
+`departure_m`. Values are validated before model creation. The initial overrides
+run before discovery/commands. With `mobile=false`, default approach/departure
+are zero and transport is stationary; the record explicitly labels that control.
+The default configuration preserves the previous mobile episode.
+
+The fixed development matrix is
+`configs/eval/mobile_map_regression_20261117.json`. Run
+`scripts/run_mobile_map_regression.py --fixture FIXTURE --output OUT` through
+`emet jobs run --no-gpu-exclusive`. `--lane N --lanes K` partitions cases across
+separate managed jobs on disjoint safe CPU allocations; defaults are lane 0 of 1,
+with a 900 s per-case timeout. `--case ID` selects exact case IDs and is repeatable.
+Scaled geometry and constant-density mass are compiled from copied fixture XML
+before physics; source fixtures are unchanged. Task failures, negative controls,
+crashes and timeouts remain separate in each JSON lane manifest.
+
+`scripts/tamp_release_diagnostics.py` saves evaluator-only measured-state/actuator
+snapshots at release decisions. `scripts/inspect_tamp_release_states.py --fixture
+FIXTURE --states DIR... --output RESULT.json` audits those snapshots offline.
+These private MuJoCo contacts/forces never become robot sensor inputs or tool
+acceptance evidence. See the
+[release investigation](../experiments/mobile_release_20261117.md).
+
+`report_mobile_map_regression.py --runs OUT --output SUMMARY.json` summarizes all
+nine declared cases, including cases not yet launched. It counts the seven task
+cases separately from two negative controls, preserves crashes/timeouts/failures,
+and rejects duplicate or inconsistent case receipts. These development counts
+are not a qualified benchmark denominator. The fixed suite is the default;
+`--suite PATH` explicitly selects another declaration.
+
+### Reacquire after search, before publishing a plan
+
+`NativeTableAdapter(..., reacquire_scene=callback)` opts into a source handoff;
+the default remains unchanged. Search records an inert proposal with immutable
+nominal joint paths, phase start states, FK endpoints and payload transforms.
+It cannot be executed through a public handle. Finalization consumes older
+handles and retires the original map lease before calling the source provider.
+The callback must acquire a new scan after that barrier and return
+`RefreshedNativeScene(lease, checks)`. Capture identity, calibration identity,
+non-overlapping capture times, object/support identity and lease generation are
+checked. Reusing or retiming an old capture cannot authorize the proposal.
+
+The callback is a trusted provider seam: its checks must actually query the
+returned lease's geometry and preserve support-ray/unknown-space checks. The
+callback tuple is copied and its identities are bound to the finalized handle;
+bound guards exposing a `lease` must own that same lease. An arbitrary callback
+cannot be independently certified by this interface. The provider must bound
+its acquisition I/O and construction scratch.
+
+Finalization replays all eight nominal joint segments (gripper opening,
+pregrasp, grasp, lift, preplace, place, release opening and retreat), plus any
+selected loaded straight base sweep, on private MuJoCo data. It checks fixed
+edges and FK endpoints against fresh native and local-map geometry without
+additional IK search. Identical coarse grids are insufficient: original support
+rays remain part of the geometry query. The existing measured grasp/placement
+refinement, checked closing and bounded release search still run during execution;
+nominal replay does not certify their future contact outcomes.
+
+This first handoff requires the full measured scene to stay stationary to
+`1e-8` qpos difference during acquisition/revalidation, a numerical equivalence
+gate for this assisted synchronous simulator. It rejects proposals with either
+an unloaded base approach or an arm approach action. Loaded transport remains
+supported. These restrictions are not a hardware tracking tolerance. Model,
+policy and plan changes also invalidate the proposal. Fixed-path validation has
+a separate 240-second wall budget; source lifetime and IK/search budgets are
+unchanged, and the source lease must still be current when validation finishes.
+Only successful finalization publishes a fresh executable handle.
+
+Before the first possible transport send, execution checks the finalized binding
+and current lease. Each subsequent primitive send checks its current phase lease.
+An expired source during planning reports `execution_started=false`; a transport
+timeout after entering a possible send reports partial execution with
+`command_outcome_unknown`. Both consume the handle. Transport providers must
+preserve lease guards when acquiring later carry/destination scenes.
+
+Both mobile-map scripts accept `--refresh-source` to enable this experiment.
+The regression runner forwards it to task workers only; negative controls retain
+their declared paths. See the [source-finalization record](../experiments/source_finalization_20261117.md)
+for validation, retained failures and source-tier limits.
+
+### Bounded release destination alternatives
+
+The opt-in native bounded-release policy first checks the measured pose and its
+existing vertical corrections. If none certifies opening the whole hand, it
+also searches horizontal destination offsets. `ReleaseLimits.lateral_offsets_m`
+defaults to `(0.01, 0.02, 0.03)` metres, with the four cardinal
+`lateral_directions`. An empty offset tuple disables this fallback and permits
+an empty direction tuple. Up to three
+horizontal magnitudes and four unit directions are supported. With the default
+three height increments this is at most 36 lateral candidates per planning pass.
+These are generic geometry candidates, independent of object labels.
+
+Every candidate checks closed-hand arm/payload motion, commanded and lowered
+opening geometry, sampled released fall, and open-hand retreat. The original
+support/goal-region footprint checks and 1 mm contact tolerance remain mandatory.
+Horizontal target/FK displacement is bounded from the original measured release
+position across both corrections, rather than granting a new 3 cm radius after
+each move. This bounds proposed destinations; sampled paths and future tracking
+remain separately checked, with no new controller-error guarantee.
+
+Executed lateral corrections shift the subsequent placement/retreat targets by
+the same amount. The internal selected goal follows the certified correction;
+the caller's requested region stays unchanged. The same two-adjustment limit
+covers vertical and lateral motion together, and a new current-pose certificate
+is still required before opening after the last adjustment.
+
+Native release refinement charges IK to the stored primitive's remaining call
+budget. Complete planning passes, including dense collision/opening/fall/retreat
+queries, charge its remaining planning time; a late candidate cannot authorize
+an adjustment or opening. Loaded refinement also carries its consumed calls/time
+forward. Controller execution remains outside the planning-time charge and keeps
+its existing measured-motion deadlines. Exhaustion after grasp returns partial
+execution with `completed_ops=["grasp"]`, `failed_stage=release` and inspection
+recovery, consuming the handle without sending the failed opening.
+
+Legacy native policy has no release refiner. This change adds no tool, fictitious
+sensor, attachment, live pose write, free-space assertion or relaxed retention
+threshold. [The lateral-release record](../experiments/lateral_release_20261118.md)
+keeps geometry diagnostics, complete assisted tasks and failures separate.

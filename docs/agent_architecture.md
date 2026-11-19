@@ -120,6 +120,9 @@ acquisition freshness. Explicit head aiming retains its measured inspection path
 Capture, visual assessment, geometry admission and movement are distinct events.
 For example, CHAT `describe_scene` with explicit angles produces a measured head
 inspection; the next camera-enabled decision retains its own RGB-D snapshot.
+CHAT invalidates TAMP evidence and stored plans before and after explicit gaze,
+including failed motion. Caption-only calls, including explicit null angles,
+remain read-only. A post-motion image is not permission to reuse a prior plan.
 `ground_object(query)` grounds that decision view and admits object-specific
 points or abstains. A matching `find_objects(text)` can then use that reference,
 but must independently check its route. A later camera attachment can differ

@@ -19,6 +19,8 @@ from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_geom
 from emet.controller.manipulation.moving_rgbd_tracking import MovingRgbdTracker, _arrays, _frozen
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
+from emet.controller.manipulation.rgbd_capture_geometry import RgbdCaptureGeometry
+from emet.controller.manipulation.robot_view_guard import RobotViewGuard
 
 
 @dataclass(frozen=True)
@@ -27,11 +29,19 @@ class SynchronizedRgbdView:
     depth: np.ndarray
     world: np.ndarray
     capture: CaptureInterval
+    robot_guard: RobotViewGuard | None = None
+    geometry: RgbdCaptureGeometry | None = None
 
     def __post_init__(self):
         arrays = _arrays(self.rgb, self.depth, self.world)
         for name, array in zip(("rgb", "depth", "world"), arrays, strict=True):
             object.__setattr__(self, name, _frozen(array))
+        if self.robot_guard is not None and not isinstance(self.robot_guard, RobotViewGuard):
+            raise ValueError("invalid_robot_view_guard")
+        if self.geometry is not None:
+            if not isinstance(self.geometry, RgbdCaptureGeometry):
+                raise ValueError("invalid_rgbd_capture_geometry")
+            self.geometry.require(self, now=self.capture.received_monotonic)
 
 
 @dataclass(frozen=True)
@@ -104,7 +114,18 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         self.allow_clipped_views = allow_clipped_views
         self.component_policy = component_policy
         self.last_view_rejections = ()
+        self._guard_profiles = {
+            reference_view: (reference.robot_guard.profile_identity if reference.robot_guard is not None else None)
+        }
+        self._geometry_profiles = {reference_view: reference.geometry.profile_identity if reference.geometry else None}
         capture.require(now=kwargs.get("clock", time.monotonic)())
+        if reference.geometry is not None:
+            reference.geometry.require(reference, now=kwargs.get("clock", time.monotonic)())
+        if reference.robot_guard is not None:
+            reference.robot_guard.require(
+                capture, reference.depth, reference.world, now=kwargs.get("clock", time.monotonic)()
+            )
+            reference.robot_guard.require_no_interference(mask)
         super().__init__(
             model,
             observation_id=capture.observation_id,
@@ -141,7 +162,9 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         if any(view.capture != capture for view in views.values()):
             raise ObservationUnavailable("multiview_capture_mismatch")
         capture.require(now=self.clock(), after=previous.capture.latest)
-        dt = capture.earliest - previous.capture.latest
+        # Either measurement may have occurred anywhere in its capture interval.
+        # Reachability needs the largest elapsed time, not the minimum gap.
+        dt = capture.latest - previous.capture.earliest
         if (
             not views
             or not 0 < dt <= self.gap
@@ -157,6 +180,18 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         masks, points, rejected, clipped = [], [], [], []
         for name, view in views.items():
             rgb, depth, world = view.rgb, view.depth, view.world
+            geometry_profile = view.geometry.profile_identity if view.geometry else None
+            if name in self._geometry_profiles and geometry_profile != self._geometry_profiles[name]:
+                raise ObservationUnavailable("rgbd_geometry_profile_changed")
+            self._geometry_profiles[name] = geometry_profile
+            if view.geometry is not None:
+                view.geometry.require(view, now=self.clock())
+            profile = view.robot_guard.profile_identity if view.robot_guard is not None else None
+            if name in self._guard_profiles and profile != self._guard_profiles[name]:
+                raise ObservationUnavailable("robot_view_profile_changed")
+            self._guard_profiles[name] = profile
+            if view.robot_guard is not None:
+                view.robot_guard.require(capture, depth, world, now=self.clock())
             try:
                 mask = self._candidate_mask(
                     rgb,
@@ -167,6 +202,8 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
                     allow_image_boundary=self.allow_clipped_views,
                     merge_reachable=self.component_policy == "complete_prior_union",
                 )
+                if view.robot_guard is not None:
+                    view.robot_guard.require_no_interference(mask)
             except ObservationUnavailable as error:
                 rejected.append((name, str(error)))
                 continue

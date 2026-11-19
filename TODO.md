@@ -1,5 +1,7 @@
 # Living TODOs (small / near-term)
 
+- [ ] Close out #250 and follow the [TAMP qualification plan](docs/plans/2026-11-18_tamp_agent_closeout.md) for search cost, observed admission (#245), and agent trials.
+
 - [x] Reconcile #247 with main #246 and address the posted review. Preserve
       public TAMP receipts and measured settling; throttle capability retries,
       reject missing snapshot RGB and protect recorded credential fields.
@@ -358,16 +360,12 @@
       and assess task quality/cost separately from tooling correctness.
       `docs/experiments/benchmark_refresh_20261029.md`; no RL work is preempted.
 
-- [ ] Land the consolidated [merged TAMP review corrections](docs/plans/2026-11-16_tamp_stack_review.md)
+- [x] Land the consolidated [merged TAMP review corrections](docs/plans/2026-11-16_tamp_stack_review.md)
       on `fix/tamp-stack-review`, then integrate them into the observed-admission
       follow-up. Original #226/#231/#234/#242/#243/#244 are merged; the new
-      review findings require this separate fix, not rewriting historical runs.
-
-- [ ] Qualify observed robot self-occupancy and phase-specific contact admission:
-      [issue #245](https://github.com/cpaxton/home_robot_v3/issues/245). PR #226
-      supplies evidence/adapter contracts only. Preserve unknown-space rejection
-      and read-only default discovery; require an actual observed transfer before
-      claiming live observed execution. Native privileged controls remain separate.
+      review findings landed in [PR #246](https://github.com/cpaxton/home_robot_v3/pull/246)
+      as `2ccf390c`, without rewriting historical runs. Integrated and verified
+      on the observed-admission branch; its live transfer gate remains open.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

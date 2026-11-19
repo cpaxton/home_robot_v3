@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-17",
+  "scope": "Stationary provided-RGBD-map native-state-assisted in-process MuJoCo controls. Scripted public tools; no LLM/hardware/observed-only acceptance. Negative controls are not task successes. No general benchmark success rate.",
+  "primary_configuration": {
+    "map_resolution_m": 0.005,
+    "workspace": [
+      [
+        -0.4,
+        -0.9,
+        0.44
+      ],
+      [
+        0.4,
+        -0.3,
+        1.04
+      ]
+    ],
+    "placement_region": [
+      [
+        -0.18,
+        -0.73
+      ],
+      [
+        0.18,
+        -0.57
+      ]
+    ],
+    "support_footprint_resolution_m": 0.002,
+    "support_measurement_margin_m": 0.0001,
+    "penetration_limit_m": 0.001,
+    "static_assumption_window_s": 299.001
+  },
+  "gates": {
+    "map_assisted_transfer_both_shapes": true,
+    "precommand_obstacle_stop": true,
+    "postgrasp_partial_feedback": true,
+    "strict_observed_transfer": false,
+    "llm_orchestration": false,
+    "hardware_qualification": false
+  },
+  "cases": [
+    {
+      "artifact": ".tamp-runs/observed-map-pick-20261117/cube-feasible-region/result.json",
+      "sha256": "6d05ceb498205bb287d0468548b469871d02ef31cd3d14056b8012d01e266146",
+      "job_id": "20261117_162701_773ecc",
+      "kind": "physical_development",
+      "object": "object1",
+      "map_resolution_m": 0.005,
+      "status": "ok",
+      "code": "ok",
+      "task_success": true,
+      "expectation_passed": true,
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "execution_started": true,
+      "map_queries": 75113,
+      "native_only_queries": 82252,
+      "map_rejections": 0,
+      "commands": 102,
+      "placement_region": [
+        [
+          -0.18,
+          -0.73
+        ],
+        [
+          0.18,
+          -0.57
+        ]
+      ],
+      "final_object_position": [
+        -0.02044808247809688,
+        -0.6227523924820149,
+        0.5198922445797831
+      ]
+    },
+    {
+      "artifact": ".tamp-runs/observed-map-pick-20261117/cylinder-feasible-region/result.json",
+      "sha256": "bebcf60ce1dd7e50c3bcda09d0cef786b6081b7207b6f4207ebc27332dbaf84a",
+      "job_id": "20261117_162701_40a297",
+      "kind": "physical_development",
+      "object": "object2",
+      "map_resolution_m": 0.005,
+      "status": "ok",
+      "code": "ok",
+      "task_success": true,
+      "expectation_passed": true,
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "execution_started": true,
+      "map_queries": 52547,
+      "native_only_queries": 64804,
+      "map_rejections": 0,
+      "commands": 100,
+      "placement_region": [
+        [
+          -0.18,
+          -0.73
+        ],
+        [
+          0.18,
+          -0.57
+        ]
+      ],
+      "final_object_position": [
+        -0.020204699555756742,
+        -0.634952918921308,
+        0.5199120400145817
+      ]
+    },
+    {
+      "artifact": ".tamp-runs/observed-map-pick-20261117/five-mm-partial-feedback/result.json",
+      "sha256": "78332098d15c98de655d1af1ca89b3477a8960debb629c01b02bf22791c1912c",
+      "job_id": "20261117_163143_857f43",
+      "kind": "negative_control",
+      "object": "object2",
+      "map_resolution_m": 0.005,
+      "status": "partial",
+      "code": "collision",
+      "task_success": false,
+      "expectation_passed": true,
+      "completed_ops": [
+        "grasp"
+      ],
+      "execution_started": true,
+      "map_queries": 24323,
+      "native_only_queries": 40612,
+      "map_rejections": 1,
+      "commands": 54,
+      "commands_at_fault": 54
+    },
+    {
+      "artifact": ".tamp-runs/observed-map-pick-20261117/five-mm-obstacle-feedback/result.json",
+      "sha256": "b7a62fea408289fb539d0ae9cb13240706364d992460049215c33fda32d1c0cc",
+      "job_id": "20261117_163143_b5200c",
+      "kind": "negative_control",
+      "object": "object2",
+      "map_resolution_m": 0.005,
+      "status": "error",
+      "code": "no_plan_within_budget",
+      "task_success": false,
+      "expectation_passed": true,
+      "completed_ops": [],
+      "execution_started": false,
+      "map_queries": 22,
+      "native_only_queries": 56,
+      "map_rejections": 2,
+      "commands": 0,
+      "commands_at_fault": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-map-pick-20261117/native-reference-safe-final/result.json",
+      "sha256": "7b90edb110ee12a5e7c7486ccb30a1aa13250c7d0ed9ebe863791f5e56fb4db3",
+      "job_id": "20261117_161652_a5e28f",
+      "kind": "native_reference",
+      "object": "object2",
+      "map_resolution_m": 0.02,
+      "status": "ok",
+      "code": "ok",
+      "task_success": true,
+      "expectation_passed": true,
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "execution_started": true,
+      "map_queries": 0,
+      "native_only_queries": 0,
+      "map_rejections": 0,
+      "commands": 100
+    },
+    {
+      "artifact": ".tamp-runs/observed-map-pick-20261117/final-positive/result.json",
+      "sha256": "d96fb51b24984b2ffcf92a7b15fa762f7716bc6cfee020a3cf675abb46bbc129",
+      "job_id": "20261117_160946_7e8a60",
+      "kind": "earlier_2cm_control",
+      "object": "object2",
+      "map_resolution_m": 0.02,
+      "status": "ok",
+      "code": "ok",
+      "task_success": true,
+      "expectation_passed": true,
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "execution_started": true,
+      "map_queries": 52482,
+      "native_only_queries": 64869,
+      "map_rejections": 0,
+      "commands": 100
+    }
+  ],
+  "tests": [
+    {
+      "job_id": "20261117_160946_caa24c",
+      "artifact": ".tamp-runs/observed-map-pick-20261117/final-tests.xml",
+      "tests": 1044,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "job_id": "20261117_162321_cd78e8",
+      "artifact": ".tamp-runs/observed-map-pick-20261117/environment-tests.xml",
+      "tests": 192,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "job_id": "20261117_162702_655cf6",
+      "artifact": ".tamp-runs/observed-map-pick-20261117/cache-tests.xml",
+      "tests": 129,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "runtime_incidents": [
+    {
+      "job_id": "20261117_160946_024093",
+      "artifact": ".tamp-runs/observed-map-pick-20261117/final-partial/job.log",
+      "exit_code": 139,
+      "fault_injection_reached": false,
+      "root_cause": "unconfirmed",
+      "launch_error": "taskset8-13 re-enabled documented unstable CPUs8-11",
+      "serial_recovery_control_passed": "20261117_161131_2ec9f0",
+      "runtime_fixed_claim": false
+    }
+  ],
+  "retained_development_failures": {
+    "native-map-first": "support selection includes silhouette boundary; construction rejection",
+    "native-map-second": "test facade missing normal gripper_to command",
+    "native-map-third": "coarse support/free-space gate; planning budget exhausted",
+    "native-map-local-patch": "render framebuffer too small; construction rejection",
+    "native-reference": "cancelled: missing in-process native-policy clock hook",
+    "native-map-boundary-fix": "partial at release: opaque map wrapper correctly unsupported by bounded release",
+    "final-cube": "coarse mixed table-edge voxel; zero-command rejection",
+    "cube-fine-support": "measured footprint improved; coarse mixed occupancy retained and rejected",
+    "cube-five-mm": "stale native snapshot after expensive map construction",
+    "cylinder-five-mm": "same pre-adapter stale native snapshot",
+    "cube-five-mm-fresh": "cancelled planning-only narrow goal; retained surface-search failures"
+  },
+  "raw_artifacts_policy": "Large captures/traces/source hashes remain in ignored .tamp-runs; this file indexes compact evidence only."
+}

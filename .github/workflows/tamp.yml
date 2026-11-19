@@ -1,0 +1,62 @@
+name: TAMP contracts
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tamp:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      EMET_UV_RUN: "1"
+      MUJOCO_GL: disable
+      CUDA_VISIBLE_DEVICES: ""
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Fetch Stretch scene assets
+        run: git lfs pull --include='src/emet/assets/robot/assets/**' --exclude=''
+      - uses: astral-sh/setup-uv@v6
+      - name: Install CPU test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev libasound2-dev libsndfile1 libgl1 libegl1
+          uv sync --locked --python 3.10 --no-default-groups --group dev --group sim
+      - name: Run TAMP contracts
+        # Process isolation keeps a native binding crash attributable to a file.
+        run: |
+          mkdir -p test-reports
+          status=0
+          for file in \
+            src/test/controller/task/tamp/test_native_revalidation.py \
+            src/test/controller/task/tamp/test_native_adapter.py \
+            src/test/controller/task/tamp/test_native_approach.py \
+            src/test/controller/task/tamp/test_native_release_budget.py \
+            src/test/controller/task/tamp/test_observed_adapter.py \
+            src/test/controller/task/tamp/test_transfer_provider.py \
+            src/test/controller/task/tamp/test_mobile_case_config.py \
+            src/test/controller/task/tamp/test_mobile_map_boundary.py \
+            src/test/controller/task/tamp/test_mobile_regression_report.py \
+            src/test/motion/test_release.py \
+            src/test/motion/test_local_scene_store.py \
+            src/test/motion/test_observed_admission.py \
+            src/test/motion/test_observed_contact.py \
+            src/test/motion/test_observed_support_contact.py
+          do
+            report=$(basename "$file" .py)
+            uv run --no-sync emet test --no-cov -- "$file" -q --junitxml="test-reports/$report.xml" || status=1
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tamp-contract-reports
+          path: test-reports/
