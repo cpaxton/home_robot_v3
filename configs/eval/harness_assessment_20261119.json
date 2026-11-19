@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "base_source": "6826582673e3163d2677150ae3c63db73b56b19a",
+  "development_cases": "configs/eval/harness_capability_dev.json",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "seed": 0,
+  "groups": [
+    {
+      "id": "capture",
+      "tools": ["describe_scene", "look_around", "send_image", "take_picture"],
+      "adapters": ["Stretch", "Molmo rby1", "Habitat (EQA gaze)"],
+      "input": "Observed RGB-D and measured head pose",
+      "evidence": "Contract and bounded live capture",
+      "check": "Image/capture identity, advancing acquisition when available, measured gaze and no motion on caption-only calls",
+      "next": "Same snapshot and stale/out-of-limit controls per adapter"
+    },
+    {
+      "id": "memory",
+      "tools": ["query_memory", "query_scene_graph", "list_scene_relations", "send_object_image", "inspect_graph", "read_history", "recall_image"],
+      "adapters": ["Stretch", "Molmo rby1", "Habitat (EQA history/graph)"],
+      "input": "Historical graph, dialogue, or image evidence",
+      "evidence": "Contract and recorded replay",
+      "check": "Correct view/record identity, historical label, abstention when unavailable, no current geometry authorization",
+      "next": "Active recall with distractors and changed-scene control; M1 stays separately scoped"
+    },
+    {
+      "id": "grounding",
+      "tools": ["ground_object", "verify_siglip", "find_objects"],
+      "adapters": ["Stretch", "Molmo rby1", "Habitat (EQA verification)"],
+      "input": "Learned perception and measured depth; simulator scoring held out",
+      "evidence": "Contract and bounded live localization",
+      "check": "Classify missing, ambiguous, far and valid support separately; compare admitted target and destination geometry to scorer",
+      "next": "Molmo safe closer view, absent-target control and same-start recovery"
+    },
+    {
+      "id": "navigation",
+      "tools": ["scan_environment", "explore", "explore_frontier", "investigate", "navigate_to_obs", "go_home", "face_toward", "rotate_base", "move_forward"],
+      "adapters": ["Stretch", "Molmo rby1", "Habitat (EQA navigation)"],
+      "input": "Observed map, measured motion, adapter limits",
+      "evidence": "Contract and bounded live motion; legacy tools vary by adapter",
+      "check": "Requested and reached poses, partial progress, occupied-route refusal, useful new view and alias behavior",
+      "next": "Isolated controls on each adapter; verify the compatibility alias stays out of model-final advertisement"
+    },
+    {
+      "id": "floor",
+      "tools": ["observe_floor", "navigation_diagnostics", "send_map_snapshot"],
+      "adapters": ["Stretch", "Molmo rby1", "Habitat where shared floor tools bind"],
+      "input": "Calibrated depth and checked observed footprint",
+      "evidence": "Contract, geometry and bounded live floor recovery",
+      "check": "Same-pose support/clearance recheck, map frame, measured follow-up and occupied/drop rejection",
+      "next": "Separate unknown floor, obstruction and drop; verify capability-gated schema"
+    },
+    {
+      "id": "transfer",
+      "tools": ["scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place"],
+      "adapters": ["Stretch native; Molmo and hardware execution unqualified"],
+      "input": "Privileged, provided-map and observed simulation tracked independently",
+      "evidence": "Contract and privileged live controls",
+      "check": "Trace discovery, handle use and dispatch; independently check full footprint, support, stillness and retained progress",
+      "next": "Current-main single transfer, then #245 stationary observed input, then stopped base handoff"
+    },
+    {
+      "id": "composition",
+      "tools": ["plan_task", "execute_task_plan"],
+      "adapters": ["Stretch with qualified task provider"],
+      "input": "Provider-gated native tasks",
+      "evidence": "Contract and privileged multi-step/recovery controls",
+      "check": "Protected goals, consumed handles, no dispatch on refusal and fresh authorization of only remaining work",
+      "next": "Current-main stop/retry controls, then observed multi-object and clutter after single transfer"
+    },
+    {
+      "id": "legacy_actuation",
+      "tools": ["set_receptacle_state", "aim_arm_at", "take_ee_picture", "hand_over", "wave", "nod_head", "shake_head", "avert_gaze"],
+      "adapters": ["Capability-dependent; physical articulation and handover unqualified"],
+      "input": "Explicit assistance or legacy embodiment support",
+      "evidence": "Contract inspection; uneven live support",
+      "check": "Report unsupported effects, physical-mode articulation refusal, wrist aim authorization and valid frame",
+      "next": "Exercise advertised/refused combinations; retain unsupported rows"
+    },
+    {
+      "id": "session",
+      "tools": ["say", "quit", "submit_answer", "finish"],
+      "adapters": ["CHAT transports and Habitat EQA submodes"],
+      "input": "Transport sink and model-selected terminal action",
+      "evidence": "Contract and scored EQA episodes",
+      "check": "Correct delivery/termination, exclusive EQA terminal schema, exact submitted answer and separate correctness score",
+      "next": "Private Discord simulation and model-final answer/explore mode checks"
+    }
+  ],
+  "cases": [
+    {"id": "native-cylinder", "stage": "native", "adapter": "Stretch", "tier": "privileged simulation", "status": "pending", "fixture": "configs/eval/native_stretch_transfer_debug.json"},
+    {"id": "stop-only", "stage": "native", "adapter": "Stretch", "tier": "privileged simulation", "status": "pending", "fixture": "configs/eval/tamp_contextual_recovery_20261116.json"},
+    {"id": "contextual-recovery", "stage": "native", "adapter": "Stretch", "tier": "privileged simulation", "status": "pending", "fixture": "configs/eval/tamp_contextual_recovery_20261116.json"},
+    {"id": "default_table_s0_distinct_recep", "stage": "find", "adapter": "Stretch", "tier": "observed simulation", "status": "pending", "fixture": "configs/ovmm/find_phase_episodes.yaml"},
+    {"id": "molmo_rby1_ithor_s2_idx0", "stage": "find", "adapter": "Molmo rby1", "tier": "observed simulation", "status": "pending", "fixture": "configs/ovmm/find_phase_episodes.yaml"},
+    {"id": "molmo-far-only", "stage": "find", "adapter": "Molmo rby1", "tier": "observed simulation", "status": "blocked", "reason": "Isolated live fixture needs calibration"},
+    {"id": "molmo-unknown-floor", "stage": "find", "adapter": "Molmo rby1", "tier": "observed simulation", "status": "blocked", "reason": "Isolated live fixture needs calibration"},
+    {"id": "molmo-occupied-route", "stage": "find", "adapter": "Molmo rby1", "tier": "observed simulation", "status": "blocked", "reason": "Isolated live fixture needs calibration"},
+    {"id": "molmo-absent-target", "stage": "find", "adapter": "Molmo rby1", "tier": "observed simulation", "status": "blocked", "reason": "Isolated live fixture needs calibration"},
+    {"id": "hmeqa-q2", "stage": "eqa", "adapter": "Habitat", "tier": "observed simulation", "status": "pending"},
+    {"id": "hmeqa-q6", "stage": "eqa", "adapter": "Habitat", "tier": "observed simulation", "status": "pending"},
+    {"id": "hmeqa-q12", "stage": "eqa", "adapter": "Habitat", "tier": "observed simulation", "status": "pending"},
+    {"id": "hm3d_lamp_bed_00006_nearest_v2", "stage": "find", "adapter": "Habitat", "tier": "observed simulation", "status": "pending", "fixture": "configs/ovmm/habitat_find_phase_nearest_v2.yaml"},
+    {"id": "observed-stationary", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "#245 live stationary public-tool controls pending"},
+    {"id": "observed-stale-source", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "#245 live stale-source control pending"},
+    {"id": "observed-post-grasp-loss", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "#245 live post-grasp evidence-loss control pending"},
+    {"id": "observed-base-handoff", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "Stationary observed controls and agent transfer first"},
+    {"id": "observed-multigoal-swap-clutter", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "Observed single transfer and base handoff first"},
+    {"id": "discord-stretch", "stage": "operator", "adapter": "Stretch", "tier": "supervised simulation", "status": "blocked", "reason": "Dedicated private test channel and production CHAT camera smoke required"},
+    {"id": "hardware-stretch", "stage": "operator", "adapter": "Stretch", "tier": "stationary hardware", "status": "blocked", "reason": "Simulator review and operator hardware session required"},
+    {"id": "hardware-mars", "stage": "operator", "adapter": "Innate Mars", "tier": "stationary hardware", "status": "blocked", "reason": "Simulator review and operator hardware session required"}
+  ]
+}
