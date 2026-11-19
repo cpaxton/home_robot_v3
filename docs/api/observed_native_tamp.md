@@ -281,7 +281,7 @@ Missing or inconsistent proof preserves environment evidence. Without that
 qualification, excluded endpoints cannot retain old free status. Hidden cells
 without new endpoints retain their original age; a static assumption cannot
 restore cells invalidated by unqualified labels. See the
-[repair plan and unfinished live gates](../plans/2026-11-16_observed_admission.md).
+[qualification plan and unfinished live gates](../plans/2026-11-18_tamp_agent_closeout.md).
 
 Payload records carry position/angular error bounds for unique rigid poses and
 shape equivalence alike. A visual frame must cover those bounds; attachment and
@@ -789,7 +789,8 @@ The opt-in native bounded-release policy first checks the measured pose and its
 existing vertical corrections. If none certifies opening the whole hand, it
 also searches horizontal destination offsets. `ReleaseLimits.lateral_offsets_m`
 defaults to `(0.01, 0.02, 0.03)` metres, with the four cardinal
-`lateral_directions`; an empty offset tuple disables this fallback. Up to three
+`lateral_directions`. An empty offset tuple disables this fallback and permits
+an empty direction tuple. Up to three
 horizontal magnitudes and four unit directions are supported. With the default
 three height increments this is at most 36 lateral candidates per planning pass.
 These are generic geometry candidates, independent of object labels.

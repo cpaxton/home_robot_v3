@@ -1,5 +1,7 @@
 # Living TODOs (small / near-term)
 
+- [ ] Close out #250 and follow the [TAMP qualification plan](docs/plans/2026-11-18_tamp_agent_closeout.md) for search cost, observed admission (#245), and agent trials.
+
 - [x] Reconcile #247 with main #246 and address the posted review. Preserve
       public TAMP receipts and measured settling; throttle capability retries,
       reject missing snapshot RGB and protect recorded credential fields.
@@ -364,65 +366,6 @@
       review findings landed in [PR #246](https://github.com/cpaxton/home_robot_v3/pull/246)
       as `2ccf390c`, without rewriting historical runs. Integrated and verified
       on the observed-admission branch; its live transfer gate remains open.
-
-- [ ] Qualify observed robot self-occupancy and phase-specific contact admission:
-      [issue #245](https://github.com/cpaxton/home_robot_v3/issues/245). PR #226
-      supplies evidence/adapter contracts only. Preserve unknown-space rejection
-      and read-only default discovery; require an actual observed transfer before
-      claiming live observed execution. Native privileged controls remain separate.
-      Active fixes: [observed admission repair](docs/plans/2026-11-16_observed_admission.md)
-      on `fix/tamp-observed-admission`; captured-material mechanics, fingertip
-      contact, finite checked closing and error/receipt repairs are implemented.
-      Local support-contact mechanics are implemented; full live source and
-      observed-transfer qualification remain open. The
-      [support witness checks](docs/experiments/observed_support_contact_20261117.md)
-      preserve mixed ownership, historical capture ages and the 1 mm bound.
-      [Current capture/geometry evidence](docs/experiments/observed_transfer_progress_20261116.md):
-      whole-robot outer bounds pass contact sampling; synchronized depth provenance
-      reproduces wrist-camera/target RGB ownership disagreement. Normal tracking
-      81/81 is a separate development repeat, not observed control qualification.
-      [November 17 camera-source checks](docs/experiments/observed_camera_source_20261117.md)
-      add continuous tracking and whole-camera interference rejection. Normal
-      0.266-second live camera updates still expose incompatible isolated depth
-      returns; continuous processing alone does not resolve association.
-      [Transport cause and repair](docs/experiments/observed_rgbd_transport_20261117.md):
-      same-frame replay isolates JPEG colour corruption. PNG transport passes
-      41/43 tracked captures in separate stationary views, four consumer-pause
-      windows each; one uses no provenance channel. Full observed execution
-      source/refiner assembly remains the next gate.
-      [Coherent visual frames](docs/experiments/observed_visual_frames_20261117.md)
-      now retain original camera calibration and eight motors, propagate robot
-      pose errors through visual checks, and preserve original reference receipt
-      times. Live frame assembly passes; full collision-scene ownership and
-      source/refiner integration still precede observed transfer acceptance.
-      [Mapped contact integration](docs/experiments/mapped_contact_20261117.md)
-      now completes a native-state-assisted public-tool transfer with a real
-      provided RGBD collision map, including release/retreat. Original-ray
-      refinement, voxel-boundary support contact, release guard propagation,
-      uncertainty accounting and partial/no-command controls are covered.
-      This is a separate control; full observed source/refiner and relative
-      contact/geometry qualification remain open.
-      [Bounded local maps and mobile gate](docs/experiments/local_map_mobile_20261117.md):
-      batch construction preserves the cell checksum at ~13.8× lower isolated
-      peak RSS. Generation leases invalidate retired maps/plans. One assisted
-      cube episode completes navigation, pick/carry/place, remapping and departure;
-      [release investigation](docs/experiments/mobile_release_20261117.md) now
-      reproduces and repairs first-feasible release selection: both original
-      mobile objects complete under bounded candidate-margin ranking. Expanded
-      cases still expose source-evidence expiry during long planning. The opt-in
-      [source-finalization handoff](docs/experiments/source_finalization_20261117.md)
-      now consumes old handles, reacquires evidence and revalidates the chosen
-      nominal proposal without IK before publishing a fresh handle. Original
-      depth rays remain authoritative; coarse-grid equality is insufficient.
-      Cylinder and shifted-cube follow-ups complete; the retained clutter release
-      failure now has a [bounded lateral-release follow-up](docs/experiments/lateral_release_20261118.md).
-      A fresh clutter repeat completes release/retreat/remapping/departure after
-      one vertical and one 1 cm lateral correction, within the original region
-      and limits. Initial-search expiry remains in the record. Whole-pass geometry
-      time and IK calls now consume retained primitive/episode budgets; partial
-      feedback and unknown-space rejection are preserved. Next: broaden layouts
-      and reduce search cost while completing observed source qualification.
-      Full observed execution and broader OVMM remain unqualified.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

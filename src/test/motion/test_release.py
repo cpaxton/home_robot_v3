@@ -510,6 +510,7 @@ def test_shared_place_executor_stops_before_next_command_on_release_failure(fail
         {"max_adjustments": True},
         {"offsets_m": (0.003, 0.003)},
         {"offsets_m": ()},
+        {"lateral_directions": ()},
     ],
 )
 def test_invalid_limits_rejected(kwargs):
@@ -604,7 +605,7 @@ def test_lateral_fallback_shifts_destination_when_vertical_opening_stays_blocked
 
 def test_disabled_lateral_fallback_preserves_vertical_only_verdict():
     ex = rig_xy('<body name="wall" pos=".05 0 .075"><geom type="box" size=".005 .1 .075"/></body>')
-    limits = ReleaseLimits(.04, .04, height_joint="height", lateral_offsets_m=())
+    limits = ReleaseLimits(.04, .04, height_joint="height", lateral_offsets_m=(), lateral_directions=())
     plan, error = plan_release(ex, support="table", region=None, limits=limits, initial_z=.025)
     assert plan is None and "collision" in error
     ex.command_joints.assert_not_called()
@@ -690,4 +691,17 @@ def test_lateral_fallback_keeps_map_guards_on_the_released_object(unknown_latera
         assert 'collision' in error
     np.testing.assert_array_equal(ex.data.qpos, before)
     np.testing.assert_array_equal(ex.collision.payload_transform, reference)
+    ex.command_joints.assert_not_called()
+
+
+def test_rejected_held_start_skips_all_release_adjustment_ik():
+    ex = rig_xy()
+    ex.collision.additional_scene_checks = (lambda *_: True,)
+    ex.plan_pose = Mock(side_effect=AssertionError("invalid held start cannot reach adjustment IK"))
+    plan, error = plan_release(
+        ex, support="table", region=None, limits=ReleaseLimits(.04, .04, height_joint="height"), initial_z=.025
+    )
+    assert plan is None
+    assert error == "arm_path_failed:invalid_start:collision"
+    ex.plan_pose.assert_not_called()
     ex.command_joints.assert_not_called()
