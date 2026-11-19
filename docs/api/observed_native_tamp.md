@@ -326,6 +326,14 @@ artifacts stay in `.tamp-runs/`; the compact experiment index records outcomes.
 engine without captured robot material. It cannot grant self ownership or pass
 the observed executor's material-admission type check.
 
+Environment-only admission can return `observed_free_fast_path` when the
+solid's entire closed bounding box lies inside the workspace, every touched
+cell is fresh and free, and no support-contact exception is active. Other
+queries use the detailed admission checks. The assisted mapped-contact
+diagnostic can use this shortcut. `ObservedNativeCollisionChecker` enables
+captured-robot ownership for its robot and payload queries, which use the
+detailed checks. Times from the assisted diagnostic characterize
+environment-only admission.
 
 The initial grasp reference now requests a genuinely post-motion frame through
 `source.collect(..., after=barrier)`, just as lift/place verification does.
