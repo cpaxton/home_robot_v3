@@ -67,3 +67,27 @@ rows `[2, 4)` contain the gripper-opening rejection, the map witness records
 tool issued no commands. The public receipt still reports
 `no_plan_within_budget`. This validates the diagnostic bundle for a returned
 preflight failure.
+
+## Pre-descent placement pilot
+
+Job `20261118_193547_b44a88` reran cube back using its original layout.
+The planner completed source finalization, grasp and loaded carry, then
+checked release before the first placement arm command. Seven of 11
+destinations failed the retreat start check and four failed pose IK. The tool
+returned `partial / no_collision_free_placement` at `place_refinement` with
+`completed_ops=["grasp"]` and `recovery=inspect`. The trace contains no
+preplace, place, or release commands. The destination map reported unknown
+payload volume and the retreat events listed no native contact pairs. The
+exact failing fall sample still needs a targeted replay.
+
+The failure bundle is at
+`.tamp-runs/pre-descent-cube-back/retry/cube_clutter_back/tool-calls/02-execute_pick_place_plan/failure.json`.
+The separate boundary check passed and the pilot regression batch passed
+209 tests. The first simulator attempt failed to load the missing software
+renderer. The retry used a temporary extracted OSMesa package. The pilot code
+is preserved locally at `8c8d03d3` on `experiment/tamp-pre-descent-admission`.
+This run is a safe stop, and cube back remains an open transfer failure.
+
+The #250 closeout reran release and mobile case configuration tests on the
+published implementation. Job `20261118_224127_6fcb93` passed all 68 tests
+with zero failures, errors, or skips.

@@ -281,7 +281,7 @@ Missing or inconsistent proof preserves environment evidence. Without that
 qualification, excluded endpoints cannot retain old free status. Hidden cells
 without new endpoints retain their original age; a static assumption cannot
 restore cells invalidated by unqualified labels. See the
-[repair plan and unfinished live gates](../plans/2026-11-16_observed_admission.md).
+[qualification plan and unfinished live gates](../plans/2026-11-18_tamp_agent_closeout.md).
 
 Payload records carry position/angular error bounds for unique rigid poses and
 shape equivalence alike. A visual frame must cover those bounds; attachment and

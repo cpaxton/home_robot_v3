@@ -1,71 +1,81 @@
-# TAMP agent integration and qualification
+# TAMP agent qualification
 
-Main at `f1b7bb5b` includes #247–249. Use [agent architecture](../agent_architecture.md), [tool contracts](../agent_tool_contracts.md), [tool index](../agent_tools.md), and [run agent](../AGENT_RUN.md) as the current interface documentation. The TAMP branch is already based on that revision. Its explicit gaze invalidation fix is documented there. Keep tool behavior in those pages, native input details in [observed TAMP](../api/observed_native_tamp.md), and measured outcomes in experiment records and the paper appendix.
+## Current status
 
-1. **PR #250, placement and observed admission.** Clarify the expanded layouts as nominal footprint tests with intentional boundary contact. Run all seven layouts on the same revision with fresh-source validation, and retain all attempts. Score full completion, measured settled support, failure stage, partial receipts, and map lifetime. Previous post-refactor successes include clutter, shifted cylinder and larger cylinder. They do not constitute the new seven-case cohort. Review and merge #250 first.
-2. **Stacked search-cost PR, proposed by DeepSeek.** Profile arm, base sweep, and release queries on a frozen case, with timing for solid construction and admission. Cache validated local geometry only if measurements support it. Hull planes are already cached. Add a conservative fresh/free AABB shortcut after evidence validation and preserve the detailed query on a miss. Check stale cells, boundary contact, unknown, occupied, support rays and outside-map behavior. Compare decisions on identical replay inputs, then report wall time and expiry counts on the same layout cohort. Keep existing sweep spacing. Base this PR on #250 until it lands.
-3. **Observed execution.** Connect the live simulated Stretch RGBD and measured motor stream to capture-bound robot/target material, independent support/background evidence, and the contact refiner. Verify a stationary public-tool transfer first, with stale/no-command and post-grasp loss controls. Then qualify a stopped base handoff and observed goal grounding. Record the actual sensor and simulator assistance used.
-4. **Agent composition.** Freeze solvable MuJoCo tasks with independently verified reference executions. Run the same `run agent` entry point and remote model configuration across native assisted and qualified observed inputs. Start with single transfers and explicit recovery, then protected two-object goals, swaps, clutter clearing when required, and exploration/navigation to acquire missing evidence. Require observed goal verification, correct partial feedback, and a new handle before an authorized retry. Report task and step completion, failure stage, unnecessary moves, model calls, planning time and evidence expiry. Keep reference construction failures visible. Use fixed cases and held-out layouts before updating paper claims.
+| Work | Evidence and disposition |
+|---|---|
+| [#250](https://github.com/cpaxton/home_robot_v3/pull/250), assisted transfer and diagnostics | Ready for review as a development slice. Includes capture-bound collision maps, fresh-source path validation, bounded lateral release, checkpoints, and failed-tool bundles. The original expanded cohort completed **2/7**. The current release-focused suite retains four layouts, with the original seven outcomes preserved. |
+| Cube-back placement | The pre-descent pilot stopped safely after grasp and carry. All 11 candidate destinations failed. It remains on the local `experiment/tamp-pre-descent-admission` branch at `8c8d03d3` pending a passing transfer and positive controls. |
+| [#251](https://github.com/cpaxton/home_robot_v3/pull/251), collision-check cost | Draft stacked on #250. It adds an all-fresh/free AABB shortcut and reports 121 passing tests. Runtime benefit on the transfer workload still needs a matched comparison. |
+| [#245](https://github.com/cpaxton/home_robot_v3/issues/245), observed execution | Capture, geometry, and contact components have evidence. A complete live observed-input transfer remains open. |
+| Remote CHAT startup | Local `fix/tamp-remote-chat-startup` preserves `27dded16` for separate review and validation. |
 
-Other open dependencies and parallel work:
+The [transfer blocker catalogue](../experiments/mobile_transfer_blockers_20261118.md)
+and [hard-case index](../../configs/eval/mobile_transfer_hard_cases_20261118.json)
+give exact cases and replay inputs. The [observed admission development history](../experiments/observed_admission_development_20261116.md)
+preserves capture, geometry, and prior integration evidence.
 
-- **#229** preserves query-grounding rejection reasons. Review and exercise the feedback in the observed agent gate.
-- **#228** caches the Stretch native model fingerprint. Review its clock and model identity tests independently of the collision-query optimization.
-- **#241** is draft controller work for coupled tracking and native feedback. Retest against measured failures when it lands. It is a parallel track for assisted agent qualification.
-- **#230** plans interaction-grounded memory and matched model evaluation. Review separately and use the matched evaluation design once execution gates are stable.
+## Work in dependency order
 
-The two DeepSeek work items are #250's layout expansion and the proposed search-cost follow-up. The latter has no open PR in the current inventory.
+1. **Review #250 and land the scoped changes.** Review partial receipts,
+   unknown-space rejection, and the evidence boundaries. Use the two successful
+   layouts as positive controls. Preserve the historical failures and keep the
+   unqualified pre-descent pilot separate.
+2. **Measure and qualify #251.** Replay cylinder right and time solid creation,
+   map admission, arm paths, base sweeps, and release separately. Require
+   collision-decision parity before timing comparisons. Rerun both cylinder
+   cases with the same 299-second source lifetime and sweep spacing. Cache
+   validated local geometry if the profile shows it dominates. Existing code
+   already caches hull planes.
+3. **Resolve placement and source coverage.** Replay cube-back with the saved
+   destination scan. Identify the solid and height that first fail during the
+   sampled fall and retreat. Test a different certified destination or a
+   calibrated view that covers the missing volume. Compare candidate ranking
+   by support footprint and hand/retreat clearance on frozen inputs. Require
+   cube-back and a previously passing control to complete before enabling the
+   stricter preflight. For cube left and front, replay the starting payload
+   check with a second view and expose the geometry rejection in the tool
+   receipt. For cylinder left, distinguish unknown support from expiry.
+4. **Qualify live observed input.** Bind synchronized simulated Stretch RGBD,
+   measured robot joints, calibrated robot and target envelopes, support and
+   background evidence, and the motion refiner. Require a stationary
+   public-tool transfer, a stale-source preflight stop, and a post-grasp
+   evidence-loss control. Then add a stopped base handoff with fresh
+   destination evidence. Use independently measured outcomes for scoring.
+5. **Qualify agent composition.** Use the same `run agent` entry point and remote
+   model configuration on reference-certified MuJoCo episodes. Start with one
+   transfer and an explicit recovery turn. Then test protected multi-object
+   goals, swaps, authorized clutter clearing, and exploration or navigation
+   for missing evidence. Report full goals, partial progress, tool and model
+   calls, search time, and failures on held-out layouts before updating
+   paper claims.
 
-## Completed expanded layout baseline
+Parallel PRs are #228 (Stretch model fingerprint and clock), #229 (grounding
+feedback), #241 (draft controller tracking), and #230 (interaction memory and
+matched model evaluation). Review those in their own scope. Test #229 feedback
+at the observed-agent gate and use #230 for matched evaluation once execution
+is stable.
 
-The seven provided-map runs finished at **2/7**. Cube right and far completed.
-Cube left and front both stopped before IK when the map could not certify the
-starting payload volume. The public budget code obscures that rejection.
-Cylinder right stopped on stale evidence and cylinder left reported unknown
-support geometry. Both consumed about 299 s across map construction and search.
-The left-cylinder trace also includes a rejected destination with finger contact
-against the distractor. Resolve the support rejection independently of timing.
-Cube back completed grasp and stopped at release with an invalid measured start
-for the adjustment path.
+## Transfer rules and replay
 
-Use separate follow-ups for these three mechanisms:
+| Condition | Tool contract and recovery |
+|---|---|
+| Unknown starting or swept volume | Keep the volume blocked and report the evidence failure at the affected phase. Seek a calibrated view from a checked viewpoint, then replan. |
+| Shared start rejected | Check it once and skip dependent candidates. Independently checked actions remain available. |
+| Placement exit rejected | Check descent, opening, fall, and retreat before selecting the destination. Try another candidate inside the goal region and budget. Recheck measured state before opening. If no candidate passes after grasp, report partial progress and inspect. |
+| Stale evidence | Retire the old authority. Validate a retained candidate against a fresh capture or search again at a checked, stopped state. Track expiry separately from numerical and geometry failures. |
+| Occupied destination | Search other permitted destinations. Clearing a blocker is a separate authorized task step. |
+| Uncertain command outcome | Consume the handle, preserve verified progress, and inspect measured state before a new command. |
 
-- Profile and accelerate collision checks on cylinder right. Replay identical
-  checks for parity and rerun both cylinder layouts with the original lifetime.
-- Replay the left/front source captures and isolate the unknown payload volume.
-  Test a second view at the same starting state, and expose an actionable public
-  preflight cause if the evidence remains insufficient.
-- Replay the cube-back saved release state. Identify the first rejecting solid
-  and evidence source before changing placement selection. If the terminal pose
-  leaves no certified correction, select an alternative earlier while the load
-  is still at the checked preplace pose.
+Pair each regression with a passing control. Preserve the relevant simulator
+checkpoint, capture and map generation, first rejection, and command range.
+Full agent restore still needs conversation, memory, controller state, goal,
+verified progress, and random state saved at a quiet tool boundary. Restored
+execution acquires fresh evidence and new handles.
 
-Artifacts are under `.tamp-runs/expanded-clutter-20261118/`. This baseline
-is separate from earlier controls. Keep all seven cases in the next comparison.
-
-## Checkpoints and simpler candidate selection
-
-The mobile harness saves MuJoCo integration state alongside scans and release
-diagnostics. Restore into a private simulator using the original fixture and
-runtime. Retain the resolved fixture, command prefix, decision phase, and capture
-artifacts together. Before relying on a replay, compare the next measured
-states and tool receipts against the original.
-
-For an agent checkpoint, save at a quiet tool boundary. Bundle the simulator
-and controller state, agent conversation and model settings, memory checkpoint,
-task goal and verified progress, and RNG state. Keep pending commands and their
-outcomes in the trace. Recreate the session on restore, acquire fresh evidence,
-and rediscover/replan before sending commands. Historical captures and tool
-receipts may be replayed for offline comparisons at their recorded times.
-Executable handles from the prior session cannot authorize restored motion.
-
-Use the source and release checkpoints to compare candidate samplers on the
-same state. Precompute robot-frame geometry and deterministic sample templates.
-Rank destination candidates by payload footprint and conservative room for the
-opening hand and retreat before spending IK on them. Certify the selected path
-with the existing detailed geometry and evidence checks. Compare candidate
-count, time to the first certified path, and final decisions. Begin with failed
-cube-back release and cylinder-right source planning, then rerun all seven
-layouts.
-
-The [transfer blocker catalogue](../experiments/mobile_transfer_blockers_20261118.md) indexes each failure and its replay inputs.
+Main's [agent architecture](../agent_architecture.md),
+[tool contracts](../agent_tool_contracts.md), [tool index](../agent_tools.md),
+and [operator guide](../AGENT_RUN.md) define the shared interface.
+[Observed TAMP API](../api/observed_native_tamp.md) owns native evidence and
+receipt details. The [household benchmark plan](2026-10-22_mujoco_tamp_benchmarks.md)
+owns the broader experiment design.

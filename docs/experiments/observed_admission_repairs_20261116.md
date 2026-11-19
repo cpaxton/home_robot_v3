@@ -44,4 +44,4 @@ Do not drop the pixels by size/fit quality or reinterpret the historical result.
 Remaining gates are local support contact, complete Stretch geometry over
 unmeasured joints, a live source/refiner, depth ownership/explicit reacquisition,
 and a public-tool observed transfer with independent physical scoring. See the
-[active repair plan](../plans/2026-11-16_observed_admission.md).
+[observed admission development history](observed_admission_development_20261116.md).

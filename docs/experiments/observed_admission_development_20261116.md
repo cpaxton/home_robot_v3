@@ -1,4 +1,6 @@
-# Observed TAMP execution repair
+# Observed TAMP execution repair history
+
+Current work and release gates are tracked in the [TAMP qualification plan](../plans/2026-11-18_tamp_agent_closeout.md).
 
 Branch `fix/tamp-observed-admission`, based on main `6386e9d3` after the native
 agent stack landed. Tracks [issue #245](https://github.com/cpaxton/home_robot_v3/issues/245).
@@ -105,7 +107,7 @@ capture at a valid 1.351-second gap reproduces the old tracking rejection:
 independent rays identify both suspicious depth returns as `link_d405`, even
 though one RGB pixel is target-labelled. A fresh normal 81/81 repeat is therefore
 not a fix for timing-dependent association. See
-[results and exact cohort limits](../experiments/observed_transfer_progress_20261116.md).
+[results and exact cohort limits](observed_transfer_progress_20261116.md).
 
 The committed geometry audit then exposes two native CPU `_structs` crashes;
 the faulthandler reproduction identifies the bulk contact-field read in the
@@ -132,7 +134,7 @@ does not close the source/contact gates below.
    peg; lift/place paths pass an independent dense collision replay. These are
    mechanics checks, not a live Stretch transfer. The source must still qualify
    masks, backing thickness, registration and motion-error budgets. See
-   [the current support record](../experiments/observed_support_contact_20261117.md).
+   [the current support record](observed_support_contact_20261117.md).
    Broader motion/TAMP/capture regressions pass 988 tests. After preserving the
    same attachment's original floor during measured-pose replanning, 188 final
    physical/interface checks pass. Independent lift/place replay records 110
@@ -153,20 +155,20 @@ does not close the source/contact gates below.
    and changed-tilt views still reject their first update at normal 0.266-second
    gaps. Publish original raw registration provenance on the live ZMQ path next;
    continuous processing alone does not fix incompatible depth returns. See
-   [the camera-source evidence](../experiments/observed_camera_source_20261117.md).
+   [the camera-source evidence](observed_camera_source_20261117.md).
    Subsequent same-capture replay isolates the live failure to JPEG RGB colour
    corruption, not depth quantization. Optional original provenance publication
    is implemented. Explicit PNG transport passes 41 captures at the original
    view and 43 at the changed view (the latter without provenance inputs), each
    through four paused-consumer windows. This resolves the live transport gate;
    complete source/refiner/ownership assembly below remains open. See
-   [the causal transport record](../experiments/observed_rgbd_transport_20261117.md).
+   [the causal transport record](observed_rgbd_transport_20261117.md).
    Same-capture camera/motor/gripper evidence is now retained with tracked views.
    The live debug profile assembles six visual frames across 27 tracked captures;
    declared FK/localization error reaches lift, retention and retreat checks.
    Historical reference validation uses original image receipt as well as robot
    bracket time. This is a source component, not the complete collision source
-   or observed task gate. See [the visual-frame integration audit](../experiments/observed_visual_frames_20261117.md).
+   or observed task gate. See [the visual-frame integration audit](observed_visual_frames_20261117.md).
 4. Resolve moving-mask foreign components with independent geometry/provenance
    evidence; preserve tiny unresolved competitors, complete-union controls,
    latched loss and explicit fresh reacquisition. Do not retime captures, shrink
@@ -185,7 +187,7 @@ clones are implemented. Pre-command occupied-map and after-grasp evidence-loss
 controls stop correctly; the latter preserves partial progress and sends no
 further command. Full motion/TAMP regression passes 1,044 tests; subsequent
 environment-query and immutable-cache batches pass 192 and 129 overlapping
-checks. The [experiment record](../experiments/mapped_contact_20261117.md)
+checks. The [experiment record](mapped_contact_20261117.md)
 retains source profiles, negative cases, cancelled infeasible goals and a native
 crash separately. This establishes collision-map integration, **not completion
 of gates 2–5 above**. The observed source/refiner and relative contact geometry
@@ -200,7 +202,7 @@ An isolated 2.304-million-cell comparison preserves the exact grid checksum and
 reduces peak RSS from 1,877,245,952 to 136,491,008 bytes. The initial mobile
 control reaches grasp/lift but outlasts source evidence during loaded preflight;
 reacquisition now occurs at the stopped loaded handoff. See the
-[mobile experiment record](../experiments/local_map_mobile_20261117.md).
+[mobile experiment record](local_map_mobile_20261117.md).
 This is provided-map/native-state assistance, not default OVMM or full observed
 source qualification. One cube control now completes navigation/carry/place/departure;
 the cylinder completes carry but rejects release with persistent measured
@@ -210,7 +212,7 @@ collision bounds remain unchanged.
 
 ### November 17: finalize inert proposals under fresh source evidence
 
-The [release follow-up](../experiments/mobile_release_20261117.md) repairs bounded
+The [release follow-up](mobile_release_20261117.md) repairs bounded
 candidate ordering and retains a five-of-seven primary task matrix plus two
 expected fault stops. Long search still expires source evidence. An opt-in
 native handoff now retires old map leases and handles, acquires a post-barrier
@@ -219,7 +221,7 @@ IK before publishing a new handle. Capture times and original support rays are
 preserved. Immutable callback/lease bindings and transport-boundary accounting
 distinguish no-actuation expiry from possible-dispatch timeout.
 
-The [source-finalization record](../experiments/source_finalization_20261117.md)
+The [source-finalization record](source_finalization_20261117.md)
 retains the initial successful refreshed cylinder and safely rejected
 180-second-budget clutter pilot. Three subsequent source handoffs pass; cylinder
 and shifted-cube full tasks finish, while clutter stops partial on unknown
@@ -230,7 +232,7 @@ observed source/ownership gates remain open.
 
 ### November 18: bounded lateral release alternatives
 
-The [lateral-release follow-up](../experiments/lateral_release_20261118.md)
+The [lateral-release follow-up](lateral_release_20261118.md)
 completes a fresh clutter task through measured released support, shifted retreat,
 remapping and departure using one vertical and one 1 cm lateral correction. Full
 hand/payload opening/fall/retreat checks retain the requested region and all
