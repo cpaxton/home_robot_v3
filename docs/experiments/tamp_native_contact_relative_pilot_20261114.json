@@ -1,0 +1,396 @@
+{
+  "schema_version": 1,
+  "scope": "Same-source privileged native development contact-relative position-hold pilot; stricter sampled original-reference hold coverage; no hardware, force sensing, training, held-out or general qualification claim",
+  "source_commit": "ba7430eac56772ecb9cf93d7fbe70dfc8481e005",
+  "protocol": "configs/eval/tamp_native_contact_relative_pilot_20261114.json",
+  "exact_paired_initial_state_certificate": false,
+  "old_native_aggregate_unchanged": "4/8",
+  "old_caliban_aggregate_unchanged": "3/4",
+  "cases": [
+    {
+      "id": "loose-control-ablation",
+      "case_id": "control",
+      "role": "same_source_ablation",
+      "job_id": "20261114_201814_78af6f",
+      "gripper_close_preset_override": "loose",
+      "effective_gripper_close_loose": true,
+      "effective_gripper_contact_hold_fraction": 0.0,
+      "hold_targets": [],
+      "passed": false,
+      "run_status": "complete",
+      "code": "payload_not_retained",
+      "status": "partial",
+      "verification": null,
+      "completed_transfers": 1,
+      "declared_transfers": 2,
+      "cube_max_original_rotation_before_handoff_rad": 0.0920354271761547,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": false
+      },
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 399,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 113.23519228491932,
+      "last_event": {
+        "phase": "payload_retention",
+        "accepted": false,
+        "reason": "payload_not_retained",
+        "translation_residual_m": 0.00498680105623719,
+        "rotation_residual_rad": 0.10151057343878626,
+        "translation_tolerance_m": 0.02,
+        "rotation_tolerance_rad": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/protocol.json",
+          "sha256": "5966f2d98e6037910c00a348c292a2c9feb91a037af507bf16ca3f5efe15600a"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/summary.json",
+          "sha256": "72f4ad350a1ddbe7a33ca849783647c9c24c591562b045a8987ccc8fa79b85c3"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/initial.json",
+          "sha256": "1a70772211c9ba20ae5e839424503f0fa6ea56a679b816bd113e396774d57b3c"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/final.json",
+          "sha256": "bb54fba0dd8c109ab1cb7a06a86249842daab09ca793f421ed152ca5f5d77816"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/contact.jsonl",
+          "sha256": "facc9ea099189cdefb2d5d24c79e768ef8af45acebb30f1078b95c2f4ad05c1d"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/adapter_events.json",
+          "sha256": "fffc7310ad67d21d480a7d570f1fb38188210f7703f98e84c594fceac0f32632"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/loose-control-ablation/actuation.jsonl",
+          "sha256": "6588217dbfec0357afd78bb2d568fdbe2507e3157d195fc33d23fa0ffcf3c2a9"
+        }
+      ]
+    },
+    {
+      "id": "relative-control",
+      "case_id": "control",
+      "role": "production_candidate",
+      "job_id": "20261114_201814_8000d5",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.5,
+      "hold_targets": [
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.014422255030118347,
+          "target_encoder_position": -0.14278887248494082,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        },
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.006906724189759683,
+          "target_encoder_position": -0.14654663790512015,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        }
+      ],
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "status": "ok",
+      "verification": null,
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "cube_max_original_rotation_before_handoff_rad": 0.029567695689249246,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 508,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 134.69058265490457,
+      "last_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/protocol.json",
+          "sha256": "8702e543d9b3981f726a50aced38cab51538c1665f7c40101a49a6d5fd4614fd"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/summary.json",
+          "sha256": "f0a0dbb44d652114646818995f15994d1f1b6b662ae00ac8a90d7b3eaed0c7d2"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/initial.json",
+          "sha256": "865de054811993561978b3343215203477a771d1f61090e416e94bbe29aa1edb"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/final.json",
+          "sha256": "c0e3745e3f20140333ff0e7b757caf859eb229827ab431b9d92b149d8153b76e"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/contact.jsonl",
+          "sha256": "962eed78dc6b8da8e0e5cf1aa152fd45bc54d82bc909ae11a31b34352222adc2"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/adapter_events.json",
+          "sha256": "979f535d8e40cf8c5ece2ecbb47c47aab1cce8114a4575152b2fe40a0675ff65"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-control/actuation.jsonl",
+          "sha256": "bf3329aeb9f4c5cab42659667eee33745a9cbbf389cd41c80360879f4371005c"
+        }
+      ]
+    },
+    {
+      "id": "relative-swap",
+      "case_id": "swap-right25",
+      "role": "production_candidate",
+      "job_id": "20261114_201815_3da1c9",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.5,
+      "hold_targets": [
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.016309849841479263,
+          "target_encoder_position": -0.14184507507926036,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        },
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.012339285654051957,
+          "target_encoder_position": -0.14383035717297402,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        }
+      ],
+      "passed": false,
+      "run_status": "complete",
+      "code": "payload_not_retained",
+      "status": "partial",
+      "verification": {
+        "substage": "lift_motion",
+        "reason": "payload_not_retained"
+      },
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "cube_max_original_rotation_before_handoff_rad": 0.1001103518503479,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "boundary_checks": [],
+      "audit_commands": 457,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 152.2045940940734,
+      "last_event": {
+        "phase": "payload_retention",
+        "accepted": false,
+        "reason": "payload_not_retained",
+        "translation_residual_m": 0.001734401250528039,
+        "rotation_residual_rad": 0.1001103518503479,
+        "translation_tolerance_m": 0.02,
+        "rotation_tolerance_rad": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/protocol.json",
+          "sha256": "af44bf5d074d5972f985061c7f7a4296b5dcbe6042a8e892364f69ddaf03a55a"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/summary.json",
+          "sha256": "3ddd15d21fcff4a165b130a8520deef711fb9d65773e0cd4ab3317e128e02ef9"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/initial.json",
+          "sha256": "cdb9d0e95fe1f5e1ae2e4c676e7275fc872a82ddc7bd5be1ee8a8d5ddbd4baf9"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/final.json",
+          "sha256": "fdfa720e69f7a24bafc7d46d8c3f09f1680872b9e44b9172ae8fa7eb817246f3"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/contact.jsonl",
+          "sha256": "8d2db9d4290ff827e168f9e1e9d1663e0f7352b50d672056a5d555000d5d6e03"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/adapter_events.json",
+          "sha256": "6fe77627f0e5157b9c853b4e9dd30fb169a66ece7fc1ae4b16bfbe215d5b8683"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-swap/actuation.jsonl",
+          "sha256": "8101e9d2fb399a867dbc7b9da08a4b4564af87f61105414df58a446164fdaab8"
+        }
+      ]
+    },
+    {
+      "id": "relative-shift",
+      "case_id": "shift15",
+      "role": "production_candidate",
+      "job_id": "20261114_201815_b8a8fd",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.5,
+      "hold_targets": [
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.014053424702595851,
+          "target_encoder_position": -0.14297328764870207,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        },
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.007459609443849491,
+          "target_encoder_position": -0.14627019527807525,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        }
+      ],
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "status": "ok",
+      "verification": null,
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "cube_max_original_rotation_before_handoff_rad": 0.028171838543570814,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 512,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 132.77224757894874,
+      "last_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/protocol.json",
+          "sha256": "4259a7a90e3a38ca072c98b308ea8f978a38c2e2d7628574f3e45eec8cd7faa3"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/summary.json",
+          "sha256": "3405bc989ae3f9a105e301fa467aabdecc13c039df765c96c4338bb95fb15902"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/initial.json",
+          "sha256": "4f719a7f89d5b5ccf579cbad8d1a719b8a997700ed14ee0c2c5b35ac5eee1775"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/final.json",
+          "sha256": "9944f730ffff53933945229d7063e2e9e09369ff3ad2c2988bcfef284e3ae098"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/contact.jsonl",
+          "sha256": "e0da398f875a8015562a04d9181ed06755f07696ed1856d9d9554cb6c2a3a871"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/adapter_events.json",
+          "sha256": "30c6ebbdf669a930071214b8c74a2a30b26a4477651d66545f5ec03706d8e004"
+        },
+        {
+          "path": ".tamp-runs/contact-relative-20261114/relative-shift/actuation.jsonl",
+          "sha256": "790a64f371b0a9183b134c1d3e04d55f3cecf6d4883fddef2f7ccad167b12230"
+        }
+      ]
+    }
+  ],
+  "candidate_aggregate": {
+    "tasks_passed": 2,
+    "tasks": 3,
+    "completed_transfers": 5,
+    "declared_transfers": 7,
+    "boundary_checks_passed": 2,
+    "boundary_checks_observed": 2,
+    "audit_commands": 1477,
+    "forbidden_commands": 0,
+    "infrastructure_errors": 0
+  },
+  "regression": {
+    "tests": 336,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/contact-relative-20261114/full-regression/results.xml",
+      "sha256": "7af0adab276f8009539a888dffa32e2bcf0f893bc8e06ae65b1f50fb1c66da44"
+    }
+  },
+  "private_probe": {
+    "artifact": {
+      "path": ".tamp-runs/retention-20261114/component_probe_v3.json",
+      "sha256": "f63cad6f0a9c428efe911c054fd41c86244dce4e0d28bd1f6c5864668be2b1c0"
+    },
+    "not_live_or_exact_replay": true,
+    "baseline_also_passed_private_probe": true,
+    "failures_retained": true
+  }
+}

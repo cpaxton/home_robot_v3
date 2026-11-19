@@ -1,0 +1,222 @@
+{
+  "scope": "Six authored development cases; recorded evidence, not active-agent or official benchmark evaluation",
+  "source_sha": "06e8c243b1ca0e53098793a8a0f576cb4bc285d0",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "quantization": "not established by endpoint metadata",
+  "arms": {
+    "full_history": {
+      "correct": 4,
+      "n": 6,
+      "errors": 0
+    },
+    "current_only": {
+      "correct": 1,
+      "n": 6,
+      "errors": 0
+    }
+  },
+  "rows": [
+    {
+      "episode_id": "cap-dev-01",
+      "family": "recall",
+      "arm": "full_history",
+      "reference_answer": "green",
+      "raw": "{\"answer\": \"green\", \"abstain\": false}",
+      "parsed": {
+        "answer": "green",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": true,
+      "error": null,
+      "calls": 2,
+      "wall_s": 2.9853776730014943
+    },
+    {
+      "episode_id": "cap-dev-01",
+      "family": "recall",
+      "arm": "current_only",
+      "reference_answer": "green",
+      "raw": "{\"answer\": \"black\", \"abstain\": false}",
+      "parsed": {
+        "answer": "black",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 1,
+      "wall_s": 1.8527803229808342
+    },
+    {
+      "episode_id": "cap-dev-02",
+      "family": "recall",
+      "arm": "current_only",
+      "reference_answer": "abstain",
+      "raw": "{\"answer\": \"black\", \"abstain\": false}",
+      "parsed": {
+        "answer": "black",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 1,
+      "wall_s": 1.8458570310031064
+    },
+    {
+      "episode_id": "cap-dev-02",
+      "family": "recall",
+      "arm": "full_history",
+      "reference_answer": "abstain",
+      "raw": "{\"answer\": \"black\", \"abstain\": false}",
+      "parsed": {
+        "answer": "black",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 2,
+      "wall_s": 2.9309219400165603
+    },
+    {
+      "episode_id": "cap-dev-07",
+      "family": "search_act",
+      "arm": "full_history",
+      "reference_answer": "yellow",
+      "raw": "{\"answer\": \"yellow\", \"abstain\": false}",
+      "parsed": {
+        "answer": "yellow",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": true,
+      "error": null,
+      "calls": 2,
+      "wall_s": 2.932901528023649
+    },
+    {
+      "episode_id": "cap-dev-07",
+      "family": "search_act",
+      "arm": "current_only",
+      "reference_answer": "yellow",
+      "raw": "{\"answer\": \"gray\", \"abstain\": false}",
+      "parsed": {
+        "answer": "gray",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 1,
+      "wall_s": 1.8449064060114324
+    },
+    {
+      "episode_id": "cap-dev-08",
+      "family": "search_act",
+      "arm": "current_only",
+      "reference_answer": "yellow",
+      "raw": "{\"answer\": \"black\", \"abstain\": false}",
+      "parsed": {
+        "answer": "black",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 3,
+      "wall_s": 4.92698713199934
+    },
+    {
+      "episode_id": "cap-dev-08",
+      "family": "search_act",
+      "arm": "full_history",
+      "reference_answer": "yellow",
+      "raw": "{\"answer\": \"yellow\", \"abstain\": false}",
+      "parsed": {
+        "answer": "yellow",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": true,
+      "error": null,
+      "calls": 4,
+      "wall_s": 5.420879964978667
+    },
+    {
+      "episode_id": "cap-dev-11",
+      "family": "insufficient",
+      "arm": "full_history",
+      "reference_answer": "blue",
+      "raw": "{\"answer\": \"blue\", \"abstain\": false}",
+      "parsed": {
+        "answer": "blue",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": true,
+      "error": null,
+      "calls": 2,
+      "wall_s": 2.9319232490088325
+    },
+    {
+      "episode_id": "cap-dev-11",
+      "family": "insufficient",
+      "arm": "current_only",
+      "reference_answer": "blue",
+      "raw": "{\"answer\": \"blue\", \"abstain\": false}",
+      "parsed": {
+        "answer": "blue",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": true,
+      "error": null,
+      "calls": 1,
+      "wall_s": 1.8068856860045344
+    },
+    {
+      "episode_id": "cap-dev-12",
+      "family": "insufficient",
+      "arm": "current_only",
+      "reference_answer": "abstain",
+      "raw": "{\"answer\": \"blue\", \"abstain\": false}",
+      "parsed": {
+        "answer": "blue",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 1,
+      "wall_s": 1.8098963829979766
+    },
+    {
+      "episode_id": "cap-dev-12",
+      "family": "insufficient",
+      "arm": "full_history",
+      "reference_answer": "abstain",
+      "raw": "{\"answer\": \"red\", \"abstain\": false}",
+      "parsed": {
+        "answer": "red",
+        "abstain": false
+      },
+      "valid": true,
+      "correct": false,
+      "error": null,
+      "calls": 2,
+      "wall_s": 2.9399912859953474
+    }
+  ],
+  "input_sha256": {
+    "protocol.json": "dd3212bad9779d01de1658981c01835c02773544bb8a70e2a0c3d284f0229e58",
+    "results.jsonl": "2e42054c060d3058ffe443729ec65134365c3c4aceefe6cf8d178550b683cb02"
+  },
+  "limits": [
+    "No active robot or manipulation",
+    "Single run on synthetic development fixtures",
+    "Both arms fail absent/ambiguous cases",
+    "History ablation changes evidence availability, not a comparison of complete agent stacks"
+  ]
+}

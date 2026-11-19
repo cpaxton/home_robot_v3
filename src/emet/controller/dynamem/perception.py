@@ -14,6 +14,7 @@ from emet.controller.dynamem.constants import (
     _env_truthy,
 )
 from emet.controller.manipulation.native_inputs import ESTIMATED_DEPTH_POINTCLOUD_SOURCE, RGBD_POINTCLOUD_SOURCE
+from emet.core.interfaces import Observations
 from emet.mapping.scene_graph import SceneGraph
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_depth_speckle_filter, sensor_depth_usable
@@ -198,16 +199,18 @@ def _log_head_camera_if_no_zmq_rerun_thread(self, obs, mapping_depth=None) -> No
     vis.log_head_camera(obs, mapping_depth=mapping_depth)
 
 
-def update(self, *, full_perception: bool | None = None):
+def update(self, *, full_perception: bool | None = None, observation: Observations | None = None):
     """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation.
 
     ``full_perception=True`` runs YoloE / SigLIP / graph ingest even when
     ``perception_every_n`` would skip this ``obs_count``. Mapping scans also
     re-run DA3 / LingBot so even headings do not reuse the previous pose's depth.
+    ``observation`` can supply an owned decision snapshot instead of fetching a
+    different sensor frame. Its original pose/timing remain attached.
     """
 
     _t_update0 = time.time()
-    obs = self.robot.get_observation()
+    obs = self.robot.get_observation() if observation is None else observation
     if obs is None:
         logger.warning("get_observation() returned None; skipping voxel update")
         self.robot.set_mapping_depth_for_rerun(None)

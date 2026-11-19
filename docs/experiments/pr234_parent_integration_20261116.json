@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "pr": 234,
+  "scope": "Parent integration and familiar privileged simulated Stretch smoke, not a new benchmark",
+  "source_sha": "bceabc97f716386e46c718129677cb923c1969ac",
+  "parent": "f5fda95b5eacffbd47672f4cd957f3e6a4187ffe",
+  "parent_main": "fb9f9bf1fe57c05205006fcdc3fcfcb1c23d1c9d",
+  "review": "Author self-review; expected independent review not submitted on GitHub at audit time",
+  "tests": {
+    "tests": "467",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "308.707"
+  },
+  "native": {
+    "job": "20261116_114611_cd5c1e",
+    "passed": true,
+    "completed_steps": 2,
+    "independent_goals_satisfied": true,
+    "audit_commands": 482,
+    "forbidden_commands": 0,
+    "payload_residual_maxima": {
+      "object2": {
+        "translation_m": 0.0020283067027121226,
+        "rotation_rad": 0.00589975312276624
+      },
+      "object1": {
+        "translation_m": 0.002763710694143883,
+        "rotation_rad": 0.01459525774354147
+      }
+    }
+  },
+  "historical_pilot_unchanged": {
+    "tasks": "2/3",
+    "transfers": "5/7"
+  },
+  "held_out_claim": false,
+  "observed_execution_claim": false,
+  "hardware_claim": false,
+  "artifacts": [
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr234/regression.xml",
+      "sha256": "927d0027f0c28bebb7155fed5f6c3fc0efbb099376c9eecdac141459645e6ac3"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr234/native/protocol.json",
+      "sha256": "3a1bdbe1b431b8009bd8983769727fadbb30471ab96b6582715e34886d538018"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr234/native/summary.json",
+      "sha256": "6bb285460cc00807f2cfd12fd1638a130c34ce121d4f01131f8e103d97f520fb"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr234/native/actuation.jsonl",
+      "sha256": "ed765c6a23c1242a3bab18a8daa775532bc98061d35809ca65a785787a92adca"
+    }
+  ]
+}

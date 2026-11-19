@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "scope": "Assisted MuJoCo development regression; provided RGBD map and native state; no observed-only qualification or benchmark denominator.",
+  "cases": [
+    {"id": "cube_control", "object": "object1", "config": {}},
+    {"id": "cylinder_control", "object": "object2", "config": {}},
+    {"id": "cylinder_stationary", "object": "object2", "config": {"mobile": false, "initial_base_x": 0.14, "initial_object_xy": [0.12, -0.55]}},
+    {"id": "cube_shifted", "object": "object1", "config": {"initial_object_xy": [-0.035, -0.565], "placement_region": [[0.045, -0.73], [0.205, -0.57]]}},
+    {"id": "cylinder_shifted", "object": "object2", "config": {"initial_object_xy": [-0.005, -0.565], "placement_region": [[0.075, -0.73], [0.235, -0.57]]}},
+    {"id": "cylinder_larger", "object": "object2", "object_scale": 1.1, "config": {}},
+    {"id": "cube_clutter", "object": "object1", "config": {"initial_distractor_xy": [0.24, -0.63]}},
+    {"id": "occupied_before_plan", "object": "object2", "fault": "obstacle_before_plan"},
+    {"id": "evidence_loss_after_grasp", "object": "object2", "fault": "unknown_after_grasp"}
+  ]
+}

@@ -33,6 +33,29 @@ def test_dynamem_preserves_enabled_negative_obstacle_evidence(tmp_path, remove_v
     assert obstacles.any(), "A measured drop must not be flattened into traversable floor"
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("minimum_density", [0.5, 1.5])
+def test_negative_obstacle_flag_and_density_remain_effective_after_visited_filter(tmp_path, enabled, minimum_density):
+    vm = SparseVoxelMap(
+        grid_size=[40, 40],
+        grid_resolution=0.1,
+        smooth_kernel_size=0,
+        obs_min_height=0.1,
+        obs_min_density=minimum_density,
+        use_negative_obstacles=enabled,
+        neg_obs_height=-0.1,
+        remove_visited_from_obstacles=True,
+        log=str(tmp_path),
+        use_instance_memory=False,
+        device="cpu",
+        image_shape=None,
+    )
+    vm.voxel_pcd.add(torch.tensor([[0.0, 0.0, -0.2]]), features=None, rgb=torch.zeros(1, 3), obs_count=1)
+    vm._visited[:] = 1
+    obstacles, _ = vm.get_navigation_map()
+    assert bool(obstacles.any()) == (enabled and minimum_density < 1.0)
+
+
 @pytest.mark.parametrize("xy", [(10.0, 0.0), (-2.2, 0.0), (0.0, 10.0), (0.0, -2.2)])
 @pytest.mark.parametrize("grid_size", [[40, 40], [40, 20]])
 def test_out_of_grid_negative_points_never_crash_or_wrap(tmp_path, xy, grid_size):
@@ -99,6 +122,28 @@ def test_terrain_map_shape_mismatch_rejects_without_indexing():
     )
     assert not space.is_valid(np.zeros(3), obstacles=np.zeros((9, 9)), explored=np.ones((9, 9)))
     assert space.last_validity["reason"] == "terrain_map_shape_mismatch"
+
+
+def test_unknown_footprint_reports_height_conflicts_separately_from_missing_returns():
+    from types import SimpleNamespace
+
+    from emet.mapping.voxel.floor_evidence import floor_evidence
+
+    layers = floor_evidence([[0, 0, 0], [0, 0, -0.031]], (9, 9), 0.1, [4, 4], reference_z_m=0)
+    obstacles, explored = np.zeros((9, 9), dtype=bool), np.ones((9, 9), dtype=bool)
+    explored[4, 4] = explored[5, 4] = False
+    space = object.__new__(SparseVoxelMapNavigationSpace)
+    space.obstacle_map_mode = "physical"
+    space._footprint = Footprint(0.1, 0.1)
+    space.voxel_map = SimpleNamespace(
+        grid_resolution=0.1, grid=SimpleNamespace(grid_origin=np.array([4, 4])), _floor_evidence=layers
+    )
+    assert not space.is_valid(np.zeros(3), obstacles=obstacles, explored=explored)
+    assert space.last_validity["reason"] == "unobserved_footprint"
+    assert space.last_validity["floor_evidence"] == {
+        "height_conflict_cells": [[4, 4]],
+        "missing_return_cells": [[5, 4]],
+    }
 
 
 def test_fractional_start_repair_preserves_unknown_and_obstacle_guards():

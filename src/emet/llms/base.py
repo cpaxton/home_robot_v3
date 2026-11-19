@@ -153,6 +153,8 @@ class AbstractVLLMClient(AbstractLLMClient):
     :meth:`generate_multimodal` with explicit ``system_prompt`` and ``max_new_tokens`` per turn.
     Implementations **must** honor ``reset_context=True`` (default) by clearing conversational state
     before each generation so one physical model can serve caption, keyword, and EQA roles safely.
+    Stateful implementations may support explicit ``reset_context=False`` continuation; it can
+    resend prior images as well as text. Shared inference/history operations must be serialized.
 
     **Dedup identity**: :meth:`canonical_model_key` encodes ``family``, resolved HF id, ``device``, and
     (where applicable) quantization so :func:`emet.llms.vllm_registry.should_share_vllm` can compare

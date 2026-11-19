@@ -495,6 +495,15 @@ def _run_vlm_view_assess(
         )
         # Retain packets and matching labels for the entire executor episode.
     query_image_paths = dump_query_rgb(self, oid, rgb, kind="vlm_assess")
+    packet_paths = []
+    for index, image in enumerate(getattr(self, "_assessed_images", {}).get(oid, ())):
+        paths = (
+            query_image_paths
+            if index == 0
+            else dump_query_rgb(self, oid, image, kind=f"vlm_assess_image_{index + 1}", write_canonical=False)
+        )
+        # Keep indices aligned with the prompt, including unavailable dump paths.
+        packet_paths.append(paths.get("query_png"))
     vlm_event_id = self._persist_agentic_evidence(
         stage="vlm_assessment",
         outcome="present" if assessment.present else "absent",
@@ -686,6 +695,7 @@ def _run_vlm_view_assess(
         "vlm_prompt": getattr(assessment, "prompt", ""),
         "vlm_system_prompt": getattr(assessment, "system_prompt", ""),
         "vlm_image_count": getattr(assessment, "image_count", None),
+        "vlm_packet_pngs": packet_paths,
         "policy_state": str(self._evidence_policy.state),
         "verified": self._verified,
         "vlm_answerable": bool(self._verified),

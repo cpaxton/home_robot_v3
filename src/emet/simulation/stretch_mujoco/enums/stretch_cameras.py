@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -129,11 +130,14 @@ class StretchCameras(Enum):
             return StretchCameras.cam_d405_rgb.initial_camera_settings
 
         if self == StretchCameras.cam_d435i_rgb:
+            scale = int(os.environ.get("EMET_STRETCH_HEAD_CAMERA_SCALE", "1"))
+            if scale not in (1, 2):
+                raise ValueError("EMET_STRETCH_HEAD_CAMERA_SCALE must be 1 or 2")
             return CameraSettings(
                 field_of_view_vertical_in_degrees=42,  # from spec
                 focal=(304.24, 304.07),  # from calibration on SE3-3044
-                width=424,  # from webteleop
-                height=240,  # from webteleop
+                width=424 * scale,  # render actual samples, never upsample
+                height=240 * scale,
                 sensor_resolution=(1920, 1080),  # from ov2740 spec
                 # sensor_pixel_size_micrometers=1.4 # from ov2740 spec
             )

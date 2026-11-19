@@ -1,0 +1,65 @@
+{
+  "complete": true,
+  "scope": "Offline state-distribution audit, not a policy rollout or causal proof.",
+  "current_training_initial_joint_min_rad": [
+    -0.038023048602061835,
+    -0.4435630645891622,
+    0.16945434156356243,
+    0.15097693029016987,
+    -0.02188987824339264
+  ],
+  "current_training_initial_joint_max_rad": [
+    0.030986119041814846,
+    -0.3830059568143204,
+    0.18347801708773354,
+    0.24314764076812867,
+    0.0350943309247433
+  ],
+  "tamp_first_joint_rad": [
+    6.81098922013766e-08,
+    -0.37411244890427364,
+    -0.0219696539395661,
+    0.3990083613266799,
+    -3.6520470533759478e-06
+  ],
+  "tamp_last_joint_rad": [
+    -0.0004875337714331552,
+    -0.37122798985433747,
+    -0.018481202872785662,
+    0.3982230111849794,
+    0.004070777851818522
+  ],
+  "source_position_normalization_mean_rad": [
+    -0.002331678549510866,
+    -0.4124812119372672,
+    0.17635642701316803,
+    0.21888570112143227,
+    0.009303555063271176
+  ],
+  "source_position_normalization_std_rad": [
+    0.02724610214794752,
+    0.023701619163104887,
+    0.015310898223142532,
+    0.0407840262837539,
+    0.029159434638766732
+  ],
+  "tamp_first_position_zscore": [
+    0.08559176796610542,
+    1.6197911468417183,
+    -12.951038810647644,
+    4.416652245016673,
+    -0.31906842131469815
+  ],
+  "normalization_clip": 20,
+  "hardware_used": false,
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-posture-audit.json",
+      "sha256": "8d0364802c6b59256f4ab63fd501e909151d5b8b22043b8ed59212ddca04ef90"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-posture-audit.py",
+      "sha256": "4fa6f16056e3b5d2ed51d5c675f7636fc56d51e6053bcad9de1857db6b19f390"
+    }
+  ]
+}

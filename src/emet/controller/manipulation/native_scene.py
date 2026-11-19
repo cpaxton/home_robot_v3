@@ -13,6 +13,23 @@ import numpy as np
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 
 
+def qpos_difference(model, current, reference):
+    """Compare configurations without treating quaternion sign as scene motion."""
+    current, reference = np.asarray(current), np.asarray(reference)
+    if (current.shape != (model.nq,) or reference.shape != (model.nq,)
+            or not np.isfinite(current).all() or not np.isfinite(reference).all()):
+        raise ObservationUnavailable('invalid_measured_state')
+    aligned = current.copy()
+    for joint in range(model.njnt):
+        kind, address = model.jnt_type[joint], int(model.jnt_qposadr[joint])
+        if kind not in (mujoco.mjtJoint.mjJNT_FREE, mujoco.mjtJoint.mjJNT_BALL):
+            continue
+        address += 3 if kind == mujoco.mjtJoint.mjJNT_FREE else 0
+        if aligned[address:address+4] @ reference[address:address+4] < 0:
+            aligned[address:address+4] *= -1
+    return aligned-reference
+
+
 def model_signature(model):
     """Bind geometry, dynamics and actuator mapping, excluding live initial state."""
     digest = hashlib.sha256(model.names)

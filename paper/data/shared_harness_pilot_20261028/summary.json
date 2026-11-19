@@ -1,0 +1,213 @@
+{
+  "scope": "Development pilot, complete-system comparison; not held-out generalization or a causal ablation.",
+  "sources": {
+    "candidate": {
+      "root": "/home/cpaxton/src/home_robot_v3/.worktrees/harness-final-review-7391b522",
+      "sha": "7391b5220a7bb2897c19e81bea6f521f82ed542a"
+    },
+    "main": {
+      "root": "/home/cpaxton/src/home_robot_v3/.worktrees/harness-baseline",
+      "sha": "a2be9d40a53a9081e204083fe1f437cb0bf42a7f"
+    }
+  },
+  "control": "Main agent plus shared evaluation-protocol patch; not unmodified main.",
+  "contracts": [
+    {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "990",
+      "time": "85.374",
+      "timestamp": "2026-10-28T10:38:51.376183-04:00",
+      "hostname": "olympia"
+    }
+  ],
+  "eqa": {
+    "n": 12,
+    "correct": {
+      "main": 7,
+      "candidate": 8
+    },
+    "candidate_only_wins": [
+      65,
+      68
+    ],
+    "candidate_only_losses": [
+      25
+    ],
+    "paired": [
+      {
+        "question_id": 2,
+        "main": false,
+        "candidate": false
+      },
+      {
+        "question_id": 6,
+        "main": true,
+        "candidate": true
+      },
+      {
+        "question_id": 12,
+        "main": false,
+        "candidate": false
+      },
+      {
+        "question_id": 14,
+        "main": false,
+        "candidate": false
+      },
+      {
+        "question_id": 15,
+        "main": true,
+        "candidate": true
+      },
+      {
+        "question_id": 16,
+        "main": true,
+        "candidate": true
+      },
+      {
+        "question_id": 25,
+        "main": true,
+        "candidate": false
+      },
+      {
+        "question_id": 28,
+        "main": true,
+        "candidate": true
+      },
+      {
+        "question_id": 31,
+        "main": true,
+        "candidate": true
+      },
+      {
+        "question_id": 56,
+        "main": true,
+        "candidate": true
+      },
+      {
+        "question_id": 65,
+        "main": false,
+        "candidate": true
+      },
+      {
+        "question_id": 68,
+        "main": false,
+        "candidate": true
+      }
+    ]
+  },
+  "s0": [
+    {
+      "seed": 0,
+      "arm": "main",
+      "object_success": true,
+      "receptacle_success": true,
+      "episode_wall_s": 979.288369100017,
+      "receptacle_rounds": 3
+    },
+    {
+      "seed": 0,
+      "arm": "candidate",
+      "object_success": true,
+      "receptacle_success": true,
+      "episode_wall_s": 479.1180969149864,
+      "receptacle_rounds": 1
+    },
+    {
+      "seed": 1,
+      "arm": "main",
+      "object_success": true,
+      "receptacle_success": false,
+      "episode_wall_s": 287.1890723249817,
+      "receptacle_rounds": 6
+    },
+    {
+      "seed": 1,
+      "arm": "candidate",
+      "object_success": true,
+      "receptacle_success": false,
+      "episode_wall_s": 798.5504960980034,
+      "receptacle_rounds": 5
+    },
+    {
+      "seed": 2,
+      "arm": "main",
+      "object_success": true,
+      "receptacle_success": true,
+      "episode_wall_s": 790.4381876290136,
+      "receptacle_rounds": 3
+    },
+    {
+      "seed": 2,
+      "arm": "candidate",
+      "object_success": true,
+      "receptacle_success": true,
+      "episode_wall_s": 478.0243069319986,
+      "receptacle_rounds": 1
+    }
+  ],
+  "s0_trace_coverage": {
+    "candidate": {
+      "primary_pick:investigate": 5,
+      "primary_pick:explore_frontier": 1,
+      "primary_pick:look_around": 1,
+      "look_results": 1,
+      "camera_motion_receipts": 1,
+      "primary_pick:submit_answer": 1
+    },
+    "main": {
+      "primary_pick:investigate": 5,
+      "primary_pick:inspect_graph": 5
+    }
+  },
+  "limitations": [
+    "Small tuned development population",
+    "Wall time is not pure navigation or sim time",
+    "No consistent per-run speedup",
+    "Seed-zero success did not invoke camera-motion feedback",
+    "No learned-perception pick/place or active EXPRESS/AbstainEQA qualification"
+  ],
+  "artifact_sha256": {
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/report.json": "47ffd3d71ef14a3dba31d75e5d77689d1780fbf214c879376ace97daca24476e",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/manifest.json": "3606213a9a883e09e3303383f6262c7748bbbb4979a159b0d55de4a69fd28d74",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q2.jsonl": "88bf67afb49aba871742e14f978d2140cf1a74d1a62e2f82a043ed0e91b753bf",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q2.jsonl": "4a49652f81e4324d2e372d0764e0a8e464909056d425fb5fc99c5a47ead01c20",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q6.jsonl": "9367ff0f2cfa4e420a9fadf5f666c78b511646d7f69f8c99333e40acaef3df7e",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q6.jsonl": "4e9f4787521844c58f141e2a4557da5f0885366753ecc26f04bab1eada554017",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q12.jsonl": "4303081fe8baa5ac3ace149e8798254c1ea5710716c181233fd29447c7afda8b",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q12.jsonl": "8ca6fda9951c0ab80feca9b6bf1ecf9f4514dd4fa92a0a1375219baeb234cb13",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q14.jsonl": "1fe55c0ef822f93e11cd9a3b739d334a8eec0da3c5b2235c139d2503e0f8c6cf",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q14.jsonl": "c5b5df9465573bbf77c4031abe54322517b17a0ad7518b2c7c53a2dfddd913ef",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q15.jsonl": "9262a782a2d90f19a0f9e6ee6a02af20a1afc6f7a2b7182c9841a9e655499cdc",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q15.jsonl": "6f7a48f9100a0f03f81fe61964f58f488f99c867e585e45a63b82d8231a6d49b",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q16.jsonl": "dc9d5bb54d90245c897fc6a48e331f3ecc1efe4a4f99c66a0a5a108f0fb18522",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q16.jsonl": "5d64ea8b39bcfcfc5048b5befc145f8153007b42ca1d1ff8dc5e5c90de4d7215",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q25.jsonl": "8b693ec780ecb29c5ef5efb4759b04b7b305a0e4080926895f6dd3ad072a1800",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q25.jsonl": "2b4d17d87b9b317d7208e4b6cab6d3b369cafa8b17259e39d56781bd003b6955",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q28.jsonl": "da27f64b19043f68eebcb31a3aa9426bcc4c474b7ababf208efc3b60915a4d49",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q28.jsonl": "c95124453b9d943c6016e41db6c787c811b3e400e3bc368ae692125f1ac8a52f",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q31.jsonl": "f252fe9d8eef863e7907669512da27b3a2424fa5daf1aebe6308b3601c46b9c8",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q31.jsonl": "59692797afb4d8437368fdb6e902357d702ff1c06a20d479c633b1d7f2357a7e",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q56.jsonl": "4834be2a2582e168803b03a17d0b52f00e198da8117d6f9a73cf1f0e608ff468",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q56.jsonl": "94d9e188022f92c284d7467d7a84e236fcef3c5e1136e1a551e89049d4e562ac",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q65.jsonl": "c5407a25be8f07361906e17e541e6557fedcd7d0aa6790d34aba5d76e95228e2",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q65.jsonl": "7e5909b9ff902f1b280ac0c9ca7b5db3191463a7b3dd06b40d09ca24f0858cf1",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-main/eqa/q68.jsonl": "03b88cb47f67755074bcee374399b939ba971ac64a22d687a39350af8f251c1a",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/eqa-candidate/eqa/q68.jsonl": "873c7b88f7d0f97775f21158b8b6dce610ea3465f75e04ae6e9dce8b85f7ad7f",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed1/results.jsonl": "93557947224680b2b94937fb93ef724b8916713aef3fce441e91800990c10cfe",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed2/results.jsonl": "017a7bbf335b780256fd0125df2ec255606ff62396d9bad8045f88a0053df81a",
+    "/home/cpaxton/runs/emet/s0-camera-feedback-pair-20261028/manifest.json": "6d939142367296dc3700e9dee40a38ef15096eb3dbbd5a8d44476de026e8ac16",
+    "/home/cpaxton/runs/emet/s0-camera-feedback-pair-20261028/results.jsonl": "1db6aadeef0c3523a764c06b3357a7e6e7150877cf98c9799dcc44e7bfd9ba82",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed1/default_table_s0_distinct_recep-candidate/artifacts/default_table_s0_distinct_recep_lazy_graph/find_object_agentic_trace.jsonl": "d50b57dd62dd7f90a17656f1c1731e95c7445ba849de14305c5fa6d360b36092",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed1/default_table_s0_distinct_recep-candidate/artifacts/default_table_s0_distinct_recep_lazy_graph/find_recep_agentic_trace.jsonl": "1811f6e9e25e065b3e5edcca4090fe5504c862e7f1034e02609c199dc868ba86",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed1/default_table_s0_distinct_recep-main/artifacts/default_table_s0_distinct_recep_lazy_graph/find_object_agentic_trace.jsonl": "ea42d8f6abae3e4e4fb60adf2a482dd40d3e539e90ebb9f700d8e939458d22bc",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed1/default_table_s0_distinct_recep-main/artifacts/default_table_s0_distinct_recep_lazy_graph/find_recep_agentic_trace.jsonl": "6b4b3a2e485854f831e57c39f672e56836c1b32265d4e4ced87f0ead187a692b",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed2/default_table_s0_distinct_recep-candidate/artifacts/default_table_s0_distinct_recep_lazy_graph/find_object_agentic_trace.jsonl": "d7603d847f68fee00f4c5a9c9ebcbc3617f0f77a760ff46e984999f5beebcab0",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed2/default_table_s0_distinct_recep-candidate/artifacts/default_table_s0_distinct_recep_lazy_graph/find_recep_agentic_trace.jsonl": "8851be0f2ab30409c8452e066b2d699f4786871d4f3f3b11164578dc915c09c6",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed2/default_table_s0_distinct_recep-main/artifacts/default_table_s0_distinct_recep_lazy_graph/find_object_agentic_trace.jsonl": "875a1c9e7fb27a01ec1b2898595abde76b537fcf970c32be6d7fa8db4b7a7ebb",
+    "/home/cpaxton/runs/emet/final-stack-review-20261028/s0-seed2/default_table_s0_distinct_recep-main/artifacts/default_table_s0_distinct_recep_lazy_graph/find_recep_agentic_trace.jsonl": "c87b24253382fe9d2985cbaab540a33a9cb2e9186b7c55d7eb90bf3f03ada8ea"
+  }
+}

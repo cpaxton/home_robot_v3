@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from emet.controller.controller_graph_eqa import GraphEQAController
+from emet.core.interfaces import Observations
 from emet.eval.benchmark_dynagraph import dynagraph_harness_flags
 from emet.memory.graph_eqa.sim_ground_truth_graph import (
     read_sim_object_placements,
@@ -188,11 +189,11 @@ class DynagraphController(GraphEQAController):
             )
         return n
 
-    def update(self, *, full_perception: bool | None = None) -> None:
+    def update(self, *, full_perception: bool | None = None, observation: Observations | None = None) -> None:
         if self.graph_memory is not None and (self.ground_truth_mode or self.visualize_ground_truth):
             self._sync_ground_truth_from_session()
         # Skip GraphEQAController.update (logs before maintain and consumes dynagraph_stride).
-        super(GraphEQAController, self).update(full_perception=full_perception)
+        super(GraphEQAController, self).update(full_perception=full_perception, observation=observation)
         if self.ground_truth_mode:
             self._associate_instances_to_ground_truth()
             self._associate_gt_to_frame_instances()

@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "pr": 242,
+  "scope": "Updated-main integration on familiar shifted three-transfer swap, not a new benchmark",
+  "source_sha": "b69e9998c8ab894f63f85019b29f1b5f9c58f2dd",
+  "source_dirty": false,
+  "parent_main": "db35f08bb5caa698539c25b6a4f014f26728b56b",
+  "independent_review": "review_pr244 inspected resolved hooks, placement budgets and stop witness; no blocker; runtime adapter hash preserved",
+  "native_adapter_sha256": "cb1040b3112979b510e46b32a30304b28c21e9b3f9f74101fa21dd758c880e69",
+  "tests": {
+    "tests": "585",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "489.988"
+  },
+  "native": {
+    "job": "20261116_123232_7b9753",
+    "passed": true,
+    "completed_steps": 3,
+    "independent_final_goals": true,
+    "checked_base_approaches_completed": 1,
+    "audit_commands": 841,
+    "forbidden_commands": 0
+  },
+  "agent": {
+    "job": "20261116_123232_47fa1e",
+    "passed": true,
+    "completed_steps": 3,
+    "physical_goals_satisfied": true,
+    "execution_completion_verified": true,
+    "cli_exit_code": 0,
+    "requested_rejection_observed": true,
+    "failure_boundaries": [
+      {
+        "tool": "execute_pick_place_plan",
+        "code": "unknown_plan",
+        "unexpected_tools": [],
+        "boundary_kind": "failure"
+      }
+    ],
+    "audit_commands": 850,
+    "forbidden_commands": 0,
+    "shutdown_warnings": 0,
+    "llm_calls": 5
+  },
+  "historical_cohorts_unchanged": true,
+  "exact_paired_reset_claim": false,
+  "hardware_claim": false,
+  "observed_execution_claim": false,
+  "artifacts": [
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/regression.xml",
+      "sha256": "750d7768bbc6aaffe6caed63a6e58c797103a1bb9b678df464a109a0f36a9f7d"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/native/protocol.json",
+      "sha256": "5da2db2a465bedede8fbb1aae150f337f7f453b0ac67a080f69908f9ab12f047"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/native/summary.json",
+      "sha256": "1319a1627c5a6ec6ad1d3bbbe20a279d20797cf5e65e762351e39bcab6e659fc"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/native/actuation.jsonl",
+      "sha256": "219bdc23227120046928e25eb0937a7533d6bee5136fc65d555a09717700e80f"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/agent/protocol.json",
+      "sha256": "de14def839de6b636ec9dba5013111dc4c7e1f3690ddb41405ab446712061096"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/agent/summary.json",
+      "sha256": "5ba7b135eb44dbce86fc1a83cca5906eee0608f2295fa63f4522ca4033d676fe"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr242/agent/actuation.jsonl",
+      "sha256": "24b6d57bd0ed4b9402a39edea2065a1b0ac270b7c66837abce1ff9f657dbe16b"
+    }
+  ]
+}

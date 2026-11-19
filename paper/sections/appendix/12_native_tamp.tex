@@ -12,7 +12,7 @@ recovery information. Plans bind to a scene snapshot and server identity;
 execution consumes a handle once and rejects changed state. An acknowledgement
 timeout after execution begins produces a partial outcome requiring inspection,
 rather than permission to replay the plan. These contracts support composition,
-but availability of tools alone does not establish multi-step task competence.
+but availability of tools alone does not establish multi-step task competence. The merged task layer adds \texttt{plan\_task} and \texttt{execute\_task\_plan}, with protected goals and measured per-step effects; Appendix~\ref{app:combined_agent} describes the complete interface.
 
 \paragraph{Controlled native-contact acceptance.}
 At implementation revision \texttt{d1d451c5}, four fresh live ZMQ transfers
@@ -84,7 +84,7 @@ records the full patch hash, job identifier and per-episode denominators.
 
 \paragraph{Proposed household experiment.}
 We next target RoboCasa365 composites and MolmoSpaces fixed episode
-specifications~\citep{robocasa365protocol2026,molmospaceseval2026}.
+specifications~\citep{nasiriany2026robocasa365,robocasa365protocol2026,molmospaceseval2026}.
 The proposed adapted suite includes clearing an occupied destination, swapping
 objects through temporary storage, retrieving and closing a cabinet, and
 collecting objects across work areas. These are \emph{planned} experiments:
@@ -101,7 +101,8 @@ must remain a separate condition.
 The implementation program standardizes on MuJoCo and separates upstream
 robot/task protocols from Stretch and Sourccey adaptations. Shared episode and
 scene-binding contracts, native control-step accounting, and measured multi-step
-plan verification are under development. Greedy, beam and UCT search use a
+plan verification are implemented; environment-specific qualification and shared
+whole-agent budget enforcement remain incomplete. Greedy, beam and UCT search use a
 common grounded-operator interface; LLM sequence planning, affordance ranking
 and PDDLStream integration remain qualification work. These interfaces and
 runtime smoke tests are not evidence of household agent success. No six-suite
@@ -137,4 +138,409 @@ measured endpoints without reconstructing unobserved intermediate paths.
   between panels; this is not a success-rate comparison. This is an endpoint view, not
   trajectory or observed-perception evidence.}
   \label{fig:native-task-integration}
+\end{figure}
+
+
+\paragraph{Preplanned control repeats and a format failure.}
+At observed-integration revision \texttt{fb0fb6cc}, we preplanned three fresh
+repeats of each of two existing privileged stationary configurations. All
+attempts remain in their respective denominators: the two-goal task passes
+3/3 episodes (six completed transfers), and the buffered swap passes 2/3
+(six completed transfers). In the failed swap episode the agent obtains a valid
+three-step plan, then emits malformed JSON with a missing list terminator.
+The strict parser dispatches no execution call; seven startup commands are
+recorded and no transfer is attempted. This is an agent-format failure, not a
+successful plan-only task or a physical grasp failure. The six episodes record
+3,094 audited commands and zero forbidden actions. No executed tool fails in
+this repeat batch, so recovery after a failed physical tool remains unassessed;
+no post-failure dispatch is observed. These repeats use the same two development fixtures, Caliban model
+identifier and configured goals; checkpoint/sampling are not independently
+pinned. They are a small reliability diagnostic, not held-out household or
+observed-input acceptance. Source/job identifiers, failed-attempt accounting,
+final predicates and raw-result hashes are retained in
+\texttt{paper/data/native\_tamp/agent\_control\_repeats\_20261023.json}.
+
+\paragraph{Upstream MuJoCo reference pilot.}
+A separate November 1 development check uses the full robosuite Panda Lift and
+Stack tasks, each at seeds 7 and 13. Native scripted OSC/gripper references pass
+4/4 original task checks and sustained physical reference checks; all four
+matched hold controls fail the task. Reference/hold pairs share initial state,
+actuator controls, model XML and controller configuration. Lift requires
+30 retained-lift samples; Stack additionally requires 30 released, settled
+support samples after retreat. The upstream horizon remains 1000 actions, with
+a separately declared 400-action diagnostic cap. These are privileged controller
+references, not agent or shared TAMP-tool results. Panda still requires a
+joint-path-compatible planner/controller binding: an OSC endpoint does not
+certify a redundant joint-space path. Global collision integrity, observed
+execution and hardware transfer remain unqualified. Source snapshots, job IDs
+and raw-result hashes are recorded in
+\path{docs/experiments/tamp_sim_realism_20261101.json}.
+
+\paragraph{Live agent placement perturbation pilot.}
+At revision \texttt{d4a05983}, four fixed development trials repeat the two-goal
+and wider-destination swap controls, then shift both initial object X positions
+by +15 mm while retaining each family's final regions, instructions, tolerances
+and budgets. The production CLI uses Caliban inference, privileged stationary
+Stretch inputs, live asynchronous native MuJoCo physics and no cameras. Both
+controls pass; both shifted trials fail during the second object's lift with
+\texttt{payload\_not\_retained}. Thus complete-task success is 2/4, with 7/10
+planned transfers completed and 5/8 final object goals independently verified.
+All tool results satisfy the JSON contract and both failed trials stop further
+dispatch. Sixteen inference calls and 2,153 audited commands are recorded, with
+zero forbidden commands or agent-trial infrastructure failures. These small
+development cases are neither held-out nor reference-certified benchmark
+instances. Separate stepped-physics diagnostic successes do not replace the
+failed live outcomes. They expose a native execution gate before observed or
+household acceptance; they do not establish that destination-space search needs
+additional task depth. A separate live diagnostic reproduces the lift rejection
+at 1.3 mm relative translation and 0.10085 rad relative rotation, just beyond the
+0.1 rad limit, while both fingertips still contact the cube. This is a rigid
+payload-pose rejection, not evidence of a dropped object; relaxing the limit
+would require collision checking to account for the changed payload pose.
+The fixed population, measured outcomes and diagnostic
+attempts are retained in
+\path{docs/experiments/tamp_stretch_realism_20261101.json}.
+
+\paragraph{Measured contact-stability comparison.}
+At revision \texttt{81c014cf}, a separate four-episode native diagnostic compares
+the existing grasp yaw candidates with an additional $\pm0.175$ rad pair, using
+scripted public task tools and no LLM calls. Each policy completes the familiar
+two-goal control and fails the +15 mm layout: 1/2 complete tasks per policy,
+6/8 total planned transfers, 1,992 audited commands and zero forbidden commands.
+Finer yaw selects a grasp target 12 mm lower and completes the shifted cube lift,
+but fails later during placement descent. The existing policy fails during lift.
+The rotation and translation limits remain 0.1 rad and 20 mm. Both failure
+snapshots retain bilateral fingertip contact; their complete tasks remain failed.
+Nominal scene hashes match within each pair, while independent live initial
+states differ. Instrumentation costs up to 1.72 ms per recorded event. These
+development diagnostics do not change the previous actual-agent denominator or
+qualify the candidate policy. Source, phase attribution, outcomes and raw-file
+hashes are retained in
+\path{docs/experiments/tamp_contact_stability_20261103.json}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_contact_stability_20261103.pdf}
+\caption{Sampled loaded-lift rotation in the four native task-tool diagnostics.
+Crosses mark lift-time rejection; the finer-yaw shifted cube completes lift and
+is rejected later in placement, outside the plotted lift segment. Lines connect
+measured samples for readability. One development replay per condition does not
+estimate manipulation reliability.}
+\label{fig:tamp_contact_stability}
+\end{figure}
+
+\paragraph{Checked handoff follow-up.}
+A separate four-episode diagnostic at \texttt{dbc708ab} compares one measured
+loaded-payload binding with preservation of the original reference. Both add the
+same checked 0.3 s hold. Each policy passes the familiar control and fails the
+shifted cylinder's opening preflight: 1/2 complete tasks per policy, 4/8 planned
+transfers, 1,436 audited commands and zero forbidden commands. Private replay
+predicts 1.37/1.43 mm of fingertip/table penetration at the opening goal; no unsafe
+opening is executed. This earlier release rejection masks the intended cube
+comparison, so rebinding has no established benefit here. A subsequent
+attribution fix preserves the collision detail in the public failure code; the
+recorded outcomes remain failed. Measured release geometry, opening sweep and
+retreat clearance remain necessary before broader native/observed acceptance.
+Provenance and the preserved comparison are recorded in
+\path{docs/experiments/tamp_loaded_payload_handoff_20261103.json}.
+
+\paragraph{Measured release refinement.}
+The November~6 development comparison at \texttt{d5e1df78} evaluates four native
+public-tool episodes with the same final goals: control and shifted layouts,
+each with existing release or bounded nearby release-pose search. Each policy
+passes 1/2 tasks; together they complete 5/8 planned transfers with 1,767 audited
+commands and no forbidden commands or infrastructure failures. Small nominal
+corrections leave the measured arm too low for opening. A separate two-episode
+follow-up at \texttt{816f1f4e} includes measured command/FK height error in the
+opening reserve. It passes the familiar control, but the shifted task stops
+after opening because the rotated cylinder's local bounding box overestimates
+its vertical extent: predicted table penetration is 1.054~mm versus 0.887~mm
+from the actual primitive/contact geometry, crossing the unchanged 1~mm gate.
+These results remain failed; private replay is not a physical task rescore.
+Protocols, receipts and source/trace hashes are in
+\path{docs/experiments/tamp_release_pose_search_20261106.json} and
+\path{docs/experiments/tamp_release_tracking_reserve_20261106.json}.
+A third, separately frozen pair at \texttt{6a1d063c} uses analytic primitive
+extents and measured supported stillness before retreat, with no exemption for
+deep payload/table contact. It passes 2/2 development tasks and 4/4 transfers,
+including the shifted layout, with 988 audited commands, zero forbidden commands
+and zero infrastructure failures. Raise/drop limits remain 40~mm and final goal
+checks are unchanged. Figure~\ref{fig:tamp_release_search} illustrates the first
+cylinder's delivered-versus-commanded pose. These are privileged native tool
+references, not agent results or an exact reset-paired benchmark. The release
+profile stays opt-in; the actual-agent baseline remains 2/4. Broader placements,
+recovery and actual-agent repeats remain necessary. Provenance is in
+\path{docs/experiments/tamp_release_shape_extents_20261106.json}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_release_pose_search_20261106.pdf}
+\caption{First-cylinder release traces from separate shifted development trials.
+Small nominal corrections leave the measured arm low (left). Measured-error-aware
+search with shape extents and support settling qualifies release (right).
+Orange is command FK with other joints measured; blue is measured EE height;
+green marks verified opening and supported stillness. Task labels are complete
+native task outcomes; only the first cylinder is plotted.}
+\label{fig:tamp_release_search}
+\end{figure}
+
+\paragraph{Broader shared-policy gate and actual agent repeat.}
+The November~13 gate uses one opt-in native policy shared by production tools
+and the diagnostic wrapper. It preserves the default policy and requires
+explicit physical mode with privileged simulation inputs. Eight native task
+candidates perturb initial X/Y positions and cube yaw, including buffered swaps;
+four separate boundary checks exercise invalid handles, consumed handles,
+stale plans after measured head motion, and occupied placement targets.
+At \texttt{cbfebe35}, the complete prospective population passes 1/8 tasks,
+4/18 declared transfers and 4/4 boundary checks. Per-tick scene hashing is cached
+outside the physics callback; a private 100-step comparison has bit-identical
+state/contact results. Faster execution does not certify task success.
+Measured failure evidence motivates anchoring release waits to fresh feedback,
+matching the existing 12~s native verifier budget, and trying an 80~mm vertical
+pregrasp after the existing candidates fail under the same 256-call IK cap.
+The unchanged population at \texttt{c4fa1668} then passes 4/8 tasks,
+11/18 transfers and 4/4 boundary checks. Because these
+cases informed the fixes, this replay is developmental, not held-out acceptance.
+Remaining failures include persistent post-release cylinder motion, cube rotation
+beyond the unchanged 0.1~rad retention bound, and a joint-bound rejection after
+release before retreat. Supported final objects alone do not complete a failed
+execution receipt.
+
+A separate repeat uses the actual \texttt{run agent} CLI with remote Caliban
+Qwen3-VL-8B inference on the original four development cases. The LLM discovers
+roles, requests a task plan and executes the returned handle; the experiment
+does not script the transfers. It passes 3/4 complete tasks and
+8/10 declared transfers, with 6/8 independently verified
+final object goals. All 4/4 trials satisfy the result contract;
+2 stop boundaries have no later dispatch before a new user turn.
+One trial explicitly requests an invalid-handle rejection, then separately
+authorizes a new task. Across both new cohorts, audited commands contain no
+forbidden attachment or pose-teleport commands. These are single live trials
+per condition with server-default sampling and independently evolving startup
+states, not exact reset pairs or manipulation reliability estimates.
+The original 2/4 agent result remains recorded separately. Figures and manifests
+preserve cohort identity, source hashes, receipts and failure cases:
+\path{docs/experiments/tamp_native_followup_20261113.json} and
+\path{docs/experiments/tamp_agent_followup_20261113.json}.
+This gate does not qualify observed grounding, navigation, exploration, household
+native adapters or hardware sensors.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_qualification_20261113.pdf}
+\caption{Native and actual-agent development cohorts remain separate.
+Cell counts show completed transfers; green additionally requires a successful
+complete-task receipt and independent physical goals. Native replay uses the
+same eight candidates after evidence-driven fixes. Agent repeats use the same
+four earlier development tasks through production tools. A single trial per
+cell does not establish held-out reliability; failures remain in the denominator.}
+\label{fig:tamp_qualification}
+\end{figure}
+
+\paragraph{Checked unloaded base approach.}
+The November~16 follow-up adds an explicit \texttt{bounded\_approach} policy.
+It searches the current base and short forward/reverse wheel-axis offsets
+(40/80~mm), checks sampled whole-robot sweeps, executes ordinary base control,
+and requires measured arrival and a confirmed quiet stop before fresh grasp
+planning. Sweep spacing is at most 5~mm / 0.025~rad with a sampled
+$\pm$10~mm XY / $\pm$0.05~rad tracking envelope; this is not a continuous or
+dynamics certificate. All alternatives share the existing IK/time budget.
+Measured loaded placement preserves the original region, grasp reference and
+unused planning budget, retaining valid nominal proposals alongside refreshed
+free-support candidates. A shared coordinate correction expresses payload-center
+offsets through the desired EE rotation. No live object/base pose writes or
+loaded base transport are introduced.
+
+The corrected three-task pilot passes 3/3 tasks and 7/7 transfers. The full
+original native population at \texttt{158fd427} then passes 8/8 tasks,
+18/18 transfers and 4/4 interface boundaries, with 4,605 audited commands and
+zero forbidden commands or infrastructure failures. The actual \texttt{run agent}
+repeat at \texttt{2e4dd8fc} passes 4/4 original development tasks,
+10/10 transfers and 8/8 independent object goals. It uses 16 remote Caliban
+model calls (116.1~s total inference wall time); all four result-contract checks
+pass, and the deliberately invalid handle produces one compliant stop boundary
+before a separately authorized task turn. Its 2,526 audited commands contain
+zero forbidden commands. A repaired startup-policy allowlist preceded this
+complete replay; all four earlier pre-command launch failures remain recorded.
+
+Figure~\ref{fig:tamp_base_approach} compares the corrected swap with its
+same-source stationary-profile trial. The latter stops after one transfer when
+cube rotation crosses the unchanged 0.1~rad retention bound; the approach profile
+completes all three transfers. This combines approach/candidate selection and
+loaded refinement, rather than isolating a locomotion-only treatment. These are
+single independently initialized development trials, not exact reset pairs or
+held-out reliability estimates. Historical native 4/8 and agent 3/4 cohorts
+remain unchanged. Explicit execution-failure recovery, observed grounding,
+exploration, household native adapters and hardware still require separate
+acceptance. Compact receipts, source/job hashes and failed attempts are in
+\path{docs/experiments/tamp_native_base_approach_20261116.json}; verbose raw
+artifacts are retained locally, not publicly archived.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_native_base_approach_20261116.pdf}
+\caption{Original-reference cube rotation during the lift and checked hold in
+separate same-source swap trials. The checked approach profile completes the
+three-transfer task; stationary execution stops when retention exceeds the
+unchanged bound. These are sparse simulator debug samples, ending before any
+loaded-payload rebinding; they do not measure force or establish replay fidelity.}
+\label{fig:tamp_base_approach}
+\end{figure}
+
+\paragraph{Prospective layouts and bounded scripted recovery.}
+A separate protocol is committed before execution at \texttt{63b85dfa}.
+Four untouched within-family layouts combine new XY shifts and cube yaw,
+retaining the existing two-goal and buffered-swap instructions. Motion-module
+and command-client hashes match the frozen checked-approach implementation.
+No policy is tuned or failed case replaced. Native tools and the actual CLI each
+pass 4/4 tasks and 10/10 transfers (Figure~\ref{fig:tamp_prospective}); the agent
+also satisfies 8/8 independent object goals. It makes 16 remote model calls
+(116.4~s inference wall time), with valid result contracts, no shutdown warnings
+and one compliant invalid-handle stop before a new authorized user turn.
+Native prospective trials contain 2,573 audited commands; agent trials contain
+2,545, with no forbidden commands or infrastructure failures.
+
+Two separately counted native scripted recovery trials pass, completing four
+transfers and five expected boundary checks. The first invalidates a plan through
+ordinary head motion, verifies stale/consumed-handle rejection without dispatch,
+then rediscovers and replans. The second injects one admission refusal after a
+measured completed transfer. Its receipt remains partial with one completed step
+and a preflight failure on step two; a new request completes only the remaining
+transfer. These 987 audited commands contain no forbidden commands. The injected
+refusal represents planning admission, not contact loss or an exhausted real
+solver budget. Scripted recovery does not qualify LLM handling of partial tasks
+or held-object recovery. All 416 affected tests pass. Protocol, receipt histories
+and source/job hashes are in
+\path{docs/experiments/tamp_prospective_20261116.json}.
+These single-trial, independently initialized layouts do not establish broad
+reliability, new-language reasoning, observed grounding or household/hardware
+capability; historical development cohorts are unchanged.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_prospective_20261116.pdf}
+\caption{The four prospectively frozen layouts through native tools and the
+actual agent CLI. Labels show completed/declared transfers; green requires a
+successful receipt and independent physical goals. Recovery trials are counted
+separately. One independently initialized trial per cell does not estimate broad
+reliability. XY offsets are in millimetres; yaw is in radians.}
+\label{fig:tamp_prospective}
+\end{figure}
+
+\paragraph{Actual-agent partial feedback and reauthorization.}
+The next pair uses the actual CLI with an evaluator-only native provider
+constructor seam: after one real, measured transfer, admission for step two is
+refused without dispatch. Public receipts now name the measured-effect-verified
+completed actions and the failed/unverified actions. They distinguish overall
+execution progress from possible dispatch of the failed step, consume the handle
+and explicitly retain \texttt{goal\_verified=false}. No motion or acceptance
+threshold changes accompany this feedback contract.
+
+At \texttt{d9fb0273}, both model reports correctly name the completed cylinder
+placement, unfinished cube and stop. The stop-only condition passes while the
+task remains incomplete. Subsequent authorized recovery fails because discovery
+rejects its configured robot selector after an unavailable inspection-tool
+proposal; this failed attempt is retained. The fix accepts the connected robot,
+clarifies the advertised inspection tool and stops mixed TAMP batches at
+unavailable calls. On the unchanged request pair at \texttt{d2b24610}, both
+feedback/control tests pass. Only after the expected partial receipt, supported
+settled objects and a quiet audit interval does a new stdin user request authorize
+fresh discovery/planning. Recovery executes exactly one cube transfer and both
+original object goals hold. Stop-only remains incomplete; it is not scored as
+full-task success. There are 799 audited commands, zero forbidden commands or
+shutdown warnings, and all 468 affected tests pass. The corrected pair uses
+12 remote model calls. Extra read-only discovery and a zero-step plan after
+completion are retained, not presented as optimal tool efficiency.
+Verbatim feedback, both source histories and hashes are in
+\path{docs/experiments/tamp_partial_agent_20261116.json}. Model-text accuracy is
+manually reviewed against the receipt and independent physical goals. The fault
+represents injected planning admission, not actual solver exhaustion, contact
+loss or sensor failure. Those trials do not test a short retry without restated
+goals. Unknown outcomes, held objects, observed inputs and hardware remain
+unqualified.
+
+\paragraph{Contextual retry diagnostic.}
+A separate familiar-layout pair tests a new user turn saying only ``Please retry
+the remaining work.'' At \texttt{0e4e3959}, bounded historical task context
+preserves the goals, but the agent bundles discovery, planning and execution with
+an invented handle. Execution rejects it without moving the cube; this failure
+is retained. The correction serializes all-TAMP proposals around actual tool
+results and explicitly requires returned handles. At \texttt{ebbdb1d9}, stop-only
+correctly leaves the task incomplete, while contextual recovery uses fresh
+discovery, a new one-step beam plan and its returned handle to complete only the
+cube transfer. Independent checks verify both original goals with supported,
+settled objects. The corrected pair uses 12 remote model calls and 799 audited
+commands, with zero forbidden commands or shutdown warnings; all 485 affected
+tests pass without errors or skips. These are two-object development diagnostics,
+not held-out generalization or physical-failure recovery. The corrected live
+agent uses one call per round; repeated bundled proposals are covered separately
+by real-loop mocked tests. Both frozen histories, exact feedback and artifact
+hashes are in \path{docs/experiments/tamp_contextual_recovery_20261116.json}.
+
+\paragraph{Provided-map mobile development controls.}
+Separate CPU-only MuJoCo controls compose unloaded navigation, a local provided
+RGBD collision map, public-tool grasp/lift, checked loaded wheel transport,
+placement/release/retreat, remapping the released object, and departure.
+Native robot/object state and geometry outside the local map remain privileged;
+the external simulated scanner is an explicit prior, not an onboard sensor claim.
+A single-entry local-map owner invalidates old generation leases and plan handles
+on retirement. In one isolated constructor comparison, batched projection keeps
+the exact 2.304-million-cell grid checksum while reducing peak process RSS from
+1.877~GB to 0.136~GB; full-model episodes still use about 2~GB. This is not a
+full-agent memory or speedup estimate.
+
+The initial mobile cylinder fails release after two corrections: the conservative
+lowered probe penetrates the support by 1.0145~mm, beyond the unchanged 1~mm limit.
+Comparing the same finite certified candidates by bottleneck support margin
+instead of first feasibility recovers that control in one correction
+(Figure~\ref{fig:mobile_release_margin}). Raise/drop, retention, contact and
+correction limits are unchanged. The original cube also completes after this
+change. Seven prospectively declared development task cases include six mobile
+and one stationary control: five complete, while two stop when source evidence
+expires during long planning or early execution. The shifted-cube failure also
+completes in a separately retained faster-CPU repeat; it does not replace the
+primary failure. Fault-injection controls remain separate. These sparse,
+within-family provided-map trials do not qualify onboard observed execution,
+household OVMM, real-time control, hardware, or new LLM-agent success rates.
+Source hashes, partial receipts and failed attempts are in
+\path{docs/experiments/mobile_release_20261117.md} and the compact JSON index.
+
+A separate opt-in handoff now treats search output as an inert proposal, retires
+old leases and handles, and acquires a new post-barrier scan. It revalidates the
+eight nominal joint segments, FK endpoints and selected loaded base sweep on
+private data without additional IK, publishing a new handle only after success.
+Original depth rays remain authoritative even when coarse occupancy grids match.
+The first implementation requires numerical equivalence of the full stationary
+scene during validation, so it is not an asynchronous hardware admission policy.
+Runtime measured grasp/placement refinement and release checks remain necessary.
+Among three selected follow-up diagnostics, cylinder and shifted-cube tasks
+finish; clutter passes fresh-source validation and loaded carry but stops partial
+at release on unknown opening volume near a distractor. All three source handoffs
+use zero additional IK calls. A no-command validation-budget pilot is retained.
+These assisted diagnostics, with their exact source versions, are recorded in
+\path{docs/experiments/source_finalization_20261117.md}; they do not replace the
+primary five-of-seven cohort above.
+
+A bounded lateral-release follow-up certifies whole-hand opening, released fall
+and a correspondingly shifted retreat within the original requested region.
+A fresh clutter repeat completes through departure after one vertical and one
+1~cm lateral correction, retaining the two-correction, contact and retention
+limits; a separate cylinder control also completes. The first clutter launch
+still expires source evidence during initial search and remains a failure.
+These are two complete tasks among three launches, not a replacement benchmark
+denominator. Release planning charges retained IK and complete geometry-planning
+time, and exhaustion preserves partial progress without a failed opening command.
+The source versions, 353-test native/contact regression and separate composition
+controls are recorded in \path{docs/experiments/lateral_release_20261118.md}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/mobile_release_margin_20261117.pdf}
+\caption{Mobile cylinder development control using native state and a provided
+RGBD map. Left: bottleneck support slack among candidates that pass the same
+sampled checks; ranking selects the middle candidate. Right: final measured and
+conservative lowered payload gaps for rejected and recovered release decisions.
+The support limit is unchanged. Simulator diagnostics do not establish hardware
+uncertainty or continuous-contact guarantees.}
+\label{fig:mobile_release_margin}
 \end{figure}

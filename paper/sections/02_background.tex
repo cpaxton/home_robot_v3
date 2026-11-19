@@ -4,15 +4,35 @@
 \subsection{Embodied question answering and 3D scene graphs}
 
 \textbf{GraphEQA}~\citep{saxena2024grapheqa} builds a real-time 3D metric-semantic scene graph (3DSG) and selects task-relevant images to ground a VLM for EQA in unseen environments, with semantics-guided hierarchical exploration.
-It is evaluated in Habitat-Sim on HM-EQA (113 HM3D questions) and an OpenEQA subset, and demonstrated on a Stretch robot in real homes.
+It is evaluated in Habitat-Sim on HM-EQA and an active OpenEQA subset, and demonstrated on a Stretch robot in real homes.
 Our \texttt{emet} stack re-implements graph-based EQA memory without the Hydra/ROS pipeline, using a lighter sensor-to-graph builder (\texttt{SensorGraphBuilder}).
 
-\textbf{GraphPad} (2025) introduces a mutable scene graph updated via agent API calls during a task; Dynagraph instead updates memory automatically from streaming perception during exploration.
+\textbf{GraphPad}~\citep{ali2025graphpad} introduces a mutable scene graph updated via agent API calls during a task; Dynagraph instead updates memory automatically from streaming perception during exploration.
 
-\textbf{M3Fusion} (2026) fuses 2D semantics and 3D geometry into unified 3D tokens for LLMs on 3DQA benchmarks---complementary representation focus, not an embodied exploration loop.
+\textbf{M3Fusion}~\citep{mao2026m3fusion} fuses 2D semantics and 3D geometry into unified 3D tokens for LLMs on 3DQA benchmarks---complementary representation focus, not an embodied exploration loop.
 
 \textbf{DeWorldSG}~\citep{kim2026deworldsg} builds spatio-temporally consistent 3D scene graphs from RGB-D by modeling each instance as a depth-aware probabilistic 3D Gaussian (rather than a single projected point) and refining relations with world-model priors, reporting large triplet/predicate recall gains over prior 3DSSG approaches.
 The probabilistic per-object representation is a promising alternative to Dynagraph's point-anchored nodes: it could make spatial merge and staleness decisions robust to pose noise, while its world-model relation prior complements our VLM-grounded graph labeling.
+
+\subsection{Visual memory and tool-using embodied agents}
+
+Structured object graphs are one way to supply a model with scene context.
+\textbf{3D-Mem}~\citep{yang2025threedmem} instead organizes visual memory around snapshots of co-visible objects and frontier snapshots for exploration.
+\textbf{ReMEmbR}~\citep{anwar2024remembr} retrieves spatial and temporal robot observations for long-horizon queries, while \textbf{LVMem}~\citep{khoruzhaya2026lvmem} augments description-based retrieval with original images.
+These approaches motivate direct multi-image and image-retrieval baselines before attributing improvements to a graph representation.
+\textbf{MemoryEQA}~\citep{zhai2025memoryeqa} supplies global and local memory to exploration and answering, and introduces multi-target, multi-region questions in MT-HM3D.
+\textbf{HIMM}~\citep{li2026himm} separates episodic retrieval and visual verification from reusable semantic memory.
+
+Tool use and context management also have direct EQA precedents.
+\textbf{ToolEQA}~\citep{zhai2025tooleqa} combines planning with executable navigation and perception tools, studying both zero-shot and supervised variants.
+\textbf{NavMCP}~\citep{lei2026navmcp} couples a reasoning VLM to a navigation foundation model and preserves trajectory evidence and cross-call task state.
+Its terminal-only interface comparison is particularly relevant to whether a robot returns useful intermediate observations rather than only its final view.
+\textbf{FAST-EQA}~\citep{zhang2026fasteqa} studies efficient exploration with bounded, question-conditioned memory, while \textbf{DIVRR}~\citep{lu2026divrr} couples view refinement with selective evidence admission under occlusion and scene changes.
+
+\textbf{Embodied VideoAgent}~\citep{fan2025embodiedvideoagent} maintains object memory from video and embodied sensors, updates it after actions, and supports navigation and manipulation primitives.
+\textbf{R4}~\citep{sohn2026rfour} indexes object observations in metric space and time for retrieval-based reasoning.
+Thus, dynamic memory, tool orchestration, and visual verification are established ingredients.
+The shared-agent evaluation must isolate the value of its memory and interfaces against images-only, retrieval-only, and restricted-tool controls, while separately measuring transfer from question answering to physically verified manipulation.
 
 \subsection{Feed-forward geometric perception and streaming mapping}
 
@@ -28,20 +48,15 @@ Purely feed-forward \emph{streaming} mappers are emerging as an alternative to i
 Hybrid GFM--SLAM systems such as \textbf{VGGT-SLAM 2.0}~\citep{maggio2026vggtslam2} retain classical factor graphs and loop closure; they can run on robots and support open-set 3D queries, but pay for global consistency with backend optimization and hand-tuned retrieval heuristics.
 
 \paragraph{LingBot-Map.}
-Among streaming feed-forward models, \textbf{LingBot-Map}~\citep{chen2026lingbotmap} is the most directly relevant to long-horizon \emph{robot} mapping.
-It replaces ad-hoc keyframe queues and pose-graph backends with a learned \emph{Geometric Context Attention} (GCA) module inside a Geometric Context Transformer (GCT): three complementary contexts mirror classical SLAM structure but are trained end-to-end.
-\emph{Anchor context} fixes the first few frames as a scale- and coordinate-grounding reference (monocular streaming cannot wait for a global batch normalize as in offline VGGT).
-A \emph{pose-reference window} keeps dense tokens from the $k$ most recent frames for local registration.
-\emph{Trajectory memory} compresses all older frames to six context tokens per frame (camera, register, anchor), augmented with video temporal positional encodings, so drift can be corrected without retaining full image tokens.
-Per-frame attention context therefore grows as $\mathcal{O}(T)$ with a small constant ($\sim$6 tokens per evicted frame) rather than $\mathcal{O}(MT)$ for causal attention over $M$ patches per frame---roughly an 80$\times$ reduction in context growth at typical patch counts---which enables $\sim$20\,FPS inference at $518\times 378$ on sequences exceeding 10{,}000 frames using a paged KV cache (FlashInfer).
-Training uses a VGGT-style base model, then swaps global attention for GCA with a progressive view curriculum (24$\rightarrow$320 frames) and context parallelism.
-On Oxford Spires, Tanks and Temples, ETH3D, and 7-Scenes, LingBot-Map reports better pose and dense reconstruction than prior streaming baselines while avoiding test-time training (TTT) or post-hoc bundle adjustment.
-For sequences beyond the $\sim$320-frame training RoPE range, the released code uses keyframe subsampling and optional \emph{windowed} mode (sliding windows with overlapping keyframes) to scale to 25{,}000+ frame indoor walkthroughs.
-Apache-2.0 weights and demo code are public (\texttt{robbyant/lingbot-map}).
-
-Relative to hybrid SLAM, LingBot-Map trades explicit loop-closure optimization and semantic queries for a single causal forward pass with bounded state---closer in spirit to ``mapping as memory management'' than to incremental BA.
-Relative to Dynagraph, it addresses the \emph{front-end} (metric-consistent depth and camera trajectory from a monocular RGB stream) rather than object-level graph lifecycle on top of voxels; the two layers are composable if LingBot-Map (or similar) supplies \texttt{depth} and \texttt{camera\_pose} to the same ZMQ observation contract \texttt{emet} already uses.
-Today \texttt{emet} fills missing depth with per-frame DA3 (Appendix~\ref{app:da3}) while sim and most platforms provide sensor depth and sim/extrinsic \texttt{camera\_pose}; adopting LingBot-Map would mean a streaming depth--pose backend, chiefly for RGB-only hardware such as Innate Mars, with open engineering questions around manipulator head motion, metric scale, and alignment to wheel odometry.
+\textbf{LingBot-Map}~\citep{chen2026lingbotmap} uses a geometric context
+transformer for streaming 3D reconstruction. Its anchor, recent-view and
+compressed trajectory contexts preserve geometric history without keeping every
+past dense image token. Compression reduces historical state growth; it does
+not make an unbounded stream's memory fixed-size. These reconstruction models
+address the depth/pose front-end, while Dynagraph addresses semantic graph
+lifecycle above the voxel map. Connecting a learned trajectory to robot
+odometry requires scale, coordinate-frame and uncertainty qualification; the
+historical Dynagraph evaluations do not establish that integration.
 
 Semantic mapping is beginning to merge with these geometric pipelines.
 \textbf{RADIO-ViPE}~\citep{nasser2026radiovipe} tightly couples RADIO-style vision--language embeddings with a monocular pose/depth factor graph, enabling online open-vocabulary grounding of free-form language queries to 3D regions from uncalibrated RGB video in dynamic scenes.
@@ -57,23 +72,95 @@ Dynagraph uses DynaMem's voxel stack for navigation and adds a graph layer for E
 \textbf{OK-Robot}~\citep{liu2024okrobot} integrates open-knowledge models for zero-shot pick-and-place with a \emph{prescanned static} semantic map; DynaMem reports substantially higher success on dynamic objects than this static baseline.
 Emet's voxel navigation code traces lineage to OK-Robot.
 
-\textbf{DREAM} (2026) extends dynamic spatio-semantic memory with redundancy-aware pruning on a pose graph for long-horizon manipulation without a pre-built map.
+\textbf{SayPlan}~\citep{rana2023sayplan} combines hierarchical scene-graph search with classical planning and feedback-driven replanning.
+\textbf{Inner Monologue}~\citep{huang2022innermonologue} demonstrates the value of language feedback for closed-loop robotic task execution.
+These precedents motivate evaluating the information returned by our tools alongside the actions they expose.
+
+\textbf{DREAM}~\citep{yan2026dream} extends dynamic spatio-semantic memory with redundancy-aware pruning on a pose graph for long-horizon manipulation without a pre-built map.
 Dynagraph's graph merge and staleness target \emph{discrete object nodes for EQA}, complementary to continuous map pruning.
 
-\textbf{PanoNav} (2025) uses a bounded memory queue of visited places for loop-free navigation; Dynagraph retains full semantic voxel and graph structure for question answering, not only pose history.
+\textbf{PanoNav}~\citep{jin2025panonav} uses a bounded memory queue of visited places for loop-free navigation; Dynagraph retains full semantic voxel and graph structure for question answering, not only pose history.
 
 \subsection{Dynamic memory for language agents}
 
 \textbf{DeltaMem}~\citep{deltamem2026} stores experience as residual deltas in a dual-tree structure for LLM agents (ALFWorld, ScienceWorld, WebShop).
-\textbf{$\delta$-mem} compresses history into a low-rank attention state during inference.
+\textbf{$\delta$-mem}~\citep{lei2026deltamem} compresses history into a low-rank attention state during inference.
 These works motivate \emph{incremental} and \emph{bounded} memory but do not address embodied 3D exploration; we cite them for the forgetting/update narrative only.
+
+\subsection{Whole-body control and learned dynamics}
+
+Unified control is relevant when manipulation and base motion must be
+coordinated beneath a task planner. Deep Whole-Body Control~\citep{fu2023deepwholebody}
+learns joint locomotion/manipulation with online adaptation and advantage
+mixing. WHOLE-MoMa~\citep{jauhri2026wholemoma} instead reuses randomized
+classical-controller data through offline reinforcement learning and
+action-chunked policies for articulated-object mobile manipulation.
+SuperMimic~\citep{liao2026supermimic} learns shared differentiable dynamics and
+improves a humanoid motion tracker through short imagined rollouts; its reported
+scope leaves terrain and object interaction open.
+These suggest complementary coordination, data-reuse and training-efficiency
+directions. Our simulator controller experiments (Appendix~\ref{app:whole_body_control})
+preserve a sensor/goal-conditioned actor and independent executor checks.
+They do not implement these complete methods or establish comparable task
+performance, transfer or compute efficiency.
 
 \subsection{Benchmarks}
 
-We target \textbf{HM-EQA} and \textbf{OpenEQA}-style evaluation via a Habitat harness (GraphEQA parity) and complementary \textbf{Robocasa} / \textbf{MolmoSpaces} episodes in MuJoCo with multi-robot support in \texttt{emet}.
+We target \textbf{HM-EQA} and \textbf{OpenEQA}-style evaluation via a Habitat harness (GraphEQA parity) and complementary \textbf{Robocasa} / \textbf{MolmoSpaces}~\citep{molmospaces2026} episodes in MuJoCo with multi-robot support in \texttt{emet}.
+\textbf{EXPRESS-Bench}~\citep{jiang2025express} emphasizes exploration and answer grounding, while \textbf{AbstainEQA}~\citep{wu2026abstaineqa} pairs answerable and abstention-requiring questions.
+They motivate planned evidence-acquisition and uncertainty evaluations; metadata adapters alone do not establish active benchmark coverage.
 MolmoSpaces also hosts an open manipulation leaderboard; \textbf{TiPToP}~\citep{shen2026tiptop} composes a GPU-parallel Task-and-Motion-Planning core (cuTAMP~\citep{shen2024cutamp}) with off-the-shelf perception and VLM grounding to search pick-and-place sequences directly from pixels.
 TiPToP constructs object geometry and symbolic goals from images, then searches action sequences including obstacle relocation.
 Its documented execution uses open-loop trajectories with joint impedance control, and its perception assumes task-relevant objects are at least partially visible from a fixed capture viewpoint.
 This motivates explicit geometric feasibility checks beneath language-level task selection.
-Our current manipulation evidence is narrower: a stationary Stretch simulator executes public JSON tools using privileged geometry and measured execution checks (Appendix~\ref{app:native_tamp}).
+Our current manipulation evidence is narrower: tabletop Stretch simulation executes public JSON tools using privileged geometry, measured execution checks, and separately labelled provided-map mobile controls (Appendix~\ref{app:native_tamp}).
 Connecting those tools to dynamic observed memory, exploration, and verified multi-step execution remains an integration objective; we do not claim comparable end-to-end manipulation performance.
+
+
+RoboVista~\citep{xie2026robovista} evaluates robot-centric visual reasoning on
+provided images and task questions. Such tests complement EQA and manipulation
+but do not by themselves establish active evidence acquisition, state tracking,
+or physically verified execution.
+
+
+\subsection{Language-guided task and motion planning}
+
+ReAct~\citep{yao2023react} interleaves language reasoning and environment actions;
+Inner Monologue~\citep{huang2023innermonologue} uses environmental feedback to
+revise robot plans. Our CHAT loop likewise returns tool outcomes to the model,
+but unknown physical outcomes stop the user turn rather than authorizing an
+autonomous manipulation retry. This interface is not a faithful reproduction of
+either baseline or evidence of their reported performance.
+
+SayCan~\citep{ahn2022saycan} grounds language-level skill selection with learned
+skill value functions. Our implemented transfer search instead uses symbolic
+preconditions and bounded geometric feasibility checks; it does not implement
+SayCan's learned affordance model. PDDLStream~\citep{garrett2020pddlstream}
+connects symbolic planning to black-box continuous samplers. Our shared operator
+and motion-refinement interfaces are related design choices, but the current
+greedy/beam/UCT implementations are not PDDLStream. TiPToP's pixel-to-manipulation
+system remains the closer end-to-end comparison target, while our present native
+results use privileged simulator inputs. Appendix~\ref{app:combined_agent}
+separates implemented orchestration from the remaining observed-execution gate.
+
+Agentic GenTAMP~\citep{merler2026agenticgentamp} evaluates coding agents that probe a simulator and
+synthesize reusable policies for generalized TAMP. Their policies are frozen
+before evaluation on unseen instances, with no LLM at test time; the setting
+uses fully observed object-centric states and distinguishes black-box simulator
+access from source access. This motivates reusable task interfaces, frozen
+development/deployment splits, and separate synthesis and execution budgets,
+in addition to policy-synthesis comparisons. Our current trials
+instead evaluate online language-agent orchestration over validated robot tools,
+including measured partial progress and explicitly authorized recovery. We have
+not reproduced their benchmark or established performance under observed
+perception uncertainty.
+
+TAMPAgent~\citep{mishra2026tampagent} integrates language-agent orchestration with
+belief-space TAMP constraints, interleaving observation and execution for mobile
+manipulation. Its MuJoCo household tasks include search, occlusion, blocker
+removal, and placement using MolmoSpaces and RoboCasa assets. These task families
+motivate a reusable harness that binds reset states, permitted observations,
+planning tools, execution receipts, and independently checked goals. Our current
+interfaces provide parts of that boundary; observed scene assembly and complete
+observed transfer remain unqualified. Sharing task families or assets does not
+constitute reproduction of TAMPAgent's system or results.

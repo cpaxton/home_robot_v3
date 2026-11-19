@@ -6,6 +6,31 @@ import numpy as np
 from emet.rl.contact import solved_contact_force
 
 
+def whole_body_stopped(control):
+    """Finite measured arm motion and all six floating-base velocity DOFs.
+
+    Keep translation (m/s) separate from angular velocity (rad/s). A planar
+    navigation stop is insufficient while the chassis is bouncing or rocking.
+    Fixed-base controls have no base DOFs; current Mars/Stretch models use a
+    free joint, whose velocity block is [vx, vy, vz, wx, wy, wz].
+    """
+    arm = np.asarray(control.velocities(), dtype=float).copy()
+    base = (
+        np.asarray(control.data.qvel[control.base_dof : control.base_dof + 6], dtype=float).copy()
+        if control.base_dof >= 0
+        else np.zeros(6)
+    )
+    return bool(
+        arm.shape == (control.profile.arm_size,)
+        and base.shape == (6,)
+        and np.isfinite(arm).all()
+        and np.isfinite(base).all()
+        and np.max(np.abs(arm)) < 0.03
+        and np.linalg.norm(base[:3]) < 0.005
+        and np.linalg.norm(base[3:]) < 0.02
+    )
+
+
 def relative_pose(data, ee, payload):
     rotation = data.xmat[ee].reshape(3, 3).T
     return rotation @ (data.xpos[payload] - data.xpos[ee]), rotation @ data.xmat[payload].reshape(3, 3)

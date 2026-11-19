@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "scope": "Assisted MuJoCo development regression; expanded clutter/layout conditions. Provided RGBD map and native state; no observed-only qualification or benchmark denominator. Distractor footprints touch the goal boundary on the reachable far sides. Near-side (left/front) distractors are excluded: the goal region's near edges sit close to the target's grasp pose, so a distractor there occludes the provided scan and fails the grasp before the release. Declared positions are development diagnostics, not held-out benchmark fixtures with independent replay certificates.",
+  "cases": [
+    {"id": "cube_clutter_right", "object": "object1", "config": {"initial_distractor_xy": [0.24, -0.63]}},
+    {"id": "cube_clutter_back", "object": "object1", "config": {"initial_distractor_xy": [0.14, -0.78]}},
+    {"id": "cube_clutter_far", "object": "object1", "config": {"initial_distractor_xy": [0.45, -0.63]}},
+    {"id": "cylinder_clutter_right", "object": "object2", "config": {"initial_distractor_xy": [0.24, -0.63]}}
+  ]
+}

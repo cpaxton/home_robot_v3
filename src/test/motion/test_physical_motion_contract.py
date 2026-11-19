@@ -280,7 +280,7 @@ def test_failed_placement_replan_reason_survives_transport_adapter():
     from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 
     executor = SimpleNamespace(
-        payload_body="load", place_paths=[[], [], []], place_targets=[[], [], []],
+        input_mode="privileged", payload_body="load", place_paths=[[], [], []], place_targets=[[], [], []],
         transport=lambda: PhysicalMotionResult(False, "no_place_witness_within_budget", "transport"),
     )
     result = PhysicalPickPlaceExecutor.place_only(executor, "support", object_gt_body="load")
@@ -441,7 +441,8 @@ def test_planned_lift_leaves_offline_payload_at_lifted_pose():
 
 
 @pytest.mark.parametrize("advance, expected", [(0.1, True), (0.0, False)])
-def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch, advance, expected):
+@pytest.mark.parametrize("custom_close", [False, True])
+def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch, advance, expected, custom_close):
     import emet.controller.manipulation.physical_pick_place as module
 
     clock = [0.0]
@@ -465,12 +466,51 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
         joint_names=["yaw"],
         collision=MujocoSceneCollisionChecker(m, robot_body="robot"),
         synchronize=sync,
-        command_joints=lambda q: True,
+        command_joints=lambda q: True, use_sim_time=True,
+        gripper_close_command=(lambda: robot.close_gripper(loose=True, blocking=False)) if custom_close else None,
     )
     result = executor._close_gripper_until_still(timeout_s=1.0)
     assert result.success == expected
-    assert commands == [{"blocking": False}]
+    assert commands == ([{"loose": True, "blocking": False}] if custom_close else [{"blocking": False}])
     assert executor.payload_body is None  # Motor settling never asserts pickup or attachment.
+
+
+def test_custom_close_without_ack_cannot_be_accepted_as_grasp():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+    executor = object.__new__(PhysicalPickPlaceExecutor)
+    executor.collision = None
+    executor.robot = SimpleNamespace(get_gripper_position=lambda: .2)
+    executor.gripper_close_command = lambda: None
+    result = executor._close_gripper_until_still()
+    assert not result.success and result.message == 'gripper_close_command_failed'
+
+
+@pytest.mark.parametrize('hold_ack, hold_delay, expected', [(True, 0., True), (None, 0., False), (True, 1., False)])
+def test_contact_hold_needs_its_own_settling_with_one_shared_timeout(monkeypatch, hold_ack, hold_delay, expected):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock, commands, events = [0.], [], []
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0]+dt))
+    m = model()
+    d = mujoco.MjData(m)
+    robot = SimpleNamespace(close_gripper=lambda **k: commands.append('close') or True,
+                            get_gripper_position=lambda: .2)
+    executor = module.PhysicalPickPlaceExecutor(robot, model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        input_mode='privileged', collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
+        synchronize=lambda data: setattr(data, 'time', clock[0]), command_joints=lambda q: True,
+        use_sim_time=True, event=lambda **row: events.append(row))
+    def hold():
+        commands.append('hold')
+        assert clock[0] >= .3
+        clock[0] += hold_delay
+        return hold_ack
+    executor.gripper_hold_command = hold
+    result = executor._close_gripper_until_still(timeout_s=.8)
+    assert result.success is expected
+    assert commands == ['close', 'hold'] and executor.payload_body is None
+    assert [e['phase'] for e in events] == (['gripper_motor_settled', 'gripper_settled'] if expected else ['gripper_motor_settled'])
+    if expected:
+        assert clock[0] >= .6
 
 
 def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):
@@ -590,7 +630,8 @@ def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
     d = mujoco.MjData(m)
     calls = []
     checker = SimpleNamespace(payload_body=None, payload_parent=None, payload_transform=None,
-                              set_payload=lambda *args: None)
+                              set_payload=lambda *args: None, capture_payload=lambda: None,
+                              restore_payload=lambda state: None)
     robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open') or False)
     executor = PhysicalPickPlaceExecutor(robot, input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
                                          collision=checker, synchronize=lambda data: None, command_joints=lambda q: True)

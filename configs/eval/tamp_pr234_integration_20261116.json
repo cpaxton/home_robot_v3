@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "purpose": "PR #234 integration smoke on updated #231 parent; familiar privileged simulated Stretch control, not a new benchmark",
+  "pr": 234,
+  "original_head": "4f2c2fad84ccc9769148c9aa414b377b0e935815",
+  "parent": "f5fda95b5eacffbd47672f4cd957f3e6a4187ffe",
+  "runtime_policy": "bounded_release",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "case_id": "two-goal-control",
+  "acceptance": [
+    "successful execution receipt and independently settled final goals",
+    "no forbidden actuation commands",
+    "unchanged collision and retention thresholds",
+    "preserve historical failed pilot outcomes; no reliability estimate"
+  ],
+  "native": {
+    "port_offset": 3460,
+    "cpu_set": "0-7"
+  },
+  "maximum_simulator_bridges": 1,
+  "local_gpu": false,
+  "remote_model": null
+}

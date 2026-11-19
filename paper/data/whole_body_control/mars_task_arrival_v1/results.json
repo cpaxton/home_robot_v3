@@ -1,0 +1,3324 @@
+{
+  "format": "mars-task-arrival-readout-v1",
+  "analysis_script_sha256": "09f78815ae34638f094ded632b017f43d340b7009d2921c91431aed0e840f873",
+  "new_ppo_steps": 0,
+  "hardware_used": false,
+  "qualified": false,
+  "studies": {
+    "arrival": {
+      "format": "mars-task-arrival-diagnostic-v1",
+      "producer_revision": "6b71a4bfed24484670e482cc7a1b46936b63b52e",
+      "script_sha256": "4a8c6e88c0a8919cac2c754429cf8cd1e56465355a2aa916f4132d31f537d2bc",
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "new_ppo_steps": 0,
+      "hardware_used": false,
+      "qualified": false,
+      "complete": true,
+      "summary_sha256": "742de91f7aadfc83e109433a2ffa589792556e21ea0a5b6af888d316ea200d23",
+      "groups": {
+        "teacher_precision": {
+          "group": "teacher_precision",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003991081033126166,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.029645367957286176,
+                "payload_min_distance_m": 2.832484818978744e-05,
+                "jaw_angle_rad": 0.3490999996201789,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 5.399999999999627,
+              "residual": 0.0010943573375700023,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.014681107350073082,
+                "payload_min_distance_m": -1.2475480531082837e-06,
+                "jaw_angle_rad": 0.3492711354346873,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 5.399999999999627,
+              "end_s": 8.449999999999491,
+              "residual": 0.0013103637828764732,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.004461947305289565,
+                "payload_min_distance_m": -1.3276510207257626e-06,
+                "jaw_angle_rad": 0.34937332038177216,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "arm_static_support_margin",
+              "start_s": 9.749999999999925,
+              "end_s": 12.85000000000096,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.03859126571674326,
+                "payload_min_distance_m": -0.0001373753309618447,
+                "jaw_angle_rad": 0.35869436933362003,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": null,
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "task_arrival_teacher",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 0,
+              "reference_controller_calls": 186,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "arm_static_support_margin",
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 186
+          },
+          "max_payload_translation_m": 0.002589205736007824,
+          "max_payload_rotation_rad": 0.030482002358145487,
+          "monitor": {
+            "peak_contact_force": 5.89818003272236,
+            "contact_impulse": 30.04010604327079,
+            "contact": true,
+            "max_penetration": 0.00020137526988789567,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              2.0978353958199178e-05
+            ],
+            "min_wheel_load": [
+              0.5727904196792938,
+              0.04665892236873436,
+              0.0
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "139764e3537ef1985a57d19724c1d29cfdf76ce7bd412d990da29a1acbfeea3b",
+          "physical_trace_identity": "660c63c5ccd51f0f8700ca811508c257614f596460805170949b3706a8b18b8f",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": {
+            "elapsed_s": 3.000000000001002,
+            "rotation_rad": 0.02289343934832425,
+            "lift_m": 0.03131952343356459,
+            "failure": "arm_static_support_margin"
+          }
+        },
+        "actor_precision": {
+          "group": "actor_precision",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003527434978760135,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.02967226527168679,
+                "payload_min_distance_m": 0.00012861492335719177,
+                "jaw_angle_rad": 0.34909999898114297,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": false,
+              "reason": "cartesian_tracking_timeout",
+              "start_s": 1.8000000000000014,
+              "end_s": 12.350000000000794,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.01811763337260952,
+                "payload_min_distance_m": -3.0728889515222156e-05,
+                "jaw_angle_rad": 0.35992219705397593,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": null,
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "tracking_timeout",
+            "message": "tracking timeout",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "pregrasp",
+              "execution_started": true,
+              "policy_calls": 221,
+              "policy_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "cartesian_tracking_timeout",
+          "inference_counts": {
+            "policy_calls": 221,
+            "reference_controller_calls": 0
+          },
+          "max_payload_translation_m": 0.0,
+          "max_payload_rotation_rad": 0.0,
+          "monitor": {
+            "peak_contact_force": 3.465853069568607,
+            "contact_impulse": 53.81423815408403,
+            "contact": true,
+            "max_penetration": 0.000696303902253663,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              1.8621227366840118,
+              2.1934776587086295,
+              0.522139347801684
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "8ac587b978754517fc3138b71de76b182017e17f7c58c152ecc093d7d2d11719",
+          "physical_trace_identity": "ad55d6a43136b53452ff8220ecd0f3fd7405a7f81e555103c8479d67e4a8fe37",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [
+            {
+              "sim_time": 12.350000000000794,
+              "phase": "pregrasp",
+              "execution_contract": "cartesian_arm_v1",
+              "reason": "cartesian_tracking_timeout",
+              "position_error_m": 0.0030069873439917765,
+              "orientation_error_rad": 0.02966344889519621
+            }
+          ],
+          "first_loaded_failure": null
+        },
+        "teacher_region": {
+          "group": "teacher_region",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003991081033126166,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.029645367957286176,
+                "payload_min_distance_m": 2.832484818978744e-05,
+                "jaw_angle_rad": 0.3490999996201789,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 5.399999999999627,
+              "residual": 0.0010943573375700023,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.014681107350073082,
+                "payload_min_distance_m": -1.2475480531082837e-06,
+                "jaw_angle_rad": 0.3492711354346873,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 5.399999999999627,
+              "end_s": 8.449999999999491,
+              "residual": 0.0013103637828764732,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.004461947305289565,
+                "payload_min_distance_m": -1.3276510207257626e-06,
+                "jaw_angle_rad": 0.34937332038177216,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "arm_static_support_margin",
+              "start_s": 9.749999999999925,
+              "end_s": 12.85000000000096,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.03859126571674326,
+                "payload_min_distance_m": -0.0001373753309618447,
+                "jaw_angle_rad": 0.35869436933362003,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "task_arrival_teacher",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 0,
+              "reference_controller_calls": 186,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "arm_static_support_margin",
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 186
+          },
+          "max_payload_translation_m": 0.002589205736007824,
+          "max_payload_rotation_rad": 0.030482002358145487,
+          "monitor": {
+            "peak_contact_force": 5.89818003272236,
+            "contact_impulse": 30.04010604327079,
+            "contact": true,
+            "max_penetration": 0.00020137526988789567,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              2.0978353958199178e-05
+            ],
+            "min_wheel_load": [
+              0.5727904196792938,
+              0.04665892236873436,
+              0.0
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "53ec8668fb46e42aed01ebf78e75b8e6b8f32e482a2d8a9ac817b85f1f87eda0",
+          "physical_trace_identity": "660c63c5ccd51f0f8700ca811508c257614f596460805170949b3706a8b18b8f",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": {
+            "elapsed_s": 3.000000000001002,
+            "rotation_rad": 0.02289343934832425,
+            "lift_m": 0.03131952343356459,
+            "failure": "arm_static_support_margin"
+          }
+        },
+        "actor_region": {
+          "group": "actor_region",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003527434978760135,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.02967226527168679,
+                "payload_min_distance_m": 0.00012861492335719177,
+                "jaw_angle_rad": 0.34909999898114297,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 9.749999999999925,
+              "residual": 0.003954190383351957,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.019003718018108823,
+                "payload_min_distance_m": -3.4429202798849774e-05,
+                "jaw_angle_rad": 0.3601986330092602,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": false,
+              "reason": "cartesian_tracking_timeout",
+              "start_s": 9.749999999999925,
+              "end_s": 20.99999999999924,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.008549623170920395,
+                "payload_min_distance_m": -8.17551938206285e-05,
+                "jaw_angle_rad": 0.364550999989955,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "tracking_timeout",
+            "message": "tracking timeout",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "grasp",
+              "execution_started": true,
+              "policy_calls": 389,
+              "policy_admission": null,
+              "execution_ik_calls": 7,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "cartesian_tracking_timeout",
+          "inference_counts": {
+            "policy_calls": 389,
+            "reference_controller_calls": 0
+          },
+          "max_payload_translation_m": 0.0,
+          "max_payload_rotation_rad": 0.0,
+          "monitor": {
+            "peak_contact_force": 4.77702362372799,
+            "contact_impulse": 137.52105782924596,
+            "contact": true,
+            "max_penetration": 0.0008247549992528545,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              1.816873105645045e-07,
+              7.60458110315998e-07,
+              0.0
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0,
+              0.522139347801684
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "5d62bcf457da0551cb7d12adf7ff74f1f2957cff6a653b41003513dc19e6e869",
+          "physical_trace_identity": "02321fe22a314fb714dcb26fb799cdd4c606cf10129e37fba500dfe5dc9ce068",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [
+            {
+              "sim_time": 20.99999999999924,
+              "phase": "grasp",
+              "execution_contract": "cartesian_arm_v1",
+              "reason": "cartesian_tracking_timeout",
+              "position_error_m": 0.0033054295414879156,
+              "orientation_error_rad": 0.03490774578923283
+            }
+          ],
+          "first_loaded_failure": null
+        }
+      },
+      "source_hashes_delta": {
+        "rl/manipulation/control.py": "be0d96b0177d477afc0fe18c5825be7c64e5012ccee496721bae7d164c0123b7",
+        "rl/manipulation/env.py": "2d095884fd8826433faec97758c4bb7c6a5e7600ec1fca2dd89b645a57247f4d",
+        "rl/manipulation/grasp_setup.py": "9db8f39bba30bcb3e5f863081a5b18dc331dd7a3ef3a5274a5a8354e7f5f8f4c",
+        "controller/task/tamp/mars_pose_executor.py": "b37ce6deade51bc0efd6c98a394471a644cd86ed353c43d145f4209252cb44aa",
+        "controller/task/tamp/api.py": "76a542d157d7a1326d82d35a1fbf3c30ed4cc2f4cdffd94f545794f68f0c67f9",
+        "eval/mars_tamp_control.py": "975ffc5d2d35e9838deb26164cda9af580bb216b64a392e691f2388e5a844599"
+      },
+      "source_hashes_sha256": "1b47f81e4e8dc0b0fc1a9df3cd424f2fe04c4f83798715557fc4bb80453b91d4"
+    },
+    "maximum_margin": {
+      "format": "mars-task-arrival-diagnostic-v1",
+      "producer_revision": "670413d63797dc23bc13b4eb02b236811d56119a",
+      "script_sha256": "60b4d01ccb57f7f02689ec2a311ff864ccc23e8c5ab01b444ef3394581107436",
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "new_ppo_steps": 0,
+      "hardware_used": false,
+      "qualified": false,
+      "complete": true,
+      "study": "maximum_margin",
+      "summary_sha256": "8a34d4950c975e2cab5001a794125d371040199f79a94677c7e05178dc1a7fb3",
+      "groups": {
+        "teacher_maximum_margin": {
+          "group": "teacher_maximum_margin",
+          "case": {
+            "id": "development:right:50g:1@maximum_margin",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.00023925541301225473,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.030822933893489973,
+                "payload_min_distance_m": -1.4046861228380492e-05,
+                "jaw_angle_rad": 0.351713157824428,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 4.899999999999682,
+              "end_s": 8.549999999999525,
+              "residual": 0.0005564446845043933,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.015218161260772883,
+                "payload_min_distance_m": -6.257476092833895e-06,
+                "jaw_angle_rad": 0.350399023556353,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 8.549999999999525,
+              "end_s": 11.80000000000061,
+              "residual": 0.0006063312285519298,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.0051294472645626865,
+                "payload_min_distance_m": -1.0258864992775007e-05,
+                "jaw_angle_rad": 0.35000796815194424,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "retention_lost",
+              "start_s": 13.200000000001078,
+              "end_s": 17.200000000001346,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.05818649312090581,
+                "payload_min_distance_m": -0.00011932102058327057,
+                "jaw_angle_rad": 0.340376269573062,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.2902193501457483,
+              -0.2220498448236858,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -1.4,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              0.019143476939524583,
+              -0.12960698693215364,
+              0.8002178512910044
+            ],
+            "witness_hand": [
+              0.3063089558586196,
+              -0.2330256202122983,
+              0.23387544468438837,
+              0.825456632783627,
+              0.5644567253093704,
+              -0.5644646230255845,
+              0.8254524791457893,
+              -0.001018207297090976,
+              -0.004099990864773129
+            ],
+            "placement_region": [
+              [
+                0.26021935014574826,
+                -0.2520498448236858
+              ],
+              [
+                0.3202193501457483,
+                -0.1920498448236858
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.01930180748068916,
+              -0.12861591327672983,
+              1.4
+            ],
+            "arm": [
+              -1.4,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": -1.4,
+            "minimum_sampled_margin_m": 0.021059668329257757,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "maximum_margin"
+          },
+          "grasp_setup_prefer_nominal": false,
+          "initial_state_sha256": "bb0830f240069e7cd90edef2c8e2454f21b03dde93c33720b78ed592c91c7a0b",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.030834334213236364,
+            "payload_min_distance_m": -2.7237395180214704e-06,
+            "jaw_angle_rad": 0.34945653247514163,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": false,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "retention_lost",
+            "message": "retention lost",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "task_arrival_teacher",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "policy_calls": 0,
+              "reference_controller_calls": 250,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 7,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "retention_lost",
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 250
+          },
+          "max_payload_translation_m": 0.0032094327763127714,
+          "max_payload_rotation_rad": 0.13843601711463527,
+          "monitor": {
+            "peak_contact_force": 5.6348281088239185,
+            "contact_impulse": 45.75307436600007,
+            "contact": true,
+            "max_penetration": 0.0005597886010068782,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              0.049815673227195906,
+              2.3322859540482463,
+              0.00554627464290335
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "d060672afa94000603b3144cd84d6840d558ec8f82a0105ba7edf4cfe5ca9ca3",
+          "physical_trace_identity": "d7ad8aa052cce7f60ffaf0f121926125ee1fc678e4b216525940d9734678fde4",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": {
+            "elapsed_s": 3.800000000000379,
+            "rotation_rad": 0.10811862690691482,
+            "lift_m": 0.048671246955170194,
+            "failure": "retention_lost"
+          }
+        },
+        "actor_maximum_margin": {
+          "group": "actor_maximum_margin",
+          "case": {
+            "id": "development:right:50g:1@maximum_margin",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.00025360704354515054,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.03076984851957509,
+                "payload_min_distance_m": -7.821612191876067e-06,
+                "jaw_angle_rad": 0.350504925092736,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": false,
+              "reason": "cartesian_path_tracking_envelope",
+              "start_s": 4.349999999999743,
+              "end_s": 6.499999999999506,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.030071129721942313,
+                "payload_min_distance_m": -1.4323497284393778e-05,
+                "jaw_angle_rad": 0.35157082388700533,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.2902193501457483,
+              -0.2220498448236858,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -1.4,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              0.019143476939524583,
+              -0.12960698693215364,
+              0.8002178512910044
+            ],
+            "witness_hand": [
+              0.3063089558586196,
+              -0.2330256202122983,
+              0.23387544468438837,
+              0.825456632783627,
+              0.5644567253093704,
+              -0.5644646230255845,
+              0.8254524791457893,
+              -0.001018207297090976,
+              -0.004099990864773129
+            ],
+            "placement_region": [
+              [
+                0.26021935014574826,
+                -0.2520498448236858
+              ],
+              [
+                0.3202193501457483,
+                -0.1920498448236858
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.01930180748068916,
+              -0.12861591327672983,
+              1.4
+            ],
+            "arm": [
+              -1.4,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": -1.4,
+            "minimum_sampled_margin_m": 0.021059668329257757,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "maximum_margin"
+          },
+          "grasp_setup_prefer_nominal": false,
+          "initial_state_sha256": "bb0830f240069e7cd90edef2c8e2454f21b03dde93c33720b78ed592c91c7a0b",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.030834334213236364,
+            "payload_min_distance_m": -2.7237395180214704e-06,
+            "jaw_angle_rad": 0.34945653247514163,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "tracking_timeout",
+            "message": "tracking timeout",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "pregrasp",
+              "execution_started": true,
+              "policy_calls": 84,
+              "policy_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "cartesian_path_tracking_envelope",
+          "inference_counts": {
+            "policy_calls": 84,
+            "reference_controller_calls": 0
+          },
+          "max_payload_translation_m": 0.0,
+          "max_payload_rotation_rad": 0.0,
+          "monitor": {
+            "peak_contact_force": 1.3215881139402197,
+            "contact_impulse": 6.320081853847462,
+            "contact": true,
+            "max_penetration": 0.0002964786246395894,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              2.7078364914824133,
+              5.961093191067096,
+              1.6437701700245588
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "8f0b866891d172c10c91ca292d3962bcf23ccaba38a7c839f33f7c102b9b67bb",
+          "physical_trace_identity": "493b617a1383773f72a42638145204ac5f81e98d6c4f0feb176cff1cae431403",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [
+            {
+              "sim_time": 6.499999999999506,
+              "phase": "pregrasp",
+              "execution_contract": "cartesian_arm_v1",
+              "reason": "cartesian_path_tracking_envelope",
+              "position_error_m": 0.010179760888971193,
+              "orientation_error_rad": 0.006184010540556923
+            }
+          ],
+          "first_loaded_failure": null
+        }
+      },
+      "source_hashes_delta": {
+        "rl/manipulation/control.py": "be0d96b0177d477afc0fe18c5825be7c64e5012ccee496721bae7d164c0123b7",
+        "rl/manipulation/env.py": "0f39766f0cbfe60bb92bad54b6ea143e1bdc6c7aa40a548b5f699fb993c5354d",
+        "rl/manipulation/grasp_setup.py": "81364a4886e2fe2ca83a8f82cdae862c0b6a0145673baa4ed16fef86ee8c3de8",
+        "controller/task/tamp/mars_pose_executor.py": "4fa036a585f627ebc5c9a330033594229a045d06af8ee1ce0e95e24323222db1",
+        "controller/task/tamp/api.py": "76a542d157d7a1326d82d35a1fbf3c30ed4cc2f4cdffd94f545794f68f0c67f9",
+        "eval/mars_tamp_control.py": "9c6983c494c55f55a59727a7d2303e42410a7d67bfb3eb5352268091f2ee5ce5"
+      },
+      "source_hashes_sha256": "d2476e6d2e9f86e0be13c67bb8326091bf41a14d690feaca7f791958fc297c59"
+    },
+    "grasp_region": {
+      "format": "mars-task-arrival-diagnostic-v1",
+      "producer_revision": "2b3ec28ae0e3331882d7d65dfa2dcdefa68a1621",
+      "script_sha256": "a59ec219ce88b64c9088154c18513ae37cd6dbd177d85299a3eb1f8028b022ae",
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "new_ppo_steps": 0,
+      "hardware_used": false,
+      "qualified": false,
+      "complete": true,
+      "study": "grasp_region",
+      "summary_sha256": "957a8dda7d759ba48db144e63b5bfaf8610531ab8905aa996e583c70713f5c13",
+      "groups": {
+        "teacher_grasp_region": {
+          "group": "teacher_grasp_region",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003991081033126166,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.029645367957286176,
+                "payload_min_distance_m": 2.832484818978744e-05,
+                "jaw_angle_rad": 0.3490999996201789,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 5.399999999999627,
+              "residual": 0.0010943573375700023,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.014681107350073082,
+                "payload_min_distance_m": -1.2475480531082837e-06,
+                "jaw_angle_rad": 0.3492711354346873,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 5.399999999999627,
+              "end_s": 8.449999999999491,
+              "residual": 0.0013103637828764732,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.004461947305289565,
+                "payload_min_distance_m": -1.3276510207257626e-06,
+                "jaw_angle_rad": 0.34937332038177216,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "arm_static_support_margin",
+              "start_s": 9.749999999999925,
+              "end_s": 12.85000000000096,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.03859126571674326,
+                "payload_min_distance_m": -0.0001373753309618447,
+                "jaw_angle_rad": 0.35869436933362003,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "arm": [
+              0.0,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": 0.0,
+            "minimum_sampled_margin_m": 0.005368835576656008,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "nominal_path_margin"
+          },
+          "grasp_setup_prefer_nominal": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "grasp_stage_region": [
+            0.004,
+            0.04
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "task_arrival_teacher",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 0,
+              "reference_controller_calls": 186,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "arm_static_support_margin",
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 186
+          },
+          "max_payload_translation_m": 0.002589205736007824,
+          "max_payload_rotation_rad": 0.030482002358145487,
+          "monitor": {
+            "peak_contact_force": 5.89818003272236,
+            "contact_impulse": 30.04010604327079,
+            "contact": true,
+            "max_penetration": 0.00020137526988789567,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              2.0978353958199178e-05
+            ],
+            "min_wheel_load": [
+              0.5727904196792938,
+              0.04665892236873436,
+              0.0
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "9d1579995d622917ed6f346889bfe08a7d4014a8428e8bda911acff5e96eeab6",
+          "physical_trace_identity": "660c63c5ccd51f0f8700ca811508c257614f596460805170949b3706a8b18b8f",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": {
+            "elapsed_s": 3.000000000001002,
+            "rotation_rad": 0.02289343934832425,
+            "lift_m": 0.03131952343356459,
+            "failure": "arm_static_support_margin"
+          }
+        },
+        "actor_grasp_region": {
+          "group": "actor_grasp_region",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003527434978760135,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.02967226527168679,
+                "payload_min_distance_m": 0.00012861492335719177,
+                "jaw_angle_rad": 0.34909999898114297,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 9.749999999999925,
+              "residual": 0.003954190383351957,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.019003718018108823,
+                "payload_min_distance_m": -3.4429202798849774e-05,
+                "jaw_angle_rad": 0.3601986330092602,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": false,
+              "reason": "cartesian_tracking_timeout",
+              "start_s": 9.749999999999925,
+              "end_s": 20.99999999999924,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.008646944461526973,
+                "payload_min_distance_m": -8.45827446527019e-05,
+                "jaw_angle_rad": 0.3649861269074858,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "arm": [
+              0.0,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": 0.0,
+            "minimum_sampled_margin_m": 0.005368835576656008,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "nominal_path_margin"
+          },
+          "grasp_setup_prefer_nominal": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "grasp_stage_region": [
+            0.004,
+            0.04
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": false
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "tracking_timeout",
+            "message": "tracking timeout",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "grasp",
+              "execution_started": true,
+              "policy_calls": 355,
+              "policy_admission": null,
+              "execution_ik_calls": 7,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "cartesian_tracking_timeout",
+          "inference_counts": {
+            "policy_calls": 355,
+            "reference_controller_calls": 0
+          },
+          "max_payload_translation_m": 0.0,
+          "max_payload_rotation_rad": 0.0,
+          "monitor": {
+            "peak_contact_force": 4.83249345473911,
+            "contact_impulse": 138.58609264587386,
+            "contact": true,
+            "max_penetration": 0.0008395242651922617,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              1.442420094754926e-06,
+              7.896587400496591e-07,
+              0.0
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0,
+              0.522139347801684
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "f218e556ad6f814596a0d597cdf2b760647ba95836026035923020b688d49245",
+          "physical_trace_identity": "ea6a58e98579130c2233ff6011a37d5081189a6bfffeac837df5a93d2e21c930",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [
+            {
+              "sim_time": 20.99999999999924,
+              "phase": "grasp",
+              "execution_contract": "cartesian_arm_v1",
+              "reason": "cartesian_tracking_timeout",
+              "position_error_m": 0.003277209355958211,
+              "orientation_error_rad": 0.040520075399763614
+            }
+          ],
+          "first_loaded_failure": null
+        }
+      },
+      "source_hashes_delta": {
+        "rl/manipulation/control.py": "be0d96b0177d477afc0fe18c5825be7c64e5012ccee496721bae7d164c0123b7",
+        "rl/manipulation/env.py": "0f39766f0cbfe60bb92bad54b6ea143e1bdc6c7aa40a548b5f699fb993c5354d",
+        "rl/manipulation/grasp_setup.py": "81364a4886e2fe2ca83a8f82cdae862c0b6a0145673baa4ed16fef86ee8c3de8",
+        "controller/task/tamp/mars_pose_executor.py": "4fa036a585f627ebc5c9a330033594229a045d06af8ee1ce0e95e24323222db1",
+        "controller/task/tamp/api.py": "76a542d157d7a1326d82d35a1fbf3c30ed4cc2f4cdffd94f545794f68f0c67f9",
+        "eval/mars_tamp_control.py": "9c6983c494c55f55a59727a7d2303e42410a7d67bfb3eb5352268091f2ee5ce5"
+      },
+      "source_hashes_sha256": "d2476e6d2e9f86e0be13c67bb8326091bf41a14d690feaca7f791958fc297c59"
+    },
+    "hold_reacquire": {
+      "format": "mars-task-arrival-diagnostic-v1",
+      "producer_revision": "2cbf70d8f0cc8ac2c95901a1ca0fcddfc425baa0",
+      "script_sha256": "a59ec219ce88b64c9088154c18513ae37cd6dbd177d85299a3eb1f8028b022ae",
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "new_ppo_steps": 0,
+      "hardware_used": false,
+      "qualified": false,
+      "complete": true,
+      "study": "grasp_region",
+      "summary_sha256": "a58ff892a43177500f0893d37eca0556065ff09bbfa35b36ca379b5a266d1dda",
+      "groups": {
+        "teacher_grasp_region": {
+          "group": "teacher_grasp_region",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003991081033126166,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.029645367957286176,
+                "payload_min_distance_m": 2.832484818978744e-05,
+                "jaw_angle_rad": 0.3490999996201789,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 5.399999999999627,
+              "residual": 0.0010943573375700023,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.014681107350073082,
+                "payload_min_distance_m": -1.2475480531082837e-06,
+                "jaw_angle_rad": 0.3492711354346873,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 5.399999999999627,
+              "end_s": 8.449999999999491,
+              "residual": 0.0013103637828764732,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.004461947305289565,
+                "payload_min_distance_m": -1.3276510207257626e-06,
+                "jaw_angle_rad": 0.34937332038177216,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "arm_static_support_margin",
+              "start_s": 9.749999999999925,
+              "end_s": 12.85000000000096,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.03859126571674326,
+                "payload_min_distance_m": -0.0001373753309618447,
+                "jaw_angle_rad": 0.35869436933362003,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "arm": [
+              0.0,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": 0.0,
+            "minimum_sampled_margin_m": 0.005368835576656008,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "nominal_path_margin"
+          },
+          "grasp_setup_prefer_nominal": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "grasp_stage_region": [
+            0.004,
+            0.04
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "task_arrival_teacher",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 0,
+              "reference_controller_calls": 186,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "arm_static_support_margin",
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 186
+          },
+          "max_payload_translation_m": 0.002589205736007824,
+          "max_payload_rotation_rad": 0.030482002358145487,
+          "monitor": {
+            "peak_contact_force": 5.89818003272236,
+            "contact_impulse": 30.04010604327079,
+            "contact": true,
+            "max_penetration": 0.00020137526988789567,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              2.0978353958199178e-05
+            ],
+            "min_wheel_load": [
+              0.5727904196792938,
+              0.04665892236873436,
+              0.0
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "d79cf1c21c6bc6091932277df0d6b0c27801a5ccc18eb2b0f119ba06b382bb3d",
+          "physical_trace_identity": "660c63c5ccd51f0f8700ca811508c257614f596460805170949b3706a8b18b8f",
+          "hold_reacquisitions": [],
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": {
+            "elapsed_s": 3.000000000001002,
+            "rotation_rad": 0.02289343934832425,
+            "lift_m": 0.03131952343356459,
+            "failure": "arm_static_support_margin"
+          }
+        },
+        "actor_grasp_region": {
+          "group": "actor_grasp_region",
+          "case": {
+            "id": "development:right:50g:1",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.0000000000000007,
+              "end_s": 1.7500000000000013,
+              "residual": 0.0003527434978760135,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.02967226527168679,
+                "payload_min_distance_m": 0.00012861492335719177,
+                "jaw_angle_rad": 0.34909999898114297,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 1.8000000000000014,
+              "end_s": 9.749999999999925,
+              "residual": 0.003954190383351957,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.019003718018108823,
+                "payload_min_distance_m": -3.4429202798849774e-05,
+                "jaw_angle_rad": 0.3601986330092602,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 9.749999999999925,
+              "end_s": 20.849999999999323,
+              "residual": 0.0031941855036598647,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.008473704500719936,
+                "payload_min_distance_m": -8.456620972724043e-05,
+                "jaw_angle_rad": 0.36451590395260425,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "arm_path_static_support_margin",
+              "start_s": 22.199999999998575,
+              "end_s": 22.199999999998575,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.008469045298482192,
+                "payload_min_distance_m": -0.0001421703426620637,
+                "jaw_angle_rad": 0.3622111255592059,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "arm": [
+              0.0,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": 0.0,
+            "minimum_sampled_margin_m": 0.005368835576656008,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "nominal_path_margin"
+          },
+          "grasp_setup_prefer_nominal": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "grasp_stage_region": [
+            0.004,
+            0.04
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.0,
+            "payload_min_distance_m": 8.228772272781896e-05,
+            "jaw_angle_rad": 0.34910026625952856,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": false
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "planning_failed",
+            "message": "planning failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "motion_rejection": "static_support_margin",
+              "policy_calls": 380,
+              "policy_admission": null,
+              "execution_ik_calls": 13,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "planning_failed",
+          "inference_counts": {
+            "policy_calls": 380,
+            "reference_controller_calls": 0
+          },
+          "max_payload_translation_m": 0.0,
+          "max_payload_rotation_rad": 0.0,
+          "monitor": {
+            "peak_contact_force": 4.83249345473911,
+            "contact_impulse": 153.97014557566476,
+            "contact": true,
+            "max_penetration": 0.000834759758674794,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              1.442420094754926e-06,
+              7.896587400496591e-07,
+              0.0
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0,
+              0.522139347801684
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "2522b4529ea108c40144ba4e7a3d941330e7b2c542977a711c419b6af329d69e",
+          "physical_trace_identity": "d186ee59344fcce17e085bf77c93a7890c2c40eb9353c59338240cc3d3293439",
+          "hold_reacquisitions": [
+            {
+              "sim_time": 19.350000000000154,
+              "phase": "grasp",
+              "execution_contract": "cartesian_arm_v1",
+              "reason": "hold_reacquire",
+              "hold_reacquisitions": 1,
+              "position_error_m": 0.0036570283130577773,
+              "orientation_error_rad": 0.0400003185443239
+            }
+          ],
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": null
+        }
+      },
+      "source_hashes_delta": {
+        "rl/manipulation/control.py": "5d9fd3f4a6b2ca6500dfa9fa2e33e5ef199a2483cf0dc41ead0c9ad575de5331",
+        "rl/manipulation/env.py": "0f39766f0cbfe60bb92bad54b6ea143e1bdc6c7aa40a548b5f699fb993c5354d",
+        "rl/manipulation/grasp_setup.py": "81364a4886e2fe2ca83a8f82cdae862c0b6a0145673baa4ed16fef86ee8c3de8",
+        "controller/task/tamp/mars_pose_executor.py": "064a140ade2ad045eff87a4e5cbe073510f522aee473eaf3f4759f2327a853a2",
+        "controller/task/tamp/api.py": "390181f5e4ed61d75addc007952cac3f97acf2c7327256b44c8da755a017102b",
+        "eval/mars_tamp_control.py": "9c6983c494c55f55a59727a7d2303e42410a7d67bfb3eb5352268091f2ee5ce5"
+      },
+      "source_hashes_sha256": "27af6d39de82de5966b0053585bfa21bb0fa2c1c810d07cc9b38438c92bb7bce"
+    },
+    "physical_stance": {
+      "format": "mars-task-arrival-diagnostic-v1",
+      "producer_revision": "1383f076ca6a4a33159658199d454b0f023ce312",
+      "script_sha256": "c549d94278f1c17a66470c2272447bda02563e2f7e191610901ccc11e7828d94",
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "new_ppo_steps": 0,
+      "hardware_used": false,
+      "qualified": false,
+      "complete": true,
+      "study": "physical_stance",
+      "summary_sha256": "a1fd9eda9f6e491fb440a5ee30ef52a231445f8519957fb2ebf29d91bd6c290c",
+      "groups": {
+        "teacher_physical_stance": {
+          "group": "teacher_physical_stance",
+          "case": {
+            "id": "development:right:50g:1@physical_stance",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [
+            {
+              "phase": "approach_clearance",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 5.999999999999561,
+              "end_s": 6.999999999999451,
+              "residual": 0.0002805106399631337,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.0,
+                "payload_min_distance_m": 0.0,
+                "jaw_angle_rad": 0.3490999996762699,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "pregrasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 7.049999999999446,
+              "end_s": 10.60000000000021,
+              "residual": 0.0009538651881236198,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.0,
+                "payload_min_distance_m": -1.93828158263602e-06,
+                "jaw_angle_rad": 0.3494186450406411,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "grasp",
+              "success": true,
+              "reason": "measured_cartesian_path",
+              "start_s": 10.60000000000021,
+              "end_s": 13.800000000001278,
+              "residual": 0.0012088688723512048,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.004560819280695905,
+                "payload_min_distance_m": -7.804633106950879e-07,
+                "jaw_angle_rad": 0.3495718167523769,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            },
+            {
+              "phase": "lift",
+              "success": false,
+              "reason": "retention_lost",
+              "start_s": 15.100000000001712,
+              "end_s": 19.200000000000237,
+              "residual": null,
+              "finger_geometry": {
+                "source_support_min_distance_m": 0.06084798556372964,
+                "payload_min_distance_m": -0.00015114374761913133,
+                "jaw_angle_rad": 0.3656919279922637,
+                "scope": "measured_configuration_only; benign payload contact permitted"
+              }
+            }
+          ],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "arm": [
+              0.0,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": 0.0,
+            "minimum_sampled_margin_m": 0.005368835576656008,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "nominal_path_margin"
+          },
+          "grasp_setup_prefer_nominal": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "physical_preparation": {
+            "minimum_measured_support_margin_m": 0.016786614952402305,
+            "collision": false,
+            "trajectory": {
+              "format": "task_pose_trajectory_v1",
+              "times": [
+                0.0,
+                3.589652264589459
+              ],
+              "base": [
+                [
+                  -0.0019539638536555234,
+                  1.3154309122400254e-05,
+                  7.896099466708325e-05
+                ],
+                [
+                  0.01804603608399609,
+                  1.473352901410089e-05,
+                  7.896099466708325e-05
+                ]
+              ],
+              "hand": [
+                [
+                  0.3140219300597733,
+                  -0.05284565772801862,
+                  0.2570762292896453,
+                  0.9999632881165251,
+                  -8.013223121180141e-05,
+                  8.12645314153742e-05,
+                  0.999999988012202,
+                  -0.008568302939556937,
+                  0.00013249310190514182
+                ],
+                [
+                  0.3140219300597733,
+                  -0.05284565772801862,
+                  0.2570762292896453,
+                  0.9999632881165251,
+                  -8.013223121180141e-05,
+                  8.12645314153742e-05,
+                  0.999999988012202,
+                  -0.008568302939556937,
+                  0.00013249310190514182
+                ]
+              ],
+              "gripper": [
+                0.3491,
+                0.3491
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "hand_mask": true,
+              "interpolation": "continuous_s_curve_translation_fixed_world_hand",
+              "scalar_derivative_certificate": {
+                "input_vertices": 2,
+                "retained_vertices": 2,
+                "geometry": "original_polyline_without_redundant_collinear_vertices",
+                "interpolation": "jerk_limited_s_curve_trapezoidal_velocity_c2",
+                "speed": [
+                  0.12
+                ],
+                "acceleration": [
+                  0.12
+                ],
+                "jerk": [
+                  1.0
+                ],
+                "jerk_limit_source": "explicit_experimental_reference_limit_not_a_hardware_rating",
+                "phase_rate_bound": 1,
+                "phase_acceleration_bound": 2.0,
+                "phase_jerk_bound": 80.0,
+                "segments": [
+                  {
+                    "nominal_peaks": [
+                      [
+                        0.011143140630802777
+                      ],
+                      [
+                        0.008321201939329585
+                      ],
+                      [
+                        0.018260271200148687
+                      ]
+                    ],
+                    "governed_bounds": [
+                      [
+                        0.011143140630802777
+                      ],
+                      [
+                        0.03060748320093514
+                      ],
+                      [
+                        0.9596387333003484
+                      ]
+                    ],
+                    "phase_durations": [
+                      0.45569980029988977,
+                      0.8834265316949501,
+                      0.45569980029988977,
+                      0.0,
+                      0.45569980029988977,
+                      0.8834265316949501,
+                      0.45569980029988977
+                    ]
+                  }
+                ],
+                "duration_s": 3.589652264589459,
+                "dynamic_feasibility_verified": false
+              },
+              "scope": "simulator physical preparation; no continuous collision or dynamics certificate"
+            },
+            "success": true,
+            "reason": "measured_pose_and_retention",
+            "measured_base": [
+              0.016866140650190018,
+              8.907777837918034e-06,
+              0.00015539326497772762
+            ],
+            "measured_hand": [
+              0.3129599535976769,
+              -0.05283922998635562,
+              0.25699111468879154,
+              0.9999608670522504,
+              -0.00010980741973165625,
+              0.00011090658620933965,
+              0.999999986190997,
+              -0.008846019660892079,
+              0.00012474107864255155
+            ]
+          },
+          "prepared_state_sha256": "9516b42c39db7dc942887e003f0a04f604f5d4493c6c98002f7ba84d92926a56",
+          "arrival_region": [
+            0.004,
+            0.04
+          ],
+          "other_stage_tolerances": [
+            0.003,
+            0.02
+          ],
+          "grasp_stage_region": [
+            0.004,
+            0.04
+          ],
+          "pregrasp_to_grasp_offset_m": [
+            0.0,
+            0.0,
+            0.010000000000000009
+          ],
+          "initial_finger_geometry": {
+            "source_support_min_distance_m": 0.029924477355193078,
+            "payload_min_distance_m": 0.0004502661292328978,
+            "jaw_angle_rad": 0.34909999999875463,
+            "scope": "measured_configuration_only; benign payload contact permitted"
+          },
+          "final_predicates": {
+            "inside_goal_region": false,
+            "destination_support": false,
+            "gripper_open": true,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          },
+          "post_execution_stable_s": 0.0,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "retention_lost",
+            "message": "retention lost",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "task_arrival_teacher",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "policy_calls": 0,
+              "reference_controller_calls": 285,
+              "reference_settings_admission": null,
+              "execution_ik_calls": 6,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "robot_failure": "retention_lost",
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 285
+          },
+          "max_payload_translation_m": 0.0036550139298698776,
+          "max_payload_rotation_rad": 0.12546521694432433,
+          "monitor": {
+            "peak_contact_force": 5.500989340226761,
+            "contact_impulse": 38.904058537842715,
+            "contact": true,
+            "max_penetration": 0.00020437913154108475,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              0.8933398365647868,
+              0.09042135636267515,
+              0.002600030862276543
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "887a6a8e901ed4399cc6efe96e77ad42eeec54f287f53845e2a368d52b5809d3",
+          "physical_trace_identity": "6a530801c53101897f870fca71bde69dc5997fb8bda2f2ec514cef54cb0554c1",
+          "hold_reacquisitions": [],
+          "physical_preparation_tracking": {
+            "requested_forward_m": 0.02,
+            "achieved_forward_m": 0.01882010410986505,
+            "peak_abs_base_request_m_s": 0.010573058690467959,
+            "peak_abs_applied_base_velocity_m_s": 0.009465323798110601
+          },
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": {
+            "elapsed_s": 3.899999999998636,
+            "rotation_rad": 0.10364298850210553,
+            "lift_m": 0.05156654237672967,
+            "failure": "retention_lost"
+          }
+        },
+        "actor_physical_stance": {
+          "group": "actor_physical_stance",
+          "case": {
+            "id": "development:right:50g:1@physical_stance",
+            "layout": "right",
+            "seed": 34600001,
+            "mass_kg": 0.05,
+            "yaw_offset_rad": -0.6
+          },
+          "success": false,
+          "stage_results": [],
+          "fixture_admission": {
+            "accepted": true,
+            "source_support": [
+              0.2948347824550802,
+              -0.0529,
+              0.10761511310618965
+            ],
+            "destination_support": [
+              0.25817630739052916,
+              -0.17122777774127637,
+              0.10761511310618965
+            ],
+            "witness_arm": [
+              -0.6,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "witness_base": [
+              -0.0019539638536555234,
+              1.3154309122400254e-05,
+              7.896099466708325e-05
+            ],
+            "witness_hand": [
+              0.2737718457675461,
+              -0.18185690422928286,
+              0.23311829990532731,
+              0.825370088304055,
+              0.5645711642991749,
+              -0.5645772981863637,
+              0.8253801893836189,
+              -0.004085548377187886,
+              -0.0026350360406314595
+            ],
+            "placement_region": [
+              [
+                0.22817630739052916,
+                -0.20122777774127637
+              ],
+              [
+                0.28817630739052913,
+                -0.14122777774127637
+              ]
+            ]
+          },
+          "reset_setup": {
+            "base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "arm": [
+              0.0,
+              -0.36822557245772836,
+              0.20470551182520608,
+              0.16352006063252228,
+              0.0
+            ],
+            "hand": [
+              0.3144823542434851,
+              -0.05285,
+              0.23761511310618966,
+              1.0,
+              0.0,
+              0.0,
+              1.0,
+              -5.551115123125783e-17,
+              0.0
+            ],
+            "azimuth_offset_rad": 0.0,
+            "minimum_sampled_margin_m": 0.005368835576656008,
+            "original_loaded_margin_m": 0.006473185844294625,
+            "initial_base": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "carry_joint_offset": null,
+            "setup_margin_required_m": 0.005,
+            "selection_reason": "nominal_path_margin"
+          },
+          "grasp_setup_prefer_nominal": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "physical_preparation": {
+            "minimum_measured_support_margin_m": 0.01678375336426015,
+            "collision": false,
+            "trajectory": {
+              "format": "task_pose_trajectory_v1",
+              "times": [
+                0.0,
+                3.589652264589459
+              ],
+              "base": [
+                [
+                  -0.0019539638536555234,
+                  1.3154309122400254e-05,
+                  7.896099466708325e-05
+                ],
+                [
+                  0.01804603608399609,
+                  1.473352901410089e-05,
+                  7.896099466708325e-05
+                ]
+              ],
+              "hand": [
+                [
+                  0.3140219300597733,
+                  -0.05284565772801862,
+                  0.2570762292896453,
+                  0.9999632881165251,
+                  -8.013223121180141e-05,
+                  8.12645314153742e-05,
+                  0.999999988012202,
+                  -0.008568302939556937,
+                  0.00013249310190514182
+                ],
+                [
+                  0.3140219300597733,
+                  -0.05284565772801862,
+                  0.2570762292896453,
+                  0.9999632881165251,
+                  -8.013223121180141e-05,
+                  8.12645314153742e-05,
+                  0.999999988012202,
+                  -0.008568302939556937,
+                  0.00013249310190514182
+                ]
+              ],
+              "gripper": [
+                0.3491,
+                0.3491
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "hand_mask": true,
+              "interpolation": "continuous_s_curve_translation_fixed_world_hand",
+              "scalar_derivative_certificate": {
+                "input_vertices": 2,
+                "retained_vertices": 2,
+                "geometry": "original_polyline_without_redundant_collinear_vertices",
+                "interpolation": "jerk_limited_s_curve_trapezoidal_velocity_c2",
+                "speed": [
+                  0.12
+                ],
+                "acceleration": [
+                  0.12
+                ],
+                "jerk": [
+                  1.0
+                ],
+                "jerk_limit_source": "explicit_experimental_reference_limit_not_a_hardware_rating",
+                "phase_rate_bound": 1,
+                "phase_acceleration_bound": 2.0,
+                "phase_jerk_bound": 80.0,
+                "segments": [
+                  {
+                    "nominal_peaks": [
+                      [
+                        0.011143140630802777
+                      ],
+                      [
+                        0.008321201939329585
+                      ],
+                      [
+                        0.018260271200148687
+                      ]
+                    ],
+                    "governed_bounds": [
+                      [
+                        0.011143140630802777
+                      ],
+                      [
+                        0.03060748320093514
+                      ],
+                      [
+                        0.9596387333003484
+                      ]
+                    ],
+                    "phase_durations": [
+                      0.45569980029988977,
+                      0.8834265316949501,
+                      0.45569980029988977,
+                      0.0,
+                      0.45569980029988977,
+                      0.8834265316949501,
+                      0.45569980029988977
+                    ]
+                  }
+                ],
+                "duration_s": 3.589652264589459,
+                "dynamic_feasibility_verified": false
+              },
+              "scope": "simulator physical preparation; no continuous collision or dynamics certificate"
+            },
+            "success": false,
+            "reason": "transport_tracking_timeout",
+            "measured_base": [
+              0.00019827392614640032,
+              1.9359538969908765e-05,
+              0.0014478115197643893
+            ],
+            "measured_hand": [
+              0.31459687211989495,
+              -0.052757525686816575,
+              0.2570810090257392,
+              0.9999607055675985,
+              8.212557845249588e-05,
+              -7.746664619105477e-05,
+              0.9999998587088221,
+              -0.008864610520039453,
+              0.0005252025589030789
+            ]
+          },
+          "prepared_state_sha256": "0333b65c38f0fc2d3a7e9f1dda185bfa14d73c7714100e53cc8e860db793a53b",
+          "error": "ValueError('physical_preparation:transport_tracking_timeout')",
+          "robot_failure": "transport_tracking_timeout",
+          "inference_counts": {
+            "policy_calls": 296,
+            "reference_controller_calls": 0
+          },
+          "max_payload_translation_m": 0.0,
+          "max_payload_rotation_rad": 0.0,
+          "monitor": {
+            "peak_contact_force": 0.5181321753610667,
+            "contact_impulse": 7.790657705977504,
+            "contact": true,
+            "max_penetration": 0.000148869401635051,
+            "wheel_lift": false,
+            "wheel_support_evaluated": true,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              3.9379831539609285,
+              6.167476918598171,
+              0.5213225708463004
+            ]
+          },
+          "stop_confirmed": true,
+          "archive_sha256": "fe32f37f21f3d3ee2c9b172b9b31100ee5a4b155c55f2cd49d5c196dfe5943aa",
+          "physical_trace_identity": "8bfd0a4abdf5933199c092a1aaf66735756709a2f0c7c301ff16ddb4c7e0be46",
+          "hold_reacquisitions": [],
+          "physical_preparation_tracking": {
+            "requested_forward_m": 0.02,
+            "achieved_forward_m": 0.0021522382630636164,
+            "peak_abs_base_request_m_s": 0.00019400618970394134,
+            "peak_abs_applied_base_velocity_m_s": 0.0007747923563147575
+          },
+          "terminal_tracking_rejections": [],
+          "first_loaded_failure": null
+        }
+      },
+      "source_hashes_delta": {
+        "rl/manipulation/control.py": "5d9fd3f4a6b2ca6500dfa9fa2e33e5ef199a2483cf0dc41ead0c9ad575de5331",
+        "rl/manipulation/env.py": "0f39766f0cbfe60bb92bad54b6ea143e1bdc6c7aa40a548b5f699fb993c5354d",
+        "rl/manipulation/grasp_setup.py": "81364a4886e2fe2ca83a8f82cdae862c0b6a0145673baa4ed16fef86ee8c3de8",
+        "controller/task/tamp/mars_pose_executor.py": "064a140ade2ad045eff87a4e5cbe073510f522aee473eaf3f4759f2327a853a2",
+        "controller/task/tamp/api.py": "390181f5e4ed61d75addc007952cac3f97acf2c7327256b44c8da755a017102b",
+        "eval/mars_tamp_control.py": "9c6983c494c55f55a59727a7d2303e42410a7d67bfb3eb5352268091f2ee5ce5"
+      },
+      "source_hashes_sha256": "27af6d39de82de5966b0053585bfa21bb0fa2c1c810d07cc9b38438c92bb7bce"
+    }
+  },
+  "source_hashes_common": {
+    "assets/robot/docking_station.xml": "3e00fc48583e27dd18c5c6e2471979b1e47b2b973b85c4ed4dc0a67411562ccf",
+    "assets/robot/innate_mars/NOTICE.md": "1e1d8e600976d8fc3b7f4f2eb6559eb91e5d8598610df138acc1731dbc346fa5",
+    "assets/robot/innate_mars/innate_mars.xml": "8535ccdaddbe696ba2ee5e7b556205a020a9d866860a05df16d558940eb58985",
+    "assets/robot/innate_mars/innate_mars_visual_extras.xml": "4a52fbf5d07b6242115d5f185f83bd81070aa27ee26a4d90473a8781294ddfa4",
+    "assets/robot/innate_mars/meshes/base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+    "assets/robot/innate_mars/meshes/head.STL": "3852748e253644f9e9d710e92d11a15fee06cc9eeb4ed0d595eeedfebc03bd55",
+    "assets/robot/innate_mars/meshes/link1.STL": "9eb892e67efe447e802009cbbeaf46c30c86d46c08563858c9d26f1cee286587",
+    "assets/robot/innate_mars/meshes/link2.STL": "d8fe401af1ee98323ff128eeaab64945533ccf6e5a836ae1252fb571b6d70182",
+    "assets/robot/innate_mars/meshes/link3.STL": "71956e0cd0b868c46200af5e1b0a5191207fc056e0878fbba9dffbdd023add40",
+    "assets/robot/innate_mars/meshes/link4.STL": "2f1c87f188ddd71479f30d2e20c488b3d7eb30b4d19d4aec572e70d4c0529fae",
+    "assets/robot/innate_mars/meshes/link5.STL": "e668681a8f62060382c73f11630a1a752b11332012791886b1e21bfceeff54d0",
+    "assets/robot/innate_mars/meshes/link61.STL": "b57b1b055e3d0bb8eda43ae23604219a1155c01f4fcecfea6d3560494280e40e",
+    "assets/robot/innate_mars/meshes/link62.STL": "44df6c24e9af8cc1bc5a0feb179d23c7039c590e45dff7e5a388363f79b5f0ba",
+    "assets/robot/innate_mars/molmospaces_spawn.json": "fffc446085228f4f1a1783fedabbf7d5050f2c8f496e70c5adbe223a5659ed9d",
+    "assets/robot/innate_mars/reference/arm.srdf": "72f67c20b8e090b09be9ac3688a88b06d09360d1ae43f9fecb9b9780d0cb8aa3",
+    "assets/robot/innate_mars/reference/chassis_support.json": "05b58956b294505f045b4a916f6a3b40e1199c64384ef61c7f63cd42fe64a7b4",
+    "assets/robot/innate_mars/reference/maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
+    "assets/robot/innate_mars/reference/provenance.json": "fa9763d7d18b5d06b33287d11b6527cbf153950f5e6d62a14c9769855ddac75a",
+    "assets/robot/innate_mars/t_2ki2q578.xml": "74fc54315db8bd0e0a1080c09262e4fab59eacb0c2877ad3c50ae3bd7a5f10b7",
+    "assets/robot/scene_environment.xml": "a4391e7ad761aa79c5ccde265bf20b6ea6d90336a63383d634bc91f3f5c5d68c",
+    "assets/robot/stretch.xml": "f84efccb18a5aaf4378f76654341140a45a6640e2457c49f0aa100a2d721a63c",
+    "controller/manipulation/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "controller/manipulation/closer_look.py": "069bd1f6c09a01b0a1daff6287045466044138210489ef93d6f4ed2d967d6f46",
+    "controller/manipulation/dynamem_manipulation/dynamem_manipulation.py": "0983079cf9cbf0f76a18856f070614a77197849b01e9b0bfa30685d9bc4540b3",
+    "controller/manipulation/dynamem_manipulation/grasper_utils.py": "6062ad09da372f767620d383121654bb70c1c57bec837dd4411a87c2cfd97089",
+    "controller/manipulation/dynamem_manipulation/image_publisher.py": "ddd19d4e32e20df45e122b4dbc32667ed6541414b4f82f4a87dfc9be99d434b1",
+    "controller/manipulation/dynamem_manipulation/place.py": "e86e33a3b3cd4477f15e09934962997bd1844f7f0a4e547e86701226fcf06df2",
+    "controller/manipulation/kinematic_pick_place.py": "d1e31f505047f1c87b3f790d993d763ffc5c16b1ed8092d917b87049935aff36",
+    "controller/manipulation/native_inputs.py": "e304662f3635ac8776005864fca64fa2c23c744c3d704fd9ad5020cafc62a56f",
+    "controller/manipulation/native_scene.py": "404fc7cfdd96adce6b16ed4bb843e118a6fa2b03ebdfaf1c8f62b710d6d77af5",
+    "controller/manipulation/physical_pick_place.py": "7e99e506f70eb7e17366f1699dc5433c1f1ea3eba4e4443c59d10d0a78ec4e0a",
+    "eval/physical_tamp.py": "deff19474bb165a33ca09ec63e7aa0708a5ecd0c79ed20faf64333c43b41fa4f",
+    "motion/__init__.py": "627228d1da4ec1fcf495127dd8a17cdfc154a10d3d9170eddcaace6e6b0088f0",
+    "motion/aabb_arm_collision.py": "d3d3190387717f7ecb78d3abced63a566763f56a1098450bce9db935ccdafecb",
+    "motion/agent_mcts.py": "7f7a7eef6e4e38e2e9e7eb5c090e300c4706178133360a376b293e1b3f4995fb",
+    "motion/algo/__init__.py": "239164c88ebd81c494b1bd0e67254edea795c9364a57792051bcca2ec63d00d6",
+    "motion/algo/a_star.py": "3c39ae9d57c44c1b05e1dadc6e6c46adf08e22d0590559806349b4936a4c9e63",
+    "motion/algo/node.py": "f0f0b02a487e08c8578c310ade0aabde16e235d719cf32dc6d0f13c0fa30e593",
+    "motion/algo/rrt.py": "23287d5010ea9eb87dd6a08859bc05b1dd6c06b8febf0ef15b5b4de77e202eb1",
+    "motion/algo/rrt_connect.py": "84390b19d04b6f17086c318a929f7abe730195f063c1789e2b1c2d138805b0ed",
+    "motion/algo/shortcut.py": "009b98197f26fe6467c632d6b816b01c24aff465a8e68f353fc399f8a78484f0",
+    "motion/algo/simplify.py": "1e10dd32d285f3d6ff3f0bb88910faed93aff623b66b48a5e84d5b8d1694df07",
+    "motion/arm_manip_profile.py": "2fb08fef144c87f991c906b33a1196ca3f16eb9dd358c56e1d63bdcc1fb12684",
+    "motion/arm_rrt.py": "bee9d28b4754f39d7aa977621bd80600e12657ac5caf3c532f57a0fb7d626131",
+    "motion/base/__init__.py": "5f16e1eb851328923b2994601c9672dbdcb622dd32fcd72e3effd225f5621d94",
+    "motion/base/base.py": "e0cc759cd4328b6859d7d6c70412fdbd4f747b8d8cca8c9a7419e94e095a42b0",
+    "motion/base/ik_solver_base.py": "28bc9d5dc51097587ef7d9cdd39e8161601120b5c66d75c5ca4380ed67b6f6dd",
+    "motion/base/space.py": "23f499f52c93df19400f486bc94b8a2d3e8e4422f2176b923e68e85c28230bfa",
+    "motion/base_goal_rank.py": "5084824c95765725e2025391bdfa0280b559cb61e0957e53731caa31b24fba75",
+    "motion/constants.py": "e79e7bab1e91ec5e33f42bb5450594eaa9820511aa34aef24f77c2b3a13a5bd4",
+    "motion/control/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/velocity_controllers.py": "f9711b8f12ec5b7ca1c41e1332fdbb948e003001885af5d406833d9d3d0c75c2",
+    "motion/control/goto_controller.py": "e95b871b4cb6bdbe3eafa1be40ba3e03734507d7304966f5e3d6a93774eb7f40",
+    "motion/control/traj_following_controller.py": "6ba470d045457e16da6377052e1ad6854f2bb92d2d6a22181eecfabf42c0dacc",
+    "motion/conversions.py": "b6307baa7cc391fe978d0547cb2dd0255a0652a38d4369908770cb935af9d901",
+    "motion/frontier_goals.py": "ea2fc1dd96a66ea9bbd02052feaf172c0c561a9a19a59b21fa5949b7330aa4a5",
+    "motion/grid_coordinates.py": "c2ae78a5555a2135edc57b655db423b3959f28447b05676d8d21c20bb876065f",
+    "motion/kinematics.py": "9f679bbbe8d98ef61975a6e6888956cc83eac7a88cb5242c853a57b5ca8aadd3",
+    "motion/mujoco_arm_ik.py": "313e0e09d7a8281fca608ab4bcff507f8fb633c01590b04ac738550b2df76b0f",
+    "motion/mujoco_collision.py": "145995c586858a6f06e4ac5ed943aa6c868fe273100197f67354f5457e02ff14",
+    "motion/navigation_sweep.py": "2a553a4c9631a28fd776b02e609d398be5097a9654d8913fe3c481ba42a702bb",
+    "motion/pinocchio_ik_solver.py": "f776d1f74b674215e74ae4076f87dfee914a8ef97e901c6129c7d3f675bbf29a",
+    "motion/placement.py": "9184873daa769c92c84d3b14009f4e4d600ada5847c807e182d7982e5816477e",
+    "motion/placement_geometry.py": "83dc90e667e4f81e602c247b5edb945c2923f4937aab31a8db1345eb25627487",
+    "motion/placement_replay.py": "06ff34147484b567509e7ab0541f3d2897a51adbb3367f87185ce93ec82e6aeb",
+    "motion/placement_surfaces.py": "98600279efd68451ec091fa34b64fc3d95a215b5ffd399a1da15906f999bf75f",
+    "motion/robot.py": "4e1926d18a5483b078a46ed9179476a84fe62a3d80f89ea2ad454d85f8398346",
+    "motion/simple_ik.py": "af9c4c9a2feb2c66c2a89d8d4331a8f3d6d40bb1bb70ded81dc9cd8d1d7c3b3e",
+    "motion/simple_ik_equations_numba.py": "f79e3130d18a1e899f90bcbcdec13b2e2f93c27e20feef389f6a478c1ba484cb",
+    "motion/utils/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "motion/utils/geometry.py": "cf20d151542f162c645e3ac8469563a4e6b2d51e534fec574b2ba592fcf1c952",
+    "motion/utils/simple_env.py": "3592c7229e3f220e619d3ff23612677855062201f54884fa1ae94988b0eb406d",
+    "motion/viewpoint_selection.py": "ec55a3eafa1cb1715354ee1537eed993d51e26d91c0f181abcacf03bb63caae0",
+    "motion/voxel_arm_collision.py": "4cb99647badbe66785581f33f6d5b9c76704c06bd2cddc5c1a143403d6867ad0",
+    "rl/__init__.py": "fd8747eb2e1726ca596569f9154471d9cb7282c555236fe2d38ed2af4021b735",
+    "rl/__main__.py": "1fa6f2731c91b3691e168ee8c090b9dc9719b09299af133763fc50aca5383d4e",
+    "rl/arm.py": "5931a057a5c1d86ad811ca8fa59dc00dd812a4796ce7232f9a64bb9462dad38f",
+    "rl/artifacts.py": "b0843988f9ce40fc65b55ca2c905aeb80ba327fbc6588e4c1ce23a5d518ae7a5",
+    "rl/audit.py": "f3f9c4de94b10621f20f6a2f67f0369cd1839753ac1891684ee3857e932f2e21",
+    "rl/base.py": "fc14e81f6881737e4eee8970317feea7fa9f8280f86fafe5a1210ddb9838ad51",
+    "rl/bootstrap.py": "9cf0b903247b94b724f753288c3ae7a3ae115de40b88de4fe0cce5c31716209c",
+    "rl/contact.py": "7258b978a81f9f7a941efcaf5f8b05609abeb2ba516662bf0c33cb2a5d497039",
+    "rl/control.py": "f2a0bfcaac71b03762e6060dfb1818d3a13086ee18dbd97082ae3284d572166e",
+    "rl/coverage.py": "258e5f9735beb3d2768f0658c7d59f1671901a8132ba6574a29c478566ddc189",
+    "rl/critic.py": "6a82b9d405fef8dfb903b6225e22c30629bc99e330a9d4b81636ae8e2f13d191",
+    "rl/env.py": "bcd6231ef2f59be80f09155069cf78237a46f9add2a807ed44c6e6d8bdea281d",
+    "rl/manipulation/__init__.py": "b1d021af151c366fb3569bf9dff91bd26a911b81a9d61fab8da49721a9242cea",
+    "rl/manipulation/__main__.py": "50699fc9ee63830903b26363acc1df6b26c5d1d9058594b79c2d2fd838415efe",
+    "rl/manipulation/action_audit.py": "b189e2b8bc285552d619a9a43b67f5f0edd7f81b8b500289955cae2eb3e63913",
+    "rl/manipulation/arm_adaptation.py": "321ce6d059ddc3e612c92710d2abb856e9be27cbdb47859f1a50e9bac55578a3",
+    "rl/manipulation/arm_component.py": "41b2f39483457b40cd8887e4a44b1f622b103b5d3702aec47675207ad551df2d",
+    "rl/manipulation/base_benchmark.py": "470333af478bedb851c9f8e9eaaf8d4376a2c51d6b8344588074da3efa59feed",
+    "rl/manipulation/base_component.py": "923f5b5b1d8c6e8e1bce5e03e0a4f94fbff5ca8faa3b8075a529d03fef1e366e",
+    "rl/manipulation/basic_learning.py": "fcecf860b3a276ef056fef68883bae4438565d4a851123f912b19b7640c17cad",
+    "rl/manipulation/calibration.py": "0d6d134063c362dff0d13ed67dc5445509df8fd4381403ec2821850ff1cb663b",
+    "rl/manipulation/carry_benchmark.py": "e33e3858667d61260f5aa2da3712c371bec1839c276a3f626c96f36b3897e09d",
+    "rl/manipulation/carry_training.py": "21b9180134176d8a85c9095ad72c7ac917d69030a44ec5a65c4c635b35347633",
+    "rl/manipulation/command_policy.py": "b657b667a2cc9272a7fd523d6ac4b0de214f90fbcae6747e0b2bf8cd3d4f68f4",
+    "rl/manipulation/command_runtime.py": "5ddf8d2a5b9a1a47e6fc6492264b3679af4198fed82f6d7f9c8445d1a02f6413",
+    "rl/manipulation/component_transfer.py": "c237e5888a52087f8331f4523a64ae9ebe59618c7246f0b6af411c7408ec83c5",
+    "rl/manipulation/dynamic_trajectory.py": "e41e1f1ee80849f4d049db02427d63a1181ce8e2382b96b364b02078a326b4fc",
+    "rl/manipulation/evaluation.py": "faf7e938d9f49cef12bfbe90c1ec67ccda386515e9e9400b1fbcbc222916cb3b",
+    "rl/manipulation/failure_replay.py": "e4eba3c5f114c303905e488c9f81e4fa83df1604d4215d164cb44ba965e65ea1",
+    "rl/manipulation/feedback_geometry.py": "0392918bb18ba0acb25f1ffffa907cbe3eac3806841bdd0080a388fa285bd3b0",
+    "rl/manipulation/feedback_policy.py": "e62ef38500c67234f2d45834d93f7e69c06e718b396d509f9b3c576f94994566",
+    "rl/manipulation/fixtures.py": "baaae9df99435b2713c46299c3610bae319a581496b7dda6da7d801028659503",
+    "rl/manipulation/grasp_lift.py": "75ce50a29c4f44813cad9d7de7e9b5e1e199b32631a164f2c8949d1aaf472d27",
+    "rl/manipulation/hand_audit.py": "d022475b8c6b077ffd62fa5686a60be5a6ee681a5194c493e519fd5d52572f6b",
+    "rl/manipulation/held_object.py": "9875fef7a8de43859945b0466b86327429611a9b36dc5d3a55a5a2a3d3967aef",
+    "rl/manipulation/hold_audit.py": "9711458c42eb5883cbf522dc6b9abb0d7e08f3f6d626db240dff732b8f832cab",
+    "rl/manipulation/hold_experiment.py": "ff286289eac3cf996f0fc2e4a2276372dbce535af666c7469eacb6f78cd79bd2",
+    "rl/manipulation/imitation.py": "eb301820f1a3692f8c8865ae6ec66dd98a17ca18d14be97461a93ddf1e8a59bf",
+    "rl/manipulation/initialization.py": "235fa9d0f039f92128d48c6e5d5c3be9c17ee29e5462df4cf199cf6596958933",
+    "rl/manipulation/integrated.py": "13c8df2bdd7940b5d3957d4bd23977b7698fea23ec60ea7aa035f36507980ca9",
+    "rl/manipulation/jerk_measurements.py": "5f926cbc097d4f3eb09f4e2ba0912c87b9c7121c0d891a49ba9ebfe98eb55d95",
+    "rl/manipulation/jerk_pose_reference.py": "88a5ebebed2de6f19db6acbef2f2165e8d85e44459413c8f686da104dd393098",
+    "rl/manipulation/jerk_reference.py": "51f734b7af70e38d5bfc6eb702736afb1b869cb0c5838b7fe92616bc9655f1a1",
+    "rl/manipulation/mastery.py": "4ff16f0cf6d0dd100a781576c962e126a5efdf83f1f28519f31b1c9ff7170b66",
+    "rl/manipulation/mastery_objective.py": "6fd77cd15de3fb6a6c5c6833fb54dc7ebaf0de29d70ff3d77c9f80736b754d9e",
+    "rl/manipulation/models.py": "9ba165454f91e4a165510a61b7c9b6c07c26ddc12265590ab3ae4901d2c08b24",
+    "rl/manipulation/multi_critic_ppo.py": "28204f63d4d7dec3ae48826d627fbf7ff0e77a5d75e52934b8eb147a688060c6",
+    "rl/manipulation/normalization.py": "a980968d40a8d7ed5d503297d26434bea0df4368a70f051d4ff94f1e92c941de",
+    "rl/manipulation/normalization_schedule.py": "0c84a9a04c1dd386f58379bf9edb779a72571bd177d6bffb205a7e77af6ca716",
+    "rl/manipulation/observation_layout.py": "bfa754fe0df5b2d4d86bc227c7002b54269febd462e7ac3481ee76dd0ca2514c",
+    "rl/manipulation/oracle.py": "09fb2d61194e6b143531c79e46cf49c033d7d6e365ccfa15ae81931fee0c5603",
+    "rl/manipulation/oracle_runner.py": "58ca9bcfabcb85a07c594e8ed0a8b4c9579e7debadbc2c590a1ab5656f6e0765",
+    "rl/manipulation/pair_recovery.py": "ee27538b6b512ea8d5d49bbeb27b99b11c33cd881a102a3c1df8172b91ab5ee2",
+    "rl/manipulation/payload_assets.py": "5b1f0eb2efbd9af135894443c6d39bf1ab5419097531d70f5e6e8e31c8bb10cd",
+    "rl/manipulation/policy.py": "3d6ed2ec10447e4d54a02181b68078768b3ca4e9040ebf2738909e8702d0d8f2",
+    "rl/manipulation/pose_value.py": "beda169d04e729262d7f6a4e6c36d64dd5fc5c450e78dfa813702793bbee87cb",
+    "rl/manipulation/post_training.py": "e38524b858e80d93aa894999154319c51dc80170c8239486cdf17d0410a117ed",
+    "rl/manipulation/profiles.py": "911acb00c84f16634e3413b992d3ae1900ec991507c94f8b8e91f7760e148b86",
+    "rl/manipulation/retention_training.py": "d60b8955315a3493e629524130e3615e1f48b2909a1b710248038481af74a690",
+    "rl/manipulation/reward_audit.py": "a2be3c3852dc71c8618aa6c62c9310ad2dabed9c9fb7ad440310fd217b5e47de",
+    "rl/manipulation/risk.py": "3c09fa301cedf185ebba9d8f80d746ea8e1e99954c07ff724e9d5d821179cf18",
+    "rl/manipulation/s_curve.py": "158a774df10764cb06b32f55375a748d1e47f1b6e2e8f3e5fa8957a1b93eee74",
+    "rl/manipulation/safety.py": "a1933653d66bb3daae2835e965398df427358ab5469d104f4c5a08a60aa7d4b8",
+    "rl/manipulation/support_audit.py": "6fd349215bb683c6d4818355a892d2db2ce7a968c4b24490a7a9bd6b878c7d04",
+    "rl/manipulation/tamp_benchmark.py": "869b7ce09ce9ce638c73cf8c0d0d4e28da59ed9f1ecfb6b8492df1304489329c",
+    "rl/manipulation/tamp_cases.py": "609c55b878bf0d8e2ed4f0b2727c5207c1a8c73664ce807c23f3e0ce294f6f79",
+    "rl/manipulation/tamp_policy.py": "c868d1d5630ad8a14e60b5c4724ddb6c1245e4ca958ccc28a1abeb662b35edf1",
+    "rl/manipulation/tamp_primitive_env.py": "b76819b2cf5d2516343102e4488e2066b06bcc926e1513358a3dbb33da479c15",
+    "rl/manipulation/tracking.py": "c9bcd24c706a83a252aa021e70a207934604b57ecb58686bbdb0c643214877fb",
+    "rl/manipulation/tracking_audit.py": "6d78cb1258e444e244d555016a3bec3e76a53871221b480d536be546674c6d0a",
+    "rl/manipulation/tracking_curriculum.py": "01af7763ec4a00d31306bc16a0c91c63951ab2e6f14e4867949eaa559749c006",
+    "rl/manipulation/translation_curriculum.py": "200ef7be25ff731b141f3c304f2b914b170c32b0f0ffe36b6adb118fa0f59376",
+    "rl/manipulation/turn_guard.py": "3e1545fe6f5fa7e90e94c221882cf9bc84e2987805d55d739db4d66709b1502a",
+    "rl/manipulation/velocity_filter.py": "cde01f4034d6d0d26e908f2e721ff23ca31a48e0581c0c48db29b6673ed35f8c",
+    "rl/manipulation/whole_body.py": "232e130f7bd01303ed1008ba10f9839717fb2f2bef5e7d95545e7df571564689",
+    "rl/manipulation/whole_body_actor.py": "3bb2b23a4641089b3b478201d170124da570672dfae102a4b10e0413189df26f",
+    "rl/manipulation/whole_body_bundle.py": "6769f92c9d0862d9240f84cef4f81e02f1fa27eed3366e41b62232be0c630dac",
+    "rl/manipulation/whole_body_env.py": "faaf98525850de11d1200c2adbd387c6e201952c1c4794f842fb8828ea82bc6d",
+    "rl/manipulation/whole_body_observation.py": "ae6d5f7c59fb11de0fc902df69e8117ad3d90639af0d72cd4e5f67fe39d351db",
+    "rl/manipulation/whole_body_reward.py": "8f32fcdada497b9247f9e5d486afbdd7645afac160bc6be7dc86c527ddd8897e",
+    "rl/manipulation/whole_body_training.py": "3a2b37d2efa67e59d24457c412ff293502bf7350327ebcda776c038506991b6b",
+    "rl/manipulation/yaw_audit.py": "2a30a56447549b80357741df0b4dd1cbab2eee7e42e1cd010749a2386b2b53ba",
+    "rl/model.py": "a4a1354b3867f03b092d9158ff1bc7fa7ec83586ca7abd37a8ff053e53891453",
+    "rl/networks.py": "c58e59cf89945af1341eff23383c14293dfe4ed79029afde5037fbe454e4ec99",
+    "rl/policy.py": "ddd1e6ba0fdffc8dd5821618f36f7d9aff8cd4c5c47dc3625d2cecb6bf2d0406",
+    "rl/pose_targets.py": "85e2b4f9f31a1d11d31219b3030125221a11334dd77fb371bf58cdcde3465d7a",
+    "rl/profile.py": "9e02df85eb4f122e4ac1cf033c4caa36b9d5be2c854d0f99ca33d46510f09577",
+    "rl/reference.py": "213f1c3b882e339bc0361fe7c621347e77b443a30d66a2a415e8edc751b2fde6",
+    "rl/refit.py": "f2f4d58abed823727dc49e0829b2c17f5154ef07293dd7c1dae7da04325dc8e2",
+    "rl/regression_gate.py": "c42cce23596e7b8df575cfdeb1b1a112c3102d8780e874fe5ada61a8a9979cac",
+    "rl/residual.py": "5a04900c56b419e4fefa6bd4380ea315e0ecd6281f40291892d87de65afc78ff",
+    "rl/robustness.py": "f864a9f3298dc2df038ca3515a445db7860b286d48de49c9cb04cc8554fdab51",
+    "rl/server.py": "cf69d1a87d32c39a1b44310476108ef5a33590bd6a1da29c6476c67eb2a1678e",
+    "rl/test_drive.py": "15b93518bc50a7ac7d46a32063be951c93a4f05db9b8ae7f12bb717a091b3605",
+    "rl/training.py": "4af1015abc0a488fc379a9087e0e2c12d42585a3c43cd0a4df408b1df7e0e338",
+    "rl/trajectories.py": "31545e53a2bd2bb9773fde0cab715ace31922e18f3316d52fcc3c09352e9588c",
+    "rl/transformer.py": "b7aa84a64c3f0dd76b6a647af23617c3a38c4e2bec76500d62e0c861fd610dbc",
+    "rl/waypoints.py": "bf7be5ebc76301d46da3e642177e1cfb600844decee98ae22620bb9bb29b77bf",
+    "robots/__init__.py": "bcd3da62da771c642ac3c3ee353fae6a14c956f37e6a88e7bae5b624c1e4e5cb",
+    "robots/base.py": "92b6b2fd557e52a5f0638d01012b80319cc731648274287876548f40589176be",
+    "robots/footprint.py": "5466857b9e23237f9821ed74b3fdf85911b65d8fe03a43731024e0e172a83de2",
+    "robots/franka_fr3/__init__.py": "c74675d245bba7653609cf95ddc0fa8993a7657f6b588dc78d6966967940a2ba",
+    "robots/galaxea_r1/__init__.py": "28524c18609a5890b530e05c9fd3f756a89fd5ccb31d684c2b77046a67457bc3",
+    "robots/galaxea_r1/sim_stationary.py": "4345966232c33e2851724e905143ba5e0299d0a54818fa5c02e5e3d3e0fef8e5",
+    "robots/head_capability.py": "76ab8f959b7a4ff3c23cc9cb5ce5555d86166d471b50320fd85daffb6d877b11",
+    "robots/innate_mars/__init__.py": "a47d9596586bd6b4dd4519f8a512dcb9f9cfee0b131ed830d011ea4cbf8f580e",
+    "robots/innate_mars/chassis.py": "ee9373ef44fc5de88e27d4985311f7f92a27fd3e21363058cefd438f91aa80bf",
+    "robots/innate_mars/control_session.py": "5870f6b3f11c8cfdb6ed047a71030e61f632046a38a3bb85fb6ab56715525fff",
+    "robots/innate_mars/dummy_client.py": "332d4710a82ce3b3cff91974582e99793e64fd136d58f3a965a4f1ebcd45c246",
+    "robots/innate_mars/emote_backend.py": "a830f20675cf59943417340c44eee49c7c2d99f0e3605a1d203af5079d598104",
+    "robots/innate_mars/head_kinematics.py": "6eaefab297668d799854931568ccccfb70c5037af5374a10886b91fab2c852ef",
+    "robots/innate_mars/motion_boundary.py": "aefe8821a761c0463ba6bc5a64d8a8733aa8d4c4ded2d329fb4ebe72a1979fb9",
+    "robots/innate_mars/ros_client.py": "95699538778c00f61ff09c6555493fa2d6c319c0d3976256c82be5f32e9043ee",
+    "robots/mobile_aloha/__init__.py": "788d13d6917cad4bdd3ae251da03e23e27bca578836a993f03a30ed769d950f0",
+    "robots/nori/__init__.py": "13e0964f820493d8313a96b31e25d0c953d379bf8c915cef26b8ccfb8192dce8",
+    "robots/rby1/__init__.py": "85b02034b848ac9aa7a8e4a3d5fa881ba53587eb1c37802af9262b6f1a1078db",
+    "robots/sourccey/__init__.py": "7fae96deca59c5fcbc13f4beaf9cac2f143082c6672515aad5656ec44d4262e5",
+    "robots/sourccey/emote_backend.py": "aed8810f56a3a782f49bb03be70f432ba655058ad0537552d3bd4cc7e5d79859",
+    "robots/spec_robot_model.py": "f88f76a8c80e82bfa84ea60197cd1c1d039a1ed3df79e8c94128d590aec934be",
+    "robots/stretch/__init__.py": "ffa2e2b7085bfd9aef6fc02b1837fd6790eca1bcd05f96db1cd3fda0b1230e3c",
+    "robots/stretch/sim_stationary.py": "a8f1ef1cc1ade25a4d7403da23d30ad86f740d11363fb66e785eb4a2ac3f9451",
+    "robots/xlerobot/__init__.py": "85f5d0539067a11faa3814bb9fc46357e098056c7baa0291f63daa0d864bf789",
+    "robots/yor/__init__.py": "3720dfb788c7bfb4d7786107aa9590e788c4ca763db69fb3dc6bf1a6339473a6",
+    "simulation/sim_object_placements.py": "fe8c0b11c31e9731021a9a943a2fd150c08369bd69cf3f21ce6e945f94e17586",
+    "utils/assets.py": "384085ced638f51a5208565d723577b31eced4188f641132825124605bfb65df",
+    "utils/logger.py": "f4a7e195cfd54d0146a1900c59b8790a2a7204b2cc043cd1de924cae32397877",
+    "@runtime": "549fb212e22c858dfb74c184b72642f056b184c6472eae95fcf74fa39e09276e",
+    "@canonical_suite": "5c7c8fd285f9c1fbad294b5887ed74c5d09ae400afb4fe1ae7427307462c5da2",
+    "@canonical_regressions": "f3143e2ab37cec866d1d8defbd6ce65dda90dfe8c9e66a5ec9362e741b9fb457",
+    "@canonical_public_tamp_suite": "5b638c6d748a343a646e733ab9bfe7a25a05b55f35d3bb4c23f4a4cc0d3567e7",
+    "controller/task/tamp/mars_native_adapter.py": "3484462965942961e139bf56ab84a94918c5b02a05e951d4fb0478a717365375",
+    "controller/task/tamp/task_session.py": "89769391ea5593b6996344b7860d2dca6d6e0e4ae998d8907796f30940948487",
+    "controller/task/tamp/grasp_frames.py": "a24bf66c4c30ddaf8533c33ad3af33d487229b95b4097bc5c6d764ce0aad9bd3",
+    "controller/task/tamp/task_contracts.py": "2aefe3567da05118f7f3867a5471171ee08954c4c8d51b9240662524c78fba00",
+    "controller/task/tamp/smoke_grasps.py": "385fe383cda4e9b2721f3412ab30176155e278df3194e05c54256405c98bd1a9",
+    "controller/task/tamp/task_mcts.py": "7c596aa5f55ebb37f10627dac510c657f8e54d33c8ba5b2d04671ef5e1ecd63e",
+    "controller/task/tamp/agent_bridge.py": "9812304ec6070ebf9e1babc80c08e18a798d102ac902731c6c961363ab342d6e",
+    "controller/task/tamp/task_budget.py": "9ef9edfc57f64fd3c2551d8eba7d9a4b71f26d2e75d50cdb211436078a8039d2",
+    "controller/task/tamp/task_planning.py": "e3cc486fb5e66999b3fac18309d26fb90e6f016919c0c42af5c7aa1683374064",
+    "controller/task/tamp/native_adapter.py": "cec8cc9461e895b6629e6896f33b084b82716a5c639100519cb80bb02b741da5",
+    "controller/task/tamp/observed_discovery.py": "e1a1f8efc24a2400c7ad14072b974154b36d3280bdbe187cfded1c31425db3b1",
+    "controller/task/tamp/__init__.py": "cebb23f1d48fd8837d5919b061d9dc44e63c72fa902e23b089ecd394361572e4",
+    "controller/task/tamp/clutter_chain.py": "032043f497c889214c8f8ed1594599c3de43279b6ed79bf761c26c41768a07cb",
+    "controller/task/tamp/transfer_provider.py": "5e146e12022542301528d0605344326b9001e1173475a757bf627ca662a0678d",
+    "controller/task/tamp/mars_sim_robot.py": "56a63976734e2f9c63875f33b14cec578e59f8166a098effdfba3947408357da",
+    "controller/task/tamp/native_transfer.py": "ecae56920e0007c112b0f13f5a13c3cea1e4962a2ea5deab57b3e0716047ca07",
+    "controller/task/tamp/task_search.py": "c91022abea6a62351f6acfb5b51013addb6d8e4a446da98de4d719d5f17818ec",
+    "controller/task/tamp/articulation.py": "199cb09762862963b1501ab800019047224960e2eb8e47fc74d5732a37a25fac",
+    "controller/task/tamp/mars_transport.py": "4e0ac1c16faef1bec5f0e6d3b0c272a45298a1cd6dbf2919bfa38fa7d7fd2fc9",
+    "agent/loop.py": "af955eefcdc21ef6dd78cc14dba5b00384cddc146bbae467f56690aecca4ae5c",
+    "agent/env_flags.py": "1e2c3c5ad84010f410755677593eebf3a4ed9c3befb15ef2f60cc7e211ce239e",
+    "agent/model_debug.py": "c805fd2a2bf594b51b1682df3994cf4e757bb616dcdf31c754d26f60b7aa0576",
+    "agent/__init__.py": "3566877ce835d23b54475ad795bb527bf2e8662ad2500ef8291da9710e0a2e01",
+    "agent/camera_debug.py": "e6449bd45a0bfe5c29c737e300c2a24ea0dbc0155bcbcadb7273cfdcb94b14b9",
+    "agent/face_toward.py": "f4d8467dc8c25728b6bc67758c610570f0e4efa65ae70a6efdd4e458b23a5cc1",
+    "agent/thinking_status.py": "c1df5e75d60dc4433de88a843e5acc25c3af7260a8cff5171ec849c14c38aea3",
+    "agent/tool_outcome.py": "fc853fe16f1aec90ca0fbea1afe3ce925bdadad3b17e1a3ecf548d14cb4d6407",
+    "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+    "agent/tamp_session.py": "e06144b45e11c47e3ee0bd8db233e9af94c9ce471560ba1292db38f974adbb30",
+    "agent/tools.py": "a1f245aa9cf56295b009b31eceaf95e9b8ae822666d8081ec17aa8228596084d",
+    "agent/skills/modes.py": "390d3fd1ea25a2234344fedc85204d1b86ef48bf11f8810e126e487fb6c05a26",
+    "agent/skills/specs.py": "7570a7f18f92a5d6768168fc3b64123d6aa8b12be63b22bb3826506b7187ef25",
+    "agent/skills/__init__.py": "4829dc99ae31b2545fe35591af6768395469c46445e8aee8627fb22fd2456a23",
+    "agent/skills/registry.py": "82550d8af12b790bd4f784a705b3be3e92132482d3d9a06956a074c5e0a6982d",
+    "agent/skills/eqa.py": "907007bbb008b272c521950eb5609a552df67c28bed7ffe112accdea66d1ec14",
+    "core/abstract_perception.py": "a398c4da0e0128905504ac28aaaff7f6cb985ef68f8c1fd10e4bfc8cdb7e68d0",
+    "core/interfaces.py": "0dfa6363ab029b5ed8762556d926065ff98dd59e01773a897ab0d4cc3ca9c12b",
+    "core/parameters.py": "c11ab56fb329021337c8a7e3bc1cf9ad5d7b18cf94977c5b79dbb77da787c88b",
+    "core/command_client.py": "104b585284ef1ddd81d0de924e8333870e6851c2a88a48d48baa57a78a632d05",
+    "core/client.py": "17645fa84c23e0e278f5373d8d43484d019cbf61ebcbb5cc4bfa2995b6654214",
+    "core/status.py": "7f1d75d2906958661e349a5473da5fedafd53af3b0732c34db2ff9375c3e2a6c",
+    "core/server.py": "ebeda64ea453485d4cfbc465bc9dae518ee5c7fae1fb2b59cae94ed2fe087c50",
+    "core/comms.py": "ba9becc3e014bd4a62dc1cf5e9586f7d449ea4b7ed83c104c8457ea8af466026",
+    "core/command_tracker.py": "ab436d7c57195654427b7a60e0aa732d7f86ff514ac2d6ff78ff711858fc85f6",
+    "core/evaluator.py": "9c0ec2dcab8c8bb33c7e291e2b41ead9fe7eae56af043a3fd545d7d7c1720311",
+    "core/zmq_server_env.py": "b3b96d8597cb611b96cfc3ca6bcc5c6990eeaf2d681c691d66f908d963caac93",
+    "core/navigation_result.py": "b384e180372d754e7158c404fba7961536b6a49bbaa48b51a15d751e154e25c0",
+    "core/__init__.py": "db8b5fd86b7add5abce89b4ff0b9c3cb41723e9dda4ee8bb10cbeeb74d6acbfe",
+    "core/task.py": "2fcfa9128868ca8ee8f02b9c30ea423f7afe6cd65ad96ab59ee021f1ceabb17b",
+    "core/command_runtime.py": "b4e6b131b51d9c0c8b9264f1b9e0c91e6e46d49bdaf4a857c8d9008b8a62a615",
+    "core/reactive_runtime.py": "4ba45aed2b48304b2a3d3d2c9923303df7209321929325c60862c3a7ade108c7",
+    "core/robot.py": "8305f5faa5276aeb3bcd9be8f7aab51dd1bd64e6c4e80e85e3d4a348a1a8eba5",
+    "core/zmq_protocol.py": "1a5cdf25918a5eab8b91b329ec8ed0cbbdd3029395f147cedf431c63939e3bbd",
+    "core/zmq_obs_codec.py": "35b7d518eeb09839d491381315f1d1f6b6170d456e09ecdd0fb21477c57fd008",
+    "eval/mars_tamp_metrics.py": "4bad6ea274f534905e78e9e723d8ba056f9aa4dd9865dc62bf16f9263f4a4045"
+  },
+  "teacher_precision_region_physics_identical": true,
+  "teacher_grasp_before_after_hold_fix_physics_identical": true,
+  "nominal_lift_support_audit": {
+    "scope": "offline admitted witness vertices; private attached-payload kinematics, no physics steps or robust certificate",
+    "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+    "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+    "minimum_margin_m": 0.005004108988174463,
+    "runtime_cutoff_m": 0.005,
+    "reserve_above_cutoff_m": 4.108988174463327e-06,
+    "vertices": 35
+  }
+}

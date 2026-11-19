@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-17",
+  "development_base": "41c0007a",
+  "scope": "Assisted MuJoCo mobile development controls: provided external RGBD, native state and full scene collision; in-process physics on sleeps.",
+  "benchmark_denominator": null,
+  "observed_only_qualified": false,
+  "default_ovmm_loaded_transport_enabled": false,
+  "final_source_sha256": {
+    "scripts/eval_mobile_mapped_contact.py": "0b8952ed47852ec6f9d8b4b54f2335af2b0ffdc8ac17d5c9b8cac2caf6824484",
+    "scripts/eval_mapped_native_contact.py": "cd60e1b00e85333f6d2237fa6752e8449822cf2a85389d5e92edf58c86406b5d",
+    "scripts/eval_local_map_memory.py": "e249365898e352b203a0d5dbcda2320a67f25383a49d4e8fc18b48e8cd38f5b1",
+    "src/emet/motion/observed_workspace.py": "fc93f7e0c8e5ebcef5d5d90c4f0ea88c6fb786a7cab2e92acb4cd51da69125c1",
+    "src/emet/motion/local_scene_store.py": "4d175ee46bbd7ce62153f96f2145ed99b866ee17be465e6973cd8e07e6332ac6",
+    "src/emet/controller/task/tamp/native_approach.py": "e38ae8a20cf7a1dd6c490b4c2fc8d9b6fc82b3bc26ef086ba0721b4edce7cf46"
+  },
+  "runs": [
+    {
+      "run": "first",
+      "job": "20261117_190648_decddd",
+      "outcome": "rejected",
+      "object": "object2",
+      "receipt": {
+        "tool": "execute_pick_place_plan",
+        "status": "partial",
+        "code": "support_geometry_unknown",
+        "recovery": "inspect"
+      },
+      "receipt_data": {
+        "completed_ops": [
+          "grasp"
+        ],
+        "failed_stage": "place",
+        "execution_started": true
+      },
+      "map_store": {
+        "loads": 1,
+        "unloads": 1,
+        "stale_rejections": 0,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24111690,
+        "load_seconds": 24.043406966004113
+      },
+      "peak_process_rss_bytes": 1997078528,
+      "map_queries": 303262,
+      "native_only_queries": 282011,
+      "base_goals_dispatched": 1,
+      "total_commands": 57,
+      "released_object_occupied_cells": null,
+      "released_object_drift_m": null,
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.5167409040004713,
+          "cumulative_peak_rss_bytes": 1884893184
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 24.05283782799961,
+          "cumulative_peak_rss_bytes": 1997078528
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 140.4213042140036,
+          "cumulative_peak_rss_bytes": 1997078528
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 134.5612694320007,
+          "cumulative_peak_rss_bytes": 1997078528
+        },
+        {
+          "phase": "loaded_carry",
+          "wall_seconds": 92.66175027900317,
+          "cumulative_peak_rss_bytes": 1997078528
+        }
+      ],
+      "result_sha256": "d4ee1a7df8c43223a011229102d816d37745c67786b7d6545ff990d098e03eb6",
+      "raw_result": ".tamp-runs/local-map-ovmm-20261117/first/result.json"
+    },
+    {
+      "run": "reacquire",
+      "job": "20261117_191624_d26a9e",
+      "outcome": "rejected",
+      "object": "object2",
+      "receipt": {
+        "tool": "execute_pick_place_plan",
+        "status": "partial",
+        "code": "no_plan_within_budget",
+        "recovery": "inspect"
+      },
+      "receipt_data": {
+        "completed_ops": [
+          "grasp"
+        ],
+        "failed_stage": "release",
+        "execution_started": true
+      },
+      "map_store": {
+        "loads": 3,
+        "unloads": 3,
+        "stale_rejections": 2,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24111690,
+        "load_seconds": 72.58309902800829
+      },
+      "peak_process_rss_bytes": 2013245440,
+      "map_queries": 382542,
+      "native_only_queries": 350073,
+      "base_goals_dispatched": 2,
+      "total_commands": 91,
+      "released_object_occupied_cells": null,
+      "released_object_drift_m": null,
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.545248337002704,
+          "cumulative_peak_rss_bytes": 1884168192
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 24.050991151001654,
+          "cumulative_peak_rss_bytes": 2000449536
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 142.2246862989996,
+          "cumulative_peak_rss_bytes": 2000449536
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 257.82252697199874,
+          "cumulative_peak_rss_bytes": 2013245440
+        },
+        {
+          "phase": "map_carry",
+          "wall_seconds": 24.04381719900266,
+          "cumulative_peak_rss_bytes": 2012385280
+        },
+        {
+          "phase": "loaded_carry",
+          "success": true,
+          "reason": "ok",
+          "measured_base": [
+            0.136148058163045,
+            0.00018116297889501825,
+            8.126683525428139e-05
+          ],
+          "wall_seconds": 135.7815115400008,
+          "cumulative_peak_rss_bytes": 2012385280
+        },
+        {
+          "phase": "map_destination",
+          "wall_seconds": 24.49826092099829,
+          "cumulative_peak_rss_bytes": 2013245440
+        }
+      ],
+      "result_sha256": "162130729bb3bf790a28d9dbce90b667016b00e330b0230b9644780736dc77e5",
+      "raw_result": ".tamp-runs/local-map-ovmm-20261117/reacquire/result.json"
+    },
+    {
+      "run": "cube",
+      "job": "20261117_191753_aee05b",
+      "outcome": "success",
+      "object": "object1",
+      "receipt": {
+        "tool": "execute_pick_place_plan",
+        "status": "ok",
+        "code": "ok",
+        "recovery": "none"
+      },
+      "receipt_data": {
+        "completed_ops": [
+          "grasp",
+          "place"
+        ],
+        "failed_stage": null,
+        "execution_started": true
+      },
+      "map_store": {
+        "loads": 4,
+        "unloads": 4,
+        "stale_rejections": 3,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24113850,
+        "load_seconds": 98.0114403409898
+      },
+      "peak_process_rss_bytes": 1999306752,
+      "map_queries": 455574,
+      "native_only_queries": 411128,
+      "base_goals_dispatched": 3,
+      "total_commands": 109,
+      "released_object_occupied_cells": 100,
+      "released_object_drift_m": 0.0,
+      "phases": [
+        {
+          "phase": "navigate_to_source",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 3.5816911430010805,
+          "cumulative_peak_rss_bytes": 1882636288
+        },
+        {
+          "phase": "map_source",
+          "wall_seconds": 24.287113241000043,
+          "cumulative_peak_rss_bytes": 1986727936
+        },
+        {
+          "phase": "plan_transfer",
+          "wall_seconds": 140.04121678600495,
+          "cumulative_peak_rss_bytes": 1986727936
+        },
+        {
+          "phase": "pick_carry_place",
+          "wall_seconds": 312.60289646899764,
+          "cumulative_peak_rss_bytes": 1999306752
+        },
+        {
+          "phase": "map_carry",
+          "wall_seconds": 24.404235358000733,
+          "cumulative_peak_rss_bytes": 1999306752
+        },
+        {
+          "phase": "loaded_carry",
+          "success": true,
+          "reason": "ok",
+          "measured_base": [
+            0.13620087050155702,
+            0.0001804980330230474,
+            8.122519887676104e-05
+          ],
+          "wall_seconds": 135.20181880400196,
+          "cumulative_peak_rss_bytes": 1999306752
+        },
+        {
+          "phase": "map_destination",
+          "wall_seconds": 24.534074387993314,
+          "cumulative_peak_rss_bytes": 1999306752
+        },
+        {
+          "phase": "map_released",
+          "wall_seconds": 24.805044178996468,
+          "cumulative_peak_rss_bytes": 1999306752
+        },
+        {
+          "phase": "navigate_away",
+          "success": true,
+          "reason": "ok",
+          "wall_seconds": 47.98840262200247,
+          "cumulative_peak_rss_bytes": 1999306752
+        }
+      ],
+      "result_sha256": "9e6ac21a812c76b23425d4976c543ecee18736d79b5ae6f209b71a491153921b",
+      "raw_result": ".tamp-runs/local-map-ovmm-20261117/cube/result.json"
+    }
+  ],
+  "memory_comparison": {
+    "reference": {
+      "reference": ".tamp-runs/local-map-ovmm-20261117/reference_workspace.py",
+      "cells": 2304000,
+      "cell_sha256": "d92a78c67d499d93ec71e3808c4b56ee75e401d45fe132c0c90af70c367d4f4f",
+      "seconds": 51.49064283200278,
+      "peak_rss_bytes": 1877245952,
+      "build_stats": {}
+    },
+    "chunked": {
+      "reference": null,
+      "cells": 2304000,
+      "cell_sha256": "d92a78c67d499d93ec71e3808c4b56ee75e401d45fe132c0c90af70c367d4f4f",
+      "seconds": 51.076145184997586,
+      "peak_rss_bytes": 136491008,
+      "build_stats": {
+        "grid_cells": 2304000,
+        "output_bytes": 2304000,
+        "estimated_working_bytes": 45720152,
+        "chunk_cells": 4096,
+        "max_cells_per_batch": 4096
+      }
+    }
+  },
+  "cancelled_duplicates": [
+    {
+      "job": "20261117_192455_e76ad4",
+      "run": "settled-cylinder"
+    },
+    {
+      "job": "20261117_192757_0cc794",
+      "run": "settled-cube"
+    }
+  ],
+  "cancellation_reason": "Native adapter already enables endpoint_settle_s=.3; proposed assignment has no behavior effect. Not new policy evidence.",
+  "regressions": [
+    {
+      "job": "20261117_191726_1d5155",
+      "passed": 225,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "job": "20261117_192528_c8af0d",
+      "passed": 99,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "open_gates": [
+    "cylinder bounded release with persistent tracking reserve",
+    "onboard observed collision source and robot occupancy qualification",
+    "default OVMM whole-house local-map lifecycle integration",
+    "sweep/search latency"
+  ]
+}

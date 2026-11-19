@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "scope": "development camera-source diagnostics; no observed transfer attempted",
+  "base_checkpoint": "61ac6adf",
+  "implementation_identity": "per-attempt source hashes in raw result.json; uncommitted checkpoint changes",
+  "raw_root": ".tamp-runs/observed-camera-20261117",
+  "task_success_assessed": false,
+  "execution_qualified": false,
+  "tests": {
+    "job": "20261117_085410_ff96e6",
+    "junit": "final-regressions-corrected.xml",
+    "passed": 79,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "paired_stationary": [
+    {"job": "20261117_082352_b78997", "directory": "original", "head_tilt": -0.7, "candidate_captures": 1, "captures": 3},
+    {"job": "20261117_082352_19af92", "directory": "changed", "head_tilt": -0.95, "candidate_captures": 1, "captures": 3}
+  ],
+  "live_zmq": [
+    {"job": "20261117_084947_00af2b", "directory": "live-source", "gate_assessed": false, "error": "physical_execution_requires_audit_path"},
+    {"job": "20261117_085044_d2e952", "directory": "live-source-audited", "passed": false, "completed_rounds": 0, "error": "geometry_tracking_no_match"},
+    {"job": "20261117_085212_3d5d9e", "directory": "live-source-input-audit", "passed": false, "completed_rounds": 0, "capture_gap_s": 0.26649319099988134, "error": "geometry_tracking_no_match"},
+    {"job": "20261117_085455_ca0fab", "directory": "live-source-view", "passed": false, "completed_rounds": 0, "capture_gap_s": 0.2666979590000622, "error": "geometry_tracking_no_match"}
+  ],
+  "original_live_union": {"main_component_pixels": 238, "singleton_components": 3},
+  "next_gate": "live original-depth provenance and independently justified correspondence, then full observed source assembly"
+}

@@ -6,9 +6,82 @@
 
 from __future__ import annotations
 
+import base64
+import json
+from io import BytesIO
 from typing import Any
 
+import numpy as np
+import pytest
+from PIL import Image
+
 from emet.llms.openai_client import OpenaiClient
+
+
+@pytest.mark.parametrize("native_tools", [False, True, None])
+def test_declared_provider_tool_protocol_is_honored_without_discarding_arguments(monkeypatch, native_tools):
+    import httpx
+    from openai import OpenAI
+
+    calls = []
+
+    def handle(request):
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "object": "list",
+                    "data": [
+                        {
+                            "id": "provided",
+                            "object": "model",
+                            "created": 1,
+                            "owned_by": "fixture",
+                            "capabilities": {"native_tools": native_tools},
+                        }
+                    ],
+                },
+            )
+        body = json.loads(request.content)
+        calls.append(body)
+        return httpx.Response(
+            200,
+            json={
+                "id": "fixture",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "provided",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": '{"tool_calls":[],"message":"done"}'},
+                    }
+                ],
+            },
+        )
+
+    sdk = OpenAI(
+        base_url="http://fixture/v1",
+        api_key="unused",
+        max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(handle)),
+    )
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", lambda **_: sdk)
+    client = OpenaiClient("Tool schemas and text-JSON protocol", model="provided", base_url="http://fixture/v1")
+    tools = [{"type": "function", "function": {"name": "inspect", "parameters": {"type": "object"}}}]
+    if native_tools is False:
+        assert not client.supports_native_tools
+        with pytest.raises(ValueError, match="prompt-based tool protocol"):
+            client("inspect", tools=tools)
+        assert not calls
+        assert client.get_history() == []
+        client("inspect with the prompt tool schema", tools=None)
+        assert "tools" not in calls[0]
+    else:
+        assert client.supports_native_tools
+        client("inspect", tools=tools)
+        assert calls[0]["tools"] == tools
 
 
 class _FakeCompletions:
@@ -60,3 +133,81 @@ def test_openai_client_reset_context_clears_history(monkeypatch) -> None:
     comps = client._openai.chat.completions
     assert len(comps.calls[1]) == 2  # system + user only
     assert comps.calls[1][1]["content"] == "two"
+
+
+@pytest.mark.parametrize("preserve", [1, 50])
+def test_history_is_bounded_before_http_and_after_reply_even_when_prefix_fills_limit(monkeypatch, preserve):
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", _FakeOpenAI)
+    client = OpenaiClient("sys", model="emet", base_url="http://fixture/v1", history_preserve=preserve)
+    for index in range(35):
+        client(f"turn {index}")
+        sent = client._openai.chat.completions.calls[-1]
+        assert len(sent) <= 50 and len(client.get_history()) <= 50
+        assert sent[0] == {"role": "system", "content": "sys"}
+        assert sent[-1] == {"role": "user", "content": f"turn {index}"}
+
+
+def test_transient_capability_failure_is_throttled_then_recovers_explicit_support(monkeypatch):
+    import httpx
+    from openai import OpenAI
+
+    requests = []
+    clock = [0.0]
+    monkeypatch.setattr("emet.llms.openai_client.time.monotonic", lambda: clock[0])
+
+    def handle(request):
+        requests.append(request.method)
+        if len(requests) == 1:
+            return httpx.Response(503, json={"error": "temporary discovery failure"})
+        return httpx.Response(
+            200,
+            json={
+                "object": "list",
+                "data": [
+                    {
+                        "id": "fixture",
+                        "object": "model",
+                        "created": 1,
+                        "owned_by": "fixture",
+                        "capabilities": {"native_tools": False},
+                    }
+                ],
+            },
+        )
+
+    sdk = OpenAI(
+        base_url="http://fixture/v1",
+        api_key="unused",
+        max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(handle)),
+    )
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", lambda **kw: sdk)
+    client = OpenaiClient("sys", model="fixture", base_url="http://fixture/v1")
+    assert client.supports_native_tools  # Compatibility default, no discovered claim.
+    assert client._native_tools_supported is None
+    clock[0] = 59.0
+    assert client.supports_native_tools and client.supports_native_tools
+    assert requests == ["GET"]
+    clock[0] = 60.0
+    assert not client.supports_native_tools
+    clock[0] = 120.0
+    assert not client.supports_native_tools
+    assert requests == ["GET", "GET"]
+
+
+def test_chat_camera_keyword_reaches_http_payload_and_survives_followup(monkeypatch):
+    """Use the real CHAT call boundary, not a hand-assembled multimodal input."""
+    from emet.agent.loop import _call_llm
+
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", _FakeOpenAI)
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    rgb = np.full((4, 6, 3), [20, 180, 40], dtype=np.uint8)
+    _call_llm(client, "Observe this", [], False, image=rgb, reset_context=True)
+    _call_llm(client, "What color was it?", [], False, reset_context=False)
+    messages = client._openai.chat.completions.calls[-1]
+    content = messages[1]["content"]
+    assert isinstance(content, list)
+    assert content[0] == {"type": "text", "text": "Observe this"}
+    encoded = content[1]["image_url"]["url"].split(",", 1)[1]
+    decoded = np.asarray(Image.open(BytesIO(base64.b64decode(encoded))))
+    np.testing.assert_array_equal(decoded, rgb)

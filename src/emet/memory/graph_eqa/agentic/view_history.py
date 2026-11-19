@@ -11,6 +11,7 @@ import numpy as np
 from emet.llms.eqa_vl_settings import get_eqa_vl_int
 from emet.memory.graph_eqa.agentic.config import _eqa_cfg
 from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
+from emet.memory.navigation_views import NavigationViewBuffer
 from emet.memory.view_selection import SelectionConfig, ViewFrame, select_views
 
 
@@ -18,6 +19,18 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
     settings = dict(_eqa_cfg(executor.agent).get("view_selection") or {})
     if os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY"):
         settings["policy"] = os.environ["EMET_EQA_VIEW_SELECTION_POLICY"]
+    voxel_map = getattr(executor.agent, "voxel_map", None)
+    buffer = getattr(executor.agent.robot, "navigation_view_buffer", None)
+    navigation = (
+        buffer.frames()
+        if isinstance(buffer, NavigationViewBuffer)
+        and buffer.scope_id == getattr(voxel_map, "observation_scope_id", None)
+        else []
+    )
+    if navigation:
+        # Reuse bounded pose diversity; no target labels, extra inference or
+        # automatic answer rule. The existing image budget still applies.
+        settings.setdefault("policy", "pose")
     rank_history = bool(settings)
     before = getattr(executor.agent.robot, "pre_turn_observation", None)
     if not rank_history and before is None:
@@ -27,7 +40,6 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
         return None
     settings["max_images"] = min(settings.get("max_images", 4 if rank_history else 2), limit)
     config = SelectionConfig(**settings)
-    voxel_map = getattr(executor.agent, "voxel_map", None)
     history = getattr(voxel_map, "observations", ())
     # Production maps mint an epoch on reset and stamp it into each frame.
     # Legacy adapters without that contract use the retained-history identity.
@@ -98,6 +110,7 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
         )
         return None
     current = frames[-1]
+    frames.extend(navigation)
     pre_turn_id = None
     if before is not None:
         timing = (getattr(before, "image_timing", None) or {}).get("head_cam_left") or {}
@@ -126,5 +139,11 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
         frames = [frame for frame in frames if frame.view_id in (current_id, pre_turn_id)]
     selection = select_views(frames, current_id=current_id, pre_turn_id=pre_turn_id, config=config)
     event = "view_selection" if rank_history else "assessment_handoff"
-    executor._append_trace({"event": event, **selection.to_dict()})
+    executor._append_trace(
+        {
+            "event": event,
+            **selection.to_dict(),
+            **({"navigation_views": buffer.summary()} if navigation else {}),
+        }
+    )
     return selection

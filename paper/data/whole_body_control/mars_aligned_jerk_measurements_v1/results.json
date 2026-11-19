@@ -1,0 +1,4146 @@
+{
+  "format": "mars-aligned-jerk-readout-v1",
+  "scope": "24 final replays + 2 stationary anchors + 2 high-rate anchors + 12 corrected teacher feedback probes + 24 learned probes; first 12-probe attempt invalid",
+  "new_ppo_steps": 0,
+  "hardware_used": false,
+  "qualified": false,
+  "acceptance_or_reward_changed": false,
+  "experiments": {
+    "data": {
+      "producer_revision": "dc4f96c30a4ea2f163072cdd92ae7bda0fa2bff3",
+      "original_summary_sha256": "36184f2d1c03a75ba3fc1dc7ea21d705c374938101974f2f7b8bbc6dcc3f1e14",
+      "elapsed_wall_seconds": 55.1741893410217,
+      "variants": {
+        "control": {
+          "actor_weights_sha256": "935ec62232ac4e2b87b31239ff5bd22fd80e203a51411f31a50123340470b2fc",
+          "actor_bundle_sha256": "935ec62232ac4e2b87b31239ff5bd22fd80e203a51411f31a50123340470b2fc",
+          "original_report_sha256": "1dfb8521071d0de469ca76a6b611934093638dff5d81f91fc4572a52ea1d13cd",
+          "native_archive_sha256": "020aa9e56aa4986ca50bb5b76aef2a08c0ab25bd6f54b0a69a07690b62d05f09",
+          "replay_validation": {
+            "cases": 12,
+            "physical_identities_equal": true,
+            "all_outcomes_metrics_actions_poses_exact": true
+          },
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.10634119368229195,
+                  0.10634119368229195,
+                  0.08032102885437847
+                ],
+                "displacement_vector": [
+                  0.2046780913188119,
+                  0.2046780913188119,
+                  0.08032102885437847
+                ],
+                "jacobian": [
+                  3.596431647452994,
+                  3.596431647452994,
+                  0.29916672180904635
+                ],
+                "jacobian_zero_reset": [
+                  3.596431647452994,
+                  3.596431647452994,
+                  0.39999330516007486
+                ],
+                "jacobian_trapezoid": [
+                  1.4489007107974539,
+                  1.4489007107974539,
+                  0.27959027890397486
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.2956885973676795,
+              "readonly_reward_group_totals": [
+                17.92252393066883,
+                -0.2960862137024378,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 39,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  0.3136605503232187,
+                  0.3136605503232187,
+                  0.15968271580169227
+                ],
+                "displacement_vector": [
+                  0.37222901527608465,
+                  0.37222901527608465,
+                  0.15968271580169227
+                ],
+                "jacobian": [
+                  3.5789830758473795,
+                  3.5789830758473795,
+                  1.13530382591286
+                ],
+                "jacobian_zero_reset": [
+                  3.5789830758473795,
+                  3.5789830758473795,
+                  1.13530382591286
+                ],
+                "jacobian_trapezoid": [
+                  0.7426245140305385,
+                  0.7426245140305385,
+                  0.3360894782292498
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.03589942396246415,
+              "readonly_reward_group_totals": [
+                2.5119671151041985,
+                -0.03597539997849708,
+                0.0
+              ],
+              "max_dt_error_seconds": 5.509481759702339e-15
+            },
+            {
+              "id": "train:arm:pitch_up",
+              "samples": 109,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "f93a30c12233a3ec782578cc31ea81703491c61b6561e8a843db3de4005677be",
+              "jerk_channels": {
+                "gate": [
+                  1.0566209649575418,
+                  1.0566209649575418,
+                  1.2423660027656747
+                ],
+                "displacement_vector": [
+                  1.0566181705633342,
+                  1.0566181705633342,
+                  1.2423660027656747
+                ],
+                "jacobian": [
+                  2.956492433304224,
+                  2.956492433304224,
+                  2.8458990416472107
+                ],
+                "jacobian_zero_reset": [
+                  2.956492433304224,
+                  2.956492433304224,
+                  2.8458990416472107
+                ],
+                "jacobian_trapezoid": [
+                  1.217797387791191,
+                  1.217797387791191,
+                  1.3156024929424641
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.023902516032939195,
+              "readonly_reward_group_totals": [
+                14.042706370353699,
+                -0.02415911196055731,
+                0.0
+              ],
+              "max_dt_error_seconds": 5.509481759702339e-15
+            },
+            {
+              "id": "train:arm:pitch_down",
+              "samples": 78,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "56bbf8786d53651e81d7f50df8977d464326854f254988fdb211a4a84fb7d670",
+              "jerk_channels": {
+                "gate": [
+                  0.2570471510625062,
+                  0.2570471510625062,
+                  0.12306379598775452
+                ],
+                "displacement_vector": [
+                  0.4370174941942017,
+                  0.4370174941942017,
+                  0.12306379598775452
+                ],
+                "jacobian": [
+                  3.374603521466316,
+                  3.374603521466316,
+                  0.6004262763199062
+                ],
+                "jacobian_zero_reset": [
+                  3.374603521466316,
+                  3.374603521466316,
+                  0.6004262763199062
+                ],
+                "jacobian_trapezoid": [
+                  1.1307106461572936,
+                  1.1307106461572936,
+                  0.21674361391548352
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00943349802544397,
+              "readonly_reward_group_totals": [
+                10.093729250133038,
+                -0.009510271060380049,
+                0.0
+              ],
+              "max_dt_error_seconds": 5.509481759702339e-15
+            },
+            {
+              "id": "train:arm:roll_left",
+              "samples": 240,
+              "initial_state_sha256": "c77d29b0f59d8145f378e6005a4020ab63ffd9997874ad11f3e4cb1578fb5e3d",
+              "reference_sha256": "e60177c8064d453a251a4ca8683fde02626cd0217d31dc57049897c2d8d1137f",
+              "jerk_channels": {
+                "gate": [
+                  0.4779392021325916,
+                  0.4779392021325916,
+                  1.0008995293623861
+                ],
+                "displacement_vector": [
+                  0.4815635021049555,
+                  0.4815635021049555,
+                  1.0008995293623861
+                ],
+                "jacobian": [
+                  3.4041146902532686,
+                  3.4041146902532686,
+                  3.0455357992982313
+                ],
+                "jacobian_zero_reset": [
+                  3.4041146902532686,
+                  3.4041146902532686,
+                  3.0455357992982313
+                ],
+                "jacobian_trapezoid": [
+                  1.3086692331395193,
+                  1.3086692331395193,
+                  1.104901295696535
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.12378529720826267,
+              "readonly_reward_group_totals": [
+                29.580221503973007,
+                -0.12577390125139232,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_right",
+              "samples": 219,
+              "initial_state_sha256": "7f581e2cf758a8e80f9c4cf29a4b997880010217ddab8f0d47fdcffb777c69e9",
+              "reference_sha256": "b7aa22e0d5eae267e51a4293c391f9157f94b25c906f3269204d2d966c0b35b7",
+              "jerk_channels": {
+                "gate": [
+                  0.2296163010646383,
+                  0.2296163010646383,
+                  0.14356192399614734
+                ],
+                "displacement_vector": [
+                  0.4763714517950862,
+                  0.4763714517950862,
+                  0.14356192399614734
+                ],
+                "jacobian": [
+                  3.3554859204923884,
+                  3.3554859204923884,
+                  1.3241243127882287
+                ],
+                "jacobian_zero_reset": [
+                  3.3554859204923884,
+                  3.3554859204923884,
+                  1.3241243127882287
+                ],
+                "jacobian_trapezoid": [
+                  1.0956752466207167,
+                  1.0956752466207167,
+                  0.48330648087337114
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.04261089779180286,
+              "readonly_reward_group_totals": [
+                26.822508439421654,
+                -0.043031789266876785,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.43886121098819,
+                  0.43886121098819,
+                  0.7043011919230374
+                ],
+                "displacement_vector": [
+                  0.4994158619576829,
+                  0.4994158619576829,
+                  0.7043011919230374
+                ],
+                "jacobian": [
+                  3.3840134491548652,
+                  3.3840134491548652,
+                  2.039552075420335
+                ],
+                "jacobian_zero_reset": [
+                  3.3840134491548652,
+                  3.3840134491548652,
+                  2.039552075420335
+                ],
+                "jacobian_trapezoid": [
+                  1.372274061550622,
+                  1.372274061550622,
+                  0.8350487823800385
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0967168038942322,
+              "readonly_reward_group_totals": [
+                33.248649179935455,
+                -0.09818873569119546,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.5",
+              "samples": 201,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "cf0fb789fc067b3b8a9aed7be9b2a55014a6c31ea21a88c62383b53859dfccab",
+              "jerk_channels": {
+                "gate": [
+                  0.3764775892198314,
+                  0.3764775892198314,
+                  0.5956642037895363
+                ],
+                "displacement_vector": [
+                  0.37649496556113843,
+                  0.37649496556113843,
+                  0.5956642037895363
+                ],
+                "jacobian": [
+                  3.3882277165919974,
+                  3.3882277165919974,
+                  3.1914698401153907
+                ],
+                "jacobian_zero_reset": [
+                  3.3882277165919974,
+                  3.3882277165919974,
+                  3.1914698401153907
+                ],
+                "jacobian_trapezoid": [
+                  1.224896946427476,
+                  1.224896946427476,
+                  1.339928144662456
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.04796416229504188,
+              "readonly_reward_group_totals": [
+                26.444315910339355,
+                -0.04839804628636557,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "e65c08e727df76cc64d71f3eb0fcc9e71dd21dc284f8397247af099b3e9e4a0b",
+              "jerk_channels": {
+                "gate": [
+                  0.4292203237635601,
+                  0.4292203237635601,
+                  0.1740361547747716
+                ],
+                "displacement_vector": [
+                  0.4431039036747215,
+                  0.4431039036747215,
+                  0.1740361547747716
+                ],
+                "jacobian": [
+                  3.139180282102108,
+                  3.139180282102108,
+                  1.1281600400058285
+                ],
+                "jacobian_zero_reset": [
+                  3.139180282102108,
+                  3.139180282102108,
+                  1.1281600400058285
+                ],
+                "jacobian_trapezoid": [
+                  1.1949227543366883,
+                  1.1949227543366883,
+                  0.43410537838489305
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.03501026562236153,
+              "readonly_reward_group_totals": [
+                32.748022355139256,
+                -0.0353332583889312,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.5",
+              "samples": 173,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "8f20142ad2eb0a3347f41a486b2542945594079c45b03902a36eee2ca37d21b5",
+              "jerk_channels": {
+                "gate": [
+                  0.31718796002900496,
+                  0.31718796002900496,
+                  0.11420860789482234
+                ],
+                "displacement_vector": [
+                  0.41082706212517733,
+                  0.41082706212517733,
+                  0.11420860789482234
+                ],
+                "jacobian": [
+                  3.2829793974754766,
+                  3.2829793974754766,
+                  0.9871169559742216
+                ],
+                "jacobian_zero_reset": [
+                  3.2829793974754766,
+                  3.2829793974754766,
+                  0.9871169559742216
+                ],
+                "jacobian_trapezoid": [
+                  1.2651516081863547,
+                  1.2651516081863547,
+                  0.5008152059680788
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.024100309011491013,
+              "readonly_reward_group_totals": [
+                22.76061376184225,
+                -0.024301556126383517,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "7f99e612ccf9a466dade0718419b09256c3953abb6951286874bcca0b509a867",
+              "jerk_channels": {
+                "gate": [
+                  0.15733760139053157,
+                  0.15733760139053157,
+                  0.10316553550586911
+                ],
+                "displacement_vector": [
+                  0.2345237419361097,
+                  0.2345237419361097,
+                  0.10316553550586911
+                ],
+                "jacobian": [
+                  1.7441112162257622,
+                  1.7441112162257622,
+                  0.9300815862098246
+                ],
+                "jacobian_zero_reset": [
+                  1.7441112162257622,
+                  1.7441112162257622,
+                  0.9300815862098246
+                ],
+                "jacobian_trapezoid": [
+                  1.1782223051197904,
+                  1.1782223051197904,
+                  0.4609445706182856
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.01981927448064355,
+              "readonly_reward_group_totals": [
+                34.843287885189056,
+                -0.020113806770552856,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "f06a7797efd401e2840098c47b0de82c5174c2e3175fe11402a896f1535c33da",
+              "jerk_channels": {
+                "gate": [
+                  0.19738109176478355,
+                  0.19738109176478355,
+                  0.23966827549615644
+                ],
+                "displacement_vector": [
+                  0.19742796840143836,
+                  0.19742796840143836,
+                  0.23966827549615644
+                ],
+                "jacobian": [
+                  1.8947400021363454,
+                  1.8947400021363454,
+                  1.7764982409456869
+                ],
+                "jacobian_zero_reset": [
+                  1.8947400021363454,
+                  1.8947400021363454,
+                  1.7764982409456869
+                ],
+                "jacobian_trapezoid": [
+                  0.8466556270624873,
+                  0.8466556270624873,
+                  0.692118084399671
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.03288924506236762,
+              "readonly_reward_group_totals": [
+                32.19225597381592,
+                -0.03337104430552529,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "original_source_hashes_digest": "47a85f450ab8395b0ce3724ef351320903a4a3f8c921ccb0c5f9fc91241c463a",
+          "instrumented_source_hashes_digest": "3a3dce0c9514e6493bead788b5a95613e48eb97f516ec3dc6517b2a6df0d308e"
+        },
+        "candidate": {
+          "actor_weights_sha256": "ee2e5f1fa5302efb341892768c4f16dab5aab3bf75d90d0a4ddafd6e02a41a4e",
+          "actor_bundle_sha256": "ee2e5f1fa5302efb341892768c4f16dab5aab3bf75d90d0a4ddafd6e02a41a4e",
+          "original_report_sha256": "9d16e78eb3e41269354f2998a0502c49b3842752bf686125333812b836cf4a43",
+          "native_archive_sha256": "2489a9140d8e67193f25d16da07de289ceeb7a17c6aad4dd5178d163ee377684",
+          "replay_validation": {
+            "cases": 12,
+            "physical_identities_equal": true,
+            "all_outcomes_metrics_actions_poses_exact": true
+          },
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.0933084979085166,
+                  0.0933084979085166,
+                  0.1491901037893664
+                ],
+                "displacement_vector": [
+                  0.4562190773050481,
+                  0.4562190773050481,
+                  0.1491901037893664
+                ],
+                "jacobian": [
+                  2.593346376483316,
+                  2.593346376483316,
+                  0.18574666782748758
+                ],
+                "jacobian_zero_reset": [
+                  2.593346376483316,
+                  2.593346376483316,
+                  0.18574666782748758
+                ],
+                "jacobian_trapezoid": [
+                  0.11826905201313413,
+                  0.11826905201313413,
+                  0.2090169574617496
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.21118443946106225,
+              "readonly_reward_group_totals": [
+                17.955973491072655,
+                -0.21185324419639073,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 39,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  0.2088889425310613,
+                  0.2088889425310613,
+                  0.24239738918435325
+                ],
+                "displacement_vector": [
+                  0.34376156970586813,
+                  0.34376156970586813,
+                  0.24239738918435325
+                ],
+                "jacobian": [
+                  3.6418870892764446,
+                  3.6418870892764446,
+                  0.5987823570536177
+                ],
+                "jacobian_zero_reset": [
+                  3.6418870892764446,
+                  3.6418870892764446,
+                  0.5987823570536177
+                ],
+                "jacobian_trapezoid": [
+                  0.03772668434185331,
+                  0.03772668434185331,
+                  0.04866720337878459
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.04962449417274487,
+              "readonly_reward_group_totals": [
+                2.5515127703547478,
+                -0.049674347712425515,
+                0.0
+              ],
+              "max_dt_error_seconds": 5.509481759702339e-15
+            },
+            {
+              "id": "train:arm:pitch_up",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "f93a30c12233a3ec782578cc31ea81703491c61b6561e8a843db3de4005677be",
+              "jerk_channels": {
+                "gate": [
+                  0.6604801212840598,
+                  0.6604801212840598,
+                  0.2773749424061431
+                ],
+                "displacement_vector": [
+                  0.6617634106038617,
+                  0.6617634106038617,
+                  0.2773749424061431
+                ],
+                "jacobian": [
+                  3.699884883129278,
+                  3.699884883129278,
+                  1.2555651660147193
+                ],
+                "jacobian_zero_reset": [
+                  3.699884883129278,
+                  3.699884883129278,
+                  1.2555651660147193
+                ],
+                "jacobian_trapezoid": [
+                  1.209376950796897,
+                  1.209376950796897,
+                  0.507765720794808
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.10067946110529617,
+              "readonly_reward_group_totals": [
+                32.778986766934395,
+                -0.10128244348230453,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "56bbf8786d53651e81d7f50df8977d464326854f254988fdb211a4a84fb7d670",
+              "jerk_channels": {
+                "gate": [
+                  0.5393002767323953,
+                  0.5393002767323953,
+                  0.3824202464136235
+                ],
+                "displacement_vector": [
+                  0.6259808175655919,
+                  0.6259808175655919,
+                  0.3824202464136235
+                ],
+                "jacobian": [
+                  3.7676596614937736,
+                  3.7676596614937736,
+                  1.9758456652194374
+                ],
+                "jacobian_zero_reset": [
+                  3.7676596614937736,
+                  3.7676596614937736,
+                  1.9758456652194374
+                ],
+                "jacobian_trapezoid": [
+                  2.030140553011904,
+                  2.030140553011904,
+                  0.916480251993603
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.12921541199869432,
+              "readonly_reward_group_totals": [
+                32.85054591298103,
+                -0.13043792745449423,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_left",
+              "samples": 240,
+              "initial_state_sha256": "c77d29b0f59d8145f378e6005a4020ab63ffd9997874ad11f3e4cb1578fb5e3d",
+              "reference_sha256": "e60177c8064d453a251a4ca8683fde02626cd0217d31dc57049897c2d8d1137f",
+              "jerk_channels": {
+                "gate": [
+                  0.35496595640298056,
+                  0.35496595640298056,
+                  0.6041166401168918
+                ],
+                "displacement_vector": [
+                  0.7005290919973023,
+                  0.7005290919973023,
+                  0.6041166401168918
+                ],
+                "jacobian": [
+                  3.8565667635201737,
+                  3.8565667635201737,
+                  2.979021706800246
+                ],
+                "jacobian_zero_reset": [
+                  3.8565667635201737,
+                  3.8565667635201737,
+                  2.979021706800246
+                ],
+                "jacobian_trapezoid": [
+                  1.7201340227128445,
+                  1.7201340227128445,
+                  0.49720203340160013
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.16895149393310951,
+              "readonly_reward_group_totals": [
+                29.753729462623596,
+                -0.16977989202570143,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_right",
+              "samples": 240,
+              "initial_state_sha256": "7f581e2cf758a8e80f9c4cf29a4b997880010217ddab8f0d47fdcffb777c69e9",
+              "reference_sha256": "b7aa22e0d5eae267e51a4293c391f9157f94b25c906f3269204d2d966c0b35b7",
+              "jerk_channels": {
+                "gate": [
+                  0.35460788553316314,
+                  0.35460788553316314,
+                  0.34917212457563634
+                ],
+                "displacement_vector": [
+                  0.46240262998570036,
+                  0.46240262998570036,
+                  0.34917212457563634
+                ],
+                "jacobian": [
+                  3.8213751073183504,
+                  3.8213751073183504,
+                  1.5055849644814105
+                ],
+                "jacobian_zero_reset": [
+                  3.8213751073183504,
+                  3.8213751073183504,
+                  1.5055849644814105
+                ],
+                "jacobian_trapezoid": [
+                  1.895960612392727,
+                  1.895960612392727,
+                  0.5469282539459109
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.07650776109536271,
+              "readonly_reward_group_totals": [
+                29.727636769413948,
+                -0.07783610330153579,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.3316813216036894,
+                  0.3316813216036894,
+                  0.24845596295359346
+                ],
+                "displacement_vector": [
+                  0.5317569030491984,
+                  0.5317569030491984,
+                  0.24845596295359346
+                ],
+                "jacobian": [
+                  3.649461633598572,
+                  3.649461633598572,
+                  0.7524022188988113
+                ],
+                "jacobian_zero_reset": [
+                  3.649461633598572,
+                  3.649461633598572,
+                  0.7524022188988113
+                ],
+                "jacobian_trapezoid": [
+                  1.6657566717451227,
+                  1.6657566717451227,
+                  0.36520966857890386
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.11445925416577839,
+              "readonly_reward_group_totals": [
+                35.079872608184814,
+                -0.11509657277019869,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.5",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "cf0fb789fc067b3b8a9aed7be9b2a55014a6c31ea21a88c62383b53859dfccab",
+              "jerk_channels": {
+                "gate": [
+                  0.3505099689432876,
+                  0.3505099689432876,
+                  0.25873145523917784
+                ],
+                "displacement_vector": [
+                  0.6204914185079385,
+                  0.6204914185079385,
+                  0.25873145523917784
+                ],
+                "jacobian": [
+                  3.652682717492754,
+                  3.652682717492754,
+                  0.8454277657383711
+                ],
+                "jacobian_zero_reset": [
+                  3.652682717492754,
+                  3.652682717492754,
+                  0.8454277657383711
+                ],
+                "jacobian_trapezoid": [
+                  1.659282595966015,
+                  1.659282595966015,
+                  0.3520680265649301
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.125221869096782,
+              "readonly_reward_group_totals": [
+                34.32961632311344,
+                -0.12750189061489436,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "e65c08e727df76cc64d71f3eb0fcc9e71dd21dc284f8397247af099b3e9e4a0b",
+              "jerk_channels": {
+                "gate": [
+                  0.34555199427343736,
+                  0.34555199427343736,
+                  0.24587427307088197
+                ],
+                "displacement_vector": [
+                  0.6892767277468248,
+                  0.6892767277468248,
+                  0.24587427307088197
+                ],
+                "jacobian": [
+                  3.5394356805554104,
+                  3.5394356805554104,
+                  0.9325349938964639
+                ],
+                "jacobian_zero_reset": [
+                  3.5394356805554104,
+                  3.5394356805554104,
+                  0.9325349938964639
+                ],
+                "jacobian_trapezoid": [
+                  1.6180673728928536,
+                  1.6180673728928536,
+                  0.28432546497628
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.15342556036362662,
+              "readonly_reward_group_totals": [
+                35.085320711135864,
+                -0.15598204427351448,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.5",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "8f20142ad2eb0a3347f41a486b2542945594079c45b03902a36eee2ca37d21b5",
+              "jerk_channels": {
+                "gate": [
+                  0.4093221250353941,
+                  0.4093221250353941,
+                  0.2833581389923888
+                ],
+                "displacement_vector": [
+                  0.6718953401656419,
+                  0.6718953401656419,
+                  0.2833581389923888
+                ],
+                "jacobian": [
+                  3.701311788220891,
+                  3.701311788220891,
+                  1.257731397178652
+                ],
+                "jacobian_zero_reset": [
+                  3.701311788220891,
+                  3.701311788220891,
+                  1.257731397178652
+                ],
+                "jacobian_trapezoid": [
+                  1.7451318276660848,
+                  1.7451318276660848,
+                  0.45545527986042916
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.1161062446847144,
+              "readonly_reward_group_totals": [
+                34.31101794540882,
+                -0.11698608922512221,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "7f99e612ccf9a466dade0718419b09256c3953abb6951286874bcca0b509a867",
+              "jerk_channels": {
+                "gate": [
+                  0.14764028741497584,
+                  0.14542134523163752,
+                  0.29606123937699047
+                ],
+                "displacement_vector": [
+                  0.6410139806559247,
+                  0.6410139806559247,
+                  0.29606123937699047
+                ],
+                "jacobian": [
+                  3.5168130489239795,
+                  3.5168130489239795,
+                  1.5747180586339338
+                ],
+                "jacobian_zero_reset": [
+                  3.5168130489239795,
+                  3.5168130489239795,
+                  1.5747180586339338
+                ],
+                "jacobian_trapezoid": [
+                  0.9009712030043258,
+                  0.9009712030043258,
+                  0.5307958506889829
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.14890464036352805,
+              "readonly_reward_group_totals": [
+                34.94458298385143,
+                -0.1508777594201547,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "f06a7797efd401e2840098c47b0de82c5174c2e3175fe11402a896f1535c33da",
+              "jerk_channels": {
+                "gate": [
+                  0.22754381054330441,
+                  0.22754381054330441,
+                  0.4362471254693995
+                ],
+                "displacement_vector": [
+                  0.6002168128398953,
+                  0.6002168128398953,
+                  0.4362471254693995
+                ],
+                "jacobian": [
+                  2.804415150507624,
+                  2.804415150507624,
+                  1.6484429562468594
+                ],
+                "jacobian_zero_reset": [
+                  2.804415150507624,
+                  2.804415150507624,
+                  1.6484429562468594
+                ],
+                "jacobian_trapezoid": [
+                  1.2713929324079756,
+                  0.8328500945790831,
+                  0.7457915605851223
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.02199399083153888,
+              "readonly_reward_group_totals": [
+                31.94081199169159,
+                -0.02245031999049729,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "original_source_hashes_digest": "47a85f450ab8395b0ce3724ef351320903a4a3f8c921ccb0c5f9fc91241c463a",
+          "instrumented_source_hashes_digest": "3a3dce0c9514e6493bead788b5a95613e48eb97f516ec3dc6517b2a6df0d308e"
+        }
+      }
+    },
+    "anchors": {
+      "producer_revision": "1297ff2dfdfb7c849db16ca61a2ce8f9cf728e7a",
+      "original_summary_sha256": "72280e79b6f0197f3b726bd441dd14c3beb969d50586c7daaae77f329b52301d",
+      "elapsed_wall_seconds": 8.762474840972573,
+      "variants": {
+        "initial_zero_actor": {
+          "actor_weights_sha256": "02087b95ba3f5d878b676355e6b5d470442f6f06978fe2d8b17391cc9c8ec033",
+          "actor_bundle_sha256": "02087b95ba3f5d878b676355e6b5d470442f6f06978fe2d8b17391cc9c8ec033",
+          "original_report_sha256": "9f19848cf41d9fe0df058126b09e697470efd26be2c28ecc758fa587bb9cde3d",
+          "native_archive_sha256": "ab2f63327031016f0431fb7f7fda45a392a106c1aa1c38867c2a62c3bf91c7c5",
+          "replay_validation": {
+            "cases": 1,
+            "physical_identities_equal": true,
+            "all_outcomes_metrics_actions_poses_exact": true
+          },
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.09594203198593179,
+                  0.09594203198593179,
+                  0.08064756855599015
+                ],
+                "displacement_vector": [
+                  0.2888638337060069,
+                  0.2888638337060069,
+                  0.08064756855599015
+                ],
+                "jacobian": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_zero_reset": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_trapezoid": [
+                  1.2295729752808093,
+                  1.2295729752808093,
+                  0.282493319722744
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.299113482719206,
+              "readonly_reward_group_totals": [
+                17.923050455749035,
+                -0.29950505923807214,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "original_source_hashes_digest": "47a85f450ab8395b0ce3724ef351320903a4a3f8c921ccb0c5f9fc91241c463a",
+          "instrumented_source_hashes_digest": "3a3dce0c9514e6493bead788b5a95613e48eb97f516ec3dc6517b2a6df0d308e"
+        },
+        "analytic_teacher": {
+          "actor_weights_sha256": null,
+          "actor_bundle_sha256": null,
+          "original_report_sha256": "47e01923eb5003cb1ab721d78594e025ac954c427b5f3a6ce78b1c7f835360f8",
+          "native_archive_sha256": "de65a75a56fc8fcafe2b4a599619815dd6504ebd509ac2998ed1be3af9e43a1a",
+          "replay_validation": {
+            "cases": 1,
+            "physical_identities_equal": true,
+            "all_outcomes_metrics_actions_poses_exact": true
+          },
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.09594203198593179,
+                  0.09594203198593179,
+                  0.08064756855599015
+                ],
+                "displacement_vector": [
+                  0.2888638337060069,
+                  0.2888638337060069,
+                  0.08064756855599015
+                ],
+                "jacobian": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_zero_reset": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_trapezoid": [
+                  1.2295729752808093,
+                  1.2295729752808093,
+                  0.282493319722744
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.299113482719206,
+              "readonly_reward_group_totals": [
+                17.923050455749035,
+                -0.29950505923807214,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "original_source_hashes_digest": "47a85f450ab8395b0ce3724ef351320903a4a3f8c921ccb0c5f9fc91241c463a",
+          "instrumented_source_hashes_digest": "3a3dce0c9514e6493bead788b5a95613e48eb97f516ec3dc6517b2a6df0d308e"
+        }
+      }
+    },
+    "substeps": {
+      "producer_revision": "cee5838aa725c9f653dad7e7a2d174dc3dd02e59",
+      "original_summary_sha256": "95c3072bf9d9abc50ea0edbf5a8315e5f4ec37a2f4dac895e4a79df1e39fa6c4",
+      "elapsed_wall_seconds": 9.787386078154668,
+      "variants": {
+        "initial_zero_actor": {
+          "actor_weights_sha256": "02087b95ba3f5d878b676355e6b5d470442f6f06978fe2d8b17391cc9c8ec033",
+          "actor_bundle_sha256": "02087b95ba3f5d878b676355e6b5d470442f6f06978fe2d8b17391cc9c8ec033",
+          "original_report_sha256": "9f19848cf41d9fe0df058126b09e697470efd26be2c28ecc758fa587bb9cde3d",
+          "native_archive_sha256": "d4d01f3b6381213ce30094b4c641fc962c55153a92e2ca1b47ad9b51d92db426",
+          "replay_validation": {
+            "cases": 1,
+            "physical_identities_equal": true,
+            "all_outcomes_metrics_actions_poses_exact": true
+          },
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.09594203198593179,
+                  0.09594203198593179,
+                  0.08064756855599015
+                ],
+                "displacement_vector": [
+                  0.2888638337060069,
+                  0.2888638337060069,
+                  0.08064756855599015
+                ],
+                "jacobian": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_zero_reset": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_trapezoid": [
+                  1.2295729752808093,
+                  1.2295729752808093,
+                  0.282493319722744
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.299113482719206,
+              "readonly_reward_group_totals": [
+                17.923050455749035,
+                -0.29950505923807214,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "original_source_hashes_digest": "47a85f450ab8395b0ce3724ef351320903a4a3f8c921ccb0c5f9fc91241c463a",
+          "instrumented_source_hashes_digest": "197ca1b037808073c4e97701f146b8dac9bc4f6a9febc80fa834db54b7905da7",
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015830469391420504,
+              "vx_peak_to_peak_m_s": 0.004248945386651624,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9999865447603891,
+              "wheel_command_rms_rad_s": 0.009678440275392943,
+              "wheel_actuator_force_rms_native": 0.01010372763716402,
+              "wheel_actuator_force_peak_native": 0.017000431251278817,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.09594203198593179,
+                "base_yaw_jerk": 0.08064756855599015,
+                "joint_jerk": 0.6348286989532146,
+                "hand_position_error_m": 0.0006551852193124981,
+                "hand_orientation_error_rad": 0.0028530816943692985,
+                "base_error_m": 9.555862145476282e-05,
+                "base_heading_error_rad": 4.691057350540923e-05,
+                "hold_drift_m": 5.2180638586330725e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            }
+          ]
+        },
+        "analytic_teacher": {
+          "actor_weights_sha256": null,
+          "actor_bundle_sha256": null,
+          "original_report_sha256": "47e01923eb5003cb1ab721d78594e025ac954c427b5f3a6ce78b1c7f835360f8",
+          "native_archive_sha256": "d0ffbb8293b1f81dab2e95cd02a2f0bbafdc3620d5b4a1c421d035c5e1a385c7",
+          "replay_validation": {
+            "cases": 1,
+            "physical_identities_equal": true,
+            "all_outcomes_metrics_actions_poses_exact": true
+          },
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.09594203198593179,
+                  0.09594203198593179,
+                  0.08064756855599015
+                ],
+                "displacement_vector": [
+                  0.2888638337060069,
+                  0.2888638337060069,
+                  0.08064756855599015
+                ],
+                "jacobian": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_zero_reset": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_trapezoid": [
+                  1.2295729752808093,
+                  1.2295729752808093,
+                  0.282493319722744
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.299113482719206,
+              "readonly_reward_group_totals": [
+                17.923050455749035,
+                -0.29950505923807214,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "original_source_hashes_digest": "47a85f450ab8395b0ce3724ef351320903a4a3f8c921ccb0c5f9fc91241c463a",
+          "instrumented_source_hashes_digest": "197ca1b037808073c4e97701f146b8dac9bc4f6a9febc80fa834db54b7905da7",
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015830469391420504,
+              "vx_peak_to_peak_m_s": 0.004248945386651624,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9999865447603891,
+              "wheel_command_rms_rad_s": 0.009678440275392943,
+              "wheel_actuator_force_rms_native": 0.01010372763716402,
+              "wheel_actuator_force_peak_native": 0.017000431251278817,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.09594203198593179,
+                "base_yaw_jerk": 0.08064756855599015,
+                "joint_jerk": 0.6348286989532146,
+                "hand_position_error_m": 0.0006551852193124981,
+                "hand_orientation_error_rad": 0.0028530816943692985,
+                "base_error_m": 9.555862145476282e-05,
+                "base_heading_error_rad": 4.691057350540923e-05,
+                "hold_drift_m": 5.2180638586330725e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            }
+          ]
+        }
+      }
+    },
+    "feedback": {
+      "producer_revision": "9625f5310d5a27e725aabc366e0bae79d105a704",
+      "original_summary_sha256": "d83a98556d767d95eba14a1fc1e771f56f9f8391812476d35d2f5f7df3b153ee",
+      "elapsed_wall_seconds": 37.172086940845475,
+      "variants": {
+        "cached_com": {
+          "raw_sha256": "b425af41609fbea895b2c5948dcdc541d6d3fba668ec88163989dda6b76eb845",
+          "all_reset_reference_identities_equal": true,
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.09594203198593179,
+                  0.09594203198593179,
+                  0.08064756855599015
+                ],
+                "displacement_vector": [
+                  0.2888638337060069,
+                  0.2888638337060069,
+                  0.08064756855599015
+                ],
+                "jacobian": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_zero_reset": [
+                  3.401659597768511,
+                  3.401659597768511,
+                  0.3925168692235308
+                ],
+                "jacobian_trapezoid": [
+                  1.2295729752808093,
+                  1.2295729752808093,
+                  0.282493319722744
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.299113482719206,
+              "readonly_reward_group_totals": [
+                17.923050455749035,
+                -0.29950505923807214,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 240,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  1.244440375242013,
+                  1.244440375242013,
+                  0.1257972042098907
+                ],
+                "displacement_vector": [
+                  1.3674654428917044,
+                  1.3674654428917044,
+                  0.1257972042098907
+                ],
+                "jacobian": [
+                  4.5747733861831605,
+                  4.5747733861831605,
+                  0.964266250410403
+                ],
+                "jacobian_zero_reset": [
+                  4.5747733861831605,
+                  4.5747733861831605,
+                  0.964266250410403
+                ],
+                "jacobian_trapezoid": [
+                  1.8456375467766162,
+                  1.8456375467766162,
+                  0.3795088430834632
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.11660909629881776,
+              "readonly_reward_group_totals": [
+                17.96570347249508,
+                -0.11976712442071857,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.2281091579229543,
+                  0.2281091579229543,
+                  0.5004801492205779
+                ],
+                "displacement_vector": [
+                  0.6353876575379973,
+                  0.6353876575379973,
+                  0.5004801492205779
+                ],
+                "jacobian": [
+                  3.504264968061741,
+                  3.504264968061741,
+                  0.630746142171145
+                ],
+                "jacobian_zero_reset": [
+                  3.504264968061741,
+                  3.504264968061741,
+                  0.630746142171145
+                ],
+                "jacobian_trapezoid": [
+                  1.419035633505793,
+                  1.419035633505793,
+                  0.2645631958579586
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.13580610152375958,
+              "readonly_reward_group_totals": [
+                35.91014498472214,
+                -0.14928187469422483,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015830469391420504,
+              "vx_peak_to_peak_m_s": 0.004248945386651624,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9999865447603891,
+              "wheel_command_rms_rad_s": 0.009678440275392943,
+              "wheel_actuator_force_rms_native": 0.01010372763716402,
+              "wheel_actuator_force_peak_native": 0.017000431251278817,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            },
+            "train:base:forward": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.003952525854945708,
+              "vx_peak_to_peak_m_s": 0.021864342101217692,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.2017524411982618,
+              "wheel_command_rms_rad_s": 0.09675521915563429,
+              "wheel_actuator_force_rms_native": 0.010190955766988901,
+              "wheel_actuator_force_peak_native": 0.02764531296967876,
+              "requested_base_command_peak": [
+                0.010958028902388903,
+                0.00013385209624307414
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015600481319864683,
+              "vx_peak_to_peak_m_s": 0.005601486557749154,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9978216434342422,
+              "wheel_command_rms_rad_s": 0.009550330124465206,
+              "wheel_actuator_force_rms_native": 0.009992033929823705,
+              "wheel_actuator_force_peak_native": 0.020452328601973067,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.09594203198593179,
+                "base_yaw_jerk": 0.08064756855599015,
+                "joint_jerk": 0.6348286989532146,
+                "hand_position_error_m": 0.0006551852193124981,
+                "hand_orientation_error_rad": 0.0028530816943692985,
+                "base_error_m": 9.555862145476282e-05,
+                "base_heading_error_rad": 4.691057350540923e-05,
+                "hold_drift_m": 5.2180638586330725e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:base:forward",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 1.244440375242013,
+                "base_yaw_jerk": 0.1257972042098907,
+                "joint_jerk": 1.1714184556518608,
+                "hand_position_error_m": 0.001674543401671342,
+                "hand_orientation_error_rad": 0.002942811496192822,
+                "base_error_m": 0.0013443201621076203,
+                "base_heading_error_rad": 1.3824823723593197e-05,
+                "hold_drift_m": 4.41160420590852e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.2281091579229543,
+                "base_yaw_jerk": 0.5004801492205779,
+                "joint_jerk": 4.61152704075063,
+                "hand_position_error_m": 4.5172450691711824e-06,
+                "hand_orientation_error_rad": 1.2276820643445335e-05,
+                "base_error_m": 7.156978724198061e-06,
+                "base_heading_error_rad": 3.605065590212963e-05,
+                "hold_drift_m": 8.263465514280427e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            }
+          ]
+        },
+        "feedback_off": {
+          "raw_sha256": "9a0031a4fd8d464e8e16d3def4ecefc98d4a4b671ba357b61b3ef290f00e1079",
+          "all_reset_reference_identities_equal": true,
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.0673970023884622,
+                  0.0673970023884622,
+                  0.0691937031463731
+                ],
+                "displacement_vector": [
+                  0.29357061836411247,
+                  0.29357061836411247,
+                  0.0691937031463731
+                ],
+                "jacobian": [
+                  0.8913980144154731,
+                  0.2740992599127302,
+                  0.06637897527378739
+                ],
+                "jacobian_zero_reset": [
+                  0.46598402508480885,
+                  0.2740992599127302,
+                  0.13921960766243338
+                ],
+                "jacobian_trapezoid": [
+                  0.308649956018244,
+                  0.308649956018244,
+                  0.1848716840462364
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0002834016769359615,
+              "readonly_reward_group_totals": [
+                17.989463545382023,
+                -0.0002847009918653205,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 240,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  13.799186600413533,
+                  13.799186600413533,
+                  1.2291351767003185
+                ],
+                "displacement_vector": [
+                  15.489422652691513,
+                  15.489422652691513,
+                  1.2291351767003185
+                ],
+                "jacobian": [
+                  19.718474335010878,
+                  19.718474335010878,
+                  0.8039504641727521
+                ],
+                "jacobian_zero_reset": [
+                  19.718474335010878,
+                  19.718474335010878,
+                  0.8039504641727521
+                ],
+                "jacobian_trapezoid": [
+                  5.741670682926732,
+                  5.741670682926732,
+                  0.3186073004496459
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.06248942029813614,
+              "readonly_reward_group_totals": [
+                17.9524651132524,
+                -0.06257778882215687,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.2165139469543377,
+                  0.15220274988678345,
+                  0.3638929929325775
+                ],
+                "displacement_vector": [
+                  0.2166909159723389,
+                  0.17726573121509742,
+                  0.3638929929325775
+                ],
+                "jacobian": [
+                  1.3959631946976117,
+                  0.6151825281886936,
+                  0.07867765994349367
+                ],
+                "jacobian_zero_reset": [
+                  0.7422781854455722,
+                  0.6151825281886936,
+                  0.07636921218980212
+                ],
+                "jacobian_trapezoid": [
+                  0.43110137704035495,
+                  0.3903905918294019,
+                  0.142651311285169
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0006449349492998396,
+              "readonly_reward_group_totals": [
+                35.96092192828655,
+                -0.0008785845728411126,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 3.2896571833726405e-07,
+              "vx_peak_to_peak_m_s": 1.7373313719943794e-07,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.006723503401804729,
+              "wheel_command_rms_rad_s": 0.0,
+              "wheel_actuator_force_rms_native": 7.85889743026988e-06,
+              "wheel_actuator_force_peak_native": 1.3333570161517601e-05,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            },
+            "train:base:forward": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0037564308521371575,
+              "vx_peak_to_peak_m_s": 0.04075689796575619,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.04176642332233692,
+              "wheel_command_rms_rad_s": 0.0925819186877283,
+              "wheel_actuator_force_rms_native": 0.002364005563593561,
+              "wheel_actuator_force_peak_native": 0.04165271028536489,
+              "requested_base_command_peak": [
+                0.010420759678844742,
+                0.0001847370712997004
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 1.886175164978532e-05,
+              "vx_peak_to_peak_m_s": 0.00020061190673394206,
+              "vx_dominant_frequency_Hz": 20.087256862388656,
+              "vx_power_fraction_above_10Hz": 0.9940847342847017,
+              "wheel_command_rms_rad_s": 0.0,
+              "wheel_actuator_force_rms_native": 2.558220105445061e-05,
+              "wheel_actuator_force_peak_native": 0.0001204027930880003,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.0673970023884622,
+                "base_yaw_jerk": 0.0691937031463731,
+                "joint_jerk": 0.1988155021053572,
+                "hand_position_error_m": 0.0006788280419109289,
+                "hand_orientation_error_rad": 0.002845853310370992,
+                "base_error_m": 4.738965206901075e-06,
+                "base_heading_error_rad": 4.3426420596487814e-05,
+                "hold_drift_m": 2.091632406672134e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:base:forward",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk",
+                "smoothness/base_yaw_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 13.799186600413533,
+                "base_yaw_jerk": 1.2291351767003185,
+                "joint_jerk": 1.3083625687159897,
+                "hand_position_error_m": 0.0022409615625856756,
+                "hand_orientation_error_rad": 0.002933213489763461,
+                "base_error_m": 0.0019517005107165827,
+                "base_heading_error_rad": 2.4373202538085104e-05,
+                "hold_drift_m": 1.7341674717609504e-06,
+                "settled_seconds": 8.84999999999999
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.2165139469543377,
+                "base_yaw_jerk": 0.3638929929325775,
+                "joint_jerk": 2.6482686555583523,
+                "hand_position_error_m": 4.2508061685587965e-06,
+                "hand_orientation_error_rad": 9.755425037940478e-07,
+                "base_error_m": 1.3986039708773746e-05,
+                "base_heading_error_rad": 4.60764549335543e-05,
+                "hold_drift_m": 2.0491480919727018e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            }
+          ]
+        },
+        "current_com": {
+          "raw_sha256": "b40e3581d8fce4cb3a96830d66298d52a35f776ea8a81ef9e3ad2d9b55716be9",
+          "all_reset_reference_identities_equal": true,
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.06234460018029802,
+                  0.02809128258152669,
+                  0.054448707969372706
+                ],
+                "displacement_vector": [
+                  0.0720868989847894,
+                  0.03912145571733682,
+                  0.054448707969372706
+                ],
+                "jacobian": [
+                  0.43261774996828334,
+                  0.0003371921624699209,
+                  0.1133842004953167
+                ],
+                "jacobian_zero_reset": [
+                  0.007205932382082513,
+                  0.0003371921624699209,
+                  0.060244027728555256
+                ],
+                "jacobian_trapezoid": [
+                  0.42478493911136717,
+                  0.21618418794694214,
+                  0.16888650669006197
+                ]
+              },
+              "integrated_base_jerk_reward_component": -8.968786054690759e-05,
+              "readonly_reward_group_totals": [
+                17.991486757993698,
+                -9.078289648013402e-05,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 240,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  1.4090344684327432,
+                  1.4090344684327432,
+                  0.06527887280114407
+                ],
+                "displacement_vector": [
+                  1.7830745326589856,
+                  1.7830745326589856,
+                  0.06527887280114407
+                ],
+                "jacobian": [
+                  1.5133069171708144,
+                  1.5133069171708144,
+                  0.0974493569299332
+                ],
+                "jacobian_zero_reset": [
+                  1.5133069171708144,
+                  1.5133069171708144,
+                  0.010511895937058945
+                ],
+                "jacobian_trapezoid": [
+                  0.7596594406223572,
+                  0.7414775989271042,
+                  0.10295772676358701
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0013463163047396365,
+              "readonly_reward_group_totals": [
+                17.992234013974667,
+                -0.0013648823538889607,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.06307752226719425,
+                  0.025648229759145293,
+                  0.1520974230485097
+                ],
+                "displacement_vector": [
+                  0.06328128656445577,
+                  0.025468836751423682,
+                  0.1520974230485097
+                ],
+                "jacobian": [
+                  0.6571429703548588,
+                  0.008869733626153752,
+                  0.056831414670424234
+                ],
+                "jacobian_zero_reset": [
+                  0.008869733626153752,
+                  0.008869733626153752,
+                  0.11430328190814563
+                ],
+                "jacobian_trapezoid": [
+                  0.6572632111202218,
+                  0.3294337722013494,
+                  0.15895893073989054
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00019473411251012606,
+              "readonly_reward_group_totals": [
+                35.96244691312313,
+                -0.0003181300071032048,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 2.166578696054633e-07,
+              "vx_peak_to_peak_m_s": 9.145962225295027e-08,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.002664667840317677,
+              "wheel_command_rms_rad_s": 3.0706094791134e-06,
+              "wheel_actuator_force_rms_native": 7.882290983422177e-06,
+              "wheel_actuator_force_peak_native": 1.5149904365527068e-05,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            },
+            "train:base:forward": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.003576838137019635,
+              "vx_peak_to_peak_m_s": 0.01813066287867416,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.007858400170721208,
+              "wheel_command_rms_rad_s": 0.09603762583721025,
+              "wheel_actuator_force_rms_native": 0.0010076104168788734,
+              "wheel_actuator_force_peak_native": 0.02185689502071988,
+              "requested_base_command_peak": [
+                0.010913370068759207,
+                0.00012755598911216574
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 7.837999435767485e-06,
+              "vx_peak_to_peak_m_s": 0.00011743058977094533,
+              "vx_dominant_frequency_Hz": 20.087256862388656,
+              "vx_power_fraction_above_10Hz": 0.9866069197720497,
+              "wheel_command_rms_rad_s": 0.00012192973179441855,
+              "wheel_actuator_force_rms_native": 0.00012284169928440553,
+              "wheel_actuator_force_peak_native": 0.0018226201458710588,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.06234460018029802,
+                "base_yaw_jerk": 0.054448707969372706,
+                "joint_jerk": 0.18077854720983821,
+                "hand_position_error_m": 0.0006787791799695784,
+                "hand_orientation_error_rad": 0.0028457396896085516,
+                "base_error_m": 4.313010595041151e-06,
+                "base_heading_error_rad": 3.530861416275316e-05,
+                "hold_drift_m": 1.3898505724644609e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:base:forward",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 1.4090344684327432,
+                "base_yaw_jerk": 0.06527887280114407,
+                "joint_jerk": 0.09357576355315156,
+                "hand_position_error_m": 0.0017505314282554826,
+                "hand_orientation_error_rad": 0.0029331398042064002,
+                "base_error_m": 0.0014300225772067448,
+                "base_heading_error_rad": 1.2623973187307885e-05,
+                "hold_drift_m": 1.1836197790109691e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.06307752226719425,
+                "base_yaw_jerk": 0.1520974230485097,
+                "joint_jerk": 2.0308431628141497,
+                "hand_position_error_m": 3.4936532725714868e-06,
+                "hand_orientation_error_rad": 8.301966355552983e-07,
+                "base_error_m": 9.879202758429238e-06,
+                "base_heading_error_rad": 3.786685087048139e-05,
+                "hold_drift_m": 1.361849415413894e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            }
+          ]
+        },
+        "current_axle": {
+          "raw_sha256": "5ba0ee014ff0a12636ab56137ac5bf068f70898f58f05d49ce748dff259b3133",
+          "all_reset_reference_identities_equal": true,
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.06738456087365079,
+                  0.02913657396217054,
+                  0.053535958628510294
+                ],
+                "displacement_vector": [
+                  0.07966692509829809,
+                  0.04438687780992472,
+                  0.053535958628510294
+                ],
+                "jacobian": [
+                  0.43483561059990555,
+                  0.0005672049295827142,
+                  0.11329179445433844
+                ],
+                "jacobian_zero_reset": [
+                  0.009422782906584316,
+                  0.0005672049295827142,
+                  0.0603047995748527
+                ],
+                "jacobian_trapezoid": [
+                  0.4244102163716569,
+                  0.21713438261389473,
+                  0.16887068959272156
+                ]
+              },
+              "integrated_base_jerk_reward_component": -9.041989768202096e-05,
+              "readonly_reward_group_totals": [
+                17.991488933563232,
+                -9.151668641568339e-05,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 240,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  1.3316287062001422,
+                  1.3316287062001422,
+                  0.06919560377296322
+                ],
+                "displacement_vector": [
+                  1.7074453291264624,
+                  1.7074453291264624,
+                  0.06919560377296322
+                ],
+                "jacobian": [
+                  1.607457595814567,
+                  1.607457595814567,
+                  0.09703547997572338
+                ],
+                "jacobian_zero_reset": [
+                  1.607457595814567,
+                  1.607457595814567,
+                  0.012121365393717729
+                ],
+                "jacobian_trapezoid": [
+                  0.7665395395448211,
+                  0.7665395395448211,
+                  0.10316325472156208
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0014218481552606456,
+              "readonly_reward_group_totals": [
+                17.99211360514164,
+                -0.0014403720356474612,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.046819453990876725,
+                  0.010659409946065044,
+                  0.15125858609679735
+                ],
+                "displacement_vector": [
+                  0.047205559982124085,
+                  0.010930163517490021,
+                  0.15125858609679735
+                ],
+                "jacobian": [
+                  0.6725575404402412,
+                  0.0017960930040177112,
+                  0.05849007540874103
+                ],
+                "jacobian_zero_reset": [
+                  0.0189930966242714,
+                  0.0017960930040177112,
+                  0.11204082980906188
+                ],
+                "jacobian_trapezoid": [
+                  0.652025404784984,
+                  0.3370407598013575,
+                  0.1586570350595071
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00020427165842786034,
+              "readonly_reward_group_totals": [
+                35.96235503256321,
+                -0.00032969977723992425,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 2.1862745638498159e-07,
+              "vx_peak_to_peak_m_s": 9.953538199371343e-08,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.0031198701349673627,
+              "wheel_command_rms_rad_s": 3.0118222551466117e-06,
+              "wheel_actuator_force_rms_native": 7.882389509218087e-06,
+              "wheel_actuator_force_peak_native": 1.5150770115156787e-05,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            },
+            "train:base:forward": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0035754106828520893,
+              "vx_peak_to_peak_m_s": 0.017157650990522737,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.007226082726481012,
+              "wheel_command_rms_rad_s": 0.09603040559734448,
+              "wheel_actuator_force_rms_native": 0.0009592115410134593,
+              "wheel_actuator_force_peak_native": 0.018188253465983246,
+              "requested_base_command_peak": [
+                0.010913091274692635,
+                0.0001275318980308401
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 6.757530120778122e-06,
+              "vx_peak_to_peak_m_s": 0.00011611974924069536,
+              "vx_dominant_frequency_Hz": 20.087256862388656,
+              "vx_power_fraction_above_10Hz": 0.982068925073977,
+              "wheel_command_rms_rad_s": 0.00013334211247324895,
+              "wheel_actuator_force_rms_native": 0.00013574835309448682,
+              "wheel_actuator_force_peak_native": 0.0022055612247013547,
+              "requested_base_command_peak": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.06738456087365079,
+                "base_yaw_jerk": 0.053535958628510294,
+                "joint_jerk": 0.18044772303996667,
+                "hand_position_error_m": 0.0006788209468828638,
+                "hand_orientation_error_rad": 0.0028457395833355963,
+                "base_error_m": 4.438856991585911e-06,
+                "base_heading_error_rad": 3.529986753835401e-05,
+                "hold_drift_m": 1.3929896657666456e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:base:forward",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 1.3316287062001422,
+                "base_yaw_jerk": 0.06919560377296322,
+                "joint_jerk": 0.07952670806271343,
+                "hand_position_error_m": 0.0017494401621630784,
+                "hand_orientation_error_rad": 0.002933139744401719,
+                "base_error_m": 0.0014288413692159396,
+                "base_heading_error_rad": 1.2612337572971482e-05,
+                "hold_drift_m": 1.1817266830085558e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000015,
+                "base_linear_jerk": 0.046819453990876725,
+                "base_yaw_jerk": 0.15125858609679735,
+                "joint_jerk": 2.0541824671699587,
+                "hand_position_error_m": 3.4941876655335486e-06,
+                "hand_orientation_error_rad": 8.26443709365275e-07,
+                "base_error_m": 9.93412262961501e-06,
+                "base_heading_error_rad": 3.786396401111352e-05,
+                "hold_drift_m": 1.3614523954738836e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            }
+          ]
+        }
+      }
+    },
+    "learned": {
+      "producer_revision": "77714a30d6b6079095a24f0026b9734e08ae1963",
+      "original_summary_sha256": "46abe0502f69da1fc683412b3ef104604fa950181f8d736f7f2244e557ea34a5",
+      "elapsed_wall_seconds": 117.49793766997755,
+      "variants": {
+        "cached_com": {
+          "raw_sha256": "03724558fbe37c981d460d0ba61253726a43c31336cfa614344a67b33bed42d4",
+          "all_reset_reference_identities_equal": true,
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.0933084979085166,
+                  0.0933084979085166,
+                  0.1491901037893664
+                ],
+                "displacement_vector": [
+                  0.4562190773050481,
+                  0.4562190773050481,
+                  0.1491901037893664
+                ],
+                "jacobian": [
+                  2.593346376483316,
+                  2.593346376483316,
+                  0.18574666782748758
+                ],
+                "jacobian_zero_reset": [
+                  2.593346376483316,
+                  2.593346376483316,
+                  0.18574666782748758
+                ],
+                "jacobian_trapezoid": [
+                  0.11826905201313413,
+                  0.11826905201313413,
+                  0.2090169574617496
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.21118443946106225,
+              "readonly_reward_group_totals": [
+                17.955973491072655,
+                -0.21185324419639073,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 39,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  0.2088889425310613,
+                  0.2088889425310613,
+                  0.24239738918435325
+                ],
+                "displacement_vector": [
+                  0.34376156970586813,
+                  0.34376156970586813,
+                  0.24239738918435325
+                ],
+                "jacobian": [
+                  3.6418870892764446,
+                  3.6418870892764446,
+                  0.5987823570536177
+                ],
+                "jacobian_zero_reset": [
+                  3.6418870892764446,
+                  3.6418870892764446,
+                  0.5987823570536177
+                ],
+                "jacobian_trapezoid": [
+                  0.03772668434185331,
+                  0.03772668434185331,
+                  0.04866720337878459
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.04962449417274487,
+              "readonly_reward_group_totals": [
+                2.5515127703547478,
+                -0.049674347712425515,
+                0.0
+              ],
+              "max_dt_error_seconds": 5.509481759702339e-15
+            },
+            {
+              "id": "train:arm:pitch_up",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "f93a30c12233a3ec782578cc31ea81703491c61b6561e8a843db3de4005677be",
+              "jerk_channels": {
+                "gate": [
+                  0.6604801212840598,
+                  0.6604801212840598,
+                  0.2773749424061431
+                ],
+                "displacement_vector": [
+                  0.6617634106038617,
+                  0.6617634106038617,
+                  0.2773749424061431
+                ],
+                "jacobian": [
+                  3.699884883129278,
+                  3.699884883129278,
+                  1.2555651660147193
+                ],
+                "jacobian_zero_reset": [
+                  3.699884883129278,
+                  3.699884883129278,
+                  1.2555651660147193
+                ],
+                "jacobian_trapezoid": [
+                  1.209376950796897,
+                  1.209376950796897,
+                  0.507765720794808
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.10067946110529617,
+              "readonly_reward_group_totals": [
+                32.778986766934395,
+                -0.10128244348230453,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "56bbf8786d53651e81d7f50df8977d464326854f254988fdb211a4a84fb7d670",
+              "jerk_channels": {
+                "gate": [
+                  0.5393002767323953,
+                  0.5393002767323953,
+                  0.3824202464136235
+                ],
+                "displacement_vector": [
+                  0.6259808175655919,
+                  0.6259808175655919,
+                  0.3824202464136235
+                ],
+                "jacobian": [
+                  3.7676596614937736,
+                  3.7676596614937736,
+                  1.9758456652194374
+                ],
+                "jacobian_zero_reset": [
+                  3.7676596614937736,
+                  3.7676596614937736,
+                  1.9758456652194374
+                ],
+                "jacobian_trapezoid": [
+                  2.030140553011904,
+                  2.030140553011904,
+                  0.916480251993603
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.12921541199869432,
+              "readonly_reward_group_totals": [
+                32.85054591298103,
+                -0.13043792745449423,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_left",
+              "samples": 240,
+              "initial_state_sha256": "c77d29b0f59d8145f378e6005a4020ab63ffd9997874ad11f3e4cb1578fb5e3d",
+              "reference_sha256": "e60177c8064d453a251a4ca8683fde02626cd0217d31dc57049897c2d8d1137f",
+              "jerk_channels": {
+                "gate": [
+                  0.35496595640298056,
+                  0.35496595640298056,
+                  0.6041166401168918
+                ],
+                "displacement_vector": [
+                  0.7005290919973023,
+                  0.7005290919973023,
+                  0.6041166401168918
+                ],
+                "jacobian": [
+                  3.8565667635201737,
+                  3.8565667635201737,
+                  2.979021706800246
+                ],
+                "jacobian_zero_reset": [
+                  3.8565667635201737,
+                  3.8565667635201737,
+                  2.979021706800246
+                ],
+                "jacobian_trapezoid": [
+                  1.7201340227128445,
+                  1.7201340227128445,
+                  0.49720203340160013
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.16895149393310951,
+              "readonly_reward_group_totals": [
+                29.753729462623596,
+                -0.16977989202570143,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_right",
+              "samples": 240,
+              "initial_state_sha256": "7f581e2cf758a8e80f9c4cf29a4b997880010217ddab8f0d47fdcffb777c69e9",
+              "reference_sha256": "b7aa22e0d5eae267e51a4293c391f9157f94b25c906f3269204d2d966c0b35b7",
+              "jerk_channels": {
+                "gate": [
+                  0.35460788553316314,
+                  0.35460788553316314,
+                  0.34917212457563634
+                ],
+                "displacement_vector": [
+                  0.46240262998570036,
+                  0.46240262998570036,
+                  0.34917212457563634
+                ],
+                "jacobian": [
+                  3.8213751073183504,
+                  3.8213751073183504,
+                  1.5055849644814105
+                ],
+                "jacobian_zero_reset": [
+                  3.8213751073183504,
+                  3.8213751073183504,
+                  1.5055849644814105
+                ],
+                "jacobian_trapezoid": [
+                  1.895960612392727,
+                  1.895960612392727,
+                  0.5469282539459109
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.07650776109536271,
+              "readonly_reward_group_totals": [
+                29.727636769413948,
+                -0.07783610330153579,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.3316813216036894,
+                  0.3316813216036894,
+                  0.24845596295359346
+                ],
+                "displacement_vector": [
+                  0.5317569030491984,
+                  0.5317569030491984,
+                  0.24845596295359346
+                ],
+                "jacobian": [
+                  3.649461633598572,
+                  3.649461633598572,
+                  0.7524022188988113
+                ],
+                "jacobian_zero_reset": [
+                  3.649461633598572,
+                  3.649461633598572,
+                  0.7524022188988113
+                ],
+                "jacobian_trapezoid": [
+                  1.6657566717451227,
+                  1.6657566717451227,
+                  0.36520966857890386
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.11445925416577839,
+              "readonly_reward_group_totals": [
+                35.079872608184814,
+                -0.11509657277019869,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.5",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "cf0fb789fc067b3b8a9aed7be9b2a55014a6c31ea21a88c62383b53859dfccab",
+              "jerk_channels": {
+                "gate": [
+                  0.3505099689432876,
+                  0.3505099689432876,
+                  0.25873145523917784
+                ],
+                "displacement_vector": [
+                  0.6204914185079385,
+                  0.6204914185079385,
+                  0.25873145523917784
+                ],
+                "jacobian": [
+                  3.652682717492754,
+                  3.652682717492754,
+                  0.8454277657383711
+                ],
+                "jacobian_zero_reset": [
+                  3.652682717492754,
+                  3.652682717492754,
+                  0.8454277657383711
+                ],
+                "jacobian_trapezoid": [
+                  1.659282595966015,
+                  1.659282595966015,
+                  0.3520680265649301
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.125221869096782,
+              "readonly_reward_group_totals": [
+                34.32961632311344,
+                -0.12750189061489436,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "e65c08e727df76cc64d71f3eb0fcc9e71dd21dc284f8397247af099b3e9e4a0b",
+              "jerk_channels": {
+                "gate": [
+                  0.34555199427343736,
+                  0.34555199427343736,
+                  0.24587427307088197
+                ],
+                "displacement_vector": [
+                  0.6892767277468248,
+                  0.6892767277468248,
+                  0.24587427307088197
+                ],
+                "jacobian": [
+                  3.5394356805554104,
+                  3.5394356805554104,
+                  0.9325349938964639
+                ],
+                "jacobian_zero_reset": [
+                  3.5394356805554104,
+                  3.5394356805554104,
+                  0.9325349938964639
+                ],
+                "jacobian_trapezoid": [
+                  1.6180673728928536,
+                  1.6180673728928536,
+                  0.28432546497628
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.15342556036362662,
+              "readonly_reward_group_totals": [
+                35.085320711135864,
+                -0.15598204427351448,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.5",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "8f20142ad2eb0a3347f41a486b2542945594079c45b03902a36eee2ca37d21b5",
+              "jerk_channels": {
+                "gate": [
+                  0.4093221250353941,
+                  0.4093221250353941,
+                  0.2833581389923888
+                ],
+                "displacement_vector": [
+                  0.6718953401656419,
+                  0.6718953401656419,
+                  0.2833581389923888
+                ],
+                "jacobian": [
+                  3.701311788220891,
+                  3.701311788220891,
+                  1.257731397178652
+                ],
+                "jacobian_zero_reset": [
+                  3.701311788220891,
+                  3.701311788220891,
+                  1.257731397178652
+                ],
+                "jacobian_trapezoid": [
+                  1.7451318276660848,
+                  1.7451318276660848,
+                  0.45545527986042916
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.1161062446847144,
+              "readonly_reward_group_totals": [
+                34.31101794540882,
+                -0.11698608922512221,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "7f99e612ccf9a466dade0718419b09256c3953abb6951286874bcca0b509a867",
+              "jerk_channels": {
+                "gate": [
+                  0.14764028741497584,
+                  0.14542134523163752,
+                  0.29606123937699047
+                ],
+                "displacement_vector": [
+                  0.6410139806559247,
+                  0.6410139806559247,
+                  0.29606123937699047
+                ],
+                "jacobian": [
+                  3.5168130489239795,
+                  3.5168130489239795,
+                  1.5747180586339338
+                ],
+                "jacobian_zero_reset": [
+                  3.5168130489239795,
+                  3.5168130489239795,
+                  1.5747180586339338
+                ],
+                "jacobian_trapezoid": [
+                  0.9009712030043258,
+                  0.9009712030043258,
+                  0.5307958506889829
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.14890464036352805,
+              "readonly_reward_group_totals": [
+                34.94458298385143,
+                -0.1508777594201547,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "f06a7797efd401e2840098c47b0de82c5174c2e3175fe11402a896f1535c33da",
+              "jerk_channels": {
+                "gate": [
+                  0.22754381054330441,
+                  0.22754381054330441,
+                  0.4362471254693995
+                ],
+                "displacement_vector": [
+                  0.6002168128398953,
+                  0.6002168128398953,
+                  0.4362471254693995
+                ],
+                "jacobian": [
+                  2.804415150507624,
+                  2.804415150507624,
+                  1.6484429562468594
+                ],
+                "jacobian_zero_reset": [
+                  2.804415150507624,
+                  2.804415150507624,
+                  1.6484429562468594
+                ],
+                "jacobian_trapezoid": [
+                  1.2713929324079756,
+                  0.8328500945790831,
+                  0.7457915605851223
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.02199399083153888,
+              "readonly_reward_group_totals": [
+                31.94081199169159,
+                -0.02245031999049729,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015829258650364184,
+              "vx_peak_to_peak_m_s": 0.004256064584168025,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9999896837108978,
+              "wheel_command_rms_rad_s": 0.009679730323628667,
+              "wheel_actuator_force_rms_native": 0.010105274287130995,
+              "wheel_actuator_force_peak_native": 0.017237476161602146,
+              "requested_base_command_peak": [
+                1.752458803821355e-05,
+                9.645706450100988e-05
+              ]
+            },
+            "train:base:forward": {
+              "samples": 975,
+              "spectral_samples_after_one_second": 476,
+              "planar_velocity_rms_m_s": 0.0015866528174283592,
+              "vx_peak_to_peak_m_s": 0.004640635005717694,
+              "vx_dominant_frequency_Hz": 50.42016806722688,
+              "vx_power_fraction_above_10Hz": 0.9976189780478284,
+              "wheel_command_rms_rad_s": 0.009731711346287406,
+              "wheel_actuator_force_rms_native": 0.010102194341763966,
+              "wheel_actuator_force_peak_native": 0.01759582824414674,
+              "requested_base_command_peak": [
+                0.00010733259608969092,
+                0.00020168969058431685
+              ]
+            },
+            "train:arm:pitch_up": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0012696177273042156,
+              "vx_peak_to_peak_m_s": 0.006547055109166573,
+              "vx_dominant_frequency_Hz": 49.718233048536625,
+              "vx_power_fraction_above_10Hz": 0.9648400067934415,
+              "wheel_command_rms_rad_s": 0.01105709314559456,
+              "wheel_actuator_force_rms_native": 0.008713164530308877,
+              "wheel_actuator_force_peak_native": 0.02523629439849917,
+              "requested_base_command_peak": [
+                0.0007006013207137584,
+                0.0018333971966058016
+              ]
+            },
+            "train:arm:pitch_down": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0016197237935463035,
+              "vx_peak_to_peak_m_s": 0.008505539311429316,
+              "vx_dominant_frequency_Hz": 50.35448100345391,
+              "vx_power_fraction_above_10Hz": 0.9739271745393362,
+              "wheel_command_rms_rad_s": 0.011919795027149327,
+              "wheel_actuator_force_rms_native": 0.009867587915212767,
+              "wheel_actuator_force_peak_native": 0.025095082523707193,
+              "requested_base_command_peak": [
+                0.0007335958443582057,
+                0.0017308286624029279
+              ]
+            },
+            "train:arm:roll_left": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015492828083210099,
+              "vx_peak_to_peak_m_s": 0.007453287146593662,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9969942824493639,
+              "wheel_command_rms_rad_s": 0.011299882385674422,
+              "wheel_actuator_force_rms_native": 0.010256516247120177,
+              "wheel_actuator_force_peak_native": 0.026462435945284784,
+              "requested_base_command_peak": [
+                0.00027708557434380054,
+                0.0029250967781990767
+              ]
+            },
+            "train:arm:roll_right": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0011843185351805678,
+              "vx_peak_to_peak_m_s": 0.006971846452638406,
+              "vx_dominant_frequency_Hz": 49.80912561352481,
+              "vx_power_fraction_above_10Hz": 0.996974021491491,
+              "wheel_command_rms_rad_s": 0.009938841010413195,
+              "wheel_actuator_force_rms_native": 0.008652358579057032,
+              "wheel_actuator_force_peak_native": 0.026096855078940544,
+              "requested_base_command_peak": [
+                0.0002491284906864166,
+                0.002708482090383768
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015089594428061661,
+              "vx_peak_to_peak_m_s": 0.007454575951268323,
+              "vx_dominant_frequency_Hz": 50.26358843846573,
+              "vx_power_fraction_above_10Hz": 0.9933657068212008,
+              "wheel_command_rms_rad_s": 0.009174277733940632,
+              "wheel_actuator_force_rms_native": 0.009377389409543462,
+              "wheel_actuator_force_peak_native": 0.022775086870960932,
+              "requested_base_command_peak": [
+                0.00024803755804896354,
+                0.0005747653776779771
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.5": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015407787487613316,
+              "vx_peak_to_peak_m_s": 0.00711358127981793,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9922842844335895,
+              "wheel_command_rms_rad_s": 0.010090937035151041,
+              "wheel_actuator_force_rms_native": 0.009784429128107678,
+              "wheel_actuator_force_peak_native": 0.023591538092344752,
+              "requested_base_command_peak": [
+                0.0003862496092915535,
+                0.001040944247506559
+              ]
+            },
+            "train:arm:pitch_down@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0015799816312092878,
+              "vx_peak_to_peak_m_s": 0.007470972802701245,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9960631362808074,
+              "wheel_command_rms_rad_s": 0.00969753804743179,
+              "wheel_actuator_force_rms_native": 0.009952660998797498,
+              "wheel_actuator_force_peak_native": 0.022573654752163975,
+              "requested_base_command_peak": [
+                0.0002042825287207961,
+                0.0006546585354954004
+              ]
+            },
+            "train:arm:pitch_down@amplitude:0.5": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0016140868539553392,
+              "vx_peak_to_peak_m_s": 0.007659596754423579,
+              "vx_dominant_frequency_Hz": 49.718233048536625,
+              "vx_power_fraction_above_10Hz": 0.9902877812558109,
+              "wheel_command_rms_rad_s": 0.010070192537710305,
+              "wheel_actuator_force_rms_native": 0.009817932281150526,
+              "wheel_actuator_force_peak_native": 0.024338198038592246,
+              "requested_base_command_peak": [
+                0.0003728676214814186,
+                0.0009838466066867113
+              ]
+            },
+            "train:arm:supported_A_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0014747065215562178,
+              "vx_peak_to_peak_m_s": 0.005225812245111415,
+              "vx_dominant_frequency_Hz": 49.990910743501175,
+              "vx_power_fraction_above_10Hz": 0.9986263652001506,
+              "wheel_command_rms_rad_s": 0.009374884621809947,
+              "wheel_actuator_force_rms_native": 0.009562425744932487,
+              "wheel_actuator_force_peak_native": 0.020893839475779687,
+              "requested_base_command_peak": [
+                0.0001523281261324882,
+                0.0003821337304543704
+              ]
+            },
+            "train:arm:supported_A_up": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0010067807887796107,
+              "vx_peak_to_peak_m_s": 0.004734318645054748,
+              "vx_dominant_frequency_Hz": 60.80712597709507,
+              "vx_power_fraction_above_10Hz": 0.9814529237720357,
+              "wheel_command_rms_rad_s": 0.010358774298774626,
+              "wheel_actuator_force_rms_native": 0.007654328653704218,
+              "wheel_actuator_force_peak_native": 0.019765657977508427,
+              "requested_base_command_peak": [
+                0.0004791737347841263,
+                0.0009343473357148468
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.0933084979085166,
+                "base_yaw_jerk": 0.1491901037893664,
+                "joint_jerk": 0.47232032771665405,
+                "hand_position_error_m": 0.0007123474717636142,
+                "hand_orientation_error_rad": 0.0028326587234383254,
+                "base_error_m": 0.00010245271524569675,
+                "base_heading_error_rad": 2.007155637116873e-05,
+                "hold_drift_m": 5.4438378809126316e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:base:forward",
+              "code": "mastery_tracking_envelope",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": true,
+              "failure_reasons": [
+                "mastery_tracking_envelope",
+                "terminal_hold"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.2088889425310613,
+                "base_yaw_jerk": 0.24239738918435325,
+                "joint_jerk": 0.34659086606483935,
+                "hand_position_error_m": 0.01536937042778089,
+                "hand_orientation_error_rad": 0.0018468863662507633,
+                "base_error_m": 0.015250277625837689,
+                "base_heading_error_rad": 5.6999761596242954e-05,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            },
+            {
+              "id": "train:arm:pitch_up",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.6604801212840598,
+                "base_yaw_jerk": 0.2773749424061431,
+                "joint_jerk": 1.0599875702551684,
+                "hand_position_error_m": 0.00021358387420173158,
+                "hand_orientation_error_rad": 0.012643091797867429,
+                "base_error_m": 0.0015689280070314768,
+                "base_heading_error_rad": 0.0049336048895446275,
+                "hold_drift_m": 7.596065521181263e-05,
+                "settled_seconds": 4.799999999999991
+              }
+            },
+            {
+              "id": "train:arm:pitch_down",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.5393002767323953,
+                "base_yaw_jerk": 0.3824202464136235,
+                "joint_jerk": 1.1156754035889205,
+                "hand_position_error_m": 0.00017780404212544288,
+                "hand_orientation_error_rad": 0.011963194806336034,
+                "base_error_m": 0.00153353154200638,
+                "base_heading_error_rad": 0.004737212888836946,
+                "hold_drift_m": 0.00010756365115152639,
+                "settled_seconds": 5.349999999999989
+              }
+            },
+            {
+              "id": "train:arm:roll_left",
+              "code": "tracking_timeout",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "tracking_timeout",
+                "terminal_hold",
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.35496595640298056,
+                "base_yaw_jerk": 0.6041166401168918,
+                "joint_jerk": 1.1240682882037496,
+                "hand_position_error_m": 0.00039935115582023247,
+                "hand_orientation_error_rad": 0.044865518297553836,
+                "base_error_m": 0.001510536131423797,
+                "base_heading_error_rad": 0.010627515163790792,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            },
+            {
+              "id": "train:arm:roll_right",
+              "code": "tracking_timeout",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "tracking_timeout",
+                "terminal_hold",
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.35460788553316314,
+                "base_yaw_jerk": 0.34917212457563634,
+                "joint_jerk": 1.0412081562974764,
+                "hand_position_error_m": 0.000553982359585045,
+                "hand_orientation_error_rad": 0.044703241045019305,
+                "base_error_m": 0.0015781610011799847,
+                "base_heading_error_rad": 0.011164982412028429,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.3316813216036894,
+                "base_yaw_jerk": 0.24845596295359346,
+                "joint_jerk": 0.902988181794469,
+                "hand_position_error_m": 5.9032674019555704e-05,
+                "hand_orientation_error_rad": 0.002699009680624976,
+                "base_error_m": 0.00046259693785938544,
+                "base_heading_error_rad": 0.0012963051044402895,
+                "hold_drift_m": 3.647135331817547e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.5",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.3505099689432876,
+                "base_yaw_jerk": 0.25873145523917784,
+                "joint_jerk": 1.0384862453402384,
+                "hand_position_error_m": 9.966126948222029e-05,
+                "hand_orientation_error_rad": 0.005765838215259411,
+                "base_error_m": 0.0008701787606655316,
+                "base_heading_error_rad": 0.0024882025297832985,
+                "hold_drift_m": 5.9139856354626856e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.25",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.34555199427343736,
+                "base_yaw_jerk": 0.24587427307088197,
+                "joint_jerk": 1.096970405210896,
+                "hand_position_error_m": 3.9444761745055485e-05,
+                "hand_orientation_error_rad": 0.003127485176425239,
+                "base_error_m": 0.0003532362091550215,
+                "base_heading_error_rad": 0.0011252371990227304,
+                "hold_drift_m": 3.134131526115557e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.5",
+              "code": "ok",
+              "mastered": false,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.4093221250353941,
+                "base_yaw_jerk": 0.2833581389923888,
+                "joint_jerk": 1.0737130287024546,
+                "hand_position_error_m": 0.00018841117419734175,
+                "hand_orientation_error_rad": 0.004875050603536116,
+                "base_error_m": 0.0007931459039272525,
+                "base_heading_error_rad": 0.002398537791672933,
+                "hold_drift_m": 3.532388802255074e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:supported_A_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.7587866076475073,
+                "base_linear_jerk": 0.14764028741497584,
+                "base_yaw_jerk": 0.29606123937699047,
+                "joint_jerk": 1.6548452370308986,
+                "hand_position_error_m": 0.00031614289049038585,
+                "hand_orientation_error_rad": 0.00607983182314153,
+                "base_error_m": 0.00035328995845796855,
+                "base_heading_error_rad": 0.00015200812590535886,
+                "hold_drift_m": 0.000123780663223387,
+                "settled_seconds": 9.5
+              }
+            },
+            {
+              "id": "train:arm:supported_A_up",
+              "code": "tracking_timeout",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": false,
+              "failure_reasons": [
+                "tracking_timeout",
+                "terminal_hold",
+                "smoothness/base_linear_jerk"
+              ],
+              "metrics": {
+                "peak_force_N": 0.7569017092951995,
+                "base_linear_jerk": 0.22754381054330441,
+                "base_yaw_jerk": 0.4362471254693995,
+                "joint_jerk": 1.2641360946881335,
+                "hand_position_error_m": 0.0009121786405628609,
+                "hand_orientation_error_rad": 0.024508735058541068,
+                "base_error_m": 0.002327225065393754,
+                "base_heading_error_rad": 0.0060185958483743454,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            }
+          ]
+        },
+        "current_com": {
+          "raw_sha256": "3b7de5e85afe3b22d52adbc6af4e4e7bd9ac8ccfa3474392c55336c7b1ec8c01",
+          "all_reset_reference_identities_equal": true,
+          "cases": [
+            {
+              "id": "train:base:hold",
+              "samples": 240,
+              "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+              "reference_sha256": "fd3c7eac65d059c38922a3aa358391b92a9e7890c95befa641a3c3856844c090",
+              "jerk_channels": {
+                "gate": [
+                  0.046202486954835476,
+                  0.022354962928037604,
+                  0.02742889634359605
+                ],
+                "displacement_vector": [
+                  0.046214304620124505,
+                  0.021089943376046184,
+                  0.02742889634359605
+                ],
+                "jacobian": [
+                  0.45623732021112196,
+                  0.014994460512940478,
+                  0.14984184346371462
+                ],
+                "jacobian_zero_reset": [
+                  0.030822314979160385,
+                  0.014994460512940478,
+                  0.02696593860275357
+                ],
+                "jacobian_trapezoid": [
+                  0.4178247111653343,
+                  0.22062162229311774,
+                  0.15781328670114392
+                ]
+              },
+              "integrated_base_jerk_reward_component": -9.676074192698314e-05,
+              "readonly_reward_group_totals": [
+                17.99421426653862,
+                -9.785424669962118e-05,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:base:forward",
+              "samples": 39,
+              "initial_state_sha256": "e570f59fd84a1c484d4e9268d351e2341d01309e839d01f5eff7ca46c1b8e587",
+              "reference_sha256": "482b52d28ec5bcdad5a52a987a2a301cfa58e307b5f20ca5f96c90ab8be0840e",
+              "jerk_channels": {
+                "gate": [
+                  0.02813906545901983,
+                  0.014963329688657111,
+                  0.1031790688854721
+                ],
+                "displacement_vector": [
+                  0.028139201855917208,
+                  0.014963426806534457,
+                  0.1031790688854721
+                ],
+                "jacobian": [
+                  0.8975494142705138,
+                  0.023691523003375785,
+                  0.18722286333797833
+                ],
+                "jacobian_zero_reset": [
+                  0.054059011946252775,
+                  0.023691523003375785,
+                  0.08616030009166688
+                ],
+                "jacobian_trapezoid": [
+                  0.8311885536547553,
+                  0.4369289578893911,
+                  0.07941058725620749
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0003366143366600951,
+              "readonly_reward_group_totals": [
+                2.559846166521311,
+                -0.0003367968853468012,
+                0.0
+              ],
+              "max_dt_error_seconds": 5.509481759702339e-15
+            },
+            {
+              "id": "train:arm:pitch_up",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "f93a30c12233a3ec782578cc31ea81703491c61b6561e8a843db3de4005677be",
+              "jerk_channels": {
+                "gate": [
+                  0.1306793744719167,
+                  0.06743530149305264,
+                  0.14538819842109876
+                ],
+                "displacement_vector": [
+                  0.13080844541675937,
+                  0.06764204823404511,
+                  0.14538819842109876
+                ],
+                "jacobian": [
+                  0.7440222310549379,
+                  0.041435445856218826,
+                  0.06306331654737686
+                ],
+                "jacobian_zero_reset": [
+                  0.09033032424678554,
+                  0.041435445856218826,
+                  0.16335008889479738
+                ],
+                "jacobian_trapezoid": [
+                  0.6331467354464086,
+                  0.35129339586285685,
+                  0.18078970457835478
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00023492649693438217,
+              "readonly_reward_group_totals": [
+                32.84201979637146,
+                -0.0002416602109598931,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "56bbf8786d53651e81d7f50df8977d464326854f254988fdb211a4a84fb7d670",
+              "jerk_channels": {
+                "gate": [
+                  0.03922886697421982,
+                  0.007145700330503881,
+                  0.036384063921604544
+                ],
+                "displacement_vector": [
+                  0.08430860322502859,
+                  0.0625932984145551,
+                  0.036384063921604544
+                ],
+                "jacobian": [
+                  0.6952943388875399,
+                  0.041408436730243234,
+                  0.05678964584429881
+                ],
+                "jacobian_zero_reset": [
+                  0.057593988213431827,
+                  0.041408436730243234,
+                  0.05678964584429881
+                ],
+                "jacobian_trapezoid": [
+                  0.6193882501078822,
+                  0.32694312334610187,
+                  0.04993304672543738
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00020820937546535135,
+              "readonly_reward_group_totals": [
+                32.893706902861595,
+                -0.00021508264016925627,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_left",
+              "samples": 240,
+              "initial_state_sha256": "c77d29b0f59d8145f378e6005a4020ab63ffd9997874ad11f3e4cb1578fb5e3d",
+              "reference_sha256": "e60177c8064d453a251a4ca8683fde02626cd0217d31dc57049897c2d8d1137f",
+              "jerk_channels": {
+                "gate": [
+                  0.03552178010924149,
+                  0.01904630856717532,
+                  0.08105773498775365
+                ],
+                "displacement_vector": [
+                  0.035535968238516256,
+                  0.019073007393631828,
+                  0.08105773498775365
+                ],
+                "jacobian": [
+                  0.18272885638947647,
+                  0.004756410025508926,
+                  0.10987735266036747
+                ],
+                "jacobian_zero_reset": [
+                  0.010097679704226335,
+                  0.004756410025508926,
+                  0.07074227780849918
+                ],
+                "jacobian_trapezoid": [
+                  0.17165908428290372,
+                  0.08898634571431209,
+                  0.17086120613917982
+                ]
+              },
+              "integrated_base_jerk_reward_component": -1.6714568070681613e-05,
+              "readonly_reward_group_totals": [
+                29.829200141131878,
+                -1.8469450906610785e-05,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:roll_right",
+              "samples": 240,
+              "initial_state_sha256": "7f581e2cf758a8e80f9c4cf29a4b997880010217ddab8f0d47fdcffb777c69e9",
+              "reference_sha256": "b7aa22e0d5eae267e51a4293c391f9157f94b25c906f3269204d2d966c0b35b7",
+              "jerk_channels": {
+                "gate": [
+                  0.04824970960798853,
+                  0.009857824843392688,
+                  0.06301858568150479
+                ],
+                "displacement_vector": [
+                  0.07965142671751686,
+                  0.06000680125330816,
+                  0.06301858568150479
+                ],
+                "jacobian": [
+                  1.049809777151336,
+                  0.07708586222507867,
+                  0.2556977461191673
+                ],
+                "jacobian_zero_reset": [
+                  0.13670137561703335,
+                  0.07708586222507867,
+                  0.1168049707878419
+                ],
+                "jacobian_trapezoid": [
+                  0.8768397792244126,
+                  0.48636212387561506,
+                  0.09637352352561254
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00042715202166046143,
+              "readonly_reward_group_totals": [
+                29.75919482856989,
+                -0.00043064020678684756,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "0a6f70eabe9ffccfcb2a4b0e29729d9dbbb740ac36dd8198e82592e7b7dee4f5",
+              "jerk_channels": {
+                "gate": [
+                  0.1318702835117107,
+                  0.06786291920457088,
+                  0.1446593626753291
+                ],
+                "displacement_vector": [
+                  0.13196936916297883,
+                  0.06802846341382587,
+                  0.1446593626753291
+                ],
+                "jacobian": [
+                  0.74473284793413,
+                  0.041314030069173384,
+                  0.06417774398999011
+                ],
+                "jacobian_zero_reset": [
+                  0.09104059444816592,
+                  0.041314030069173384,
+                  0.16331911468997853
+                ],
+                "jacobian_trapezoid": [
+                  0.6331101835972814,
+                  0.351709410953343,
+                  0.1800960333854421
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0002353097274478301,
+              "readonly_reward_group_totals": [
+                35.14540985226631,
+                -0.00023630814824878582,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.5",
+              "samples": 240,
+              "initial_state_sha256": "35c5ad9f30cad0122167f723cbf619d977d52dfa715c196fb4392f214d63e04b",
+              "reference_sha256": "cf0fb789fc067b3b8a9aed7be9b2a55014a6c31ea21a88c62383b53859dfccab",
+              "jerk_channels": {
+                "gate": [
+                  0.13146310576723644,
+                  0.06761681961044827,
+                  0.1451600235338503
+                ],
+                "displacement_vector": [
+                  0.13157205829401292,
+                  0.06779685782478354,
+                  0.1451600235338503
+                ],
+                "jacobian": [
+                  0.7445297653368258,
+                  0.04137268966402661,
+                  0.06386140129891985
+                ],
+                "jacobian_zero_reset": [
+                  0.0908376534722222,
+                  0.04137268966402661,
+                  0.1633243649599492
+                ],
+                "jacobian_trapezoid": [
+                  0.6331048052707935,
+                  0.35157853831632985,
+                  0.18032784471672114
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0002351908187772005,
+              "readonly_reward_group_totals": [
+                34.335265070199966,
+                -0.00023732302686311352,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "e65c08e727df76cc64d71f3eb0fcc9e71dd21dc284f8397247af099b3e9e4a0b",
+              "jerk_channels": {
+                "gate": [
+                  0.04195717858896311,
+                  0.007257296134562079,
+                  0.03626550118319968
+                ],
+                "displacement_vector": [
+                  0.08501217976199289,
+                  0.06230733399698231,
+                  0.03626550118319968
+                ],
+                "jacobian": [
+                  0.6958785299483178,
+                  0.041106097916164916,
+                  0.057705749887658836
+                ],
+                "jacobian_zero_reset": [
+                  0.058177908711594166,
+                  0.041106097916164916,
+                  0.057705749887658836
+                ],
+                "jacobian_trapezoid": [
+                  0.6193607078205522,
+                  0.32738630515031464,
+                  0.04901255999061299
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00020850617132711104,
+              "readonly_reward_group_totals": [
+                35.137998923659325,
+                -0.0002095501666958214,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.5",
+              "samples": 240,
+              "initial_state_sha256": "5b8a2abc9b992c4388eefc96b8ebd1b4e76cd5eb4be3a697f77277f33be9ea26",
+              "reference_sha256": "8f20142ad2eb0a3347f41a486b2542945594079c45b03902a36eee2ca37d21b5",
+              "jerk_channels": {
+                "gate": [
+                  0.041038255259388,
+                  0.007342612724195384,
+                  0.036263085364574704
+                ],
+                "displacement_vector": [
+                  0.0847901491689567,
+                  0.06250208538566335,
+                  0.036263085364574704
+                ],
+                "jacobian": [
+                  0.6956498665598994,
+                  0.04118816556945479,
+                  0.057355700106358
+                ],
+                "jacobian_zero_reset": [
+                  0.057949302381173136,
+                  0.04118816556945479,
+                  0.057355700106358
+                ],
+                "jacobian_trapezoid": [
+                  0.6193871726742788,
+                  0.3272309729426337,
+                  0.049320322833086766
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00020839586227403763,
+              "readonly_reward_group_totals": [
+                34.3458034992218,
+                -0.00021062184065316625,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up@amplitude:0.25",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "7f99e612ccf9a466dade0718419b09256c3953abb6951286874bcca0b509a867",
+              "jerk_channels": {
+                "gate": [
+                  0.10416843547294267,
+                  0.10416843547294267,
+                  0.12345451149245175
+                ],
+                "displacement_vector": [
+                  0.17721868367436933,
+                  0.17721868367436933,
+                  0.12345451149245175
+                ],
+                "jacobian": [
+                  0.729081686057669,
+                  0.35755647486986386,
+                  0.7487033845991233
+                ],
+                "jacobian_zero_reset": [
+                  0.35755647486986386,
+                  0.35755647486986386,
+                  0.7487033845991233
+                ],
+                "jacobian_trapezoid": [
+                  0.5859371059017718,
+                  0.33308060685697666,
+                  0.1845608510459308
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.00033440439554318914,
+              "readonly_reward_group_totals": [
+                34.999480843544006,
+                -0.00045206752959021067,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            },
+            {
+              "id": "train:arm:supported_A_up",
+              "samples": 240,
+              "initial_state_sha256": "655ed7818ef9092a5261ee18c87ef53b0f40c232a158716d801f9d018fe3cc2c",
+              "reference_sha256": "f06a7797efd401e2840098c47b0de82c5174c2e3175fe11402a896f1535c33da",
+              "jerk_channels": {
+                "gate": [
+                  0.1063340798582426,
+                  0.1063340798582426,
+                  0.13550970569208182
+                ],
+                "displacement_vector": [
+                  0.10635024793397424,
+                  0.10635024793397424,
+                  0.13550970569208182
+                ],
+                "jacobian": [
+                  0.7276228560610308,
+                  0.42625775046649084,
+                  1.2628169258589654
+                ],
+                "jacobian_zero_reset": [
+                  0.42625775046649084,
+                  0.42625775046649084,
+                  1.2628169258589654
+                ],
+                "jacobian_trapezoid": [
+                  0.5857853035092925,
+                  0.33270187868651785,
+                  0.521921599981871
+                ]
+              },
+              "integrated_base_jerk_reward_component": -0.0005938309985381923,
+              "readonly_reward_group_totals": [
+                32.02861995995045,
+                -0.0008995528663992558,
+                0.0
+              ],
+              "max_dt_error_seconds": 1.669497873280079e-14
+            }
+          ],
+          "physics_readout": {
+            "train:base:hold": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 6.807001668589874e-07,
+              "vx_peak_to_peak_m_s": 2.140900849250502e-06,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.008653711960846817,
+              "wheel_command_rms_rad_s": 1.6834334545832018e-05,
+              "wheel_actuator_force_rms_native": 8.036822129792489e-06,
+              "wheel_actuator_force_peak_native": 1.4176375340923037e-05,
+              "requested_base_command_peak": [
+                1.0803483019117265e-05,
+                7.48573147575371e-05
+              ]
+            },
+            "train:base:forward": {
+              "samples": 975,
+              "spectral_samples_after_one_second": 476,
+              "planar_velocity_rms_m_s": 7.788565213114027e-05,
+              "vx_peak_to_peak_m_s": 7.66266806948392e-05,
+              "vx_dominant_frequency_Hz": 1.0504201680672267,
+              "vx_power_fraction_above_10Hz": 0.07356642634966483,
+              "wheel_command_rms_rad_s": 0.0014415432980570337,
+              "wheel_actuator_force_rms_native": 0.00011808278308727112,
+              "wheel_actuator_force_peak_native": 0.0002820493136226371,
+              "requested_base_command_peak": [
+                8.907470852136611e-05,
+                0.00011232912947889417
+              ]
+            },
+            "train:arm:pitch_up": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0002741867560238143,
+              "vx_peak_to_peak_m_s": 0.0008094927420925584,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.04219723063819749,
+              "wheel_command_rms_rad_s": 0.007452514640037239,
+              "wheel_actuator_force_rms_native": 0.0016422454465008175,
+              "wheel_actuator_force_peak_native": 0.006531432167616962,
+              "requested_base_command_peak": [
+                0.0006474309973418713,
+                0.0016032882267609239
+              ]
+            },
+            "train:arm:pitch_down": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.0002744799246206134,
+              "vx_peak_to_peak_m_s": 0.0008315439435456441,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.04562715224104132,
+              "wheel_command_rms_rad_s": 0.0073913761652753575,
+              "wheel_actuator_force_rms_native": 0.0015611444205263464,
+              "wheel_actuator_force_peak_native": 0.006189804470522718,
+              "requested_base_command_peak": [
+                0.0006541318260133266,
+                0.0015493789687752724
+              ]
+            },
+            "train:arm:roll_left": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.00014226363017570502,
+              "vx_peak_to_peak_m_s": 0.00025999956122246343,
+              "vx_dominant_frequency_Hz": 19.996364297400472,
+              "vx_power_fraction_above_10Hz": 0.4567547012453788,
+              "wheel_command_rms_rad_s": 0.006276110931455954,
+              "wheel_actuator_force_rms_native": 0.003081330489601086,
+              "wheel_actuator_force_peak_native": 0.006040165934377015,
+              "requested_base_command_peak": [
+                0.00021132883150130509,
+                0.002620256505906582
+              ]
+            },
+            "train:arm:roll_right": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.00015037446555276045,
+              "vx_peak_to_peak_m_s": 0.0002518570379390788,
+              "vx_dominant_frequency_Hz": 19.996364297400472,
+              "vx_power_fraction_above_10Hz": 0.49705023941143156,
+              "wheel_command_rms_rad_s": 0.006040185725895025,
+              "wheel_actuator_force_rms_native": 0.002753876013279,
+              "wheel_actuator_force_peak_native": 0.005752808946721021,
+              "requested_base_command_peak": [
+                0.00019931718707084654,
+                0.002559732412919402
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 6.94835108610187e-05,
+              "vx_peak_to_peak_m_s": 0.00020309553607331446,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.03784796013647245,
+              "wheel_command_rms_rad_s": 0.001890386191399677,
+              "wheel_actuator_force_rms_native": 0.00040343294334503214,
+              "wheel_actuator_force_peak_native": 0.0015839964350039043,
+              "requested_base_command_peak": [
+                0.00016413694247603415,
+                0.00039949288475327194
+              ]
+            },
+            "train:arm:pitch_up@amplitude:0.5": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.00013760679593677463,
+              "vx_peak_to_peak_m_s": 0.00040582782317623366,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.040944901297164604,
+              "wheel_command_rms_rad_s": 0.003738112355932775,
+              "wheel_actuator_force_rms_native": 0.0008119138517802201,
+              "wheel_actuator_force_peak_native": 0.003245960362739265,
+              "requested_base_command_peak": [
+                0.0003253005165606737,
+                0.0007968388381414115
+              ]
+            },
+            "train:arm:pitch_down@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 6.758954652358547e-05,
+              "vx_peak_to_peak_m_s": 0.00020695275933150408,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.05027124470556992,
+              "wheel_command_rms_rad_s": 0.0018149033523277062,
+              "wheel_actuator_force_rms_native": 0.0003890541532364564,
+              "wheel_actuator_force_peak_native": 0.0016123904066748075,
+              "requested_base_command_peak": [
+                0.00016093064099550246,
+                0.00038663996383547783
+              ]
+            },
+            "train:arm:pitch_down@amplitude:0.5": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.00013660284571841047,
+              "vx_peak_to_peak_m_s": 0.0004145043599814869,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.04690349264501471,
+              "wheel_command_rms_rad_s": 0.0036786191324546746,
+              "wheel_actuator_force_rms_native": 0.0007834952747553527,
+              "wheel_actuator_force_peak_native": 0.003167316432966529,
+              "requested_base_command_peak": [
+                0.0003252422343939543,
+                0.0007778900908306241
+              ]
+            },
+            "train:arm:supported_A_up@amplitude:0.25": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 5.525234416925902e-05,
+              "vx_peak_to_peak_m_s": 0.0005284536555258905,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.3550206494187718,
+              "wheel_command_rms_rad_s": 0.002272831471781208,
+              "wheel_actuator_force_rms_native": 0.001127995094107165,
+              "wheel_actuator_force_peak_native": 0.003907277027179783,
+              "requested_base_command_peak": [
+                0.00011641418561339378,
+                0.0002087696921080351
+              ]
+            },
+            "train:arm:supported_A_up": {
+              "samples": 6000,
+              "spectral_samples_after_one_second": 5501,
+              "planar_velocity_rms_m_s": 0.00023011587678866332,
+              "vx_peak_to_peak_m_s": 0.0007976426996794769,
+              "vx_dominant_frequency_Hz": 0.09089256498818396,
+              "vx_power_fraction_above_10Hz": 0.09049958388579132,
+              "wheel_command_rms_rad_s": 0.007342132992832532,
+              "wheel_actuator_force_rms_native": 0.002062604609471911,
+              "wheel_actuator_force_peak_native": 0.005965970132744291,
+              "requested_base_command_peak": [
+                0.0004467216599732637,
+                0.0008127153851091862
+              ]
+            }
+          },
+          "outcomes": [
+            {
+              "id": "train:base:hold",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.046202486954835476,
+                "base_yaw_jerk": 0.02742889634359605,
+                "joint_jerk": 0.18090201963646857,
+                "hand_position_error_m": 0.000680799730128974,
+                "hand_orientation_error_rad": 0.0028456040116277195,
+                "base_error_m": 9.828664184027936e-06,
+                "base_heading_error_rad": 2.204337214607938e-05,
+                "hold_drift_m": 1.2203762141360463e-06,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:base:forward",
+              "code": "mastery_tracking_envelope",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": true,
+              "failure_reasons": [
+                "mastery_tracking_envelope",
+                "terminal_hold"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.02813906545901983,
+                "base_yaw_jerk": 0.1031790688854721,
+                "joint_jerk": 0.09024655117482941,
+                "hand_position_error_m": 0.015338267473409366,
+                "hand_orientation_error_rad": 0.0018532518404324185,
+                "base_error_m": 0.015217325114642521,
+                "base_heading_error_rad": 5.790188384326611e-05,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            },
+            {
+              "id": "train:arm:pitch_up",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.1306793744719167,
+                "base_yaw_jerk": 0.14538819842109876,
+                "joint_jerk": 0.10820895244098484,
+                "hand_position_error_m": 0.00018255441325852405,
+                "hand_orientation_error_rad": 0.01236693300529748,
+                "base_error_m": 0.0016026367213782338,
+                "base_heading_error_rad": 0.0050107830105209274,
+                "hold_drift_m": 6.842007396585091e-05,
+                "settled_seconds": 4.899999999999991
+              }
+            },
+            {
+              "id": "train:arm:pitch_down",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.03922886697421982,
+                "base_yaw_jerk": 0.036384063921604544,
+                "joint_jerk": 0.10660763987662122,
+                "hand_position_error_m": 0.0001648132447596669,
+                "hand_orientation_error_rad": 0.012065352451526777,
+                "base_error_m": 0.0015212636801619525,
+                "base_heading_error_rad": 0.004799207870195533,
+                "hold_drift_m": 8.402916569434647e-05,
+                "settled_seconds": 5.09999999999999
+              }
+            },
+            {
+              "id": "train:arm:roll_left",
+              "code": "tracking_timeout",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": true,
+              "failure_reasons": [
+                "tracking_timeout",
+                "terminal_hold"
+              ],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.03552178010924149,
+                "base_yaw_jerk": 0.08105773498775365,
+                "joint_jerk": 0.16942975102900437,
+                "hand_position_error_m": 0.0004084548598142287,
+                "hand_orientation_error_rad": 0.04467352395562445,
+                "base_error_m": 0.001473178910998878,
+                "base_heading_error_rad": 0.010671846085035835,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            },
+            {
+              "id": "train:arm:roll_right",
+              "code": "tracking_timeout",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": true,
+              "failure_reasons": [
+                "tracking_timeout",
+                "terminal_hold"
+              ],
+              "metrics": {
+                "peak_force_N": 0.4905000000000012,
+                "base_linear_jerk": 0.04824970960798853,
+                "base_yaw_jerk": 0.06301858568150479,
+                "joint_jerk": 0.20332905381393848,
+                "hand_position_error_m": 0.0005329136478989468,
+                "hand_orientation_error_rad": 0.044690284821096965,
+                "base_error_m": 0.0015761530793169452,
+                "base_heading_error_rad": 0.011241614625705732,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.1318702835117107,
+                "base_yaw_jerk": 0.1446593626753291,
+                "joint_jerk": 0.10735962554909999,
+                "hand_position_error_m": 5.132240039952209e-05,
+                "hand_orientation_error_rad": 0.0030202792858981145,
+                "base_error_m": 0.0004325616242950216,
+                "base_heading_error_rad": 0.0013056151801749839,
+                "hold_drift_m": 2.1660923726910622e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_up@amplitude:0.5",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.13146310576723644,
+                "base_yaw_jerk": 0.1451600235338503,
+                "joint_jerk": 0.10766805505220442,
+                "hand_position_error_m": 9.43761712632132e-05,
+                "hand_orientation_error_rad": 0.006131508759332177,
+                "base_error_m": 0.0008199081186922531,
+                "base_heading_error_rad": 0.0025437284452052046,
+                "hold_drift_m": 3.7020205277354395e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.04195717858896311,
+                "base_yaw_jerk": 0.03626550118319968,
+                "joint_jerk": 0.1052860268179295,
+                "hand_position_error_m": 3.632372728558386e-05,
+                "hand_orientation_error_rad": 0.003041725857888101,
+                "base_error_m": 0.00035398832886335193,
+                "base_heading_error_rad": 0.001148939016880583,
+                "hold_drift_m": 2.798127776048353e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:pitch_down@amplitude:0.5",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.49050000000000127,
+                "base_linear_jerk": 0.041038255259388,
+                "base_yaw_jerk": 0.036263085364574704,
+                "joint_jerk": 0.10576573725881756,
+                "hand_position_error_m": 7.954524224805923e-05,
+                "hand_orientation_error_rad": 0.006049141695554258,
+                "base_error_m": 0.0007454631536114961,
+                "base_heading_error_rad": 0.0023669981397247946,
+                "hold_drift_m": 4.066504122816174e-05,
+                "settled_seconds": 8.999999999999993
+              }
+            },
+            {
+              "id": "train:arm:supported_A_up@amplitude:0.25",
+              "code": "ok",
+              "mastered": true,
+              "tracking_and_settling_pass": true,
+              "smoothness_pass": true,
+              "failure_reasons": [],
+              "metrics": {
+                "peak_force_N": 0.5759593863474307,
+                "base_linear_jerk": 0.10416843547294267,
+                "base_yaw_jerk": 0.12345451149245175,
+                "joint_jerk": 1.7476334739442279,
+                "hand_position_error_m": 0.00028680489309740515,
+                "hand_orientation_error_rad": 0.006208568083310038,
+                "base_error_m": 0.0004619906215950894,
+                "base_heading_error_rad": 1.1514214991071886e-05,
+                "hold_drift_m": 0.0002184100650941847,
+                "settled_seconds": 9.5
+              }
+            },
+            {
+              "id": "train:arm:supported_A_up",
+              "code": "tracking_timeout",
+              "mastered": false,
+              "tracking_and_settling_pass": false,
+              "smoothness_pass": true,
+              "failure_reasons": [
+                "tracking_timeout",
+                "terminal_hold"
+              ],
+              "metrics": {
+                "peak_force_N": 0.9697958632329042,
+                "base_linear_jerk": 0.1063340798582426,
+                "base_yaw_jerk": 0.13550970569208182,
+                "joint_jerk": 1.5589934212777212,
+                "hand_position_error_m": 0.0008971262787801368,
+                "hand_orientation_error_rad": 0.024206111423835,
+                "base_error_m": 0.002249389607374514,
+                "base_heading_error_rad": 0.0059573664822885125,
+                "hold_drift_m": 0.0,
+                "settled_seconds": 0
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "readout_script_sha256": "4c3b437624d4aae2b6a51897af1d7ee02da2dbf8e770d406dbdcfa79da2c9cdb",
+  "jerk_channel_columns": [
+    "linear_peak",
+    "linear_peak_after_two_samples",
+    "yaw_peak"
+  ],
+  "invalid_attempt": {
+    "path": "logs/eval/mars-aligned-jerk-v1/feedback",
+    "reason": "observer restored feedback on nonterminal code=ok; excluded from comparison; raw archives retained",
+    "summary_sha256": "6251a47ffb03306b157523347437ba1d3691148a30c8d111b01b81b2a7b162f0"
+  }
+}

@@ -1,0 +1,440 @@
+{
+  "schema_version": 1,
+  "source_commit": "81c014cf",
+  "scope": "Scripted public task tools with live native physics; no agent score or rescore of November 1",
+  "protocol": "configs/eval/tamp_contact_stability.json",
+  "original_agent_result_unchanged": "2/4",
+  "agent_score": false,
+  "hardware_trials": false,
+  "llm_calls": 0,
+  "population": 4,
+  "frozen_batch": {
+    "path": ".tamp-runs/contact-stability-20261103/frozen_batch.json",
+    "sha256": "b1e97d37900ed16d1f170d5650c97c507691e2e89835d4e6230c0f1cf2baef5e"
+  },
+  "collision_or_retention_limits_relaxed": false,
+  "production_yaw_policy_changed": false,
+  "cases": [
+    {
+      "id": "shift-baseline",
+      "job_id": "20261103_182046_c7f52b",
+      "case_id": "two-goal-shift",
+      "policy": "baseline",
+      "run_status": "complete",
+      "passed": false,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "payload_not_retained",
+        "message": "payload not retained",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 1,
+          "planned_steps": 2,
+          "failed_step_1based": 2,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "native_failure_stages": [
+        "lift"
+      ],
+      "objects": {
+        "object2": {
+          "grasp_target_z_m": 0.5297920409701065,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.015097109818727689,
+          "max_lift_translation_m": 0.001845377997835231,
+          "height_above_closure_at_rejection_m": null,
+          "rejection_contacts": null
+        },
+        "object1": {
+          "grasp_target_z_m": 0.5297717595724836,
+          "lift_completed": false,
+          "lift_samples": 4,
+          "max_lift_rotation_rad": 0.10076449197867184,
+          "max_lift_translation_m": 0.0016124736784805293,
+          "height_above_closure_at_rejection_m": 0.011028802887607214,
+          "rejection_contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "object1"
+              ],
+              "distance_m": -0.0052340566003811866
+            },
+            {
+              "bodies": [
+                "rubber_tip_right",
+                "object1"
+              ],
+              "distance_m": -0.005182685656860306
+            }
+          ]
+        }
+      },
+      "audit_commands": 467,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 257.19055068993475,
+      "max_record_wall_s": 0.0015191440470516682,
+      "execution_refinement_ik_calls": [
+        26,
+        25
+      ],
+      "provider_ik_calls_consumed": 175,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-baseline/summary.json",
+          "sha256": "eb7142ee4574d0688a0797d109fc5dc2ba358204d1c574e1cda6e63718e0bbd8"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-baseline/protocol.json",
+          "sha256": "21640a210867686c33b0612e6da827669d791c944e5557ef8ea560bff20d6b54"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-baseline/initial.json",
+          "sha256": "87251b93543ab32be0ebd618c8fe398d8035172d3bd0b21f6fd386446aaad997"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-baseline/contact.jsonl",
+          "sha256": "388bd46383eb1ae6cc97deb8738e6e6b625fc1cc6ebfdbba574296a12fde0d14"
+        }
+      ]
+    },
+    {
+      "id": "shift-fine-yaw",
+      "job_id": "20261103_182048_281d72",
+      "case_id": "two-goal-shift",
+      "policy": "fine_yaw",
+      "run_status": "complete",
+      "passed": false,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "payload_not_retained",
+        "message": "payload not retained",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 1,
+          "planned_steps": 2,
+          "failed_step_1based": 2,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "native_failure_stages": [
+        "place"
+      ],
+      "objects": {
+        "object2": {
+          "grasp_target_z_m": 0.5177917357081172,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.0036484430701181885,
+          "max_lift_translation_m": 0.000976106086909611,
+          "height_above_closure_at_rejection_m": null,
+          "rejection_contacts": null
+        },
+        "object1": {
+          "grasp_target_z_m": 0.5177717604255649,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.0776562541725617,
+          "max_lift_translation_m": 0.0018979759786444546,
+          "height_above_closure_at_rejection_m": 0.11089064069376608,
+          "rejection_contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "object1"
+              ],
+              "distance_m": -0.002901012381805965
+            },
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "object1"
+              ],
+              "distance_m": -0.002266418839276751
+            },
+            {
+              "bodies": [
+                "rubber_tip_right",
+                "object1"
+              ],
+              "distance_m": -0.0031098151807196963
+            },
+            {
+              "bodies": [
+                "rubber_tip_right",
+                "object1"
+              ],
+              "distance_m": -0.0019701566082397067
+            }
+          ]
+        }
+      },
+      "audit_commands": 477,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 283.4918054169975,
+      "max_record_wall_s": 0.0017191750230267644,
+      "execution_refinement_ik_calls": [
+        19,
+        19
+      ],
+      "provider_ik_calls_consumed": 174,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-fine-yaw/summary.json",
+          "sha256": "31f8692686a3120e960976f05a86240819a0cf32d327c26501a17c6114e1a766"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-fine-yaw/protocol.json",
+          "sha256": "6768220b53a16ccd5cd68c81e07ba13c589ba35364ee5b4b9df32ecc2a9f0d15"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-fine-yaw/initial.json",
+          "sha256": "737ca39f5f41bb08cddb34e32d9fb758ed32bd2edb7f2f28f3113fc5d1c19d75"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/shift-fine-yaw/contact.jsonl",
+          "sha256": "5a4cfdb8946b07e00fb0d88402115c4dc435f7f4673aa8b5ed8da1acde9ca282"
+        }
+      ]
+    },
+    {
+      "id": "control-baseline",
+      "job_id": "20261103_182101_4ca333",
+      "case_id": "two-goal-control",
+      "policy": "baseline",
+      "run_status": "complete",
+      "passed": true,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "ok",
+        "code": "ok",
+        "message": "ok",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 2,
+          "goal_verified": true
+        },
+        "recovery": "none"
+      },
+      "native_failure_stages": [],
+      "objects": {
+        "object2": {
+          "grasp_target_z_m": 0.5297922463243773,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.0035336348463414534,
+          "max_lift_translation_m": 0.001488743323893605,
+          "height_above_closure_at_rejection_m": null,
+          "rejection_contacts": null
+        },
+        "object1": {
+          "grasp_target_z_m": 0.5297717601864997,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.032978729174343656,
+          "max_lift_translation_m": 0.0006283845599659946,
+          "height_above_closure_at_rejection_m": null,
+          "rejection_contacts": null
+        }
+      },
+      "audit_commands": 524,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 315.19107596296817,
+      "max_record_wall_s": 0.0015359069220721722,
+      "execution_refinement_ik_calls": [
+        22,
+        22
+      ],
+      "provider_ik_calls_consumed": 174,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-baseline/summary.json",
+          "sha256": "b018378d1482c23fdc0f96b14c53aba042a913e9e416e3eb7c528290220bf4c6"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-baseline/protocol.json",
+          "sha256": "87dd274f47601c71ee627a0ffcfd832ae9d27bb50eebe8dd268409a1b6da8ffb"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-baseline/initial.json",
+          "sha256": "cc1823b350166bad4f738fd23a2739cbec78974bfb3781745decd411e46c5590"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-baseline/contact.jsonl",
+          "sha256": "65858077a3eb799e8025b59013ba0cd4adb0c03f6cceac86d0e081016aeec0b4"
+        }
+      ]
+    },
+    {
+      "id": "control-fine-yaw",
+      "job_id": "20261103_182104_c2b689",
+      "case_id": "two-goal-control",
+      "policy": "fine_yaw",
+      "run_status": "complete",
+      "passed": true,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "ok",
+        "code": "ok",
+        "message": "ok",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 2,
+          "goal_verified": true
+        },
+        "recovery": "none"
+      },
+      "native_failure_stages": [],
+      "objects": {
+        "object2": {
+          "grasp_target_z_m": 0.5297924197967465,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.003694594971586182,
+          "max_lift_translation_m": 0.001505152951593905,
+          "height_above_closure_at_rejection_m": null,
+          "rejection_contacts": null
+        },
+        "object1": {
+          "grasp_target_z_m": 0.5297717601866809,
+          "lift_completed": true,
+          "lift_samples": 16,
+          "max_lift_rotation_rad": 0.028536423198886288,
+          "max_lift_translation_m": 0.00046821274184847953,
+          "height_above_closure_at_rejection_m": null,
+          "rejection_contacts": null
+        }
+      },
+      "audit_commands": 524,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 311.1864214359084,
+      "max_record_wall_s": 0.001527222921140492,
+      "execution_refinement_ik_calls": [
+        28,
+        28
+      ],
+      "provider_ik_calls_consumed": 226,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-fine-yaw/summary.json",
+          "sha256": "fa24110bf5c9e3270257472ab8248142fb8df83018b7debe2e5a680f1ff7329c"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-fine-yaw/protocol.json",
+          "sha256": "0ba0098b795eb56050912e6f9af0dd12f2cb08532b909aee4dbd55740ce3a70a"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-fine-yaw/initial.json",
+          "sha256": "b7d31a250553f6325e2a05fb15edcd8bbb1019d61bc8c3c99f7b7b3ff905e41f"
+        },
+        {
+          "path": ".tamp-runs/contact-stability-20261103/episodes/control-fine-yaw/contact.jsonl",
+          "sha256": "dcd76ae121f85b03edaa5ecad136f9db0149cec68bae647da1f133434de7a392"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "selected_tests": 36,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "junit": {
+      "path": ".tamp-runs/contact-stability-20261103/tests.xml",
+      "sha256": "f0fad8ad69495187bad2f9db47311b1f5fdc790f56b0315f9df9a79b298d0ab4"
+    }
+  },
+  "native_diagnostic_completions_by_policy": {
+    "baseline": {
+      "passed": 1,
+      "cases": 2
+    },
+    "fine_yaw": {
+      "passed": 1,
+      "cases": 2
+    }
+  },
+  "initial_state_pair_comparison": {
+    "control": {
+      "nominal_scene_hashes_match": true,
+      "max_qpos_difference_mixed_units": 0.00012160270918136658,
+      "initial_sim_times_s": [
+        9.127999999999718,
+        9.167999999999731
+      ],
+      "bit_identical": false
+    },
+    "shift": {
+      "nominal_scene_hashes_match": true,
+      "max_qpos_difference_mixed_units": 0.0015876591729979978,
+      "initial_sim_times_s": [
+        9.097999999999708,
+        8.997999999999674
+      ],
+      "bit_identical": false
+    }
+  },
+  "aggregate": {
+    "native_tasks_passed": 2,
+    "completed_transfers": 6,
+    "declared_transfers": 8,
+    "audit_commands": 1992,
+    "forbidden_commands": 0,
+    "infrastructure_failures": 0
+  },
+  "post_capture_validation": {
+    "tests": 40,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit": {
+      "path": ".tamp-runs/contact-stability-20261103/final-tests.xml",
+      "sha256": "011b931b372dc96780d5ff4de7bc3827480852f1802f56d0a1307b201fe9e76a"
+    },
+    "changes": [
+      "explicit_active_motion_phase_in_future_traces",
+      "plot_phase_filter_and_regressions"
+    ],
+    "physical_episodes_rerun": false
+  },
+  "figure": {
+    "pdf": {
+      "path": "paper/figures/tamp_contact_stability_20261103.pdf",
+      "sha256": "57f39b02c998e6db9900e33c32ed3737fe114ed44748d4fec019bbb00b803531"
+    },
+    "png": {
+      "path": "docs/experiments/media/tamp_contact_stability_20261103.png",
+      "sha256": "52519f3eeb09a42adbf51ba5f1d424704e7e9280d806aef6189633ea5d06da6b"
+    },
+    "source": {
+      "path": "scripts/plot_tamp_contact_stability.py",
+      "sha256": "c16fe7ddd745cbf32700516873dd1c26ac5460026c47025411a9617358677c79"
+    },
+    "raw_provenance": {
+      "path": ".tamp-runs/contact-stability-20261103/figures/lift_rotation.json",
+      "sha256": "0956adf7e463015db4ebf10668243af183fb90cfe973a63bc448d4b23a063b94"
+    }
+  },
+  "paper_validation": {
+    "pages": 55,
+    "undefined_references_or_citations": false,
+    "log": {
+      "path": ".tamp-runs/contact-stability-20261103/paper-build.log",
+      "sha256": "a76a1a3463b12dc6784babb49490c710c31fb010224ea00728a6287598b48e2f"
+    }
+  }
+}

@@ -306,3 +306,35 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 See [AGENT_RUN.md](AGENT_RUN.md).
 
 Add new cross-cutting `EMET_*` variables here or in a topic-specific doc and link from [simulation.md](simulation.md) / [README.md](../README.md) as appropriate.
+
+### Observed Stretch camera trials
+
+- `EMET_SIM_RGB_CODEC`: Stretch simulator full/servo RGB wire encoding, `jpeg`
+  (default) or `png` (lossless). Use PNG for metric RGBD appearance tracking when
+  JPEG chroma bleed would mix target/background colours. This changes image
+  transport only; camera projection, original timing, depth transport and robot
+  sensing are unchanged. PNG has different bandwidth/CPU costs. Other robot
+  publishers do not currently use this selector.
+- `EMET_SIM_RGBD_PROVENANCE`: `1` adds an optional JSON-compatible lossless
+  original head RGB/depth/registration packet to Stretch full observations.
+  Default `0`. The packet retains native camera grids, calibration, clock and
+  separate original RGB/depth intervals; it does not establish surface ownership
+  or synchronize asynchronous exposures. Missing acquisition intervals reject.
+  This diagnostic channel is not needed to use PNG RGB transport.
+
+- `EMET_STRETCH_HEAD_CAMERA_SCALE`: `1` (default, 424×240) or `2` (848×480).
+  Renders native samples at the selected resolution for both head RGB and depth;
+  intrinsics and registration use that projection. This does not upsample images
+  or qualify hardware depth precision/exposure timing.
+- `EMET_SIM_HEAD_RENDER_ROBOT`: `1` enables the default MuJoCo visual geom mask
+  for Stretch head images, preserving robot self-occlusion. Default `0` retains
+  the existing mapping-oriented robot-body suppression. Collision proxy groups
+  remain hidden. Realistic rendering does not itself remove robot map points.
+- `EMET_SIM_SYNCHRONIZED_RGBD`: `1` copies one scene sample under the physics
+  lock, then renders the cameras from that private copy while physics continues.
+  Default `0` preserves asynchronous rendering. Images retain original sampling
+  times and camera FK; separate metadata carries eight Stretch motor readings
+  and explicitly labelled full-robot kinematic debug truth. Passive finger angles
+  and individual telescope lengths are not motor measurements. Debug samples
+  cannot qualify observed visual effects. This is ideal simulator co-sampling,
+  not hardware clock/noise calibration.

@@ -31,6 +31,7 @@ from emet.simulation.mujoco_ground_truth import (
     mujoco_ground_truth_write_path,
     parse_ground_truth_dump_action_field,
 )
+from emet.simulation.rgb_encoding import encode_sim_rgb, sim_rgb_codec
 from emet.simulation.sim_manipulation import (
     parse_sim_set_body_pose_action,
     parse_sim_set_joint_qpos_action,
@@ -241,35 +242,21 @@ class MujocoZmqServer(BaseZmqServer):
                 molmospaces_environment=molmospaces_environment,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
-        # Get the intrinsic parameters of the d435i rgb camera
-        (
-            fx,
-            _,
-            cx,
-            _,
-            fy,
-            cy,
-            _,
-            _,
-            _,
-        ) = StretchCameras.cam_d435i_rgb.initial_camera_settings.get_intrinsic_params_k()
-        # Rotate the head camera matrix as the head camera realsense is rotated 90 degrees
-        self.head_K = np.array([[fy, 0, cy], [0, fx, cx], [0, 0, 1]])
+        from emet.simulation.depth_registration import rendered_camera_intrinsics
 
-        # Get the intrinsic parameters of the d405 rgb camera
-        (
-            fx,
-            _,
-            cx,
-            _,
-            fy,
-            cy,
-            _,
-            _,
-            _,
-        ) = StretchCameras.cam_d405_rgb.initial_camera_settings.get_intrinsic_params_k()
-        # No need to rotate the ee camera matrix as it is not rotated
-        self.ee_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+        settings = StretchCameras.cam_d435i_rgb.initial_camera_settings
+        # Simulator pinhole projection uses fovy, not the physical camera's
+        # 304.24/304.07 px focal calibration (312.6107 px at 424x240, fovy=42).
+        # Registration and the published rotated K must use this same geometry.
+        raw_k = rendered_camera_intrinsics(settings.field_of_view_vertical_in_degrees, settings.width, settings.height)
+        # Images rotate clockwise into the head optical convention.
+        self.head_K = np.array([[raw_k[1, 1], 0, settings.height - 1 - raw_k[1, 2]],
+                                [0, raw_k[0, 0], raw_k[0, 2]], [0, 0, 1]])
+
+        # The wrist stream is unrotated but still uses rendered pinhole geometry,
+        # not physical-camera focal calibration or the full sensor resolution.
+        wrist = StretchCameras.cam_d405_rgb.initial_camera_settings
+        self.ee_K = rendered_camera_intrinsics(wrist.field_of_view_vertical_in_degrees, wrist.width, wrist.height)
 
         self.simulation_rate = simulation_rate
         self.objects_info = objects_info
@@ -1204,8 +1191,9 @@ class MujocoZmqServer(BaseZmqServer):
         # Get the joint state
         positions, _, _ = self.get_joint_state()
 
-        # Make both into jpegs
-        rgb = compression.to_jpg(rgb)
+        # Encode RGB with the declared profile; retain the existing depth transport.
+        rgb_codec = sim_rgb_codec()
+        rgb = encode_sim_rgb(rgb, codec=rgb_codec)
         depth = compression.to_jp2(depth)
 
         if self._initial_xyt is None or not self._stretch_sim_publish_ok():
@@ -1216,7 +1204,9 @@ class MujocoZmqServer(BaseZmqServer):
         try:
             # ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
             # Frame contract: src/test/simulation/test_zmq_observation_frame_contract.py
-            head_cam_world = self._head_camera_opencv_world()
+            head_cam_world = cam_data.captured_camera_pose(StretchCameras.cam_d435i_rgb)
+            if head_cam_world is None:
+                head_cam_world = self._head_camera_opencv_world()
             ee_world = self.robot_sim.get_ee_pose()
         except (ConnectionError, ConnectionResetError, OSError):
             return None
@@ -1224,7 +1214,9 @@ class MujocoZmqServer(BaseZmqServer):
         # Get the other fields from an observation
         message = {
             "rgb": rgb,
+            "rgb_codec": rgb_codec,
             "depth": depth,
+            "rgbd_registration": getattr(cam_data, 'head_depth_registration', None),
             "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "camera_K": self.head_K,
             "camera_pose": head_cam_world,
@@ -1324,17 +1316,22 @@ class MujocoZmqServer(BaseZmqServer):
 
         # Compress the images
         compressed_ee_depth_image = compression.to_jp2(ee_depth_image)
-        compressed_ee_color_image = compression.to_jpg(ee_color_image)
+        rgb_codec = sim_rgb_codec()
+        compressed_ee_color_image = encode_sim_rgb(ee_color_image, codec=rgb_codec)
         compressed_head_depth_image = compression.to_jp2(head_depth_image)
-        compressed_head_color_image = compression.to_jpg(head_color_image)
+        compressed_head_color_image = encode_sim_rgb(head_color_image, codec=rgb_codec)
 
         # Get position info
         positions, _, _ = self.get_joint_state()
         if self._initial_xyt is None:
             return None
         try:
-            ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
-            head_pose_cam = self._head_camera_opencv_world()
+            ee_pose_cam = cam_data.captured_camera_pose(StretchCameras.cam_d405_rgb)
+            if ee_pose_cam is None:
+                ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
+            head_pose_cam = cam_data.captured_camera_pose(StretchCameras.cam_d435i_rgb)
+            if head_pose_cam is None:
+                head_pose_cam = self._head_camera_opencv_world()
             ee_pose_mat = self.robot_sim.get_ee_pose()
         except (ConnectionError, ConnectionResetError, OSError):
             return None

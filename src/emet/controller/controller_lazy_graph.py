@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from emet.controller.controller_dynagraph import DynagraphController
+from emet.core.interfaces import Observations
 from emet.memory.graph_eqa.lazy_graph_commit import commit_graph_from_arrival_obs
 from emet.utils.logger import Logger
 from emet.visualization.null_visualizer import visualizer_is_enabled
@@ -146,6 +147,74 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "reason": "fresh observation required"}
         return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
 
+    def ground_current_view(
+        self, query: str, *, observation: Observations | None = None, decision_view: dict[str, Any] | None = None
+    ):
+        """Ground the supplied decision snapshot, or capture when none is supplied.
+
+        This does not move the robot or retrieve a search anchor. Acquisition
+        timing is evidence metadata, not a guarantee of a newly acquired frame;
+        physical manipulation still requires its existing fresh reacquisition.
+        """
+        query = " ".join(query.lower().split())
+        if not query:
+            return {"ok": False, "status": "invalid_query", "reason": "target description required"}
+        self._grounded_query_target = None
+        decision_scope = (decision_view or {}).get("observation_scope_id")
+        if decision_scope is not None and decision_scope != self.voxel_map.observation_scope_id:
+            return {
+                "ok": False,
+                "status": "observation_scope_mismatch",
+                "reason": "map changed since the decision view; a new camera decision is required",
+            }
+        before = len(self.voxel_map.observations)
+        if observation is None:
+            self.update(full_perception=True)
+        else:
+            self.update(full_perception=True, observation=observation)
+        source = len(self.voxel_map.observations)
+        if source <= before:
+            return {"ok": False, "status": "observation_unavailable", "reason": "new captured observation required"}
+        frame = self.voxel_map.observations[-1]
+        info = frame.info
+        if decision_view is not None:
+            # Frame is a namedtuple; its metadata dictionary is mutable.
+            info["decision_view"] = dict(decision_view)
+        result = self.ground_query_view(query, source_obs_id=source, target_description=query)
+        return {
+            **result,
+            "query": query,
+            "status": "grounded" if result["ok"] else "not_grounded",
+            "observation": {
+                **(decision_view or {}),
+                "input_source": "coordinator_snapshot" if observation is not None else "tool_capture",
+                "source_obs_id": source,
+                "view_id": f"voxel-frame:{source}",
+                "image_timing": info.get("image_timing"),
+                "observation_scope_id": info.get("observation_scope_id"),
+                "acquisition_freshness": "not_verified_by_this_tool",
+            },
+            "geometry": {
+                "status": "admitted" if result["ok"] else "not_admitted",
+                **(
+                    {
+                        "xyz": result["xyz"],
+                        "coordinate_frame": "world",
+                        "units": "meters",
+                        "obs_id": result["obs_id"],
+                        "source": self._grounded_query_target.geometry_source,
+                        "point_count": len(self._grounded_query_target.points),
+                    }
+                    if result["ok"]
+                    else {
+                        "reason": result.get("reason"),
+                        "model_reason": result.get("model_reason"),
+                        "depth_support": result.get("depth_support"),
+                    }
+                ),
+            },
+        }
+
     def ground_query_view(self, query: str, *, source_obs_id: int, target_description: str):
         """Localize a target in the current captured view without a retrieval prerequisite.
 
@@ -188,7 +257,7 @@ class LazyGraphController(DynagraphController):
             fusion = GraphObjectFusion(fusion_config_from_sources(parameters=self.parameters))
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
-        from emet.memory.query_grounding import cache_grounding_record, select_query_detections
+        from emet.memory.query_grounding import cache_grounding_record, proposal_view_context, select_query_detections
 
         backend = (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "yoloe")
         client = getattr(self.graph_memory, "eqa_client", None)
@@ -206,6 +275,10 @@ class LazyGraphController(DynagraphController):
             )
         else:
             raise ValueError(f"Unknown query grounding backend: {backend}")
+        if verification.get("depth_support") is not None:
+            verification["depth_support"] = proposal_view_context(
+                verification["depth_support"], observation_frame, source_obs_id=len(vm.observations)
+            )
         admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         import os
         from dataclasses import asdict
@@ -235,6 +308,7 @@ class LazyGraphController(DynagraphController):
                     for name in ("camera_K", "camera_pose", "base_pose")
                 },
                 "xyz_frame": getattr(observation_frame, "xyz_frame", None),
+                "decision_view": (getattr(observation_frame, "info", None) or {}).get("decision_view"),
                 "target_description": target_description,
                 "grounding_backend": backend,
                 "detector_vocabulary": [query]
@@ -266,18 +340,20 @@ class LazyGraphController(DynagraphController):
                 and getattr(self.graph_memory, "eqa_client", None) is None
             ):
                 return {"ok": False, "reason": "semantic verification unavailable", "cache_path": cache_path}
+            reason = "target absent or ambiguous"
+            if backend == "vlm":
+                reason = verification.get("reason") or "surface geometry not admitted"
             if handle is not None:
-                self.query_candidates.reject(
-                    handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
-                )
+                self.query_candidates.reject(handle, observation_revision=len(vm.observations), reason=reason)
             return {
                 "ok": False,
-                "reason": "target absent or ambiguous",
+                "reason": reason,
                 "cache_path": cache_path,
                 "n_detections": len(detections),
                 "matching_ids": matching_ids,
                 "verification_source": verification["source"],
                 "support_reason": verification.get("reason"),
+                "model_reason": verification.get("model_reason"),
                 "depth_support": verification.get("depth_support"),
             }
         det = matches[0]
@@ -332,7 +408,13 @@ class LazyGraphController(DynagraphController):
             world[valid],
             geometry_source=verification.get("geometry_source", "detector_mask"),
         )
-        return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
+        return {
+            "ok": True,
+            "instance_id": obs_id,
+            "obs_id": obs_id,
+            "xyz": self._grounded_query_target.xyz.tolist(),
+            "cache_path": cache_path,
+        }
 
     def ground_vlm_frame(self, frame, query, description, *, min_depth=None, tracking_target=None, purpose="object"):
         """Shared head/wrist perception without admitting a new memory instance."""
@@ -396,6 +478,15 @@ class LazyGraphController(DynagraphController):
             detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
             _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
             options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+        if config.get("split_surface_normals", False):
+            from emet.memory.graph_eqa.ingest.instance_observations import frame_world_xyz_hw3
+
+            points = frame_world_xyz_hw3(frame)
+            if points is None:
+                raise ValueError("Surface-normal splitting requires world-aligned depth")
+            options["world_xyz"] = points.detach().cpu().numpy()
+        if "search_padding" in config:
+            options["search_padding"] = config["search_padding"]
         if "surface_presentation" in config:
             options["presentation"] = config["surface_presentation"]
         if "whole_object_box" in config:

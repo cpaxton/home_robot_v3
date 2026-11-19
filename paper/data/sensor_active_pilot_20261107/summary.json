@@ -1,0 +1,116 @@
+{
+  "source_commit": "9ff8521f1b1efd7e7c6500222c683ed5a1e10659",
+  "fork_commit": "5f3fc51a8b611668d263b7b43e92f9f7cd76dfe0",
+  "status": "complete",
+  "paired_manifest_sha256": "2118cf4d4ad41457dca67465aeacd2f743ccf90e1abf39bc499fd03e09eecdeb",
+  "analysis_sha256": "72e08fdb80b614e46dcabf6a6f08015799880c8bc5cf6cf76154f390d17e77b1",
+  "arms": {
+    "emet": {
+      "planned": 3,
+      "completed": 3,
+      "correct": 0
+    },
+    "grapheqa": {
+      "planned": 3,
+      "completed": 3,
+      "correct": 0
+    }
+  },
+  "scope": "Three hard development cases; whole systems; no task-quality improvement established",
+  "artifact_root": "~/runs/emet/sensor-active-pairs-20261107-r7/",
+  "rows": [
+    {
+      "question_id": 2,
+      "agent": "emet",
+      "complete": true,
+      "correct": false,
+      "answer": "White",
+      "wall_s": 150.28630118397996,
+      "primitive_count": 200,
+      "model_calls": 41,
+      "estimated_camera_path_m": 2.9366305776927994,
+      "commanded_forward_m": 2.882381697815948,
+      "collisions": 0,
+      "action_rewrites": 0,
+      "ledger_sha256": "84e23c2cd20281dcf2e20d7e2b3b0da0da3aa22285ac32876ec92de0c5a36556",
+      "model_trace_sha256": "a44b7431c81cc7d502feff5d4b458c70f20e4e0b5996edc30b37780b22a4fde0"
+    },
+    {
+      "question_id": 2,
+      "agent": "grapheqa",
+      "complete": true,
+      "correct": false,
+      "answer": "D",
+      "wall_s": 104.48645613109693,
+      "primitive_count": 78,
+      "model_calls": 4,
+      "estimated_camera_path_m": 0.015124770568030209,
+      "commanded_forward_m": 0,
+      "collisions": 0,
+      "ledger_sha256": "3795944f47690a6a1bec678af1d0d5bbb76b5e3cd50b02ef58f3d5d1f4b9824e",
+      "model_trace_sha256": "b1aaadcf6561b0ee9d37710dc58527d66eb9e1ed0fa536f4dc42ea6169e752b9"
+    },
+    {
+      "question_id": 6,
+      "agent": "emet",
+      "complete": true,
+      "correct": false,
+      "answer": "By the dining table",
+      "wall_s": 148.36686702107545,
+      "primitive_count": 200,
+      "model_calls": 44,
+      "estimated_camera_path_m": 3.2655616892332295,
+      "commanded_forward_m": 3.189531106812142,
+      "collisions": 0,
+      "action_rewrites": 0,
+      "ledger_sha256": "f9566252174ef8e171bf2e642ccbda0af187f562e62ce4eae580e8394d993f97",
+      "model_trace_sha256": "a359b6e9089669c7d31c5854723e6988e1e8c5ba95f4285b2cf61133eeb3906d"
+    },
+    {
+      "question_id": 6,
+      "agent": "grapheqa",
+      "complete": true,
+      "correct": false,
+      "answer": "C",
+      "wall_s": 81.3531359010376,
+      "primitive_count": 78,
+      "model_calls": 4,
+      "estimated_camera_path_m": 0.025401042774537842,
+      "commanded_forward_m": 0,
+      "collisions": 0,
+      "ledger_sha256": "f667b70e495536b0917812c5bbc958b0fcc090344e7fcb5c73c12f162e543fc3",
+      "model_trace_sha256": "9e069ecf500535387de317281b18c7df2053e616e5a57dacc412bfd5859229b3"
+    },
+    {
+      "question_id": 12,
+      "agent": "emet",
+      "complete": true,
+      "correct": false,
+      "answer": "One",
+      "wall_s": 102.23966338799801,
+      "primitive_count": 141,
+      "model_calls": 33,
+      "estimated_camera_path_m": 2.460621918124783,
+      "commanded_forward_m": 2.418644035619094,
+      "collisions": 0,
+      "action_rewrites": 0,
+      "ledger_sha256": "09075f21be97fb61656f98fa030e390e8d175e7b93f5b1702335475b0700e250",
+      "model_trace_sha256": "fa6432f931b433c446b3cc5df7a9492d860c39b796df8abbea31db50cd29e28d"
+    },
+    {
+      "question_id": 12,
+      "agent": "grapheqa",
+      "complete": true,
+      "correct": false,
+      "answer": "C",
+      "wall_s": 38.43738618690986,
+      "primitive_count": 78,
+      "model_calls": 1,
+      "estimated_camera_path_m": 0.02001930246699908,
+      "commanded_forward_m": 0,
+      "collisions": 0,
+      "ledger_sha256": "f3298feb9977645fff78c4b286b1d817f62ad5aedc096c8227bc1f97460fc988",
+      "model_trace_sha256": "ad716fd35c5f47c0ba17463da0f856d2d99f85856d20583669ff9ec2cc86614f"
+    }
+  ]
+}

@@ -9,12 +9,23 @@
 
 # Copyright (c) Hello Robot, Inc. All rights reserved.
 #
-# Agent tools: single registry of tools with name, description, parameters (JSON Schema), func,
-# and executor command mapping. The prompt and tool-calling interface derive from this registry.
+"""Context-bound CHAT handlers for terminal and Discord sessions.
+
+``skills.specs.CHAT_SKILL_SPECS`` owns all names, descriptions, argument schemas
+and result-visibility flags. ``build_chat_tools`` binds those specs to closures
+over a mutable session context, delegating task handlers to ``chat_tamp``; construction does not probe robot capabilities
+or load perception models. The session loop applies provider advertisement gates.
+
+Handlers either return information directly or carry legacy executor command
+mappings. The dispatcher preserves call order and TAMP stop boundaries; it must
+inspect actual outcomes rather than treating executor continuation as success.
+Images are queued separately for the user-facing reply. EQA orchestration lives
+in ``memory.graph_eqa.agentic``, not in these CHAT handlers. See
+``docs/agent_architecture.md`` and ``docs/agent_tool_contracts.md``.
+"""
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from collections.abc import Callable
 from typing import Any
@@ -22,6 +33,8 @@ from typing import Any
 import numpy as np
 
 from emet.agent.camera_debug import print_camera_frame_diagnostics
+from emet.agent.tool import Tool, get_tool_descriptions_for_prompt  # noqa: F401 — compatibility exports
+from emet.agent.tool_outcome import ToolOutcome
 from emet.mapping.close_map import close_map_from_agent, format_close_map_hint
 from emet.mapping.voxel_localize import localize_text_xyz, voxel_map_from_agent
 from emet.memory.graph_eqa.graph_stats import format_graph_size_report
@@ -172,6 +185,9 @@ def format_base_clearance_hint(agent: Any | None) -> str:
         return ""
     try:
         pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        planning_pose = getattr(agent, "_planning_base_xyt", None)
+        if callable(planning_pose):
+            pose = np.asarray(planning_pose(pose), dtype=np.float64).reshape(-1)
         if pose.size < 2:
             return ""
         if getattr(planner, "_clearance_m", None) is None:
@@ -220,53 +236,6 @@ def _graph_eqa_tool_string(query_out: tuple) -> str:
         debug_reasoning=(reasoning or confidence_reasoning or "").strip(),
     )
     return format_eqa_tool_response(human)
-
-
-class Tool:
-    """A single agent tool: name, description, JSON Schema parameters, callable, and executor mapping.
-
-    If returns_info is True, the tool returns text that the LLM should see and
-    summarize for the user (e.g. query_memory, describe_scene).  The agent loop
-    will feed the result back to the LLM for a follow-up response.
-    """
-
-    __slots__ = ("name", "description", "parameters", "func", "executor_commands", "returns_info")
-
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        parameters: dict[str, Any],
-        func: Callable[..., Any],
-        executor_commands: Callable[[dict[str, Any]], list[tuple[str, str]]] | None = None,
-        returns_info: bool = False,
-    ):
-        self.name = name
-        self.description = description
-        self.parameters = parameters
-        self.func = func
-        self.executor_commands = executor_commands
-        self.returns_info = returns_info
-
-    def schema(self) -> dict[str, Any]:
-        """Return OpenAI-style tool schema (for tools param or prompt generation)."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.parameters,
-            },
-        }
-
-    def to_executor(self, arguments: dict[str, Any]) -> list[tuple[str, str]]:
-        """Map tool call arguments to executor (command, args) list. Empty list means use func instead."""
-        if self.executor_commands is not None:
-            return self.executor_commands(arguments)
-        return []
-
-
-_NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
 
 def _robot_base_xy(robot: Any, executor: Any | None = None) -> tuple[float, float] | None:
@@ -320,22 +289,63 @@ def _simple_exec_mapping(cmd: str) -> Callable[[dict[str, Any]], list[tuple[str,
 def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     """Build the Discord/terminal CHAT tool pack for *context*.
 
+    Bind canonical specs once to lazy closures over executor, robot, memory and
+    reply-image state. Explicit ``head_view_capability`` specializes gaze schemas;
+    an absent key preserves generic registry schemas for introspection. The CHAT
+    loop subsequently applies task-provider advertisement gates.
+
     Prefer :func:`get_tools` (routes through :func:`emet.agent.skills.build_skill_pack`).
     """
     from emet.agent.env_flags import env_base_rotate_only
+    from emet.agent.skills.specs import CHAT_EXCLUSIVE_TOOL_NAMES, CHAT_SKILL_SPECS, head_view_skill
+
+    specs = {spec.name: spec for spec in CHAT_SKILL_SPECS}
+
+    def _bind(
+        name: str,
+        *,
+        func: Callable[..., Any],
+        executor_commands: Callable[[dict[str, Any]], list[tuple[str, str]]] | None = None,
+    ) -> Tool:
+        """Attach a handler to canonical metadata without inspecting live runtime objects."""
+        spec = specs[name]
+        if "head_view_capability" in context:
+            spec = head_view_skill(spec, context["head_view_capability"])
+        return Tool(
+            name=spec.name,
+            description=spec.description,
+            parameters=spec.parameters,
+            func=func,
+            executor_commands=executor_commands,
+            returns_info=spec.returns_info,
+        )
 
     tools: list[Tool] = []
 
+    def _query_graph_backend(question: str, *, caller: str) -> str | None:
+        """Shared graph QA; callers retain their own fallback order."""
+        backend = context.get("graph_memory_backend")
+        if backend is None or not hasattr(backend, "query_answer"):
+            return None
+        try:
+            return _graph_eqa_tool_string(
+                backend.query_answer(question, context.get("xyt_for_query"), context.get("planner"))
+            )
+        except Exception as error:
+            _logger.warning(f"{caller} graph backend failed: {error}")
+            return None
+
     # -- query_memory --------------------------------------------------------
     def query_memory(question: str) -> str:
+        """Read graph EQA, then memory-backend QA, then voxel retrieval as available.
+
+        The fallback XYZ is a search hypothesis, not admitted object geometry.
+        """
         xyt = context.get("xyt_for_query")
         planner = context.get("planner")
-        graph_backend = context.get("graph_memory_backend")
-        if graph_backend is not None and hasattr(graph_backend, "query_answer"):
-            try:
-                return _graph_eqa_tool_string(graph_backend.query_answer(question, xyt, planner))
-            except Exception as e:
-                _logger.warning(f"query_memory graph backend failed ({e}); trying voxel memory.")
+        graph_answer = _query_graph_backend(question, caller="query_memory")
+        if graph_answer is not None:
+            return graph_answer
         memory_backend = context.get("memory_backend")
         if memory_backend is not None and hasattr(memory_backend, "query_answer"):
             try:
@@ -354,31 +364,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return "I haven't seen that in my memory."
         return "Memory not available."
 
-    tools.append(
-        Tool(
-            name="query_memory",
-            description=(
-                "Questions about the scene (where is X, have I seen Y). Uses graph EQA when enabled, else voxel memory. "
-                "Returns a final user-facing Answer line (not image numbers). "
-                "For relations use list_scene_relations; for open-ended views use describe_scene and send_image."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "Natural language question about the environment or memory.",
-                    }
-                },
-                "required": ["question"],
-            },
-            func=query_memory,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("query_memory", func=query_memory))
 
     # -- send_image ----------------------------------------------------------
-    def send_image() -> str:
+    def send_image() -> ToolOutcome:
+        """Queue an owned head RGB frame for the next user reply; report missing camera data."""
         robot = context.get("robot")
         image = None
         if robot is not None and hasattr(robot, "get_observation"):
@@ -394,22 +384,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             )
         if stash_discord_image(context, image):
             if context.get("discord_bot") is not None:
-                return "Image queued for Discord (attached to the reply)."
-            return "Image captured (no Discord to send to)."
-        return "No image available."
+                return ToolOutcome(
+                    True, status="captured", note="Image queued for Discord (attached to the reply).", tool="send_image"
+                )
+            return ToolOutcome(
+                True, status="captured", note="Image captured (no Discord to send to).", tool="send_image"
+            )
+        return ToolOutcome(False, status="observation_unavailable", note="No image available.", tool="send_image")
 
-    tools.append(
-        Tool(
-            name="send_image",
-            description=(
-                "Capture the head-camera view and attach it to the reply (Discord when connected). "
-                "Use with describe_scene for 'what do you see', or alone when asked for a photo."
-            ),
-            parameters=_NO_PARAMS,
-            func=send_image,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("send_image", func=send_image))
 
     def _exec(cmd: str, args: Any = "") -> str:
         executor = context.get("executor")
@@ -419,19 +402,25 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return "Done." if ok else "Command was interrupted or failed."
 
     # -- explore -------------------------------------------------------------
-    def explore() -> str:
+    def explore() -> ToolOutcome:
+        """Run coverage exploration and return navigation status plus bounded plan evidence."""
         executor = context.get("executor")
         robot = context.get("robot")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([("explore", "")])
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.", tool="explore")
+        keep_running = executor([("explore", "")])
+        ok = keep_running and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
         robot_xy = _robot_base_xy(robot)
         vm = _voxel_map_from_executor(executor)
         _img, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
-        summary = format_navigation_report(stats, explore_ok=ok)
+        # The explicit outcome below owns completion status; map statistics
+        # must not turn executor liveness into an additional success claim.
+        summary = format_navigation_report(stats)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
+        if str(outcome or "").startswith(("rejected_", "aborted_", "failed")) or outcome == "user_cancelled":
+            ok = False
         head = format_nav_outcome_head(outcome, ok=ok, verb="Explore")
         parts = [head, summary]
         if plan_line:
@@ -440,27 +429,19 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if gsize:
             _logger.info(gsize)
             parts.append(f"[{gsize}]")
-        return " ".join(parts)
-
-    tools.append(
-        Tool(
-            name="explore",
-            description=(
-                "Navigate to explore and build a map (moves through the space — longer than scan_environment). "
-                "Use for 'explore', 'map the room', 'go look around the house'. "
-                "For a quick in-place look, prefer scan_environment. "
-                "Returns map diagnostics plus last-plan summary (localize source, waypoint count, min clearance, "
-                "and outcomes such as user_cancelled / aborted_waypoint_timeout / rejected_low_clearance when "
-                "--confirm-nav or safety filters fire). Pair with send_map_snapshot or describe_scene if stuck."
-            ),
-            parameters=_NO_PARAMS,
-            func=explore,
-            returns_info=True,
+        return ToolOutcome(
+            bool(ok),
+            status=outcome or ("ok" if ok else "failed"),
+            note=" ".join(parts),
+            tool="explore",
+            payload={"navigation": navigation_feedback(agent)},
         )
-    )
+
+    tools.append(_bind("explore", func=explore))
 
     # -- navigation_diagnostics / send_map_snapshot -------------------------
     def navigation_diagnostics() -> str:
+        """Summarize map coverage, base clearance and the last plan without moving."""
         executor = context.get("executor")
         robot = context.get("robot")
         if executor is None:
@@ -491,6 +472,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return " ".join(parts)
 
     def send_map_snapshot() -> str:
+        """Render the voxel map and last path, queueing an image without executing the path."""
         executor = context.get("executor")
         robot = context.get("robot")
         discord_bot = context.get("discord_bot")
@@ -553,504 +535,50 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             parts.append("Last motion plan overlaid on map.")
         return " ".join(parts)
 
-    tools.append(
-        Tool(
-            name="navigation_diagnostics",
-            description=(
-                "Text summary of the current 2D voxel map: explored vs obstacle cell counts, base pose in grid, "
-                "last motion-plan summary (localize / waypoints / min clearance / confirm-nav or abort outcomes), "
-                "and whether the base sits under min_clearance_m of obstacles. "
-                "Use after failed explore/find or when the user asks why navigation failed."
-            ),
-            parameters=_NO_PARAMS,
-            func=navigation_diagnostics,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("navigation_diagnostics", func=navigation_diagnostics))
 
-    tools.append(
-        Tool(
-            name="send_map_snapshot",
-            description=(
-                "Render a top-down RGB view of obstacles vs explored space (cropped to the explored region plus margin), "
-                "optionally overlaying the last motion plan, and send to Discord if configured; also logs the same crop "
-                "to Rerun at world/map_snapshot/topdown when the live Rerun visualizer is enabled."
-            ),
-            parameters=_NO_PARAMS,
-            func=send_map_snapshot,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("send_map_snapshot", func=send_map_snapshot))
 
-    from emet.controller.task.tamp.api import failure_code, json_tool, plan_data, response
+    from emet.agent.chat_tamp import build_tamp_handlers
 
-    # -- pick_place / plan_pick_place ----------------------------------------
-    def _tamp_robot() -> Any | None:
-        robot = context.get("robot")
-        if robot is not None:
-            return robot
-        executor = context.get("executor")
-        return getattr(executor, "robot", None) if executor is not None else None
+    for name, handler in build_tamp_handlers(context).items():
+        tools.append(_bind(name, func=handler))
 
-    def _tamp_manip_mode() -> str:
-        from emet.simulation.env_flags import env_manip_mode
-
-        executor = context.get("executor")
-        return env_manip_mode() or str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
-
-    def _native_input_gate() -> str | None:
-        if _tamp_manip_mode().strip().lower() != "physical":
-            return None
-        executor = context.get("executor")
-        inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
-        if inputs not in {"observed", "privileged"}:
-            return "invalid_tamp_inputs"
-        if inputs == "observed":
-            # Do not read simulator task metadata before an observed-scene
-            # adapter is installed. Input isolation includes task discovery.
-            return "observed_scene_unavailable"
-        robot = _tamp_robot()
-        session_getter = getattr(robot, "get_emet_session", None)
-        session = session_getter() if callable(session_getter) else None
-        if not isinstance(session, dict) or session.get("is_simulation") is not True:
-            return "privileged_inputs_require_simulation"
-        from emet.controller.manipulation.native_inputs import ObservationUnavailable
-        from emet.controller.task.tamp.native_adapter import adapter_for
-
-        try:
-            return None if adapter_for(context, robot) is not None else "native_execution_unavailable"
-        except (ObservationUnavailable, ValueError) as exc:
-            return failure_code(str(exc))
-
-    def _native_adapter():
-        from emet.controller.task.tamp.native_adapter import adapter_for
-
-        return adapter_for(context, _tamp_robot())
-
-    def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
-        keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
-        task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
-        return response(
-            "pick_place",
-            code="ok" if task_ok else "controller_failed",
-            data={"mode": "configured_controller", "assistance": None, "completed_ops": None, "measurements": None},
-        )
-
-    def _build_tamp_plan(
-        *,
-        task_ref: str = "",
-        object_name: str = "",
-        receptacle_name: str = "",
-    ):
-        from emet.controller.task.tamp.agent_bridge import (
-            AgentPlanBuild,
-            AgentTaskRef,
-            build_agent_pick_place_plan,
-            robot_session_key,
-        )
-
-        requested_ref = str(task_ref).strip()
-        native_error = _native_input_gate()
-        if native_error:
-            from emet.controller.task.tamp.agent_bridge import AgentPlanBuild
-
-            return AgentPlanBuild(None, None, "physical", True, native_error)
-        selected = (context.get("_tamp_task_refs") or {}).get(requested_ref)
-        if selected is not None and not isinstance(selected, AgentTaskRef):
-            selected = None
-        if requested_ref and context.get("_tamp_scene_key") != robot_session_key(_tamp_robot()):
-            selected = None
-        if requested_ref and selected is None:
-            return AgentPlanBuild(
-                task=None,
-                plan=None,
-                mode=None,
-                live_sim=False,
-                reason="unknown_task_ref",
-            )
-        if selected is not None:
-            return build_agent_pick_place_plan(
-                _tamp_robot(),
-                selected.object_query,
-                selected.receptacle_query,
-                object_body=selected.object_body,
-                receptacle_body=selected.receptacle_body,
-                manip_mode=_tamp_manip_mode(),
-            )
-        if not str(object_name).strip() or not str(receptacle_name).strip():
-            return AgentPlanBuild(
-                task=None,
-                plan=None,
-                mode=None,
-                live_sim=False,
-                reason="provide_task_ref_or_object_and_receptacle",
-            )
-        return build_agent_pick_place_plan(
-            _tamp_robot(),
-            str(object_name),
-            str(receptacle_name),
-            manip_mode=_tamp_manip_mode(),
-        )
-
-    def _format_tamp_plan(plan_ref: str, build: Any) -> dict:
-        plan = build.plan
-        if plan is None or not plan.success or build.task is None:
-            return response("plan_pick_place", code=failure_code(build.reason or "planner_error"))
-        return response("plan_pick_place", data=plan_data(plan, build.mode, plan_ref))
-
-    @json_tool
-    def plan_pick_place(
-        task_ref: str = "",
-        object_name: str = "",
-        receptacle_name: str = "",
-        placement_region: list[list[float]] | None = None,
-    ) -> dict:
-        from emet.controller.task.tamp.agent_bridge import store_agent_plan
-
-        if _tamp_manip_mode().strip().lower() == "physical":
-            error = _native_input_gate()
-            return (
-                response("plan_pick_place", code=error)
-                if error
-                else _native_adapter().plan(task_ref, object_name, receptacle_name, placement_region)
-            )
-        if placement_region is not None:
-            return response("plan_pick_place", code="placement_region_unsupported")
-        build = _build_tamp_plan(
-            task_ref=task_ref,
-            object_name=object_name,
-            receptacle_name=receptacle_name,
-        )
-        if build.plan is None or not build.plan.success:
-            return _format_tamp_plan("", build)
-        plan_ref = store_agent_plan(context, _tamp_robot(), build)
-        return _format_tamp_plan(plan_ref, build)
-
-    @json_tool
-    def execute_pick_place_plan(plan_ref: str) -> dict:
-        native_error = _native_input_gate()
-        if native_error:
-            return response("execute_pick_place_plan", code=native_error)
-        if _tamp_manip_mode().strip().lower() == "physical":
-            return _native_adapter().execute(str(plan_ref))
-        from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result
-
-        robot = _tamp_robot()
-        if robot is None:
-            return response("execute_pick_place_plan", code="robot_not_connected")
-        return execute_stored_agent_plan_result(robot, context, str(plan_ref))
-
-    @json_tool
-    def pick_place(object_name: str, receptacle_name: str) -> dict:
-        if _tamp_manip_mode().strip().lower() == "physical":
-            error = _native_input_gate()
-            if error:
-                return response("pick_place", code=error)
-            adapter = _native_adapter()
-            planned = adapter.plan(object_name=object_name, receptacle_name=receptacle_name)
-            result = adapter.execute(planned["data"]["plan_ref"]) if planned["status"] == "ok" else planned
-            return {**result, "tool": "pick_place"}
-        executor = context.get("executor")
-        if executor is None and _tamp_robot() is None:
-            return response("pick_place", code="robot_not_connected")
-        if (
-            executor is not None
-            and _tamp_manip_mode().strip().lower() != "physical"
-            and (
-                bool(getattr(executor, "visual_servo", False))
-                or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
-            )
-        ):
-            return _fallback_pick_place(executor, object_name, receptacle_name)
-        build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
-        if build.plan is not None and build.plan.success:
-            from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result, store_agent_plan
-
-            plan_ref = store_agent_plan(context, _tamp_robot(), build)
-            result = execute_stored_agent_plan_result(_tamp_robot(), context, plan_ref)
-            result["tool"] = "pick_place"
-            return result
-        if build.live_sim or _tamp_manip_mode().strip().lower() == "physical":
-            return response("pick_place", code=failure_code(build.reason or "planner_error"))
-        if executor is None:
-            return response("pick_place", code="controller_unavailable")
-        return _fallback_pick_place(executor, object_name, receptacle_name)
-
-    tools.append(
-        Tool(
-            name="pick_place",
-            description="Pick up an object and place it on a receptacle. "
-            "In simulation, plan and validate the task before guarded kinematic or teleport execution; "
-            "on real hardware use the configured manipulation controller.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "object_name": {"type": "string", "description": "Name of the object to pick up."},
-                    "receptacle_name": {
-                        "type": "string",
-                        "description": "Name of the receptacle or surface to place it on.",
-                    },
-                },
-                "required": ["object_name", "receptacle_name"],
-            },
-            func=pick_place,
-            returns_info=True,
-        )
-    )
-    tools.append(
-        Tool(
-            name="plan_pick_place",
-            description=(
-                "Plan, but do not execute, a pick-and-place task. Prefer a semantic task_ref from "
-                "scene_tasks; otherwise provide object_name and receptacle_name."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "task_ref": {"type": "string", "description": "Semantic task handle from scene_tasks."},
-                    "object_name": {"type": "string", "description": "Object name if no task_ref is supplied."},
-                    "receptacle_name": {
-                        "type": "string",
-                        "description": "Receptacle name if no task_ref is supplied.",
-                    },
-                },
-                "required": [],
-            },
-            func=plan_pick_place,
-            returns_info=True,
-        )
-    )
-    tools.append(
-        Tool(
-            name="execute_pick_place_plan",
-            description=(
-                "Execute a plan_ref returned by plan_pick_place after rechecking the live scene. "
-                "Plans are one-shot and stale plans are refused."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "plan_ref": {"type": "string", "description": "Opaque plan handle from plan_pick_place."}
-                },
-                "required": ["plan_ref"],
-            },
-            func=execute_pick_place_plan,
-            returns_info=True,
-        )
-    )
-
-    @json_tool
-    def set_receptacle_state(task_ref: str, state: str) -> dict:
-        native_error = _native_input_gate()
-        if native_error:
-            return response("set_receptacle_state", code=native_error)
-        if _tamp_manip_mode().strip().lower() == "physical":
-            return response("set_receptacle_state", code="native_articulation_unavailable")
-        from emet.controller.task.tamp.articulation import set_receptacle_state as apply_state
-
-        return apply_state(_tamp_robot(), context, task_ref, state)
-
-    tools.append(
-        Tool(
-            name="set_receptacle_state",
-            description="Simulator-assisted open/close of the receptacle selected by task_ref. "
-            "Teleports one supported joint; verifies state and refreshes geometry. "
-            "No physical manipulation or door-sweep collision guarantee. Replan afterward.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
-                    "state": {"type": "string", "enum": ["open", "closed"]},
-                },
-                "required": ["task_ref", "state"],
-            },
-            func=set_receptacle_state,
-            returns_info=True,
-        )
-    )
-
-    # -- scene_tasks ----------------------------------------------------------
-    @json_tool
-    def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
-        """Enumerate pick-and-place options from the current scene as a compact digest."""
-        session = context.get("tamp_task_session")
-        if session is not None:
-            return session.discover(object_filter, robot)
-        if _tamp_manip_mode().strip().lower() == "physical":
-            executor = context.get("executor")
-            inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
-            if inputs == "observed":
-                from emet.controller.task.tamp.observed_discovery import discover_observed_tasks
-
-                return discover_observed_tasks(context.get("observed_tamp_provider"), object_filter, robot)
-        native_error = _native_input_gate()
-        if native_error:
-            return response("scene_tasks", code=native_error)
-        if _tamp_manip_mode().strip().lower() == "physical":
-            return _native_adapter().discover(object_filter, robot)
-        from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
-        from emet.eval.scene_task_extractor import (
-            default_molmospaces_scenes_dir,
-            emit_tasks,
-            load_scene_metadata,
-            pickable_objects,
-            receptacle_objects,
-            resolve_scene_metadata_for_session,
-            scene_objects,
-        )
-
-        scene_dir = default_molmospaces_scenes_dir()
-        ithor = scene_dir / "ithor"
-        executor = context.get("executor")
-        robot_obj = context.get("robot") or (getattr(executor, "robot", None) if executor is not None else None)
-        session = (
-            robot_obj.get_emet_session() if robot_obj is not None and hasattr(robot_obj, "get_emet_session") else None
-        )
-        live_sim = isinstance(session, dict) and bool(session.get("is_simulation"))
-        if live_sim:
-            from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
-
-            placements = read_sim_object_placements(session) or {}
-        else:
-            placements = {}
-        from emet.controller.task.tamp.agent_bridge import robot_session_key
-
-        session_key = robot_session_key(robot_obj)
-        active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
-        candidates = (
-            [active_metadata]
-            if active_metadata is not None
-            else ([] if live_sim else (sorted(ithor.glob("*_physics_metadata.json")) if ithor.is_dir() else []))
-        )
-        if not candidates:
-            stable_scene_task_refs(context, [], {}, session_key=session_key)
-            return response("scene_tasks", code="metadata_unavailable")
-        metadata = load_scene_metadata(candidates[0])
-        objs = scene_objects(metadata)
-        picks = pickable_objects(objs)
-        recepts = receptacle_objects(objs)
-        tasks = emit_tasks(objs, sim="configs/sim/molmospaces_ithor_train_0.yaml")
-        filt = (object_filter or "").strip().lower()
-        if filt:
-            tasks = [t for t in tasks if filt in t.object]
-        task_refs = stable_scene_task_refs(
-            context,
-            tasks,
-            placements,
-            session_key=session_key,
-        )
-
-        reachability = None
-        reachability_status = "not_requested"
-        rid = (robot or "").strip().lower()
-        if rid:
-            try:
-                from emet.eval.scene_task_extractor import compute_reachability_priors
-
-                def _pose(body: str) -> np.ndarray:
-                    info = placements.get(body)
-                    if info is None and body.endswith("_1_1_0"):
-                        info = placements.get(body[: -len("_1_1_0")] + "_1_0_0")
-                    pos = (info or {}).get("pos")
-                    return np.asarray(pos, dtype=float).reshape(3) if pos is not None else np.zeros(3)
-
-                priors = compute_reachability_priors(
-                    objs, robot_id=rid, arm="left", **({"object_pose_fn": _pose} if placements else {})
-                )
-                reachability = {
-                    "robot": rid,
-                    "source": "sim_placements" if placements else "zero_pose_proxy",
-                    "reachable_categories": sorted({r.category for r in priors.values() if r.reachable}),
+    # -- current-view object geometry ----------------------------------------
+    def ground_object(query: str) -> dict:
+        """Ground the decision RGB-D snapshot without moving; return geometry or explicit abstention."""
+        agent = _agent_from_context(context)
+        ground = getattr(agent, "ground_current_view", None)
+        if not callable(ground):
+            return {"ok": False, "status": "unavailable", "note": "Current-view RGB-D grounding is unavailable."}
+        if "decision_observation" in context:
+            observation = context["decision_observation"]
+            if observation is None:
+                agent._grounded_query_target = None
+                return {
+                    "ok": False,
+                    "status": "observation_unavailable",
+                    "note": "No camera view attached for this decision.",
                 }
-                reachability_status = "evaluated"
-            except Exception:
-                reachability_status = "unavailable"
-        from emet.simulation.articulation import articulation_access
+            result = ground(query, observation=observation, decision_view=context["decision_view"])
+        else:
+            result = ground(query)
+        return {**result, "note": result.get("reason") or "Object geometry admitted from the captured RGB-D view."}
 
-        return response(
-            "scene_tasks",
-            data={
-                "tasks": [
-                    {
-                        "task_ref": ref.ref,
-                        "object_name": ref.object_query,
-                        "receptacle_name": ref.receptacle_query,
-                        "start_receptacle": ref.start_receptacle,
-                        "access": articulation_access(session if live_sim else {}, ref.receptacle_body),
-                    }
-                    for ref in task_refs
-                ],
-                "pickable_categories": sorted({p.category for p in picks}),
-                "receptacle_categories": sorted({r.category for r in recepts}),
-                "reachability": reachability,
-                "reachability_status": reachability_status,
-            },
-        )
-
-    tools.append(
-        Tool(
-            name="scene_tasks",
-            description=(
-                "Enumerate candidate pick-and-place tasks from the configured input provider. "
-                "Observed discovery_only proposals do not enable planning or execution."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "object_filter": {
-                        "type": "string",
-                        "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
-                    },
-                    "robot": {
-                        "type": "string",
-                        "description": "Optional robot id (e.g. 'sourccey', 'rby1') to also report which objects its arm can reach.",
-                    },
-                },
-                "required": [],
-            },
-            func=scene_tasks,
-            returns_info=True,
-        )
-    )
-
-    # Multi-step tools remain unavailable until a qualified provider is bound.
-    # Looking it up at call time keeps tool registration free of runtime/model IO.
-    @json_tool
-    def plan_task(instruction: str, strategy: str = "beam") -> dict:
-        from emet.controller.task.tamp.api import response
-
-        session = context.get("tamp_task_session")
-        if session is None:
-            return response("plan_task", code="task_provider_unavailable")
-        return session.plan(instruction, strategy)
-
-    @json_tool
-    def execute_task_plan(plan_ref: str) -> dict:
-        from emet.controller.task.tamp.api import response
-
-        session = context.get("tamp_task_session")
-        if session is None:
-            return response("execute_task_plan", code="task_provider_unavailable")
-        return session.execute(plan_ref)
-
-    from emet.agent.skills.specs import CHAT_SKILL_SPECS
-
-    for name, func in (("plan_task", plan_task), ("execute_task_plan", execute_task_plan)):
-        spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == name)
-        tools.append(
-            Tool(name=name, description=spec.description, parameters=spec.parameters, func=func, returns_info=True)
-        )
+    tools.append(_bind("ground_object", func=ground_object))
 
     # -- find_objects --------------------------------------------------------
-    def find_objects(text: str) -> str:
+    def find_objects(text: str) -> dict:
+        """Run object search/approach and return task success separately from executor continuation."""
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([("find", text)])
+            return {"ok": False, "status": "unavailable", "note": "Robot not connected."}
+        keep_going = executor([("find", text)])
+        task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
-        head = format_nav_outcome_head(outcome, ok=ok, verb="Find")
+        head = format_nav_outcome_head(outcome, ok=task_ok, verb="Find")
         parts = [head]
         if text:
             parts.append(f"Query={text!r}.")
@@ -1069,38 +597,40 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "Do not immediately re-call find_objects; ask the user or use "
                 "navigation_diagnostics / send_map_snapshot / scan_environment first."
             )
-        return " ".join(parts)
+        return {
+            "ok": task_ok,
+            "status": outcome or ("ok" if task_ok else "failed"),
+            "note": " ".join(parts),
+            "navigation": navigation_feedback(agent),
+        }
 
-    tools.append(
-        Tool(
-            name="find_objects",
-            description=(
-                "Find and navigate to an object or location by name. Returns last-plan summary "
-                "(localize source, waypoints, min clearance) and outcomes such as user_cancelled / "
-                "aborted_waypoint_timeout / rejected_low_clearance when --confirm-nav or safety filters fire. "
-                "On cancel/abort/reject, do not blindly retry — use navigation_diagnostics or ask the user."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {"text": {"type": "string", "description": "Object or location name to find."}},
-                "required": ["text"],
-            },
-            func=find_objects,
-            executor_commands=lambda args: [("find", args.get("text", ""))],
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("find_objects", func=find_objects))
 
     # -- describe_scene ------------------------------------------------------
-    def describe_scene() -> str:
+    def describe_scene(pan_rad=None, tilt_rad=None):
+        """Caption without motion, or request measured head gaze and return its capture receipt."""
         robot = context.get("robot")
         executor = context.get("executor")
+        if pan_rad is not None or tilt_rad is not None:
+            from emet.agent.tool_outcome import ToolOutcome
+            from emet.controller.dynamem.head_observation import capture_head_view
+
+            agent = _agent_from_context(context)
+            if agent is None:
+                return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+            receipt, obs = capture_head_view(agent, pan_rad=pan_rad, tilt_rad=tilt_rad)
+            if receipt["ok"]:
+                stash_discord_image(context, np.asarray(obs.rgb).copy())
+            return ToolOutcome.from_eqa_dict("describe_scene", receipt)
         if robot is None or not hasattr(robot, "get_observation"):
             return "No robot view available."
         obs = robot.get_observation()
         if obs is None or getattr(obs, "rgb", None) is None:
             return "No current image."
-        live_rgb = np.asarray(obs.rgb).copy()
+        from emet.agent.camera_snapshot import camera_snapshot
+
+        obs, _identity = camera_snapshot(obs)
+        live_rgb = np.asarray(obs.rgb)
         agent = getattr(executor, "agent", None) if executor is not None else None
         if agent is None or not hasattr(agent, "describe_head_camera_scene_text"):
             stash_discord_image(context, live_rgb)
@@ -1109,15 +639,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "a photo is attached when Discord is connected."
             )
         text = agent.describe_head_camera_scene_text(
+            observation=obs,
             graph_memory=context.get("graph_memory"),
             memory_backend=context.get("memory_backend"),
             graph_memory_backend=context.get("graph_memory_backend"),
         )
-        # Always attach the *live* head camera for "what can you see" — graph crops are for
-        # send_object_image, not scene description (crops of walls/wrong nodes confuse users).
-        obs2 = robot.get_observation()
-        if obs2 is not None and getattr(obs2, "rgb", None) is not None:
-            live_rgb = np.asarray(obs2.rgb).copy()
+        # Caption and delivery refer to the same owned observation. A later live
+        # frame cannot silently replace the image described by the model.
         image = live_rgb
         if image is not None:
             print_camera_frame_diagnostics(
@@ -1133,68 +661,24 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             text = f"{text}\n[{gsize}]"
         return text
 
-    tools.append(
-        Tool(
-            name="describe_scene",
-            description=(
-                "Caption what is in front of the robot *right now* (live head camera) and optionally "
-                "ground with known scene-graph / map labels. Does NOT move or reorient the robot — "
-                "this alone is not a 'closer look'. For 'are you sure' / 'look closer' / confirm, "
-                "first call rotate_base / move_forward / scan_environment (as allowed), then this tool. "
-                "Queues the live head-camera photo for Discord (not an object crop; use send_object_image "
-                'for that). Use an empty JSON "message" on the tool-call turn so chat/Discord only show '
-                "your answer after [Tool results]."
-            ),
-            parameters=_NO_PARAMS,
-            func=describe_scene,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("describe_scene", func=describe_scene))
 
     # -- say -----------------------------------------------------------------
     tools.append(
-        Tool(
-            name="say",
-            description="Speak text to the user via TTS (text-to-speech). Use to announce what you are doing.",
-            parameters={
-                "type": "object",
-                "properties": {"text": {"type": "string", "description": "The message to speak aloud."}},
-                "required": ["text"],
-            },
-            func=lambda text: _exec("say", text),
-            executor_commands=lambda args: [("say", args.get("text", ""))],
+        _bind(
+            "say", func=lambda text: _exec("say", text), executor_commands=lambda args: [("say", args.get("text", ""))]
         )
     )
 
     # -- emotes and gestures -------------------------------------------------
-    for cmd, desc in [
-        ("wave", "Wave at a person (e.g. when greeting or saying goodbye)."),
-        ("nod_head", "Nod the robot's head (e.g. to indicate yes or agreement)."),
-        ("shake_head", "Shake the robot's head (e.g. to indicate no or disagreement)."),
-        ("avert_gaze", "Avert the robot's gaze (look away)."),
-    ]:
-        tools.append(
-            Tool(
-                name=cmd,
-                description=desc,
-                parameters=_NO_PARAMS,
-                func=lambda _cmd=cmd: _exec(_cmd, ""),
-                executor_commands=_simple_exec_mapping(cmd),
-            )
-        )
+    for cmd in ("wave", "nod_head", "shake_head", "avert_gaze"):
+        tools.append(_bind(cmd, func=lambda _cmd=cmd: _exec(_cmd, ""), executor_commands=_simple_exec_mapping(cmd)))
 
     # -- navigation ----------------------------------------------------------
-    tools.append(
-        Tool(
-            name="go_home",
-            description="Navigate the robot back to its starting position. Requires a map from prior exploration.",
-            parameters=_NO_PARAMS,
-            func=lambda: _exec("go_home", ""),
-            executor_commands=_simple_exec_mapping("go_home"),
-        )
-    )
+    tools.append(_bind("go_home", func=lambda: _exec("go_home", ""), executor_commands=_simple_exec_mapping("go_home")))
 
     def observe_floor(pan_rad=None, tilt_rad=-1.0, target_blocker=False):
+        """Inspect downward RGB-D and recheck the rejected footprint, restoring the prior task view."""
         from emet.agent.tool_outcome import ToolOutcome
         from emet.controller.dynamem.look import inspect_floor as capture_floor
 
@@ -1205,48 +689,34 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             "observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker)
         )
 
-    from emet.agent.skills.specs import CHAT_SKILL_SPECS
+    tools.append(_bind("observe_floor", func=observe_floor))
 
-    floor_spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == "observe_floor")
-    tools.append(
-        Tool(
-            name=floor_spec.name,
-            description=floor_spec.description,
-            parameters=floor_spec.parameters,
-            func=observe_floor,
-            returns_info=True,
-        )
-    )
-
-    def scan_environment() -> str:
+    def scan_environment() -> ToolOutcome:
+        """Run an in-place survey and return map/plan feedback; base rotation is possible."""
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([("rotate_in_place", "")])
-        if not ok:
-            return "Scan interrupted or failed."
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.", tool="scan_environment")
+        keep_running = executor([("rotate_in_place", "")])
+        task_ok = keep_running and bool(getattr(executor, "_last_exec_ok", True))
+        if not task_ok:
+            return ToolOutcome(False, status="failed", note="Scan interrupted or failed.", tool="scan_environment")
         gsize = _graph_size_line(context)
         if gsize:
             _logger.info(gsize)
-            return f"Completed in-place ≈360° scan; map/memory updated. [{gsize}]"
-        return "Completed in-place ≈360° scan; map/memory updated."
-
-    tools.append(
-        Tool(
-            name="scan_environment",
-            description=(
-                "Rotate in place through a full ≈360° scan to update the map and save memory. "
-                "Use for 'look around', 'scan the room', or a full in-place survey — not for a single "
-                "turn (use rotate_base) or a short drive (use move_forward). "
-                "After scanning, you may call describe_scene to report the new view."
-            ),
-            parameters=_NO_PARAMS,
-            func=scan_environment,
-            returns_info=True,
+            return ToolOutcome(
+                True,
+                status="completed",
+                note=f"Completed in-place ≈360° scan; map/memory updated. [{gsize}]",
+                tool="scan_environment",
+            )
+        return ToolOutcome(
+            True, status="completed", note="Completed in-place ≈360° scan; map/memory updated.", tool="scan_environment"
         )
-    )
+
+    tools.append(_bind("scan_environment", func=scan_environment))
 
     def rotate_base(degrees: float = 90.0) -> str | dict:
+        """Request relative yaw in degrees; prefer validated motion and retain measured feedback."""
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -1279,37 +749,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         context["last_rotate_degrees"] = deg
         return f"Rotated about {deg:.0f}° in place."
 
-    tools.append(
-        Tool(
-            name="rotate_base",
-            description=(
-                "Rotate the wheeled base in place by a relative yaw in degrees (positive = left/CCW, "
-                "negative = right/CW). Pass an explicit angle: turn around → 180, turn right → -90, "
-                "turn left → 90, slight turn → ±30–45. "
-                "'rotate back' / 'turn back' means NEGATE the previous rotate (e.g. after +45 use -45) "
-                "— NOT 180 (that is 'turn around'). "
-                "For 'look at / face / go toward X' when you have a named object, prefer face_toward."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "degrees": {
-                        "type": "number",
-                        "description": "Relative yaw in degrees (e.g. 180, -90, 45, or -last for 'back').",
-                    }
-                },
-                "required": ["degrees"],
-            },
-            func=rotate_base,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("rotate_base", func=rotate_base))
 
-    def face_toward(object_label: str) -> str:
+    def face_toward(object_label: str) -> str | dict:
         """Yaw in place to face a scene-graph / voxel object (no XY drive)."""
         import math
 
         from emet.agent.face_toward import resolve_object_xy, yaw_to_face_xy
+        from emet.agent.tool_outcome import ToolOutcome
+        from emet.utils.geometry import nav_xyt_to_world_xyt
 
         executor = context.get("executor")
         robot = context.get("robot")
@@ -1327,52 +775,38 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             )
         try:
             pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            planning_pose = getattr(agent, "_planning_base_xyt", None)
+            if callable(planning_pose):
+                pose = np.asarray(planning_pose(pose), dtype=np.float64).reshape(-1)
+            else:
+                session_reader = getattr(robot, "get_emet_session", None)
+                pose = nav_xyt_to_world_xyt(pose, session_reader() if callable(session_reader) else None)
         except Exception as e:
-            return f"Could not read base pose: {e}"
-        if pose.size < 3:
-            return "Base pose incomplete."
+            return {"ok": False, "status": "base_pose_unavailable", "note": str(e)}
+        if pose.size < 3 or not np.isfinite(pose[:3]).all():
+            return {"ok": False, "status": "base_pose_unavailable", "note": "Base pose incomplete or nonfinite."}
         delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
         deg = float(math.degrees(delta_rad))
         if abs(deg) < 3.0:
-            msg = f"Already roughly facing {label!r} ({source})."
-        else:
-            deg = float(np.clip(deg, -180.0, 180.0))
-            ok = executor([("rotate_base", str(deg))])
-            if not ok:
-                return f"Tried to face {label!r} ({source}) but rotate failed."
-            context["last_rotate_degrees"] = deg
-            msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+            msg = f"Already roughly facing the search location for {label!r} ({source})."
+            hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
+            return f"{msg} {hint}".strip()
+        deg = float(np.clip(deg, -180.0, 180.0))
+        turn = ToolOutcome.coerce("rotate_base", rotate_base(deg))
+        msg = (
+            f"Measured turn reached {deg:+.0f}° toward the search location for {label!r} ({source})."
+            if turn.ok
+            else f"Turn toward the search location for {label!r} ({source}) did not complete."
+        )
         hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
         if hint:
             msg = f"{msg} {hint}"
-        return msg
+        return {"ok": turn.ok, "status": turn.status, "note": msg, "navigation": turn.to_dict()}
 
-    tools.append(
-        Tool(
-            name="face_toward",
-            description=(
-                "Rotate in place to face a named object from the scene graph / map "
-                "(computes yaw toward its remembered XY). Use for 'look at the aquarium', "
-                "'face the shelf', 'turn toward the TV'. Does NOT drive closer — follow with "
-                "describe_scene. Prefer this over a blind rotate_base(±45) when the object is known. "
-                "If the object is unknown, fall back to rotate_base or ask."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "object_label": {
-                        "type": "string",
-                        "description": "Object name to face (e.g. aquarium, shelf, cardboard box).",
-                    }
-                },
-                "required": ["object_label"],
-            },
-            func=face_toward,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("face_toward", func=face_toward))
 
     def move_forward(meters: float = 0.1) -> str | dict:
+        """Request bounded forward travel in meters, retaining clearance and measured-progress failures."""
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -1409,39 +843,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return "Move forward failed or interrupted."
         return f"Moved forward (requested {dist:.2f} m; map-clipped by the controller if needed)."
 
-    tools.append(
-        Tool(
-            name="move_forward",
-            description=(
-                "Drive the base forward along its current heading by approximately *meters*. "
-                "Uses the 2D map (including a local_radius explored disk around the base when "
-                "depth is still empty): shortens or refuses if blocked or the path leaves "
-                "explored space. If refused, ask the user whether to scan_environment / "
-                "rotate_base — do NOT auto-scan. If the user did not say how far, do NOT call "
-                "this tool — ask how far first. Use meters=0.1 for 'a bit' / 'a little' / "
-                "'nudge'; ~0.5 for half a meter; ~1.0 for a meter. Cap near 1.5 m. "
-                "Do not use for turning (use rotate_base)."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "meters": {
-                        "type": "number",
-                        "description": (
-                            "Forward distance in meters (required). "
-                            "0.1 for a small nudge / 'a bit'; 0.5 for half a meter; 1.0 for a meter."
-                        ),
-                    }
-                },
-                "required": ["meters"],
-            },
-            func=move_forward,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("move_forward", func=move_forward))
 
     # -- camera --------------------------------------------------------------
-    def take_picture() -> str:
+    def take_picture() -> ToolOutcome:
+        """Capture the head view locally through the executor; no remote delivery is promised."""
         executor = context.get("executor")
         robot = context.get("robot")
         if executor is not None:
@@ -1452,23 +858,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             if obs is not None and getattr(obs, "rgb", None) is not None:
                 image = np.asarray(obs.rgb).copy()
         if stash_discord_image(context, image):
-            return "Head-camera photo queued for Discord."
-        return "Took a head-camera picture locally (no frame to attach)."
-
-    tools.append(
-        Tool(
-            name="take_picture",
-            description=(
-                "Capture the head camera locally. Prefer send_image or describe_scene when the user "
-                "should see or hear a description — those attach a photo / caption to Discord."
-            ),
-            parameters=_NO_PARAMS,
-            func=take_picture,
-            returns_info=True,
+            return ToolOutcome(
+                True, status="captured", note="Head-camera photo queued for Discord.", tool="take_picture"
+            )
+        return ToolOutcome(
+            False,
+            status="observation_unavailable",
+            note="No head-camera frame is available; local capture is unverified.",
+            tool="take_picture",
         )
-    )
+
+    tools.append(_bind("take_picture", func=take_picture))
 
     def take_ee_picture():
+        """Capture wrist RGB only after a successful arm aim in this session."""
         from emet.agent.tool_outcome import ToolOutcome
         from emet.controller.manipulation.closer_look import consume_closer_look_aim_for_ee_picture
 
@@ -1513,24 +916,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             payload={"action_kind": "closer_look", "phrase": phrase, "queued": False},
         )
 
-    tools.append(
-        Tool(
-            name="take_ee_picture",
-            description=(
-                "Capture the wrist/end-effector camera after aim_arm_at in this session "
-                "(no further arm motion). Requires a prior aim: successful aim grants one capture; "
-                "if aim returns not_implemented (no kinematic stack), one soft-allow capture is ok. "
-                "Prefer face_toward + describe_scene (head camera) when the wrist stream is dark."
-            ),
-            parameters=_NO_PARAMS,
-            func=take_ee_picture,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("take_ee_picture", func=take_ee_picture))
 
     # -- arm aim / closer look -----------------------------------------------
     def aim_arm_at(object_label: str):
         # See docs/attempt_ledger.md and plans/2026-08-08_embodied_agent_planning.md Phase 3.
+        """Aim the wrist at a localized target when supported and retain success for wrist capture."""
         from emet.controller.manipulation.closer_look import aim_wrist_at_phrase, record_closer_look_aim
 
         agent = _agent_from_context(context)
@@ -1552,51 +943,19 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         record_closer_look_aim(result, agent=agent, context=context)
         return result.to_tool_outcome()
 
-    tools.append(
-        Tool(
-            name="aim_arm_at",
-            description=(
-                "Point the arm / wrist camera at a named object (localize + kinematic EE aim when "
-                "available). On success you may call take_ee_picture once. If aim fails or is "
-                "unavailable, prefer face_toward + describe_scene (head camera) instead of claiming "
-                "a closer look."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "object_label": {
-                        "type": "string",
-                        "description": "Object or region to aim at (e.g. cables, red cup).",
-                    }
-                },
-                "required": ["object_label"],
-            },
-            func=aim_arm_at,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("aim_arm_at", func=aim_arm_at))
 
     # -- manipulation --------------------------------------------------------
     tools.append(
-        Tool(
-            name="hand_over",
-            description="Hand the held object to a person (find person, navigate, extend arm).",
-            parameters=_NO_PARAMS,
-            func=lambda: _exec("hand_over", ""),
-            executor_commands=_simple_exec_mapping("hand_over"),
-        )
+        _bind("hand_over", func=lambda: _exec("hand_over", ""), executor_commands=_simple_exec_mapping("hand_over"))
     )
 
     # -- query_scene_graph (GraphEQA + open-vocab fallback) -------------------
     def query_scene_graph(question: str) -> str:
-        gmb = context.get("graph_memory_backend")
-        if gmb is not None and hasattr(gmb, "query_answer"):
-            try:
-                xyt = context.get("xyt_for_query")
-                planner = context.get("planner")
-                return _graph_eqa_tool_string(gmb.query_answer(question, xyt, planner))
-            except Exception as e:
-                _logger.warning(f"query_scene_graph graph backend failed: {e}")
+        """Ask configured graph EQA or return the open-vocabulary graph fallback."""
+        graph_answer = _query_graph_backend(question, caller="query_scene_graph")
+        if graph_answer is not None:
+            return graph_answer
         executor = context.get("executor")
         if executor is not None and hasattr(executor, "agent"):
             sg = executor.agent.get_voxel_map().get_scene_graph()
@@ -1604,28 +963,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 return f"[Open-vocab scene graph snapshot]\n{sg.to_string()}\n(User question was: {question})"
         return "No graph memory or open-vocab scene graph available yet; explore or scan first."
 
-    tools.append(
-        Tool(
-            name="query_scene_graph",
-            description=(
-                "Embodied where/what questions using GraphEQA (objects, 3D positions) when enabled. "
-                "Returns Answer / Location / Confidence for the user (not internal image ids). "
-                "Otherwise dumps the open-vocab spatial scene graph. Prefer for 'where is', 'what color', 'is there'."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "Natural language question about the scene graph / objects.",
-                    },
-                },
-                "required": ["question"],
-            },
-            func=query_scene_graph,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("query_scene_graph", func=query_scene_graph))
 
     def list_scene_relations() -> str:
         """Prefer Dynagraph / GraphEQAMemory; fall back to open-vocab only if that is empty."""
@@ -1678,22 +1016,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             "that includes graph.json (dynagraph) or open_vocab_scene_graph/."
         )
 
-    tools.append(
-        Tool(
-            name="list_scene_relations",
-            description=(
-                "List objects and spatial relations (near, on, on_floor, supports). "
-                "Uses the Dynagraph / GraphEQA memory plug-in when present; otherwise the "
-                "open-vocab scene graph. Use for 'what objects are in the room' and "
-                "structured connectivity questions."
-            ),
-            parameters=_NO_PARAMS,
-            func=list_scene_relations,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("list_scene_relations", func=list_scene_relations))
 
     def send_object_image(object_label: str) -> str:
+        """Queue a stored object crop by label; this does not capture a current camera view."""
         executor = context.get("executor")
         if executor is None or not hasattr(executor, "agent"):
             return "Robot not connected."
@@ -1713,65 +1039,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return f"Crop available for {object_label!r} (no Discord to send to)."
         return f"Object {object_label!r} has no stored crop image yet."
 
-    tools.append(
-        Tool(
-            name="send_object_image",
-            description=(
-                "Send the robot's last stored crop image for a named object from the open-vocab scene graph "
-                "(not the live camera). Use after the object has been observed while mapping."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "object_label": {"type": "string", "description": "Object name or label (e.g. red cylinder)."},
-                },
-                "required": ["object_label"],
-            },
-            func=send_object_image,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("send_object_image", func=send_object_image))
 
     # -- quit ----------------------------------------------------------------
-    tools.append(
-        Tool(
-            name="quit",
-            description="End the conversation and stop the robot. Use when the user says goodbye or asks to stop.",
-            parameters=_NO_PARAMS,
-            func=lambda: None,
-            executor_commands=_simple_exec_mapping("quit"),
-        )
-    )
+    tools.append(_bind("quit", func=lambda: None, executor_commands=_simple_exec_mapping("quit")))
 
-    from emet.agent.skills.specs import CHAT_EXCLUSIVE_TOOL_NAMES, CHAT_SKILL_SPECS
-
-    by_name = {s.name: s for s in CHAT_SKILL_SPECS}
     registered = {t.name for t in tools}
     expected = set(CHAT_EXCLUSIVE_TOOL_NAMES)
     if registered != expected:
         missing = sorted(expected - registered)
         extra = sorted(registered - expected)
         raise RuntimeError(f"CHAT tool pack drift vs CHAT_SKILL_SPECS: missing={missing} extra={extra}")
-    for t in tools:
-        spec = by_name[t.name]
-        t.description = spec.description
-        t.parameters = spec.parameters
-        t.returns_info = spec.returns_info
-
     if env_base_rotate_only():
         # Keep tool names in the pack so the LLM does not invent calls; stubs return a clear refusal.
-        blocked = frozenset(
-            {
-                "explore",
-                "find_objects",
-                "move_forward",
-                "go_home",
-                "pick_place",
-                "execute_pick_place_plan",
-                "execute_task_plan",
-                "hand_over",
-            }
-        )
+        from emet.agent.tool_policy import ROTATE_ONLY_BLOCKED_TOOLS
+        from emet.controller.task.tamp.api import TAMP_TOOLS, response
+
+        blocked = ROTATE_ONLY_BLOCKED_TOOLS
         stub_msg = (
             "I can't drive or translate right now (EMET_BASE_ROTATE_ONLY — tethered / plugged in). "
             "I can rotate in place, scan the room, or describe what I see. "
@@ -1779,8 +1063,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
 
         def _make_stub(orig: Tool) -> Tool:
-            def _fn(**_kwargs: Any) -> str:
-                return stub_msg
+            def _fn(**_kwargs: Any) -> ToolOutcome:
+                if orig.name in TAMP_TOOLS or orig.name in {"rotate_base", "move_forward"}:
+                    envelope = response(orig.name, code="base_rotate_only", recovery="none")
+                    envelope["message"] = stub_msg
+                    return ToolOutcome.from_versioned_result(orig.name, envelope)
+                return ToolOutcome(False, status="base_rotate_only", tool=orig.name, note=stub_msg)
 
             return Tool(
                 name=orig.name,
@@ -1828,19 +1116,3 @@ def get_tool_schemas_for_llm(context: dict[str, Any] | None = None) -> list[dict
     if context is None:
         context = {}
     return [t.schema() for t in get_tools(context)]
-
-
-def get_tool_descriptions_for_prompt(tools: list[Tool]) -> str:
-    """Build a compact tools block for the system prompt from Tool objects."""
-    lines = ["TOOLS (use these names in tool_calls):"]
-    for t in tools:
-        props = t.parameters.get("properties", {})
-        if props:
-            arg_names = ", ".join(props.keys())
-            lines.append(f"- {t.name}({arg_names}): {t.description}")
-            # Local text-only clients do not receive the separate API tools
-            # parameter. Preserve types, optionality, nested bounds and meanings.
-            lines.append("  Arguments (JSON Schema): " + json.dumps(t.parameters, separators=(",", ":")))
-        else:
-            lines.append(f"- {t.name}(): {t.description}")
-    return "\n".join(lines)

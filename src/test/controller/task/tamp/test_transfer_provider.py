@@ -14,6 +14,20 @@ from emet.controller.task.tamp.task_session import TaskExecutionResult, TaskSess
 from emet.controller.task.tamp.transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
 
 
+@pytest.mark.parametrize('reason,expected', [
+    ('object_pose_ambiguous', 'object_pose_ambiguous'),
+    ('task_object_not_settled_on_support', 'task_object_not_settled_on_support'),
+    ('robot_material_identity_changed', 'robot_material_identity_changed'),
+    ('object_observation_stale', 'stale_observation'),
+    ('private model/path detail', 'observation_unavailable'),
+])
+def test_observation_failures_keep_only_public_actionable_codes(reason, expected):
+    from emet.controller.manipulation.native_inputs import ObservationUnavailable
+    from emet.controller.task.tamp.task_session import provider_failure_code
+
+    assert provider_failure_code(ObservationUnavailable(reason)) == expected
+
+
 def make_domain(*, lie=False):
     regions = tuple(TransferRegion(name, ((i*2., 0.), (i*2.+1., 1.)))
                     for i, name in enumerate(('left', 'right', 'buffer')))
@@ -165,10 +179,89 @@ def test_second_preflight_failure_preserves_step_number():
     assert result['data']['completed_steps'] == 1
     assert result['data']['failed_step_1based'] == 2
     assert result['data']['failed_phase'] == 'preflight'
+    assert result['data']['failed_step_execution_started'] is False
+    assert result['data']['plan_consumed'] is True
+    assert result['data']['goal_verified'] is False
+    assert len(result['data']['completed_actions']) == 1
+    assert result['data']['completed_actions'][0]['step_1based'] == 1
+    assert result['data']['failed_action']['step_1based'] == 2
+    assert result['data']['unverified_actions'][0] == result['data']['failed_action']
+    assert all('ref' not in row for row in result['data']['unverified_actions'])
+    assert session.execute(ref)['code'] == 'unknown_plan'
 
 
-def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog):
+def test_named_partial_feedback_uses_public_roles_and_only_verified_actions():
+    domain, _, calls = make_domain()
+    original = domain.transfer
+    def transfer(obj, region):
+        return original(obj, region) if not calls else TaskExecutionResult(False, False, 'task_motion_budget_exhausted')
+    domain.transfer = transfer
+    session = TaskSession(domain)
+    plan = session.plan('swap alpha and beta')
+    detail = plan['data']['step_details']
+    result = session.execute(plan['data']['plan_ref'])
+    assert result['data']['completed_actions'] == detail[:1]
+    assert result['data']['failed_action'] == detail[1]
+    assert result['data']['unverified_actions'] == detail[1:]
+    assert detail[0]['object_name'] in {'alpha', 'beta'}
+    assert set(detail[0]) == {'step_1based','action','object_name','from_region','to_region'}
+    assert 'transfer:' not in json.dumps(detail)
+
+
+def test_possible_dispatch_is_distinct_from_earlier_completed_work():
+    domain, _, calls = make_domain()
+    original = domain.transfer
+    def transfer(obj, region):
+        if not calls:
+            return original(obj, region)
+        raise TimeoutError('possible dispatch')
+    domain.transfer = transfer
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    result = session.execute(ref)
+    assert result['data']['failed_step_execution_started'] is True
+    assert result['data']['failed_phase'] == 'execution'
+    assert len(result['data']['completed_actions']) == 1
+
+
+def test_public_plan_description_cannot_mutate_stored_feedback():
+    domain, _, _ = make_domain()
+    session = TaskSession(domain)
+    plan = session.plan('swap alpha and beta')
+    plan['data']['step_details'][0]['object_name'] = 'tampered'
+    result = session.execute(plan['data']['plan_ref'])
+    assert result['status'] == 'ok'
+    assert result['data']['completed_actions'][0]['object_name'] != 'tampered'
+
+
+def test_invalid_public_step_description_rejects_before_commands():
+    domain, _, calls = make_domain()
+    domain.describe_operator = lambda op: {'private_body_id': 'secret-path'}
+    result = TaskSession(domain).plan('swap alpha and beta')
+    assert result['status'] == 'error' and not calls
+    assert 'secret-path' not in json.dumps(result)
+
+
+def test_connected_robot_selector_is_accepted_but_cross_robot_and_filters_reject():
+    domain, _, _ = make_domain()
+    domain.robot_name = 'stretch'
+    session = TaskSession(domain)
+    assert session.discover(robot='stretch')['status'] == 'ok'
+    assert session.discover(robot='rby1')['code'] == 'task_filter_unsupported'
+    assert session.discover(object_filter='alpha')['code'] == 'task_filter_unsupported'
+
+
+def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog, monkeypatch):
+    import logging
+
     import numpy as np
+    # Application logging initialized by other suites can stop propagation.
+    # Isolate this capture without changing production logger configuration.
+    logger = logging.getLogger("emet.controller.task.tamp.native_transfer")
+    monkeypatch.setattr(logger, "handlers", [caplog.handler])
+    monkeypatch.setattr(logger, "propagate", False)
+    monkeypatch.setattr(logger, "disabled", False)
+    caplog.set_level(logging.WARNING, logger=logger.name)
     domain, _ = native_probe_domain()
     domain.diagnostic_state = True
     domain.adapter.signature = 'a'*64
@@ -270,6 +363,43 @@ def test_native_transfer_preserves_adapter_failure_code():
                                          'data': {'execution_started': True}}
     result = domain._transfer_native('alpha', domain.regions['buffer'])
     assert result == TaskExecutionResult(False, True, 'object_not_lifted')
+
+
+@pytest.mark.parametrize('private', [False, True])
+def test_native_verification_receipt_reaches_task_tools_without_private_fields(private):
+    domain, _ = native_probe_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    domain.transfer = domain._transfer_native
+    domain._refine = lambda *a, **k: 'plan'
+    witness = {'substage': 'post_lift_hold',
+               'reason': '/private/body_123' if private else 'payload_not_retained'}
+    domain.adapter.execute = lambda ref: {'status': 'partial', 'code': 'verification_failed',
+        'data': {'execution_started': True, 'verification': witness}}
+    result = session.execute(ref)
+    assert result['status'] == 'partial' and result['code'] == 'verification_failed'
+    assert result['data']['completed_steps'] == 0
+    if private:
+        assert 'verification' not in result['data']
+    else:
+        assert result['data']['verification'] == witness
+    assert '/private/' not in json.dumps(result) and 'body_123' not in json.dumps(result)
+
+
+def test_verification_receipt_is_typed_and_not_reused_in_a_new_execution():
+    from emet.controller.task.tamp.api import VerificationFailure
+    domain, _, _ = make_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    witness = VerificationFailure('loaded_payload_handoff', 'payload_not_retained')
+    domain.transfer = lambda *a: TaskExecutionResult(False, True, 'verification_failed', witness)
+    assert session.execute(ref)['data']['verification'] == witness.to_dict()
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    domain.transfer = lambda *a: TaskExecutionResult(False, False, 'task_motion_planning_failed')
+    result = session.execute(ref)
+    assert result['data']['execution_started'] is False and 'verification' not in result['data']
+    with pytest.raises(ValueError, match='invalid_task_verification_receipt'):
+        TaskExecutionResult(False, True, 'verification_failed', {'substage': '/private/body'})
 
 
 def test_semantic_failure_after_progress_stops_and_preserves_first_transfer():
@@ -421,3 +551,24 @@ def test_native_executor_timeout_is_not_misreported_as_preflight():
     assert result['status'] == 'partial'
     assert result['data']['execution_started'] is True
     assert result['data']['failed_phase'] == 'execution'
+
+
+@pytest.mark.parametrize('release_failed', [False, True])
+def test_release_refinement_calls_are_charged_to_episode_budget(release_failed):
+    domain, _ = native_probe_domain()
+    domain._ik_remaining = 20
+
+    def execute(ref):
+        # Initial motion refinement consumed five calls; release consumes seven
+        # more from that same retained primitive, even if opening is rejected.
+        domain.adapter.planning_ik_calls += 7
+        return {'status': 'partial' if release_failed else 'ok',
+                'code': 'no_plan_within_budget' if release_failed else 'ok',
+                'data': {'execution_started': True}}
+
+    domain.adapter.execute = execute
+    result = domain._transfer_native('beta', domain.regions['buffer'])
+    assert result.success is (not release_failed)
+    assert result.execution_started is True
+    assert domain._ik_remaining == 8
+    assert domain.adapter.planning_ik_calls == 12

@@ -1,0 +1,87 @@
+{
+  "format": "whole-body-safety-curriculum-plan-v1",
+  "planning_only": true,
+  "runtime_consumed": false,
+  "date": "2026-11-13",
+  "policy_goal": "Learn safe coordinated whole-body motion; retain independent actuator limits, state validation and watchdogs.",
+  "current_implementation": {
+    "worktree": ".worktrees/mars-controller-integration",
+    "revision": "a29da15d034495e1196c970e2bb0bc106cf78100",
+    "manifest": "configs/benchmarks/mars_whole_body_v2_development.json",
+    "current_family_tick_weights": {"general": 0.5, "tamp": 0.5},
+    "current_general_stage_weights": {"base": 0.3, "arm": 0.5, "coupled": 0.2},
+    "tamp_scope": "approach/pregrasp only, before closure/lift/carry/release",
+    "state_records": ["logs/recovery/whole-body-v2/STATE.json", "logs/recovery/whole-body-v2/TEACHER_STATE.json"],
+    "do_not_mutate_running_trial": true
+  },
+  "owners": {
+    "policy_training": {"thread": "01a1373d-ef6f-7a83-a81f-ac02e6edd5c0", "pr": 227},
+    "legacy_representation_ablation": {"thread": "01a1d761-e1a7-7780-9155-35fa16093810", "pr": 232},
+    "native_fixtures_and_acceptance": {"thread": "01a0ddca-cf1f-7a43-ab7f-30a48ba6dcd0", "pr": 231},
+    "curriculum_recording_visualization": {"thread": "01a1b669-9813-7f70-9e37-4e3c7ac104e2"}
+  },
+  "observation_and_label_prerequisites": {
+    "clutter_anticipation": "Local obstacle geometry plus uncertainty, or explicitly planner-cleared reference-only scope",
+    "fault_learning": "Actor-visible age/validity and validated sensor/actuation timing",
+    "slopes_steps": "Generalized support surfaces/normals and verified load/clearance labels",
+    "wheel_support": "Separate ground support from wheel-wall contact",
+    "force": "Preserve normal force and linear L1 bound definitions; separate contact moments and phase permissions",
+    "actor_stability": "Actor-active quiet hold evaluated independently from executor hold"
+  },
+  "stages": [
+    {"id": "C0", "name": "measurement_and_admission", "requires": [], "tasks": ["source_bound_regression", "flat_support_witness", "arm_floor_levering_detector", "channel_availability"]},
+    {"id": "C1", "name": "tracking_and_actor_hold", "requires": ["C0"], "tasks": ["base_arm_coupled_tracking", "hand_only_free_base", "partial_xy_yaw_masks", "mid_motion_mask_change", "base_required_hand_goal", "corners_pauses_retiming", "actor_active_hold", "cancel"]},
+    {"id": "C2", "name": "actual_approach_pregrasp", "requires": ["C1"], "tasks": ["public_tools_pregrasp", "near_limit_escape", "supported_object_contact", "reference_handoff"]},
+    {"id": "C3", "name": "closure_lift", "requires": ["C2"], "tasks": ["empty_vs_loaded_close", "box_cylinder_grip", "full_start_lift", "phase_reset_lift", "loaded_hold"]},
+    {"id": "C4", "name": "carry_and_braking", "requires": ["C3"], "tasks": ["loaded_translation_rotation", "base_arm_braking_turning", "long_reach_shifted_com", "retention_under_stop"]},
+    {"id": "C5", "name": "place_release_escape", "requires": ["C4"], "tasks": ["declared_supported_open_or_bounded_drop", "authorized_open", "measured_supported_stillness", "near_limit_retreat"]},
+    {"id": "C6", "name": "complete_programs", "requires": ["C5"], "tasks": ["pick_carry_place", "buffered_swap", "retarget_handoff", "observed_clutter_if_admitted"]},
+    {"id": "C7", "name": "dynamics_and_safety_boundary", "requires": ["C6"], "tasks": ["mass_inertia_com_friction", "transient_sustained_disturbance", "contact_before_handoff", "levering", "terrain_only_after_label_gate"]},
+    {"id": "C8", "name": "timing_faults_recovery", "requires": ["C7"], "tasks": ["validity_marked_stale_dropout", "actuator_delay", "reference_interruption", "inference_overrun", "loaded_cancel_hold"]},
+    {"id": "C9", "name": "independent_qualification", "requires": ["C8"], "tasks": ["frozen_components", "full_start_loaded", "actor_hold", "complete_public_tasks", "stratified_risk_audit"]}
+  ],
+  "cross_cutting_overlays": {
+    "begin_low_severity_after_skill_and_observation_admission": true,
+    "families": ["disturbance", "contact", "sensor_noise", "latency", "actuator_lag"],
+    "block_unobservable_or_unscorable_capabilities": true
+  },
+  "proposed_future_mixes": [
+    {"from": "C1", "family": {"general": 0.5, "tamp": 0.5}, "general": {"base": 0.3, "arm": 0.5, "coupled": 0.2}, "tamp": {"approach": 1.0, "close_lift": 0.0, "carry": 0.0, "place": 0.0, "full_program": 0.0}},
+    {"from": "C3", "family": {"general": 0.5, "tamp": 0.5}, "general": {"base": 0.3, "arm": 0.5, "coupled": 0.2}, "tamp": {"approach": 0.5, "close_lift": 0.5, "carry": 0.0, "place": 0.0, "full_program": 0.0}},
+    {"from": "C4", "family": {"general": 0.5, "tamp": 0.5}, "general": {"base": 0.25, "arm": 0.4, "coupled": 0.35}, "tamp": {"approach": 0.3, "close_lift": 0.35, "carry": 0.35, "place": 0.0, "full_program": 0.0}},
+    {"from": "C5", "family": {"general": 0.5, "tamp": 0.5}, "general": {"base": 0.25, "arm": 0.35, "coupled": 0.4}, "tamp": {"approach": 0.2, "close_lift": 0.25, "carry": 0.25, "place": 0.3, "full_program": 0.0}},
+    {"from": "C6", "family": {"general": 0.5, "tamp": 0.5}, "general": {"base": 0.2, "arm": 0.3, "coupled": 0.5}, "tamp": {"approach": 0.2, "close_lift": 0.25, "carry": 0.25, "place": 0.2, "full_program": 0.1}}
+  ],
+  "proposed_conditional_tick_sampling": {"frontier": 0.5, "earlier_anchors": 0.25, "development_failure_neighborhoods": 0.25},
+  "physical_phase_reset_weights": {"lift_start": 0.5, "mid": 0.25, "late": 0.15, "loaded_hold": 0.1},
+  "predeclared_critical_strata": [
+    {"id": "mask_and_base_assistance", "from": "C1"},
+    {"id": "contact_before_handoff", "from": "C3"},
+    {"id": "extended_arm_high_payload_braking_turning", "from": "C4"},
+    {"id": "low_grip_friction_com_offset_retarget", "from": "C4"},
+    {"id": "near_joint_limit_loaded_cancel_and_retreat", "from": "C5"},
+    {"id": "declared_release_mode", "from": "C5"},
+    {"id": "thin_obstacle_high_speed_feedback_delay", "from": "C7", "prerequisites": ["clutter_anticipation", "fault_learning"]},
+    {"id": "wheel_wall_vs_ground_support", "from": "C7", "prerequisites": ["wheel_support"]}
+  ],
+  "progression_proposal": {
+    "changes_existing_gates": false,
+    "validation_batches": 3,
+    "minimum_independent_starts_per_required_family": 100,
+    "minimum_independent_starts_per_required_critical_stratum": 100,
+    "apply_completion_uncertainty_and_violation_gates_per_critical_stratum": true,
+    "underpowered_critical_strata_remain_unqualified": true,
+    "minimum_full_success_rate": 0.95,
+    "minimum_wilson_95_lower_success_bound": 0.9,
+    "maximum_observed_critical_violations": 0,
+    "earlier_frozen_contracts_must_not_regress": true,
+    "elapsed_steps_do_not_advance_stage": true,
+    "final_audit_used_for_selection": false,
+    "hardware_risk_target": null,
+    "note": "Simulator development targets only; unresolved research/challenge subsets remain explicitly unqualified. Existing stricter gates remain authoritative."
+  },
+  "required_ledger_axes": ["family", "primitive", "phase", "mask", "difficulty", "parent_fixture", "split", "selection_source", "actor_or_executor_control"],
+  "required_counters": ["attempted_resets", "rejected_resets", "admitted_episodes", "unassisted_full_task_starts", "assisted_lift_starts", "actor_decisions", "actor_control_ticks", "executor_hold_ticks", "reset_prefix_ticks", "elapsed_physics_ticks", "task_success", "primitive_success", "guard_stops", "unknown_outcomes"],
+  "required_visualizations": ["coverage_and_exposure", "synchronized_failure_replay", "conditional_capability_atlas", "paired_policy_comparison"],
+  "isolation": {"no_frozen_cases_in_training": true, "fresh_on_policy_rollouts_for_failure_replay": true, "one_worker_per_reserved_lane": true, "immutable_runtime": true, "hardware_used": false, "automatic_promotion": false}
+}

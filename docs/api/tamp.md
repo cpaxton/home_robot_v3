@@ -402,6 +402,23 @@ it does not lock the wheels. Supplying base constraints requires the controller
 to satisfy both base and hand contracts. The gripper schedule informs preview;
 physical closure/release remains under the executor's phase/authorization API.
 
+The simulator Cartesian executor verifies a quiet hold before completing a
+stage. If an unfaulted hold drifts outside its arrival contract, it may resume
+the same policy/trajectory at most twice, within the original deadline, using
+a smaller re-entry region. `resume_tracking_from_hold()` preserves trajectory
+progress, history and grip/release authority and refuses a stopped controller;
+it does not clear a fault or install a new goal. Exhaustion reports public
+`tracking_timeout`. Static support rejection reports `planning_failed` with
+`data.motion_rejection=static_support_margin` so the agent can distinguish
+reference feasibility from ordinary slow tracking.
+
+Explicit simulator task-region experiments are separately labeled in the
+[grasp/hold report](../experiments/mars_task_arrival_20261115.md). The default
+Mars endpoint contract remains 3 mm / 0.02 rad; experimental pregrasp acceptance
+does not change witness admission, phase retiming or independent safety checks.
+The maximum-margin reset option changes procedural initialization only and
+does not execute or authorize a real robot stance transition.
+
 The new pose-only actor sees proprioception, command history, masked pose targets,
 and preview; it does not receive a joint solution from IK or inactive target values.
 Future commands may be provided by the executor, but future unannounced replans
@@ -490,8 +507,26 @@ Native planning/execution gates remain unchanged and still reject observed mode.
 With `--memory-backend open_vocab`, `run agent` automatically uses the
 `RgbdTaskProvider` attached to its existing scene-graph processor. Explicit Python
 injection takes precedence. No new detector or tracking model is introduced. The
-provider uses only the current segmented RGBD frame; accumulated scene-graph
-bounds, cached semantic localizations and simulator metadata are not inputs.
+provider retains a bounded semantic reference from segmented RGBD. In observed
+mode the CHAT loop binds it to the robot's existing camera stream: each
+`scene_tasks` request reassociates against the latest measured depth without
+running the segmenter or VLM again. Accumulated scene-graph bounds and simulator
+object metadata never supply current geometry.
+
+Reference masks and calibrated world points are seeded by the existing
+perception processor. They expire after 30 seconds and are discarded around
+navigation/view-motion; current geometry still expires after two seconds. A
+repeated capture retains its first receive time. An already verified fresh
+capture can be reused without renewing its age. Missing depth/calibration,
+ambiguous or occluded surfaces, and stale captures return
+`observed_scene_unavailable`; they never fall back to cached coordinates. A
+negative segmentation clears the reference. Custom injected providers retain
+ownership of their own acquisition path.
+
+This is an on-demand binding to an already continuous camera stream, not a new
+inference worker. It refreshes read-only position proposals and does not install
+an observed native execution provider. See the
+[live sensor validation](../experiments/observed_capture_binding_20261026.md).
 
 The provider proposes small segmented objects (robust extent 1–30 cm) and broad
 horizontal upper depth patches (at least 15 cm in each horizontal direction and
@@ -520,3 +555,24 @@ of CPU processing and exposed incorrect support labels. Live discovery acceptanc
 is still pending; see the [diagnostic report](../experiments/tamp_observed_discovery_20261014.md).
 Controlled segmentation tests cover real depth projection and the processor/tool
 paths, but do not establish detector accuracy.
+
+
+### Observed native geometry integration (internal)
+
+The internal `ObservedNativeCollisionChecker` consumes a robot-only MuJoCo model,
+`PayloadGeometryEvidence` from an observed provider, and an observed
+`PlacementScene` with a required whole-volume `known_free` predicate. Opaque object
+handles need no simulator body. `ObservedWorkspace.from_depth` supplies a bounded
+3D free/occupied/unknown snapshot from calibrated registered sensor depth. Missing
+or occluded depth remains unknown and blocks motion; geometry revisions and local
+receive ages are rechecked during sampled path validation.
+
+Payload attachment is only a collision-planning hypothesis. These interfaces do
+not certify grasp, retention, support contact, complete shape reconstruction or
+sensor-clock synchronization. `known_model_prior` and `multiview_bound` are explicit
+producer tiers, not permission to label visible-point bounds as complete shapes.
+The default observed discovery provider remains read-only. An explicitly injected
+`ObservedNativeAdapter` now connects tracked poses and visual effects to the same
+primitive/task tools; its source must supply independently qualified sensor and
+geometry evidence. See [observed execution assembly](observed_native_tamp.md) and
+the [implementation gates](../plans/2026-10-26_observed_native_execution.md).

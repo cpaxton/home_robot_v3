@@ -223,6 +223,7 @@ def hypothesize_nav_targets(
     scored.sort(key=lambda h: (-h.score, h.path_cost, -h.obs_id))
     return self._pack_diversified_hypotheses(scored, max_k)
 
+
 def retire_frontier_obs(self, obs_id: int) -> bool:
     """Drop a frontier node after visit — visited space is not a frontier."""
     oid = int(obs_id)
@@ -249,12 +250,14 @@ def retire_frontier_obs(self, obs_id: int) -> bool:
     self._update_edges()
     return True
 
+
 def frontier_id_near_xy(self, xyz: Any, *, max_dist_m: float = 1.5) -> str:
     track = self.world_evidence.frontier_near_xyz(
         xyz,
         max_dist_m=max_dist_m,
     )
     return track.frontier_id if track is not None else ""
+
 
 def retract_phrase_claim_at_obs(
     self,
@@ -359,6 +362,7 @@ def retract_phrase_claim_at_obs(
         "room": room_label or None,
     }
 
+
 def has_absent_retraction_at_other_view(self, phrase: str, evidence_obs_id: int) -> bool:
     """Return whether the phrase was already ABSENT at a different evidence view."""
     key_phrase = str(phrase or "").strip().lower()
@@ -368,6 +372,7 @@ def has_absent_retraction_at_other_view(self, phrase: str, evidence_obs_id: int)
         int(view_id) != evidence_oid and str(view_phrase).strip().lower() == key_phrase
         for view_id, view_phrase in views
     )
+
 
 def clear_retracted_nav_claims(self) -> None:
     """Drop claim blacklist (e.g. new question).
@@ -380,6 +385,7 @@ def clear_retracted_nav_claims(self) -> None:
         return
     self._retracted_nav_claims = set()
     self._retraction_evidence_views = set()
+
 
 def retire_frontier_near_xy(
     self,
@@ -409,6 +415,7 @@ def retire_frontier_near_xy(
         if self.retire_frontier_obs(oid):
             n_dropped += 1
     return n_dropped
+
 
 def verify_phrase_at_obs(
     self,
@@ -476,6 +483,7 @@ def verify_phrase_at_obs(
         img_feat=img_feat,
     )
 
+
 def select_obs_ids_for_verified_answer(
     self,
     verified_obs_id: int,
@@ -489,10 +497,12 @@ def select_obs_ids_for_verified_answer(
         return []
     return [oid][:max_images]
 
+
 def _confirmed_memory_phrases(self) -> list[str]:
     if self._relevant_phrases:
         return list(self._relevant_phrases)
     return list(self._relevant_objects or [])
+
 
 def _siglip_match_for_phrase(self, phrase: str) -> tuple[float, np.ndarray, int | None] | None:
     key = (phrase or "").strip().lower()
@@ -514,11 +524,13 @@ def _siglip_match_for_phrase(self, phrase: str) -> tuple[float, np.ndarray, int 
     sim, xyz = float(sig[0]), np.asarray(sig[1], dtype=float)
     return sim, xyz, None
 
+
 def _object_present_in_graph_or_siglip(self, obj: str) -> bool:
     if any(label_matches_relevant_object(obj, lab) for o in self._observations for lab in o.labels):
         return True
     sig = self._siglip_match_for_phrase(obj)
     return sig is not None and float(sig[0]) >= SIGLIP_PRESENT_THRESHOLD
+
 
 def _obs_usable_for_eqa_image(self, obs_id: int) -> bool:
     """True when ``obs_id`` may be attached as a VLM answer image.
@@ -533,6 +545,7 @@ def _obs_usable_for_eqa_image(self, obs_id: int) -> bool:
         return False
     rgb = np.asarray(obs.rgb)
     return bool(rgb.ndim == 3 and rgb.shape[0] >= 2 and rgb.shape[1] >= 2)
+
 
 def _select_relevant_obs_ids(
     self,
@@ -767,6 +780,7 @@ def _select_relevant_obs_ids(
 
     return selected
 
+
 def set_text_grounder(self, grounder: Callable[[str], tuple[float, np.ndarray] | None] | None) -> None:
     """Register an open-vocab visual grounder: ``text -> (similarity, xyz) | None``.
 
@@ -774,6 +788,7 @@ def set_text_grounder(self, grounder: Callable[[str], tuple[float, np.ndarray] |
     pixels rather than the VLM's caption-derived node labels.
     """
     self._text_grounder = grounder
+
 
 def set_obs_id_grounder(self, grounder: Callable[[str], int | None] | None) -> None:
     """Register an open-vocab ``text -> obs_id`` selector (SigLIP-backed).
@@ -783,6 +798,7 @@ def set_obs_id_grounder(self, grounder: Callable[[str], int | None] | None) -> N
     """
     self._obs_id_grounder = grounder
 
+
 def set_visual_find_fn(self, fn: Callable[..., list[Any]] | None) -> None:
     """Register DynaMem retrieve: ``phrase, max_n -> [(similarity, graph_obs_id), ...]``.
 
@@ -790,6 +806,7 @@ def set_visual_find_fn(self, fn: Callable[..., list[Any]] | None) -> None:
     observation ids. SigLIP only proposes RGB; the VLM still reads the frames.
     """
     self._visual_find_fn = fn
+
 
 def snapshot_visual_find_ranks(self, *, question: str = "") -> None:
     """Cache top-k FIND ranks while SigLIP can still ``encode_text``.
@@ -868,6 +885,7 @@ def snapshot_visual_find_ranks(self, *, question: str = "") -> None:
             cache[key] = rows
     self._visual_find_rank_cache = cache
 
+
 def _nearest_object_neighbors(
     self,
     xyz: np.ndarray,
@@ -891,6 +909,7 @@ def _nearest_object_neighbors(
             scored.append((n, dist))
     scored.sort(key=lambda t: t[1])
     return scored[:max_neighbors]
+
 
 def _confirmed_phrase_statuses(
     self,
@@ -937,6 +956,7 @@ def _confirmed_phrase_statuses(
         out[obj] = (status, matches, sim, xyz, obs_id)
     return out
 
+
 def _node_room_by_id(self) -> dict[int, str]:
     """Map node_id -> stamped room-cluster name for object nodes (unknown rooms skipped)."""
     if not self._room_clusters:
@@ -950,7 +970,8 @@ def _node_room_by_id(self) -> dict[int, str]:
             out[int(nid)] = name
     return out
 
-def _relevant_memory_summary(self) -> str:
+
+def _relevant_memory_summary(self, *, for_localization: bool = False) -> str:
     """Surface question-relevant objects as 'confirmed memory' for the VLM.
 
     Graph label matches are LOOK (candidate views to inspect). SigLIP matches over
@@ -972,7 +993,8 @@ def _relevant_memory_summary(self) -> str:
         parts: list[str] = []
         if matches:
             parts.append("candidate views: " + format_graph_node_candidates(matches, max_nodes=6))
-            parts.append(_GRAPH_CANDIDATE_COUNT_DISCLAIMER)
+            if not for_localization:
+                parts.append(_GRAPH_CANDIDATE_COUNT_DISCLAIMER)
         sig_present = sig is not None and float(sig[0]) >= present_thresh
         if sig is not None:
             sim, xyz = float(sig[0]), sig[1]
@@ -995,9 +1017,7 @@ def _relevant_memory_summary(self) -> str:
             )
         elif sig is not None:
             lines.append(
-                f"- {obj}: weak SigLIP only — "
-                + "; ".join(parts)
-                + " — not evidence of absence; trust attached images"
+                f"- {obj}: weak SigLIP only — " + "; ".join(parts) + " — not evidence of absence; trust attached images"
             )
             continue
         else:
@@ -1029,14 +1049,20 @@ def _relevant_memory_summary(self) -> str:
     if not lines:
         return ""
     header = (
-        "CONFIRMED_MEMORY (index of views to look at, not the answer. LOOK = "
-        "candidate graph obs N to look at; CANDIDATE/weak SigLIP are navigation hints. "
-        "Detector class names are proposals for WHERE to look. Identify and count "
-        "from attached RGB; if images contradict memory, trust the images and keep "
-        "exploring; for location MCQs, prefer option landmarks visible in Image 1 "
-        "over nearest-furniture guesses):"
+        "SEARCH_MEMORY (candidate views and retrieval hints, not object confirmation. "
+        "Inspect RGB and use independent grounding for object locations):"
+        if for_localization
+        else (
+            "CONFIRMED_MEMORY (index of views to look at, not the answer. LOOK = "
+            "candidate graph obs N to look at; CANDIDATE/weak SigLIP are navigation hints. "
+            "Detector class names are proposals for WHERE to look. Identify and count "
+            "from attached RGB; if images contradict memory, trust the images and keep "
+            "exploring; for location MCQs, prefer option landmarks visible in Image 1 "
+            "over nearest-furniture guesses):"
+        )
     )
     return header + "\n" + "\n".join(lines)
+
 
 def _graph_covers_relevant_objects(self) -> bool:
     """True when every keyword object appears in at least one graph node label."""
@@ -1049,6 +1075,7 @@ def _graph_covers_relevant_objects(self) -> bool:
         if not self._object_present_in_graph_or_siglip(obj):
             return False
     return True
+
 
 def _target_visible_in_obs_ids(self, obs_ids: list[int]) -> bool:
     """True when a question target label appears on an attached Image 1..N view."""
@@ -1065,11 +1092,13 @@ def _target_visible_in_obs_ids(self, obs_ids: list[int]) -> bool:
                 return True
     return False
 
+
 def _obs_is_frontier(self, obs_id: int) -> bool:
     for n in self._nodes:
         if int(n.obs_id) == int(obs_id) and n.is_frontier:
             return True
     return False
+
 
 def _obs_is_object_place(self, obs_id: int) -> bool:
     """True when ``obs_id`` anchors a real object node (not frontier/viewpoint-only)."""

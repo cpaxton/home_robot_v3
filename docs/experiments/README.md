@@ -1,5 +1,67 @@
 # Paper experiments — master index
 
+**PR #247 review (2026-11-17):** [Main reconciliation and source-bound verification](pr247_review_20261117.md)
+records conflict resolutions, review fixes, 1,776 passing tests with one optional
+Habitat skip, a separate passing configuration probe and the 73-page paper build.
+These are software/integration checks, not new learned task-quality results.
+
+**Baseline design (2026-10-29):** [Shared-agent literature review and baseline matrix](shared_agent_literature_review_20261029.md)
+covers images-only/retrieval controls, minimal active tools, GraphEQA adaptation
+versus reproduction, and the closest memory/navigation/manipulation work.
+
+**Model API connection (2026-10-30):** [GraphEQA fork and paired context smoke](grapheqa_model_api_connection_20261030.md)
+records the real Qwen API check, supplied-model runner, input restrictions and
+remaining active-execution gates. Frozen-context inference is not active EQA.
+
+**Active baseline qualification (2026-10-30):** [Sensor-only GraphEQA connection](grapheqa_active_qualification_20261030.md)
+records passing short movement gates, floor calibration and independent image
+attachments. Its three-case model diagnostic still fails active acceptance;
+the matched captured-history comparison is 0/3 in each condition. Keep these
+qualification results separate from the main shared-harness EQA benchmarks.
+
+**Review and planner-contract probes (2026-10-31):** [GraphEQA review disposition and live follow-up](grapheqa_review_and_contract_probe_20261031.md)
+records 42 passing fork tests and the reviewed native stream replay. Frozen
+ordering probes suggested actions, but fresh one/four-view checks still stopped
+wrong without motion. The default field-order change was reverted; active
+acceptance and matched physical contracts remain open.
+
+**Interaction audit (2026-11-01):** [GraphEQA decoding, history and frontier registry](grapheqa_decoding_control_20261101.md)
+records a real model-selected arrival, bounded-retry/trace repairs, and selected
+follow-up format improvement from 1/6 to 6/6 valid replies. Native replay confirms
+the graph exposes only callable frontiers. Tests pass (46 fork / 25 emet), but
+the final two-case live check has zero successful answers. The connection is
+qualified; task failures remain results, and matched evaluation is separate work.
+No answer/action override is added.
+
+**Navigation repair acceptance (2026-11-06):** [Calibration, checked routes and acquisition](sensor_navigation_repairs_20261106.md)
+passes q2/q6/q12 (six measured arrivals and complete scans at 137/138/139 of 200
+actions), the independent 180-degree turn, unknown-goal rejection and ordinary
+Habitat renderer preflight. Source-linked figures and a reproducible validator
+retain the failed controls. This is navigation acceptance, not EQA/OVMM quality.
+
+**Initial task-independent acquisition (2026-11-06):** [RGB-D history and physical gates](exploration_history_20261106.md)
+records 486 frames across three development scenes; 0/2, 1/2 and 2/2 frontier
+legs complete. Floor-conflict and odometry-turn guards remain explicit failures.
+Saving geometry sampling RNG makes a separate q2 map replay exact. Source-linked
+panels and hashes are retained; no answer model runs and no EQA gain is claimed.
+
+**Frozen paired answering (2026-11-03):** [Three answer paths on identical PNG packets](frozen_eqa_comparison_20261103.md)
+records 36 planned trials with matched output allowances and counted helper calls.
+Images-only / GraphEQA / emet packet answer counts are 0/12, 1/12, 1/12 on four
+correlated development snapshots; mean answer-path times are 2.44 / 11.97 / 3.61 s.
+The packet audit passes and figures expose limited target coverage. This tests
+answer/context modules, not full active-agent performance or representative accuracy.
+
+**Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
+[proposed controlled capability suite](harness_capability_benchmark.md).
+The current shared-harness development pilot is separate from historical
+controller results. The [2026-10-29 frozen-main benchmark refresh](benchmark_refresh_20261029.md)
+now has serial idle-GPU admission and source-linked figure exports; its full matrix
+takes multiple windows. New live Stretch cases use the existing CHAT agent.
+The [refresh failure audit](benchmark_failure_audit_20261029.md) separates the
+DynaMem exception, Molmo execution-mode mismatch, and navigation/verification
+diagnostics from task-quality results.
+
 **Status (2026-10-12):** [Main, open PRs, and paper evidence](../project_status.md)
 is the current inventory. The matrix below lists available harnesses and smokes;
 it does not mean every paper result is complete. Historical HM-EQA results exist,
@@ -8,6 +70,23 @@ while learned OVMM, SQA3D, and dynamic-exploration tables remain incomplete.
 **Start here** to run and reproduce Dynagraph paper benchmarks.
 Detailed commands / LaTeX mapping: [paper_benchmarks.md](../paper_benchmarks.md).
 GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [README § Documentation map](../../README.md#documentation-map).
+
+## Evidence storage
+
+Commit concise Markdown findings and JSON summaries/manifests. Include source
+commit and dirty-file hashes, profile/input tier, denominators, failed attempts,
+job IDs, artifact locations and hashes, and commands needed to reproduce figures.
+Keep dense per-frame/per-query traces, camera captures and full logs in managed
+run artifacts (`.tamp-runs/` or the job's output directory), rather than copying
+those arrays into each checked-in summary. JSON remains the structured format.
+
+A local artifact path is not a public archive. Evidence cited by a paper needs a
+durable accessible archive or enough versioned inputs to reproduce it, with an
+archive identifier and content hashes in its manifest. Retain failed runs as well
+as successful ones. Existing detailed records remain until an archive migration
+can preserve their references and evidence; deleting them now would not remove
+their already-committed bytes from history. New review summaries follow the
+compact-manifest policy.
 
 | Need | Go to |
 |------|--------|
@@ -19,7 +98,13 @@ GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [REA
 | Graph room timeline A/B | [graph_room_evidence.md](graph_room_evidence.md) |
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
+| Provided-map mobile TAMP | [Bounded local maps](local_map_mobile_20261117.md) · [Release diagnosis and nine-case regression](mobile_release_20261117.md): five/seven tasks and both fault controls pass; [fresh-source finalization](source_finalization_20261117.md) and [lateral release](lateral_release_20261118.md) retain expiry/release failures alongside later complete controls |
+| Native retention pilots and preserved failures | [Fixed presets](tamp_native_closure_pilot_20261114.md) · [Contact-relative hold](tamp_native_contact_relative_pilot_20261114.md) · [Geometric ordering / base sensitivity](tamp_native_face_alignment_pilot_20261114.md) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
+| Mars controller timing and smoothness | [Matched wheel-feedback diagnosis](mars_aligned_jerk_measurements_20261115.md): same actor, 2/12→8/12 full passes; simulator diagnostic, zero new PPO |
+| Mars corrected-reset baselines | [Complete reset/TAMP readout](mars_current_feedback_reset_validation_20261115.md): legacy 151/164 general, 0/6 actual pregrasps; teacher 5/6; full 1,299 regressions |
+| Mars actual TAMP input diagnosis | [Four fixed traced episodes](mars_tamp_input_diagnostic_20261115.md): recording parity and exact actor replay; weak arm commands, clipped grip feedback and separate support-margin replan failure |
+| Mars grasp/hold and support preparation | [Twelve bounded task diagnostics](mars_task_arrival_20261115.md): repaired hold reacquisition reaches grasp/closure; support reserve, retention and fixed-hand/base tracking remain unqualified |
 
 ## HM-EQA baselines
 
@@ -64,6 +149,7 @@ Results JSONL: `~/.cache/habitat_eqa/results/`. Numbers + planned sweeps: [habit
 |-------|-----------|-----|---------------|----------------|-----------------|
 | **Backend localization** | qualitative / appendix | [backend_localization.md](backend_localization.md) | `uv run python scripts/smoke_backend_localization_figure.py --quick` | `~/runs/emet/backend_localization_smoke/` | `backend_localization_topdown.png`, `backend_localization_metrics_bar.png` |
 | **TAMP clutter** | `sec:tamp_clutter` | [tamp_clutter.md](tamp_clutter.md) (E1–E5 GPU queue) | `uv run python scripts/eval_tamp_clutter.py --smoke` | `~/runs/emet/tamp_clutter` | per-episode JSON + `aggregate_tamp_clutter.csv` |
+| **Panda native-reference pilot** | reference diagnostic, no agent score | [simulation realism plan](../plans/2026-11-01_tamp_sim_realism.md) · [results](tamp_sim_realism_20261101.md) | `scripts/eval_tamp_panda_reference.py --output RUN_DIR --tasks Lift Stack --seeds 7 13` via CPU `emet jobs` | `.tamp-runs/sim-realism-20261101/` | native actions, model/source snapshots, compact JSON manifest |
 | **TAMP GT+MCTS battery** | no-AI smoke | [tamp_clutter_testing.md](tamp_clutter_testing.md) | `uv run python scripts/eval_tamp_clutter.py --test-battery` | `~/runs/emet/tamp_clutter` | `battery_summary.json` |
 | **Dynamic exploration P1** | `tab:dynamic_explore_phase1` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `uv run python scripts/eval_dynamic_exploration.py --smoke --dry-run` | `~/runs/emet/dynamic_exploration/` | Rerun map from export dir |
 | **Dynamic exploration P2** | `tab:dynamic_explore_world_change` | [dynamic_exploration.md](dynamic_exploration.md) · [dynagraph_dynamic_memory.md](dynagraph_dynamic_memory.md) | `--phase world-change --cpu-only` | same | — |

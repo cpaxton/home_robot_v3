@@ -61,9 +61,22 @@ def test_only_selected_arms_require_assets_and_record_resolved_hash(tmp_path):
     source.write_bytes(b"fixture")
     candidate = tmp_path / "candidate"
     candidate.mkdir()
-    (candidate / "sam2.1_hiera_small.pt").symlink_to(source)
+    names = ("sam2.1_hiera_small.pt", "yoloe-v8l-seg.pt", "mobileclip_blt.ts")
+    for name in names:
+        (candidate / name).symlink_to(source)
     result = assets()({"main": tmp_path / "absent", "candidate": candidate}, ["candidate"], "vlm")
-    assert result == {"candidate": {"path": str(source), "sha256": hashlib.sha256(b"fixture").hexdigest()}}
+    assert result == {
+        "candidate": {name: {"path": str(source), "sha256": hashlib.sha256(b"fixture").hexdigest()} for name in names}
+    }
+
+
+@pytest.mark.parametrize("missing", ["yoloe-v8l-seg.pt", "mobileclip_blt.ts"])
+def test_vlm_preflight_requires_cached_proposal_weights(tmp_path, missing):
+    for name in ("sam2.1_hiera_small.pt", "yoloe-v8l-seg.pt", "mobileclip_blt.ts"):
+        if name != missing:
+            (tmp_path / name).write_bytes(b"fixture")
+    with pytest.raises(RuntimeError, match=missing):
+        assets()({"candidate": tmp_path}, ["candidate"], "vlm")
 
 
 def test_explicit_model_authority_is_written_to_room_config_and_manifest(tmp_path, monkeypatch):
@@ -96,6 +109,66 @@ def test_explicit_model_authority_is_written_to_room_config_and_manifest(tmp_pat
     assert json.loads((output / "manifest.json").read_text())["decision_policy"] == "model_final"
 
 
+@pytest.mark.parametrize("endpoint", [None, "http://inference.example:8000/v1#test-vlm"])
+def test_model_endpoint_is_explicit_config_and_provenance_not_ambient_environment(tmp_path, monkeypatch, endpoint):
+    import json
+
+    from omegaconf import OmegaConf
+
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+    monkeypatch.setitem(run.__globals__, "git", lambda root, *args: "frozen" if args[0] == "rev-parse" else "")
+    monkeypatch.setenv("EMET_VL_ENDPOINT", "http://wrong.example/v1#wrong-model")
+
+    def stop_before_sim(*args, **kwargs):
+        assert "EMET_VL_ENDPOINT" not in kwargs["env"]
+        raise RuntimeError("test stops before simulation")
+
+    monkeypatch.setattr(run.__globals__["subprocess"], "run", stop_before_sim)
+    output = tmp_path / "out"
+    args = SimpleNamespace(
+        main=root,
+        candidate=root,
+        output=output,
+        arms=["candidate"],
+        grounding_backend="yoloe",
+        decision_policy="model_final",
+        episodes=["fixture"],
+        seed=0,
+        scan_steps=4,
+        vl_endpoint=endpoint,
+    )
+    with pytest.raises(RuntimeError, match="test stops"):
+        run(args)
+    mapping = OmegaConf.load(output / "fixture-candidate/config.yaml").mapping
+    eqa = mapping.eqa
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert mapping.graph_object_fusion.enabled and mapping.graph_object_fusion.use_instance_nodes
+    assert manifest["graph_object_fusion"] == {"enabled": True, "use_instance_nodes": True}
+    if endpoint:
+        assert eqa.vl_endpoint == "openai@" + endpoint
+        assert "vl_quantization" not in eqa
+        assert manifest["model"]["id"] == "test-vlm"
+        assert manifest["model"]["quantization"] == "unverified"
+    else:
+        assert "vl_endpoint" not in eqa
+        assert eqa.vl_quantization == manifest["model"]["quantization"] == "int4"
+    assert manifest["model"]["transport"] == ("remote" if endpoint else "local")
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    ["http://host/v1", "file:///tmp/model#name", "https://user:secret@host/v1#name", "http://host/v1?key=secret#name"],
+)
+def test_invalid_model_endpoint_fails_before_freezing_or_writing_artifacts(tmp_path, endpoint):
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+    with pytest.raises(ValueError, match="endpoint with #MODEL"):
+        run(SimpleNamespace(vl_endpoint=endpoint))
+
+
 def test_untracked_selected_source_aborts_before_manifest_or_launch(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
@@ -121,3 +194,46 @@ def test_untracked_selected_source_aborts_before_manifest_or_launch(tmp_path, mo
             run(args)
         launch.assert_not_called()
     assert not args.output.exists()
+
+
+@pytest.mark.parametrize("rounds,moves", [(6, 3), (12, 8)])
+def test_budget_parameters_reach_both_arm_invocations_and_frozen_manifest(tmp_path, monkeypatch, rounds, moves):
+    import json
+
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+    monkeypatch.setitem(run.__globals__, "git", lambda root, *args: "frozen" if args[0] == "rev-parse" else "")
+    monkeypatch.setitem(run.__globals__, "validate_record", lambda *args: None)
+    commands = []
+
+    def launch(command, **kwargs):
+        commands.append(command)
+        out = Path(command[command.index("--output-dir") + 1])
+        out.mkdir()
+        (out / "fixture_lazy_graph.json").write_text(
+            json.dumps({"find_object_success": True, "find_recep_success": True})
+        )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(run.__globals__["subprocess"], "run", launch)
+    args = SimpleNamespace(
+        main=root,
+        candidate=root,
+        output=tmp_path / "out",
+        arms=["main", "candidate"],
+        grounding_backend="yoloe",
+        decision_policy="model_final",
+        episodes=["fixture"],
+        seed=0,
+        scan_steps=4,
+        max_rounds=rounds,
+        max_nav_steps=moves,
+    )
+    assert run(args) == 0
+    assert len(commands) == 2
+    for command in commands:
+        assert command[command.index("--agentic-max-rounds") + 1] == str(rounds)
+        assert command[command.index("--agentic-max-nav-steps") + 1] == str(moves)
+    manifest = json.loads((args.output / "manifest.json").read_text())
+    assert manifest["max_rounds_per_phase"] == rounds and manifest["max_nav_steps_per_phase"] == moves

@@ -17,6 +17,21 @@ Current slice ownership, reproduced failures and exact-head gates are tracked in
 [the stack readiness ledger](plans/shared_stack_readiness.md). Coverage is now
 separate PR #198; integrated pilot results do not clear the public slice heads.
 
+### TAMP contracts
+
+The [TAMP workflow](../.github/workflows/tamp.yml) runs on pull requests in a
+CPU environment with the locked development and simulation dependencies.
+It checks native dispatch, fresh-source revalidation, observed collision
+admission, release planning, and the mobile regression harness. Each test file
+runs in its own process so a native MuJoCo crash fails the job and leaves the
+other files runnable. The workflow uploads JUnit results as
+`tamp-contract-reports`.
+
+To reproduce the gate locally, fetch the Stretch meshes through Git LFS and
+use the install and test commands from the workflow with rendering disabled.
+Live observed transfers and agent trials
+have separate acceptance gates in the [TAMP qualification plan](plans/2026-11-18_tamp_agent_closeout.md).
+
 ### Extracted shared-agent stack (October 2026)
 
 #### Current closeout status (2026-10-16)
@@ -180,6 +195,8 @@ Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM downl
 | **Multi-robot sim plumbing** | [plans/MULTI_ROBOT_TESTING.md](plans/MULTI_ROBOT_TESTING.md) | Registry, MJCF load, GenericZmqClient (partially superseded by unit tests) |
 | **CLI / install smoke** | [cli.md](cli.md#testing), [simulation.md](simulation.md#2-test-the-setup) | `emet test`, serve smoke |
 | **SQA3D + ScanNet EQA** | [sqa3d.md](sqa3d.md) | Situated QA loaders, EM@1 eval, Open3D mesh replay |
+| **Agent architecture / tool contracts** | [agent_architecture.md](agent_architecture.md), [agent_tool_contracts.md](agent_tool_contracts.md) | Source map, all tool effects, capability gates and focused checks |
+| **Agent runtime regressions** | [test_agent_runtime_contracts.py](../src/test/agent/test_agent_runtime_contracts.py), [test_call_llm.py](../src/test/agent/test_call_llm.py) | Typed receipts, capture consistency, capability binding and single-invocation inference |
 | **Agent / LLM** | [AGENT_RUN.md](AGENT_RUN.md#testing), [llm_agent.md](llm_agent.md#testing-the-llm-agent) | Agent loop, component tests |
 | **Refactor logs (not test specs)** | [logs/README.md](logs/README.md) | Historical change notes |
 

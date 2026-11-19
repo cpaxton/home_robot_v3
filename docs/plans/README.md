@@ -2,6 +2,25 @@
 
 Design and refactor plan documents live here (`docs/plans/`).
 
+## Whole-body controller research (2026-11-14)
+
+- [RL reading map](../rl/README.md) and [complete WBC status](../rl/status_20261114.md).
+- [Controller contract and training prototype](mars_whole_body_v2.md).
+- [Completed first validation](../experiments/mars_whole_body_validation_20261113.md):
+  software checks pass; the cold pilot does not establish useful tracking.
+- [Controlled normalization comparison](mars_whole_body_advantage_pair.md):
+  the control finished; the candidate stopped before updating on a settings
+  serialization mismatch. The guard is repaired; there is no completed paired
+  result yet. The separate bundled-reward timing correction preserves raw
+  physical outcomes and uses one consistent discount clock for training.
+- [Legacy-MLP experiment report](../experiments/mars_reference_velocity_prototype.md):
+  optional preview velocity and frozen-base/context arm adaptation, independent
+  of the GRU experiment. The adaptation job timed out waiting for CPU14 and
+  recorded zero PPO transitions.
+- Correct, tested experimental code may merge with documented performance
+  limitations. Checkpoint promotion and hardware readiness require separate
+  behavioral evidence. The retained source remains unchanged; no Herman motion.
+
 ## Paper / eval status (2026-07)
 
 Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `paper/sections/04_experiments.tex`, `05_results.tex` · Runbook: [paper_benchmarks.md](../paper_benchmarks.md)
@@ -18,6 +37,8 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 ---
 
 ## Plan index
+
+- **[2026-11-13_whole_body_safety_curriculum.md](2026-11-13_whole_body_safety_curriculum.md)** – Learned whole-body safety curriculum, observation prerequisites, progression gates and visualization contract.
 
 - **[2026-11-11_interaction_memory.md](2026-11-11_interaction_memory.md)** – Proposed MessyMem-informed interaction beliefs, persistent keyframe retrieval, dynamic invalidation, and matched GPT/Qwen evaluation; no runtime/results claim.
 

@@ -5,17 +5,17 @@ Our full Habitat EQA stack --- simulator, voxel map, SigLIP grounding encoder, a
 multimodal LLM used for captioning, answering, and answer debiasing --- must share one
 24\,GB consumer GPU. This appendix records the resulting model bake-off: which open
 vision--language models we evaluated, how they were quantized to fit, and the perhaps
-counterintuitive result that a \emph{grounding-specialized} VLM at 8B parameters
-outperforms both the prior 3B control \emph{and} a newer 9B generalist that leads
-Qwen3-VL on static VQA benchmarks~\citep{qwen35}.
+slice-specific result that an 8B VLM
+scores above the prior 3B control and a newer 9B generalist, despite the latter
+reporting stronger static VQA results~\citep{qwen35}.
 
 \subsection{Roles and memory budget}
 
 The VLM serves three roles in Dynagraph: (i) per-view captioning and scene-graph object
 labeling, (ii) the iterative EQA answer/explore decision, and (iii) the answer-debiasing
-votes (free-form answer matching with choice-rotation fallback). Grounding and
-open-vocabulary retrieval are \emph{not} VLM roles: they require a contrastive dual
-encoder, so SigLIP~\citep{zhai2023siglip} is retained regardless of VLM choice (loading
+votes (free-form answer matching with choice-rotation fallback). In this historical bake-off, open-vocabulary feature retrieval uses a
+contrastive encoder rather than the answering VLM; this is not a general
+requirement that excludes later VLM-region grounding. SigLIP~\citep{zhai2023siglip} is retained regardless of VLM choice (loading
 it in bf16 halves its footprint to $\sim$1.75\,GB with pixel-feature cosine $>$0.999 vs.\
 fp32). The non-VLM stack (Habitat, voxel map, SigLIP) holds $\sim$7\,GB.
 On an RTX~4090 during live Qwen3-VL-8B int4 HM-EQA we measure $\sim$13\,GiB used / $\sim$11\,GiB free, so 8--9B-class models sit comfortably under 4-bit NF4~\citep{dettmers2023qlora}.
@@ -99,22 +99,25 @@ repository under \texttt{docs/habitat/vlm\_bakeoff.md}.
   \end{tabular}
 \end{table}
 
-Upsizing from 3B to 8B on the \emph{same} pipeline and questions recovered three
-additional correct answers (+50\% relative), establishing that the prior 3B ceiling was
-model-limited rather than exploration-limited on this slice. The balanced-31 run with the
-8B winner was in progress at submission time; we report its JSONL path in the reproduction
-doc above.
+The 8B candidate recovers three more correct answers than the 3B control on
+this selected six-question slice (5/6 versus 2/6). This is a 50-percentage-point
+accuracy difference, not a 50\% relative increase; both still miss the uncovered
+target in q17. The development-selected slice does not establish a general model
+ranking or isolate perception from exploration. Balanced-31 follow-up artifacts
+are described in the reproduction document; no new aggregate is inferred here.
 
-\subsection{Quantization is not free: int4 vs.\ fp16 on the same 8B}
+\subsection{Precision and deployment: local int4 versus remote fp16}
 \label{app:model_choice_quantization}
 
 The bake-off above is run on a single 24\,GB GPU, which forces 4-bit NF4
-quantization~\citep{dettmers2023qlora} for the 8B winner. To isolate the cost of that
-precision, we served the \emph{same} \texttt{Qwen3-VL-8B} unquantized in fp16 on a
+quantization~\citep{dettmers2023qlora} for the 8B winner. To examine that
+precision/deployment setting, we served the \emph{same} \texttt{Qwen3-VL-8B} unquantized in fp16 on a
 separate NVIDIA AGX Orin (61\,GiB unified memory) over an OpenAI-compatible HTTP
 endpoint (\texttt{EMET\_VL\_ENDPOINT}), and re-ran a representative 30-question subset of
 HM-EQA with the identical Dynagraph harness, exploration budget, and debiasing pipeline.
-Only the weight precision differs.
+Precision, hardware, serving path and image transport differ. The recorded
+question set and harness configuration are shared, but this is not a controlled
+precision-only intervention.
 
 \begin{table}[h]
   \centering
@@ -133,23 +136,25 @@ Only the weight precision differs.
   \end{tabular}
 \end{table}
 
-fp16 recovers seven additional correct answers (+78\% relative). The gain is not uniform:
-it is concentrated in the count/clock slice (10/15 vs.\ 6/15), where the task demands
-reading fine visual detail (clock hands, shelf counts, mat placement) that 4-bit
-quantization distorts; on a separate 15-qid diverse slice fp16 was roughly flat (6/15
-vs.\ 5/15). This is the first clean same-model measurement that quantization cost is
-\emph{task-dependent} and material: an unquantized (or larger) VLM is a first-class lever,
-not a footnote. Prior work reporting higher embodied-EQA accuracy with stronger VLMs may
-partly reflect this precision effect rather than model-family superiority alone.
+The recorded 30-question comparison is 16/30 versus 9/30 (+7 answers,
+23.3 percentage points). Its JSON distinguishes an earlier count/clock int4
+run at 6/15 from the count/clock portion of the later 30-question int4 run at
+4/15; the latter plus the other 5/15 gives 9/30. Combining 6/15 with 5/15
+would incorrectly produce 11/30. The fp16 portions are 10/15 and 6/15.
+These development-selected comparisons motivate a matched precision study;
+run variation and the changed deployment path prevent attributing the entire
+gap to quantization alone. The checked-in
+\texttt{paper/data/vlm\_quantization/countclock\_int4\_vs\_fp16.json}
+retains the distinct records.
 
 Operationally, the fp16 arm ran $\sim$3--4$\times$ slower (Orin nvgpu + HTTP JPEG
-transport, $\sim$10--13\,min/qid vs.\ $\sim$3\,min int4 in-process), so precision is
-traded against wall-clock on a fixed GPU; the remote-Orin split amortizes that by
+transport, $\sim$10--13\,min/qid vs.\ $\sim$3\,min int4 in-process), so this comparison also changes
+wall-clock and inference hardware; the remote-Orin split amortizes that by
 offloading the VLM off the single 24\,GB card. Pitfalls for reproducing the remote arm
 (fp16-only serve, \texttt{HF\_HOME}, ssh detachment, float32 OOM) are documented in
 \texttt{docs/experiments/vlm\_quantization.md}.
 
-\subsection{Why a newer, larger generalist loses}
+\subsection{Failure modes in the development-selected model comparison}
 \label{app:model_choice_failures}
 
 Qwen3.5-9B is trained from scratch on interleaved image/video/text tokens and reports

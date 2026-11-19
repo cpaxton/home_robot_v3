@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_replay",
+  "case_file": "configs/eval/tamp_native_qualification_20261113.json",
+  "case_file_sha256": "f493a411885581766a0a6eefaffc357d1c878592a21243603a8febdab72def4c",
+  "native_policy": "bounded_release",
+  "positive_task_candidates": 8,
+  "declared_transfers": 18,
+  "declared_boundary_checks": 4,
+  "maximum_concurrent_simulators": 2,
+  "prior_result": "docs/experiments/tamp_native_qualification_20261113.json",
+  "changes": {
+    "native_open_supported_settle_timeout_sim_s": 12.0,
+    "legacy_diagnostic_timeout_sim_s": 3.0,
+    "pregrasp_fallback_offset_m": [
+      0.0,
+      0.0,
+      0.08
+    ],
+    "common_ik_cap_unchanged": 256,
+    "controller_model_changed": false,
+    "collision_and_retention_limits_changed": false,
+    "surface_sampling_changed": false,
+    "fresh_feedback_before_wait_budget": true,
+    "authoritative_execution_receipt_required_for_agent_pass": true
+  },
+  "agent_score": false,
+  "hardware_trials": false,
+  "old_failed_runs_unchanged": true,
+  "held_out_claim": false
+}

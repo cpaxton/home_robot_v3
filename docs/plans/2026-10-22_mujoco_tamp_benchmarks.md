@@ -5,6 +5,15 @@ matched planning conditions, separate upstream and adapted robots. This extends
 [the household design](2026-10-18_household_agent_tamp.md); it does not replace its
 fixed-population, reference-certification, or observed-input gates.
 
+The harness is intended to support these task families for reusable agents and
+policies, beyond baseline comparisons. Its stable boundary should bind resets,
+permitted observations, parameterized actions, planning/execution separation,
+effect receipts, native horizons, goal checks and replayable records. Online
+agents, frozen synthesized programs and classical planners should use that same
+boundary where their access assumptions match. Agentic GenTAMP and TAMPAgent
+motivate generalization and observe/clear/manipulate task families; adapting
+their tasks or interfaces is distinct from reproducing their published systems.
+
 Machine-readable program: `configs/eval/mujoco_tamp_program.json`. It remains
 non-executable until real certified episodes and provenance are available.
 
@@ -119,3 +128,16 @@ controls and 284 passing tests are documented in
 [the integration report](../experiments/tamp_native_task_provider_20261022.md).
 These are privileged live-async Stretch diagnostics, not six-suite qualification
 or observed-input acceptance. No experimental IK restart/yaw changes were landed.
+
+## November 1 active experiment direction
+
+New experiments are simulation-only; Stretch in MuJoCo is included, while real
+Stretch hardware trials are paused. The [simulation realism progression](2026-11-01_tamp_sim_realism.md)
+and [`configs/eval/tamp_sim_realism.json`](../../configs/eval/tamp_sim_realism.json)
+uses the existing simulated Stretch adapter for shared-agent integration and
+Panda for upstream references/bindings, followed by clutter/composition, assisted
+RGBD, observed grounding and timing/physics stress.
+Sourccey remains a separate robot-transfer track pending native task-adapter
+qualification. Earlier results remain historical evidence, not automatic
+qualification of new cases. The protocol preserves the same production CHAT
+agent and separates reference-control success from scored agent capability.

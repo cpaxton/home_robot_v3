@@ -17,8 +17,60 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+
 from emet.agent.loop import _dispatch_tool_calls
 from emet.agent.tools import Tool, get_tools
+
+
+@pytest.mark.parametrize("task_ok", [True, False])
+def test_find_delivers_task_outcome_and_navigation_without_double_execution(task_ok):
+    calls = []
+
+    class Executor:
+        agent = SimpleNamespace(
+            _last_nav_plan={
+                "outcome": "ok" if task_ok else "rejected_swept_footprint:unobserved_footprint",
+                "footprint": {"coverage": 0.75},
+            },
+            planner=None,
+        )
+
+        def __call__(self, cmds):
+            calls.append(cmds)
+            self._last_exec_ok = task_ok
+            return True  # Executor liveness is independent of task success.
+
+    executor = Executor()
+    tools = {t.name: t for t in get_tools({"executor": executor})}
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "find_objects", "arguments": {"text": "microwave"}}], tools, executor
+    )
+    assert ok and has_info
+    assert calls == [[("find", "microwave")]]
+    assert len(results) == 1
+    assert results[0].startswith("[find_objects] ok" if task_ok else "[find_objects] failed")
+    assert "microwave" in results[0]
+    assert '"coverage": 0.75' in results[0]
+    if not task_ok:
+        assert "unobserved_footprint" in results[0]
+
+
+def test_executor_mapped_info_tool_requests_followup():
+    tool = Tool(
+        name="mapped_info",
+        description="Mapped information tool",
+        parameters={"type": "object", "properties": {}},
+        func=lambda: pytest.fail("Mapped tool must not execute its function as well"),
+        executor_commands=lambda args: [("inspect", "")],
+        returns_info=True,
+    )
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "mapped_info", "arguments": {}}], {tool.name: tool}, lambda cmds: True
+    )
+    assert ok and results and has_info
 
 
 def test_rotate_base_clips_degrees_via_func():
@@ -194,7 +246,6 @@ def test_status_discord_path_does_not_consume_pending_image():
 
 
 def test_scan_environment_returns_info_via_func():
-    from emet.agent.loop import _FAST_REPLY_TOOLS, _should_skip_llm_summarize
     from emet.agent.tools import get_tools
 
     calls: list[list[tuple[str, str]]] = []
@@ -207,9 +258,6 @@ def test_scan_environment_returns_info_via_func():
     scan = tools["scan_environment"]
     assert scan.returns_info is True
     assert scan.executor_commands is None
-    assert "scan_environment" in _FAST_REPLY_TOOLS
-    assert "go_home" not in _FAST_REPLY_TOOLS
-    assert "hand_over" not in _FAST_REPLY_TOOLS
 
     ok, results, has_info = _dispatch_tool_calls(
         [{"name": "scan_environment", "arguments": {}}],
@@ -219,14 +267,10 @@ def test_scan_environment_returns_info_via_func():
     assert ok and has_info
     assert calls == [[("rotate_in_place", "")]]
     assert any("scan" in r.lower() for r in results)
-    assert _should_skip_llm_summarize(
-        [{"name": "scan_environment", "arguments": {}}],
-        results,
-    )
 
 
 def test_dispatch_unknown_tool_returns_user_facing_info():
-    from emet.agent.loop import _dispatch_tool_calls, _format_fast_tool_reply, _should_skip_llm_summarize
+    from emet.agent.loop import _dispatch_tool_calls, _format_fast_tool_reply
 
     ok, results, has_info = _dispatch_tool_calls(
         [{"name": "move_forward", "arguments": {"meters": 0.5}}],
@@ -235,5 +279,24 @@ def test_dispatch_unknown_tool_returns_user_facing_info():
     )
     assert ok and has_info
     assert any("don't have a working" in r.lower() or "can't drive" in r.lower() for r in results)
-    assert _should_skip_llm_summarize([{"name": "move_forward"}], results)
     assert _format_fast_tool_reply(results)
+
+
+def test_unavailable_tool_cannot_continue_a_tamp_batch():
+    invoked = []
+    tools = {
+        "scene_tasks": Tool(
+            name="scene_tasks",
+            description="",
+            parameters={},
+            func=lambda: invoked.append("discovered"),
+            returns_info=True,
+        )
+    }
+    _, results, has_info = _dispatch_tool_calls(
+        [{"name": "unavailable_inspection", "arguments": {}}, {"name": "scene_tasks", "arguments": {}}],
+        tools,
+        executor=lambda _: True,
+    )
+    assert has_info and not invoked
+    assert "batch_stopped" in results[-1]

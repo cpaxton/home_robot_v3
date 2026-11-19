@@ -20,6 +20,44 @@ import numpy as np
 from scipy.ndimage import rotate as scipy_rotate
 
 
+class CircularFootprint:
+    """Orientation-independent disk, including every intersected grid cell."""
+
+    def __init__(self, radius):
+        if not np.isfinite(radius) or radius <= 0:
+            raise ValueError("Positive finite footprint radius required")
+        self.radius = float(radius)
+        self.length = self.width = 2 * self.radius
+        self.length_offset = self.width_offset = 0.0
+
+    def grid_cells(self, resolution, pose, grid_origin):
+        pose, origin = np.asarray(pose, dtype=float), np.asarray(grid_origin, dtype=float).reshape(-1)[:2]
+        if (
+            pose.shape != (3,)
+            or origin.shape != (2,)
+            or not np.isfinite(np.r_[pose, origin, resolution]).all()
+            or resolution <= 0
+        ):
+            raise ValueError("Finite pose, origin and positive resolution required")
+        center = pose[:2] / resolution + origin
+        extent = self.radius / resolution + 0.5
+        lo, hi = np.ceil(center - extent).astype(int), np.floor(center + extent).astype(int)
+        i, j = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1), indexing="ij")
+        dx = np.maximum(abs(i - center[0]) - 0.5, 0) * resolution
+        dy = np.maximum(abs(j - center[1]) - 0.5, 0) * resolution
+        hit = dx * dx + dy * dy <= self.radius**2 + 1e-12
+        return np.column_stack((i[hit], j[hit]))
+
+    def get_conservative_rotated_mask(self, resolution, angle_radians=0):
+        radius_cells = int(np.ceil(self.radius / resolution + 0.5))
+        mask = np.zeros((2 * radius_cells + 1,) * 2, dtype=bool)
+        cells = self.grid_cells(resolution, [0, 0, angle_radians], [radius_cells, radius_cells])
+        mask[cells[:, 0], cells[:, 1]] = True
+        return mask
+
+    get_rotated_mask = get_conservative_rotated_mask
+
+
 class Footprint:
     """Contains information about robot footprint. Returns numpy arrays (no torch)."""
 

@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "frozen_shape_extent_followup",
+  "runner": "scripts/eval_tamp_contact_stability.py",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "scope": "Native asynchronous Stretch tools; exact primitive extents and measured support settling before retreat; not an agent score",
+  "policy": "fine_yaw",
+  "payload_binding": "verified_lift",
+  "release_policies": [
+    "bounded"
+  ],
+  "max_release_raise_m": 0.04,
+  "max_release_drop_m": 0.04,
+  "opening_lift_axis_vertical_reserve_m": 0.003,
+  "nominal_release_height_offsets_m": [
+    0.003,
+    0.01,
+    0.02
+  ],
+  "maximum_measured_corrections": 2,
+  "startup_settle_sim_s": 6.0,
+  "hardware_trials": false,
+  "production_policy_changed": false,
+  "old_failed_episodes_unchanged": true,
+  "same_final_footprint_support_settling_goals": true,
+  "episodes": [
+    {
+      "id": "shift-shape-aware",
+      "case_id": "two-goal-shift",
+      "release_policy": "bounded",
+      "port_offset": 2080
+    },
+    {
+      "id": "control-shape-aware",
+      "case_id": "two-goal-control",
+      "release_policy": "bounded",
+      "port_offset": 2090
+    }
+  ],
+  "limitations": [
+    "Nominal initial fixture is matched, but asynchronous measured initial states are not bit-identical",
+    "The fixed-orientation vertical release sweep is sampled static collision validation, not a dynamics proof",
+    "Opening reserve certifies one additional lift-axis pose, not a full uncertainty tube",
+    "Measured native opening/contact verification is simulator ground truth debug, not a hardware sensor claim",
+    "Maximum two concurrent CPU simulators; no local GPU or model inference"
+  ],
+  "prior_comparison": "configs/eval/tamp_release_tracking_reserve.json",
+  "opening_reserve_includes_measured_command_fk_error": true,
+  "measured_supported_stillness_before_retreat_sim_s": 0.1,
+  "maximum_open_support_wait_sim_s": 3.0,
+  "released_payload_support_collision_exempted": false
+}

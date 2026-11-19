@@ -1222,7 +1222,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     def _update_obs(self, obs):
         """Update observation internally with lock"""
         obs = dict(obs)
-        obs['_received_monotonic'] = time.monotonic()
+        obs["_received_monotonic"] = time.monotonic()
         with self._obs_lock:
             self._obs = obs
             self._last_step = max(self._last_step, int(obs["step"]))
@@ -1376,9 +1376,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 xyz=self._obs["xyz"],
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
-                received_monotonic=self._obs.get('_received_monotonic'),
+                received_monotonic=self._obs.get("_received_monotonic"),
                 emet_session=read_emet_session(self._obs),
                 image_timing=read_image_timing(self._obs),
+                rgbd_registration=self._obs.get("rgbd_registration"),
+                is_simulation=self._obs.get("is_simulation") is True,
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1657,6 +1659,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
             self._update_obs(output)
             self._update_pose_graph(output)
+            from emet.memory.navigation_views import retain_navigation_observation
+
+            retain_navigation_observation(self, output)
 
             t1 = timeit.default_timer()
             dt = t1 - t0
@@ -1931,14 +1936,17 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def _state_only_startup_ready(self) -> bool:
         """Explicit camera-free simulation mode; never waive real-robot streams."""
-        if not getattr(self, '_state_only', False) or not isinstance(self._state, dict):
+        if not getattr(self, "_state_only", False) or not isinstance(self._state, dict):
             return False
         session = self._state.get(EMET_ZMQ_SESSION_KEY)
-        if not isinstance(session, dict) or session.get('is_simulation') is not True:
+        if not isinstance(session, dict) or session.get("is_simulation") is not True:
             return False
-        capabilities = session.get('capabilities')
-        return (isinstance(capabilities, dict) and type(capabilities.get('num_cameras')) is int
-                and capabilities['num_cameras'] == 0)
+        capabilities = session.get("capabilities")
+        return (
+            isinstance(capabilities, dict)
+            and type(capabilities.get("num_cameras")) is int
+            and capabilities["num_cameras"] == 0
+        )
 
     def start(self) -> bool:
         """Start running blocking thread in a separate thread. This will wait for observations to come in and update internal state.
@@ -1970,8 +1978,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         t0 = timeit.default_timer()
         startup_timeout = getattr(self, "_zmq_startup_timeout", 60.0)
         next_progress_log = t0 + 5.0
-        while self._state is None or ((self._obs is None or self._servo is None)
-                                     and not self._state_only_startup_ready()):
+        while self._state is None or (
+            (self._obs is None or self._servo is None) and not self._state_only_startup_ready()
+        ):
             time.sleep(0.1)
             t1 = timeit.default_timer()
             if t1 >= next_progress_log:

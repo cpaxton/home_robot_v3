@@ -133,16 +133,38 @@ def test_unverified_submission_keeps_the_best_assessed_camera_packet():
     assert not ex._verified
 
 
-def test_model_final_preserves_explicit_answer_over_assessment_and_tool_suggestion():
+def test_model_final_final_read_preserves_its_answer_over_an_earlier_assessment():
     ex, gm = _executor(Q12, query_answer="Two")
     ex.decision_policy = "model_final"
     _set_confirmed_vlm_answer(ex, "B", answer_text="One")
     gm.query_answer.return_value = ("two in RGB", "Two", True, "visible", None, [])
     ex._verified = True
-    out = ex._do_submit_answer(prefer_answer="One")
+    out = ex._do_submit_answer()
     assert out["answer"] == "Two"
     assert out["answer_source"] == "model_final"
     assert gm.query_answer.call_args.kwargs["model_final"] is True
+
+
+@pytest.mark.parametrize("answer", ["One", "None", "Unknown"])
+@pytest.mark.parametrize("with_graph", [False, True])
+def test_model_final_explicit_commit_does_not_request_a_replacement_answer(answer, with_graph):
+    ex, gm = _executor(Q12, query_answer="Two")
+    ex.decision_policy = "model_final"
+    ex._last_vlm_assess = {"suggested_answer": "Three"}
+    ex._grounded_obs_id = None
+    if not with_graph:
+        ex.agent.graph_memory = None
+    out = ex._tool_submit_answer(answer)
+    assert out["ok"] and out["answer"] == answer
+    assert out["final_decision"]["answer"] == answer
+    assert ex._grounded_obs_id is None  # A semantic commit creates no object geometry.
+    gm.query_answer.assert_not_called()
+    if with_graph:
+        assert gm.last_eqa_raw.startswith("[coordinator_submit]")
+        assert gm.last_eqa_parsed[1] == answer
+    row = next(r for r in ex._trace_rows if r.get("tool") == "submit_answer")
+    assert row["prefer_answer"] == answer and row["final_answer"] == answer
+    assert row["query_answer"] is None and row["submission_mode"] == "explicit"
 
 
 @pytest.mark.parametrize("answer,confidence", [("Unknown", False), ("None", True), ("", False)])

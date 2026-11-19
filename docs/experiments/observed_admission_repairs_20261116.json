@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "scope": "CPU development regressions; suites overlap; no observed task success assessed",
+  "base_commit": "6386e9d3af4261871bfe4270f0344b7acb5121c6",
+  "branch": "fix/tamp-observed-admission",
+  "final_source_and_test_digest_sha256": "95925072e00a15bea2a0d11cab808fff05689b807f636e3d4e18c6be21bdbe4c",
+  "provenance_note": "Broad motion-v2/task-v2 ran before final target-settling and timeout review corrections. contact-v5 covers both corrections and affected existing contracts. Digests describe final source, not every historical attempt. Raw artifacts are local and are not committed.",
+  "observed_transfer_passed": false,
+  "suites": [
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/seams-initial.xml",
+      "tests": 73,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/seams.xml",
+      "tests": 74,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/admission-initial.xml",
+      "tests": 87,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/admission-repeat.xml",
+      "tests": 87,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/admission-guards.xml",
+      "tests": 274,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/admission-guards-v2.xml",
+      "tests": 275,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/motion.xml",
+      "tests": 481,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/task.xml",
+      "tests": 427,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/task-public-codes.xml",
+      "tests": 125,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/contact.xml",
+      "tests": 191,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/contact-v3.xml",
+      "tests": 202,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/contact-v4.xml",
+      "tests": 208,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/motion-v2.xml",
+      "tests": 506,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/task-v2.xml",
+      "tests": 437,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/observed-admission-20261116/contact-v5.xml",
+      "tests": 210,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "remaining": [
+    "local support contact",
+    "full Stretch measured/interval geometry",
+    "live source/refiner assembly",
+    "RGB/depth boundary ownership and reacquisition",
+    "public-tool observed transfer and independent scoring"
+  ]
+}

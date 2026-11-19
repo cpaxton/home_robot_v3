@@ -1,0 +1,694 @@
+{
+  "schema_version": 1,
+  "scope": "fixed development pilot; not held-out or reference-certified benchmark",
+  "source_sha": "d4a05983ebc1b22615e656945e598bf70656e6cf",
+  "execution": "simulation_live_async",
+  "robot": "stretch",
+  "inputs": "privileged",
+  "hardware_trials": false,
+  "cameras": false,
+  "agent": "production run-agent CLI",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "sampling": "server defaults; not independently pinned",
+  "local_vlm": false,
+  "protocol": "configs/eval/tamp_stretch_realism_pilot.json",
+  "raw_manifest": {
+    "path": ".tamp-runs/stretch-realism-20261101/batch.json",
+    "sha256": "2247556d74f62b64470d3431e64df274a7733068e481a4372bafdedbc994e2d6"
+  },
+  "evaluator": {
+    "path": "scripts/eval_native_chat_session.py",
+    "sha256": "8546c1c08f48abd60afde299e4a59812bc17eb9d5d1babb58e15a6a36d9e593d"
+  },
+  "population_frozen_before_launch": true,
+  "certified_reference_replays_per_agent_case": 0,
+  "held_out": false,
+  "initial_state_certificate": false,
+  "full_scene_collision_integrity_qualified": false,
+  "cases": [
+    {
+      "case_id": "two-goal-control",
+      "job_id": "20261101_184945_aac16c",
+      "initial_x_shift_m": 0.0,
+      "task_passed": true,
+      "passed": true,
+      "cli_exit_code": 0,
+      "task_execution": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "ok",
+        "code": "ok",
+        "message": "ok",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 2,
+          "goal_verified": true
+        },
+        "recovery": "none"
+      },
+      "planned_steps": 2,
+      "completed_steps": 2,
+      "native_failure_stage": null,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039867178678287846,
+              -0.8202192234032929
+            ],
+            [
+              0.00026787498859302816,
+              -0.7800854993826464
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03980927617741499,
+              -0.7179086674652
+            ],
+            [
+              0.001214462203084063,
+              -0.6374017428556313
+            ]
+          ]
+        }
+      },
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 0,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": null,
+        "failure_cases": 0,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 0,
+        "failure_boundaries": [],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "audit_commands": 477,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 37.62949179293355,
+      "user_turn_wall_time_s": 259.35103,
+      "provider_ik_calls_consumed": 143,
+      "execution_refinement_ik_calls": [
+        14,
+        14
+      ],
+      "summary": {
+        "path": ".tamp-runs/stretch-realism-20261101/two-goal-control/episode/summary.json",
+        "sha256": "9e83cecf735323c9bcf75ff0ee0ad909115de1f0077854a6135ffc5ab0873424"
+      },
+      "protocol_record": {
+        "path": ".tamp-runs/stretch-realism-20261101/two-goal-control/episode/protocol.json",
+        "sha256": "95632b8c9635457aa7a409b067e06a51156bee4b9dd6e44431526b6cd3bc3d7d"
+      },
+      "actuation_audit": {
+        "path": ".tamp-runs/stretch-realism-20261101/two-goal-control/episode/actuation.jsonl",
+        "sha256": "fcbbbfa1d4c80bf3af7bd3c9be5d70a85c5f64b3874bb210147acebc9f7c7a48"
+      },
+      "chat_logs": [
+        {
+          "path": ".tamp-runs/stretch-realism-20261101/two-goal-control/episode/logs/chat/chat_2026-11-01_18-50-24.jsonl",
+          "sha256": "12b0374b4a6e16da53d00da7ae790cdc8ac40dfd7a08b6cd013d6002c2e182a4"
+        }
+      ],
+      "scene_files_sha256": {
+        "stretch.xml": "2b92ed9c692ed6eed3f23afc1cea298d6df1540c50664f93d6d135e648dd3dfc",
+        "scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+        "scene_environment.xml": "86192e87fa629a329a4d2bf353dc0a3af11a5337038ebe64b0c5d02afd0b267b",
+        "docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8"
+      }
+    },
+    {
+      "case_id": "swap-control",
+      "job_id": "20261101_184947_a0375e",
+      "initial_x_shift_m": 0.0,
+      "task_passed": true,
+      "passed": true,
+      "cli_exit_code": 0,
+      "task_execution": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "ok",
+        "code": "ok",
+        "message": "ok",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 3,
+          "goal_verified": true
+        },
+        "recovery": "none"
+      },
+      "planned_steps": 3,
+      "completed_steps": 3,
+      "native_failure_stage": null,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.04005127328428692,
+              -0.5732292942086009
+            ],
+            [
+              0.000169498629317949,
+              -0.5330066701466633
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03989198847950999,
+              -0.7204538827256002
+            ],
+            [
+              0.0012075439190954926,
+              -0.6399098231356677
+            ]
+          ]
+        }
+      },
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 0,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": null,
+        "failure_cases": 0,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 0,
+        "failure_boundaries": [],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "audit_commands": 750,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 37.965185507026035,
+      "user_turn_wall_time_s": 383.475661,
+      "provider_ik_calls_consumed": 436,
+      "execution_refinement_ik_calls": [
+        22,
+        22,
+        14
+      ],
+      "summary": {
+        "path": ".tamp-runs/stretch-realism-20261101/swap-control/episode/summary.json",
+        "sha256": "148f52a6c736428af8ba38f3902279fad71c403b3ea0f8d864f0d78672734c78"
+      },
+      "protocol_record": {
+        "path": ".tamp-runs/stretch-realism-20261101/swap-control/episode/protocol.json",
+        "sha256": "fdf463365c0d3e384b04fc6f4921291e5b84f31e3fa238c2ceed4b5832902789"
+      },
+      "actuation_audit": {
+        "path": ".tamp-runs/stretch-realism-20261101/swap-control/episode/actuation.jsonl",
+        "sha256": "f7251fe330901b0271eee31f4eba42fcb179ff3797bca894f7f4cc08a18dfdf0"
+      },
+      "chat_logs": [
+        {
+          "path": ".tamp-runs/stretch-realism-20261101/swap-control/episode/logs/chat/chat_2026-11-01_18-50-26.jsonl",
+          "sha256": "32b5eacb3997df641f42c20f6d1121696e2b72990647c86bcf68870229b1c346"
+        }
+      ],
+      "scene_files_sha256": {
+        "stretch.xml": "2b92ed9c692ed6eed3f23afc1cea298d6df1540c50664f93d6d135e648dd3dfc",
+        "scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+        "scene_environment.xml": "86192e87fa629a329a4d2bf353dc0a3af11a5337038ebe64b0c5d02afd0b267b",
+        "docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8"
+      }
+    },
+    {
+      "case_id": "two-goal-shift",
+      "job_id": "20261101_185438_c8c808",
+      "initial_x_shift_m": 0.015,
+      "task_passed": false,
+      "passed": false,
+      "cli_exit_code": 0,
+      "task_execution": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "payload_not_retained",
+        "message": "payload not retained",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 1,
+          "planned_steps": 2,
+          "failed_step_1based": 2,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "planned_steps": 2,
+      "completed_steps": 1,
+      "native_failure_stage": [
+        "lift: payload_not_retained"
+      ],
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.0055660423332318035,
+              -0.8205508875968488
+            ],
+            [
+              0.03658665484265501,
+              -0.7783989451445583
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": false,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.03645411286326837,
+              -0.5957960862307292
+            ],
+            [
+              0.023074262734233963,
+              -0.49916523371491883
+            ]
+          ]
+        }
+      },
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 2,
+          "error": 0,
+          "partial": 1,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 2,
+          "payload_not_retained": 1
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": true,
+        "failure_cases": 1,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 1,
+        "failure_boundaries": [
+          {
+            "tool": "execute_task_plan",
+            "code": "payload_not_retained",
+            "unexpected_tools": [],
+            "boundary_kind": "failure"
+          }
+        ],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "audit_commands": 450,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 44.71849213907262,
+      "user_turn_wall_time_s": 221.616154,
+      "provider_ik_calls_consumed": 227,
+      "execution_refinement_ik_calls": [
+        26,
+        52
+      ],
+      "summary": {
+        "path": ".tamp-runs/stretch-realism-20261101/two-goal-shift/episode/summary.json",
+        "sha256": "c185cf62c339490904ac52fccc66128d7dfc29905dda096e78646ec365ddb2b9"
+      },
+      "protocol_record": {
+        "path": ".tamp-runs/stretch-realism-20261101/two-goal-shift/episode/protocol.json",
+        "sha256": "dd17894d1b17793883047dfd526635d4bc2f8e76288f10a32dd2906724579c41"
+      },
+      "actuation_audit": {
+        "path": ".tamp-runs/stretch-realism-20261101/two-goal-shift/episode/actuation.jsonl",
+        "sha256": "1986edbc6e849581566ef66fed54c31a7132c1f470a689fbc023b5393657f7ca"
+      },
+      "chat_logs": [
+        {
+          "path": ".tamp-runs/stretch-realism-20261101/two-goal-shift/episode/logs/chat/chat_2026-11-01_18-57-43.jsonl",
+          "sha256": "93d78b3354a6db899345d9ae3ee80bd0ee0cb30fec03ab071d4990f3ce21efe9"
+        }
+      ],
+      "scene_files_sha256": {
+        "stretch.xml": "2b92ed9c692ed6eed3f23afc1cea298d6df1540c50664f93d6d135e648dd3dfc",
+        "scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+        "scene_environment.xml": "b19e4aa96872db41911d0fc6518a9388e1cf60cd4a3a4d781cd837e453faba18",
+        "docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8"
+      }
+    },
+    {
+      "case_id": "swap-shift",
+      "job_id": "20261101_185442_f5d8a8",
+      "initial_x_shift_m": 0.015,
+      "task_passed": false,
+      "passed": false,
+      "cli_exit_code": 0,
+      "task_execution": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "payload_not_retained",
+        "message": "payload not retained",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 1,
+          "planned_steps": 3,
+          "failed_step_1based": 2,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "planned_steps": 3,
+      "completed_steps": 1,
+      "native_failure_stage": [
+        "lift: payload_not_retained"
+      ],
+      "final_predicates": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.022470289519536685,
+              -0.8298941239173204
+            ],
+            [
+              0.01811484365184823,
+              -0.7893107326159966
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": false,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.03623846747097752,
+              -0.5959005312908368
+            ],
+            [
+              0.02307889303586534,
+              -0.4998174478604882
+            ]
+          ]
+        }
+      },
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 2,
+          "error": 0,
+          "partial": 1,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 2,
+          "payload_not_retained": 1
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": true,
+        "failure_cases": 1,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 1,
+        "failure_boundaries": [
+          {
+            "tool": "execute_task_plan",
+            "code": "payload_not_retained",
+            "unexpected_tools": [],
+            "boundary_kind": "failure"
+          }
+        ],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "audit_commands": 476,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 45.349572923907544,
+      "user_turn_wall_time_s": 230.565616,
+      "provider_ik_calls_consumed": 385,
+      "execution_refinement_ik_calls": [
+        25,
+        52
+      ],
+      "summary": {
+        "path": ".tamp-runs/stretch-realism-20261101/swap-shift/episode/summary.json",
+        "sha256": "15e7b244bd586f928f97adfd361ca5d0fccd2850ac1d0b0a5e8a694fd3abb93f"
+      },
+      "protocol_record": {
+        "path": ".tamp-runs/stretch-realism-20261101/swap-shift/episode/protocol.json",
+        "sha256": "59fccf075e4b26e17e4f00ef7e30ee3caff4970d16d26df68f00f464e9bb0097"
+      },
+      "actuation_audit": {
+        "path": ".tamp-runs/stretch-realism-20261101/swap-shift/episode/actuation.jsonl",
+        "sha256": "362408ada5122bb26c2d390ce036c5cad0d5a539f3b942c6c1e66bf7b3d4b85f"
+      },
+      "chat_logs": [
+        {
+          "path": ".tamp-runs/stretch-realism-20261101/swap-shift/episode/logs/chat/chat_2026-11-01_18-57-42.jsonl",
+          "sha256": "71f0d75e1b32e08b4f7e81375a136baf2079880959ca1f4028afa1c308f7349a"
+        }
+      ],
+      "scene_files_sha256": {
+        "stretch.xml": "2b92ed9c692ed6eed3f23afc1cea298d6df1540c50664f93d6d135e648dd3dfc",
+        "scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+        "scene_environment.xml": "b19e4aa96872db41911d0fc6518a9388e1cf60cd4a3a4d781cd837e453faba18",
+        "docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8"
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "case_id": "two-goal-control",
+      "job_id": "20261101_190300_420034",
+      "execution": "native_stepped",
+      "scope": "in-process stepped physics, scripted public pick/place tools; no task-session/LLM/live async; no agent rescore",
+      "passed": true,
+      "completed_steps": 2,
+      "retention_rejections": [],
+      "artifact": {
+        "path": ".tamp-runs/stretch-realism-20261101/diagnosis/two-goal-control/trace.json",
+        "sha256": "5e0a3897bf5de899055da28a3853a7978b8a067c60b39e7459954ddf4d9e518a"
+      }
+    },
+    {
+      "case_id": "two-goal-shift",
+      "job_id": "20261101_190302_2a1e93",
+      "execution": "native_stepped",
+      "scope": "in-process stepped physics, scripted public pick/place tools; no task-session/LLM/live async; no agent rescore",
+      "passed": true,
+      "completed_steps": 2,
+      "retention_rejections": [],
+      "artifact": {
+        "path": ".tamp-runs/stretch-realism-20261101/diagnosis/two-goal-shift/trace.json",
+        "sha256": "c9936afb882cbbd43e54018e1fb80885f8cc434c026a3a7774244a88699e6642"
+      }
+    },
+    {
+      "case_id": "two-goal-shift",
+      "job_id": "20261101_190502_acb125",
+      "scope": "scripted public task tools over live async ZMQ, no LLM, no agent rescore; startup/head timing and inference waits differ",
+      "execution": "simulation_live_async",
+      "result": {
+        "schema_version": 1,
+        "tool": "plan_task",
+        "status": "error",
+        "code": "search_exhausted",
+        "message": "search exhausted",
+        "data": {},
+        "recovery": "inspect"
+      },
+      "retention_rejections": [],
+      "artifact": {
+        "path": ".tamp-runs/stretch-realism-20261101/diagnosis/live-two-goal-shift/trace.json",
+        "sha256": "6e3b288a64ccd5df6ca0489895006a9a89d993e981d6f70677d68dfcbfbae2fc"
+      }
+    },
+    {
+      "case_id": "two-goal-shift",
+      "job_id": "20261101_190646_bff211",
+      "scope": "scripted public task tools over live async ZMQ, no LLM, no agent rescore; adds six simulated seconds of startup settling; no inference waits; separate diagnostic condition",
+      "execution": "simulation_live_async",
+      "result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "payload_not_retained",
+        "message": "payload not retained",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 1,
+          "planned_steps": 2,
+          "failed_step_1based": 2,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "retention_rejections": [
+        {
+          "sim_time": 44.538000000008466,
+          "phase": "payload_retention",
+          "accepted": false,
+          "reason": "payload_not_retained",
+          "translation_residual_m": 0.0013145420335376101,
+          "rotation_residual_rad": 0.10084912740468452,
+          "translation_tolerance_m": 0.02,
+          "rotation_tolerance_rad": 0.1
+        }
+      ],
+      "artifact": {
+        "path": ".tamp-runs/stretch-realism-20261101/diagnosis/live-warm-two-goal-shift/trace.json",
+        "sha256": "2345fe29fc48a10a4c23b89f04693549222175cabc3afaa7d6615dfeb1199a5d"
+      },
+      "snapshot_analysis": {
+        "scope": "privileged snapshot diagnostic; private MuJoCo forward/collision reconstruction; no hardware sensors or sustained retention claim",
+        "initial_cube_center_m": [
+          -0.005,
+          -0.55,
+          0.5198922445797832
+        ],
+        "failure_cube_center_m": [
+          -0.004482474690210699,
+          -0.5476485025690809,
+          0.5412267779664827
+        ],
+        "cube_height_gain_m": 0.02133453338669944,
+        "rejection": {
+          "sim_time": 44.538000000008466,
+          "phase": "payload_retention",
+          "accepted": false,
+          "reason": "payload_not_retained",
+          "translation_residual_m": 0.0013145420335376101,
+          "rotation_residual_rad": 0.10084912740468452,
+          "translation_tolerance_m": 0.02,
+          "rotation_tolerance_rad": 0.1
+        },
+        "relative_rotation_deg": 5.778229367865552,
+        "finger_contacts": [
+          {
+            "bodies": [
+              "rubber_tip_left",
+              "object1"
+            ],
+            "distance_m": -0.005238894082846414
+          },
+          {
+            "bodies": [
+              "rubber_tip_right",
+              "object1"
+            ],
+            "distance_m": -0.005230126010070013
+          }
+        ],
+        "table_contact": false,
+        "interpretation": "rejected rigid payload rotation with bilateral fingertip contact; does not establish a dropped object; fixed-transform collision plan no longer certified"
+      },
+      "snapshot_analysis_artifact": {
+        "path": ".tamp-runs/stretch-realism-20261101/diagnosis/live-warm-two-goal-shift/snapshot_analysis.json",
+        "sha256": "aa4af31ba270e72a4df60c9d19f79f1f56f0450918b6e21b2a743c95b4111808"
+      }
+    }
+  ],
+  "scoring_tests": {
+    "passed": 21,
+    "failures": 0,
+    "errors": 0,
+    "junit": {
+      "path": ".tamp-runs/stretch-realism-20261101/scoring-tests.xml",
+      "sha256": "752c5dc5edc0950da6405cc82becd80c6402bdbac8fcdc6831577eb9d3ad8623"
+    }
+  },
+  "paper_validation": {
+    "build_exit_code": 0,
+    "pages": 54,
+    "undefined_references_or_citations": false,
+    "log": {
+      "path": ".tamp-runs/stretch-realism-20261101/paper-build.log",
+      "sha256": "7a434852ca6baeedf122e4f52ab7f423ba847360617fe38eca6dbe7e479bebcf"
+    }
+  },
+  "retention_thresholds": {
+    "translation_m": 0.02,
+    "rotation_rad": 0.1,
+    "changed": false
+  },
+  "aggregate": {
+    "fixed_population": 4,
+    "task_passed": 2,
+    "completed_steps": 7,
+    "planned_steps": 10,
+    "final_goals_satisfied": 5,
+    "final_goals": 8,
+    "audit_commands": 2153,
+    "forbidden_commands": 0,
+    "llm_calls": 16,
+    "infrastructure_failures": 0
+  }
+}

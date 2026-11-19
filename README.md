@@ -189,7 +189,9 @@ Discord / Mars agent: point `agent.llm` and `mapping.eqa.vl_endpoint` at the sam
 ## Quick Start (Simulation)
 
 For goal-conditioned base-and-arm control learning on Mars, see
-[Mars reactive RL](docs/mars_reactive_rl.md) for training, evaluation, and the opt-in simulator controller.
+[RL and whole-body control](docs/rl/README.md) for the design guide and evidence
+map, and [Mars reactive RL](docs/mars_reactive_rl.md) for training, evaluation,
+and the opt-in simulator controller.
 
 Run DynaMem in MuJoCo simulation in a few steps:
 
@@ -355,7 +357,9 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [Interaction-memory plan](docs/plans/2026-11-11_interaction_memory.md) | Proposed cross-task interaction beliefs, keyframe retrieval, and matched GPT/Qwen evaluation |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
+| [Agent architecture](docs/agent_architecture.md) | Source ownership, execution diagrams, mode/capability gates, and extension workflow |
 | [Agent tools](docs/agent_tools.md) | Complete CHAT and EQA tool index, requirements, and reference links |
+| [Tool contracts](docs/agent_tool_contracts.md) | Inputs, effects, evidence guarantees, adapter capabilities, and failure/recovery semantics |
 | [TAMP overview](docs/tamp.md) | Task discovery, motion planning, execution, verification, and current limits |
 | [llm_serve.md](docs/llm_serve.md) | **Remote inference** (OpenAI LAN) + **testing LLMs** (`emet llm` / `emet run chat --host`) |
 | [llm_agent.md](docs/llm_agent.md) | Historical Stretch LLM pickup walkthrough → points at modern agent docs |
@@ -417,6 +421,7 @@ Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; append
 | Doc | When to use |
 |-----|-------------|
 | [apps.md](docs/apps.md) | Catalog of `emet.app.*` demos |
+| [rl/](docs/rl/README.md) | RL/WBC philosophy, runbooks, plans and experiment evidence |
 | [data_collection.md](docs/data_collection.md) / [learning_from_demonstration.md](docs/learning_from_demonstration.md) | LfD collect → train |
 | [install_details.md](docs/install_details.md) / [docker.md](docs/docker.md) | Deeper install / image builds |
 | [debug.md](docs/debug.md) | Headless, Rerun, common failures |

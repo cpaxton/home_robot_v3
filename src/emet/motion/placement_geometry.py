@@ -189,7 +189,7 @@ class PlacementCollisionChecker:
     """
 
     def __init__(self, model, *, robot_body: str, ee_body: str, scene: PlacementScene,
-                 payload: HeldObject, contact_bodies: Sequence[str] = (), margin_m: float = .005):
+                 payload: HeldObject | None, contact_bodies: Sequence[str] = (), margin_m: float = .005):
         if not np.isfinite(margin_m) or margin_m < 0:
             raise ValueError("Nonnegative finite margin required")
         self.scene, self.payload, self.ee_body, self.margin = scene, payload, ee_body, margin_m
@@ -207,6 +207,17 @@ class PlacementCollisionChecker:
         self.last_reason = None
         self.released_bounds = None
 
+    def _payload_scene_collides(self, model, data, bounds):
+        return self.scene.collides(bounds)
+
+    def _robot_scene_collides(self, model, data, gid, bounds):
+        return self.scene.collides(bounds)
+
+    def _payload_robot_collides(self, model, data, gid, bounds, payload_bounds):
+        if int(model.geom_bodyid[gid]) in self.allowed_ids:
+            return False
+        return bool(np.all(bounds[1] >= payload_bounds[0]) and np.all(bounds[0] <= payload_bounds[1]))
+
     def configuration_collides(self, model, data):
         # Never overwrite the caller's FK/contact buffers, including executor data.
         if model is not self._model:
@@ -218,11 +229,13 @@ class PlacementCollisionChecker:
             self.last_reason = "robot_self_collision"
             return True
         ee = data.body(self.ee_body)
-        vertices = self.payload.world_vertices(ee.xpos, ee.xmat)
-        payload_bounds = np.stack((vertices.min(axis=0) - self.margin, vertices.max(axis=0) + self.margin))
+        payload_bounds = None
+        if self.payload is not None:
+            vertices = self.payload.world_vertices(ee.xpos, ee.xmat)
+            payload_bounds = np.stack((vertices.min(axis=0) - self.margin, vertices.max(axis=0) + self.margin))
         if self.released_bounds is not None:
             payload_bounds = self.released_bounds
-        if self.scene.collides(payload_bounds):
+        if payload_bounds is not None and self._payload_scene_collides(model, data, payload_bounds):
             self.last_reason = "payload_scene_collision"
             return True
         for gid in self.geom_ids:
@@ -231,11 +244,10 @@ class PlacementCollisionChecker:
             world_center = rotation @ center + data.geom_xpos[gid]
             world_half = np.abs(rotation) @ half
             bounds = np.stack((world_center - world_half - self.margin, world_center + world_half + self.margin))
-            if self.scene.collides(bounds):
+            if self._robot_scene_collides(model, data, gid, bounds):
                 self.last_reason = "robot_scene_collision"
                 return True
-            if int(model.geom_bodyid[gid]) not in self.allowed_ids:
-                if np.all(bounds[1] >= payload_bounds[0]) and np.all(bounds[0] <= payload_bounds[1]):
-                    self.last_reason = "payload_robot_collision"
-                    return True
+            if payload_bounds is not None and self._payload_robot_collides(model, data, gid, bounds, payload_bounds):
+                self.last_reason = "payload_robot_collision"
+                return True
         return False

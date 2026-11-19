@@ -116,6 +116,11 @@ def _run_case(
                     "stages": stages,
                 }
         env.resume_stage("place", reset_clock=True)
+        # Both transport segments verified retention and clearance. Rearming
+        # clears bias conservatively; explicitly authorize it for free-space
+        # descent, just as for transport. The first support contact below
+        # disables it before any support probe or grip release.
+        env.control.set_base_bias_compensation(True)
         target = grasp_configuration
         from emet.rl.manipulation.dynamic_trajectory import ArmTrajectory, segment
 
@@ -251,7 +256,7 @@ def _run_case(
                         boundary = retreat.segments[1].start
                         if command_time >= boundary and lift_retreat_start is None:
                             touching = False
-                            for contact in env.data.contact:
+                            for contact in env.data.contact[: env.data.ncon]:
                                 a, b = (int(env.model.geom_bodyid[g]) for g in (contact.geom1, contact.geom2))
                                 other = b if a == env.payload else a if b == env.payload else None
                                 if (

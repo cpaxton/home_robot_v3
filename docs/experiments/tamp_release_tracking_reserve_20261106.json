@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "source_commit": "816f1f4e",
+  "scope": "Native asynchronous Stretch tool reference; measured command-error reserve with nominal and lowered opening sweeps; not an agent score",
+  "agent_score": false,
+  "llm_calls": 0,
+  "hardware_trials": false,
+  "production_policy_changed": false,
+  "initial_state_certificate": false,
+  "original_agent_baseline_unchanged": "2/4",
+  "protocol": "configs/eval/tamp_release_tracking_reserve.json",
+  "cases": [
+    {
+      "id": "shift-offset-aware",
+      "case_id": "two-goal-shift",
+      "job_id": "20261106_072713_93858d",
+      "passed": false,
+      "run_status": "complete",
+      "code": "collision",
+      "completed_transfers": 0,
+      "declared_transfers": 2,
+      "native_failure_stages": [
+        "release"
+      ],
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03922441455759515,
+              -0.8211371234976531
+            ],
+            [
+              0.0021985419049684388,
+              -0.7797159634956313
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.025,
+              -0.5900000000000001
+            ],
+            [
+              0.015,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "audit_commands": 199,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 177.0321559930453,
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 26.715999999996072,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.54721976153979,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.01886465898728773
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 26.77399999999604,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6152828605190851,
+              0.12755259134922264,
+              0.12755281035913185,
+              0.12755242871020114,
+              0.1275518242985661,
+              -0.07979053164502632,
+              -0.78441282623419,
+              -0.056626055079273804
+            ],
+            "measured": [
+              0.593188450271095,
+              0.12754256669873817,
+              0.1275426755502323,
+              0.12754235534931413,
+              0.12754188113162496,
+              -0.07861152180602254,
+              -0.8035305474882806,
+              -0.056632149532795245
+            ],
+            "residual": 0.02209441024799008,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.07799999999587,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.02202593770567296
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.07999999999587,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.55721976153979,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.02540845401984415
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.237999999995782,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6246556382764161,
+              0.1275527866109469,
+              0.12755283906234002,
+              0.1275526526347651,
+              0.12755237856483448,
+              -0.07997994643539587,
+              -0.7844364359331545,
+              -0.05675901202125601
+            ],
+            "measured": [
+              0.5947456536575177,
+              0.1275468012312944,
+              0.12754731300467578,
+              0.12754733327274637,
+              0.1275474918829609,
+              -0.07890940071954974,
+              -0.8043510237755308,
+              -0.05677837493949684
+            ],
+            "residual": 0.029909984618898378,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.833999999995452,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.024154291175318976
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.833999999995452,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5272891488983409,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.027614339440916846
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.849999999995443,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.021999999995348,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/shift-offset-aware/protocol.json",
+          "sha256": "362dfd9f8dc4ed6dd5268519a4a4fdb248b8131c4dbc6e6c543fdb40ab616ad2"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/shift-offset-aware/summary.json",
+          "sha256": "5c49dd0fda0a83b710adc99a1d2d14978cf7c6eb81d8e81be56e2bc4720e1059"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/shift-offset-aware/initial.json",
+          "sha256": "a6d3564b80e1100f9c502727543d065339583cb9b4c2b5755089ea19f74cdde8"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/shift-offset-aware/contact.jsonl",
+          "sha256": "345e42f630926bdbdf035bbeb6d7e6882a715160dfcc36015744e06fcd684a66"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/shift-offset-aware/actuation.jsonl",
+          "sha256": "19866b3a6be45212c2b84d5eb05717b046b3942aac5255a75b92196f4372d8fa"
+        }
+      ]
+    },
+    {
+      "id": "control-offset-aware",
+      "case_id": "two-goal-control",
+      "job_id": "20261106_072713_0d4616",
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "native_failure_stages": [],
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03983846782366316,
+              -0.8202543958904491
+            ],
+            [
+              0.00031281230922085984,
+              -0.7801025051066595
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03992205965496662,
+              -0.7192057313716421
+            ],
+            [
+              0.0009524589901849512,
+              -0.638772076806757
+            ]
+          ]
+        }
+      },
+      "audit_commands": 476,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 299.3849867039826,
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 26.817999999996015,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5225027095898829,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.018305464493577728
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 26.82599999999601,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 26.995999999995917,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug"
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.10200000001282,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5482520602481733,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.018881201685249205
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.15800000001289,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6164775645710061,
+              0.09635597421058195,
+              0.09635599376677347,
+              0.09635552869024439,
+              0.09635496440550875,
+              0.07247648354213816,
+              -0.7848516977907589,
+              0.05148224177084245
+            ],
+            "measured": [
+              0.5943379929556697,
+              0.09634533044069499,
+              0.09634534901111345,
+              0.09634493927912154,
+              0.09634444820467,
+              0.07148614816325526,
+              -0.8037539184510447,
+              0.05165651568759692
+            ],
+            "residual": 0.022139571615336417,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.46200000001326,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.022068890032871935
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.46200000001326,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5582520602481733,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.025409940715515944
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.61800000001345,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6258542977703914,
+              0.09635585287992657,
+              0.09635591667623632,
+              0.09635566975577588,
+              0.09635529314118721,
+              0.07231753502532465,
+              -0.7848928418762731,
+              0.051364390846224656
+            ],
+            "measured": [
+              0.5959448464438556,
+              0.09635051874187776,
+              0.09635098699448691,
+              0.09635094358187982,
+              0.09635095977270496,
+              0.07180329141999027,
+              -0.8045692988659222,
+              0.051720376610955736
+            ],
+            "residual": 0.029909451326535774,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.22200000001419,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.024129526499147014
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.22200000001419,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5283911491980114,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.027545718131282926
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.2280000000142,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.41600000001443,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/control-offset-aware/protocol.json",
+          "sha256": "a5dabe1e8ac40c9f1b39d5fa15206e71bd140355a82d75b17b9d394e703bf006"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/control-offset-aware/summary.json",
+          "sha256": "7820df0097bd4bc566226a965f7d22a6c7f492cf2c8cf8958afe7bce3f87dddd"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/control-offset-aware/initial.json",
+          "sha256": "d89d3a8b9748eb4b00ef85ff9b2434ac3a117214a28eb30bc4fa075908c46a68"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/control-offset-aware/contact.jsonl",
+          "sha256": "ca54dea090ff083c6b48bdb290ac8e8425e65e80f7e86be28c78b699267f279a"
+        },
+        {
+          "path": ".tamp-runs/release-tracking-reserve-20261106/episodes/control-offset-aware/actuation.jsonl",
+          "sha256": "6471d2f0feb9e09ab5b1254a1699de6bff6752c41038ec988864acb03a728efb"
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "passed": 1,
+    "completed_transfers": 2,
+    "declared_transfers": 4,
+    "audit_commands": 675,
+    "forbidden_commands": 0,
+    "malformed_audit_rows": 0,
+    "population": 2,
+    "infrastructure_errors": 0
+  },
+  "replay": {
+    "artifact": {
+      "path": ".tamp-runs/release-tracking-reserve-20261106/replay.json",
+      "sha256": "4654a1dd98c514669e422226a54591d65d72eba2735646f589f742014884f581"
+    },
+    "results": [
+      {
+        "episode": "shift-checked-preserve",
+        "tracking_reserve_m": 0.018282099676892316,
+        "original_error": "gripper_open_path_failed:invalid_goal:collision",
+        "alternative": true,
+        "error": null,
+        "unchanged": true,
+        "commands": 0,
+        "target_z": 0.5490270697313251,
+        "gap_m": 0.028722792192996116
+      },
+      {
+        "episode": "shift-loaded-bind",
+        "tracking_reserve_m": 0.018810793942823145,
+        "original_error": "gripper_open_path_failed:invalid_goal:collision",
+        "alternative": true,
+        "error": null,
+        "unchanged": true,
+        "commands": 0,
+        "target_z": 0.5485746526870949,
+        "gap_m": 0.028773484279213113
+      }
+    ]
+  },
+  "validation": {
+    "tests": 96,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/release-search-20261106/offset-aware-final.xml",
+      "sha256": "830fab8ed5bb6d07993711a9a1d103032e2b8e2aeb47848d5b6e29817296d069"
+    }
+  }
+}
