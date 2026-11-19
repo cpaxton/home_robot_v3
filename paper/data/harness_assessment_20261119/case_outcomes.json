@@ -13,7 +13,8 @@
     "reason": "Invented plan handle refused; goal was not satisfied",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/native-cylinder/summary.json",
-    "artifact_sha256": "a9baf5c1a9893e3f571d7a5864de9bffd02f6dc61db917ba55abbec0a3be0687"
+    "artifact_sha256": "a9baf5c1a9893e3f571d7a5864de9bffd02f6dc61db917ba55abbec0a3be0687",
+    "raw_artifact_retained": false
   },
   {
     "stage": "native",
@@ -29,7 +30,8 @@
     "reason": "unexpected_terminal_feedback:execute_task_plan:unknown_plan. Forbidden commands: 0.",
     "source_sha": "91304072380277f00115c16d3705dfbe983da2a1",
     "artifact": "/tmp/emet-harness-run-20261119/recovery-recheck/stop-only/summary.json",
-    "artifact_sha256": "e519502c1c3e126a276fab5dd5259c8608a26187cbf45b0684eb40a0d814c3da"
+    "artifact_sha256": "e519502c1c3e126a276fab5dd5259c8608a26187cbf45b0684eb40a0d814c3da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "native",
@@ -45,39 +47,44 @@
     "reason": "unexpected_terminal_feedback:execute_task_plan:unknown_plan. Forbidden commands: 0.",
     "source_sha": "91304072380277f00115c16d3705dfbe983da2a1",
     "artifact": "/tmp/emet-harness-run-20261119/recovery-recheck/contextual-recovery/summary.json",
-    "artifact_sha256": "f12e1213966ed439c4c03b12b9dfa421fb1138e8db1acf27f6992dde009768fe"
+    "artifact_sha256": "f12e1213966ed439c4c03b12b9dfa421fb1138e8db1acf27f6992dde009768fe",
+    "raw_artifact_retained": false
   },
   {
     "stage": "find",
     "id": "default_table_s0_distinct_recep",
     "adapter": "Stretch",
     "tier": "observed simulation",
-    "status": "pending",
-    "independent_check": "",
+    "status": "passed",
+    "independent_check": "Shared runner recorded completion and its joint object/destination find verdict",
     "wall_s": null,
     "simulation_s": null,
     "model_s": null,
     "planning_s": null,
     "reason": "",
-    "source_sha": "",
-    "artifact": "",
-    "artifact_sha256": ""
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "artifact": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/cross-simulator-job.log",
+    "artifact_sha256": "6fc6f7e3e70f0d9a3e19abcc5201efaf0b4b29bf94c07608122ef29882591b53",
+    "raw_artifact_retained": true,
+    "evidence_note": "Supervisor log retained. Episode metrics, timing, and case packets were in the cleared temporary run."
   },
   {
     "stage": "find",
     "id": "molmo_rby1_ithor_s2_idx0",
     "adapter": "Molmo rby1",
     "tier": "observed simulation",
-    "status": "pending",
-    "independent_check": "",
+    "status": "failed",
+    "independent_check": "Shared runner recorded completion and its joint object/destination find verdict",
     "wall_s": null,
     "simulation_s": null,
     "model_s": null,
     "planning_s": null,
     "reason": "",
-    "source_sha": "",
-    "artifact": "",
-    "artifact_sha256": ""
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "artifact": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/cross-simulator-job.log",
+    "artifact_sha256": "6fc6f7e3e70f0d9a3e19abcc5201efaf0b4b29bf94c07608122ef29882591b53",
+    "raw_artifact_retained": true,
+    "evidence_note": "Supervisor log retained. Episode metrics, timing, and case packets were in the cleared temporary run."
   },
   {
     "stage": "find",
@@ -148,64 +155,72 @@
     "id": "hmeqa-q2",
     "adapter": "Habitat",
     "tier": "observed simulation",
-    "status": "pending",
-    "independent_check": "",
+    "status": "failed",
+    "independent_check": "Recorded model-final answer checked against the reference",
     "wall_s": null,
     "simulation_s": null,
     "model_s": null,
     "planning_s": null,
     "reason": "",
-    "source_sha": "",
-    "artifact": "",
-    "artifact_sha256": ""
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "artifact": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/dev.eqa-evidence.mTOzmoXrhY_s0_q2/q0002_lazy_graph/metrics.json",
+    "artifact_sha256": "d933a09908445957baf235cc7b2d8ac8512318a0bc5db5c4183f22ccd34c3a78",
+    "raw_artifact_retained": true,
+    "evidence_note": "Original on-disk episode bundle recovered after reboot."
   },
   {
     "stage": "eqa",
     "id": "hmeqa-q6",
     "adapter": "Habitat",
     "tier": "observed simulation",
-    "status": "pending",
-    "independent_check": "",
+    "status": "passed",
+    "independent_check": "Recorded model-final answer checked against the reference",
     "wall_s": null,
     "simulation_s": null,
     "model_s": null,
     "planning_s": null,
     "reason": "",
-    "source_sha": "",
-    "artifact": "",
-    "artifact_sha256": ""
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "artifact": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/dev.eqa-evidence.mTOzmoXrhY_s0_q6/q0006_lazy_graph/metrics.json",
+    "artifact_sha256": "edd216ae0278212b0fa10a0aed28c19083af6709173a8e7724a2e0143bd3833b",
+    "raw_artifact_retained": true,
+    "evidence_note": "Original on-disk episode bundle recovered after reboot."
   },
   {
     "stage": "eqa",
     "id": "hmeqa-q12",
     "adapter": "Habitat",
     "tier": "observed simulation",
-    "status": "pending",
-    "independent_check": "",
+    "status": "passed",
+    "independent_check": "Recorded model-final answer checked against the reference",
     "wall_s": null,
     "simulation_s": null,
     "model_s": null,
     "planning_s": null,
     "reason": "",
-    "source_sha": "",
-    "artifact": "",
-    "artifact_sha256": ""
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "artifact": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/dev.eqa-evidence.mTOzmoXrhY_s0_q12/q0012_lazy_graph/metrics.json",
+    "artifact_sha256": "acffc011e8148ec745dde0b24181b83854dc494193d8c00badd3c2ae23cefb79",
+    "raw_artifact_retained": true,
+    "evidence_note": "Original on-disk episode bundle recovered after reboot."
   },
   {
     "stage": "find",
     "id": "hm3d_lamp_bed_00006_nearest_v2",
     "adapter": "Habitat",
     "tier": "observed simulation",
-    "status": "pending",
+    "status": "infrastructure_error",
     "independent_check": "",
     "wall_s": null,
     "simulation_s": null,
     "model_s": null,
     "planning_s": null,
-    "reason": "",
-    "source_sha": "",
-    "artifact": "",
-    "artifact_sha256": ""
+    "reason": "Host reboot with no final metric for this assignment",
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "artifact": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/cross-simulator-job.log",
+    "artifact_sha256": "6fc6f7e3e70f0d9a3e19abcc5201efaf0b4b29bf94c07608122ef29882591b53",
+    "raw_artifact_retained": true,
+    "evidence_note": "The reboot interrupted the original attempt. Bounded CPU-only preflights stopped at renderer initialization."
   },
   {
     "stage": "observed-tamp",
@@ -349,7 +364,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -365,7 +381,8 @@
     "reason": "Required change of view did not occur",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/active-cap-dev-01/cap-dev-01/result.json",
-    "artifact_sha256": "1082f18eab510694a2249ff93af22911ae0895e04ef4d953422dd4d47c7351bc"
+    "artifact_sha256": "1082f18eab510694a2249ff93af22911ae0895e04ef4d953422dd4d47c7351bc",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -381,7 +398,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -397,7 +415,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "geometry",
@@ -413,7 +432,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -429,7 +449,8 @@
     "reason": "Required change of view did not occur",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/active-cap-dev-02/cap-dev-02/result.json",
-    "artifact_sha256": "821141694c1ffa53e5f6dbe1c30eb943126e5c6ae094ecfd24bc2f096d49b85b"
+    "artifact_sha256": "821141694c1ffa53e5f6dbe1c30eb943126e5c6ae094ecfd24bc2f096d49b85b",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -445,7 +466,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -461,7 +483,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "geometry",
@@ -477,7 +500,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -509,7 +533,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -541,7 +566,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -573,7 +599,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -605,7 +632,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -637,7 +665,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -653,7 +682,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "geometry",
@@ -669,7 +699,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -701,7 +732,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -717,7 +749,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "geometry",
@@ -733,7 +766,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -765,7 +799,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -797,7 +832,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -829,7 +865,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -845,7 +882,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "geometry",
@@ -861,7 +899,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/recorded-geometry/qualification.json",
-    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01"
+    "artifact_sha256": "85e114296cf280e9bd5c3cd49ab5a7a2cc2a1a930828c02a85d6854c2d700d01",
+    "raw_artifact_retained": false
   },
   {
     "stage": "active",
@@ -893,7 +932,8 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   },
   {
     "stage": "replay",
@@ -909,6 +949,7 @@
     "reason": "",
     "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
     "artifact": "/tmp/emet-harness-run-20261119/replay/results.jsonl",
-    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da"
+    "artifact_sha256": "36b83f3f965854bbd447667c8cbc2961dd92da24634040ab5f9a40bd110e36da",
+    "raw_artifact_retained": false
   }
 ]

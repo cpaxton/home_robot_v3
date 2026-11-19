@@ -1,7 +1,7 @@
 # First harness audit figure inputs
 
-This snapshot preserves initial contract, recorded and live development
-outcomes on the frozen assessment revision. See the
+This snapshot preserves initial and recovered cross-simulator outcomes from
+the frozen assessment revision. See the
 [assessment report](../../../docs/experiments/harness_assessment_20261119.md)
 for interpretation and remaining gates.
 
@@ -20,6 +20,11 @@ for interpretation and remaining gates.
 
 Build from raw evidence with
 [`summarize_harness_assessment.py`](../../../scripts/summarize_harness_assessment.py).
-Raw paths resolve on the host under `/tmp/emet-harness-run-20261119`. The
-normalized JSONL and generated CSV are in that run directory. This snapshot
-is the initial audit and does not pool separate trials or assistance modes.
+The reboot cleared the original temporary artifacts. The ledger retains their
+previously recorded hashes and marks their availability. The copied supervisor
+log and Habitat bundles are in the persistent
+`logs/harness-assessment-resume-20261119/recovered` directory.
+
+- [Recovered Habitat EQA maps](../../figures/harness_assessment_habitat_eqa_20261119.pdf)
+  and [map hashes](recovered_eqa_maps.json).
+- [Interruption and renderer preflight receipt](reboot_recovery.json).

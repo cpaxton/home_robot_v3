@@ -5,7 +5,10 @@ and Habitat. Start from the main revision recorded in the
 [case manifest](../../configs/eval/harness_assessment_20261119.json). Commit
 the assessment driver and freeze its SHA before launching a scored cohort.
 Use a clean checkout, a new artifact directory per attempt, and the existing
-managed jobs policy. Keep simulator, replay, and hardware results distinct.
+managed jobs policy. Keep the checkout, raw outputs, and job logs on persistent
+storage so a reboot preserves completed cases. Validate one frame on the actual
+renderer before resuming an interrupted live cohort. Keep simulator, replay,
+and hardware results distinct.
 
 ## Assessment order
 

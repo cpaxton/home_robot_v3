@@ -33,11 +33,9 @@ any retry authorization. The recovery recheck is a separate cohort. Both trials 
 reached the specified partial-transfer boundary or received a recovery turn.
 
 See the [coverage and per-case figure inputs](../../paper/data/harness_assessment_20261119/README.md).
-The raw run root is `/tmp/emet-harness-run-20261119` on the assessment host.
 Managed job receipts preserve the commands and timestamps. Discord awaits an
 explicit private test channel. Stationary hardware and observed execution
-remain gated by the simulator review and #245 respectively. Follow the scoped
-Stretch/Molmo find and Habitat jobs through `20261119_170502_21b235`.
+remain gated by the simulator review and #245 respectively.
 
 The active cases give evidence for camera transport, absent-target handling,
 and no-dispatch motion refusal. The changed-view recall gate remains open.
@@ -45,3 +43,33 @@ The next isolated navigation comparison is a scripted feasible rotation
 with qualified footprint coverage versus the fixed unknown-footprint
 refusal, followed by the same agent requests. Keep broad downward
 inspection and targeted floor projection separately measurable.
+
+## Recovered cross-simulator assessment
+
+Job `20261119_170502_21b235` recorded five completed verdicts before the host
+reboot at 17:50 EST. The available journal does not establish the cause.
+
+| Case | Recovered result | Evidence |
+| --- | --- | --- |
+| Stretch S0 find | Object and destination gate passed | Supervisor log |
+| Molmo rby1 find | Finished and missed the joint object and destination gate | Supervisor log |
+| Habitat HM-EQA q2/q6/q12 | 2/3 correct. q6 and q12 passed. | Original episode bundles and model-final metrics |
+| Habitat nearest-v2 find | Interrupted, no task verdict | Missing final metric after reboot |
+
+The reboot cleared the original scratch checkout and temporary run directory.
+The surviving job logs and all three EQA bundles are archived under
+`logs/harness-assessment-resume-20261119/recovered` in the persistent workspace.
+The two room verdicts have log-level evidence. Their episode timings, packets,
+and phase details remain unavailable. The revised figure includes the
+recovered rows, and the [EQA map panel](../../paper/figures/harness_assessment_habitat_eqa_20261119.pdf)
+uses the original bundles.
+
+Only the pending Habitat proxy scene was probed after reboot. CUDA was hidden
+and the probes were limited to two CPU cores, 16 GiB address space, and 55–75
+seconds. The installed Habitat 0.3.3 build first rejected the software EGL
+context for lack of a CUDA device. Selecting the default EGL device with
+`gpu_device_id=-1` reached Mesa but aborted at LLVM option registration. The
+system-loader probe reproduced that abort. The host boot ID stayed stable and
+the agent trial remained unscored. The renderer failures are recorded
+separately from the unexplained reboot. A compatible software Habitat build
+or an isolated simulator host is the next path for the remaining case.

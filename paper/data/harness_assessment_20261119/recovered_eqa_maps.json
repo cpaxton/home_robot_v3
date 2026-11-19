@@ -1,0 +1,29 @@
+[
+  {
+    "question_id": 2,
+    "correct": false,
+    "answer_provenance": "model_final",
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "map": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/dev.eqa-evidence.mTOzmoXrhY_s0_q2/q0002_lazy_graph/topdown_map.png",
+    "map_sha256": "2cbc8790f624e273559cfbc8380ad428c9f4b652544fc4fb333431f43ad9152a",
+    "metrics_sha256": "d933a09908445957baf235cc7b2d8ac8512318a0bc5db5c4183f22ccd34c3a78"
+  },
+  {
+    "question_id": 6,
+    "correct": true,
+    "answer_provenance": "model_final",
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "map": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/dev.eqa-evidence.mTOzmoXrhY_s0_q6/q0006_lazy_graph/topdown_map.png",
+    "map_sha256": "adb22a1098d241e5af0c83665434d46ed63bc42eebe8187e4aa37b15dbefa0bf",
+    "metrics_sha256": "edd216ae0278212b0fa10a0aed28c19083af6709173a8e7724a2e0143bd3833b"
+  },
+  {
+    "question_id": 12,
+    "correct": true,
+    "answer_provenance": "model_final",
+    "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+    "map": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/dev.eqa-evidence.mTOzmoXrhY_s0_q12/q0012_lazy_graph/topdown_map.png",
+    "map_sha256": "c6a5a634536b9f209def02773b05be9ad89b4ba26a561056c4dff1f28048b73a",
+    "metrics_sha256": "acffc011e8148ec745dde0b24181b83854dc494193d8c00badd3c2ae23cefb79"
+  }
+]
