@@ -17,10 +17,10 @@ preserves capture, geometry, and prior integration evidence.
 
 ## Work in dependency order
 
-1. **Review #250 and land the scoped changes.** Review partial receipts,
-   unknown-space rejection, and the evidence boundaries. Use the two successful
-   layouts as positive controls. Preserve the historical failures and keep the
-   unqualified pre-descent pilot separate.
+1. **Land the scoped #250 changes after the [TAMP contract checks](../TESTING.md#tamp-contracts).**
+   The review covered partial receipts, unknown-space rejection, and evidence
+   boundaries. Use the two successful layouts as positive controls. Preserve
+   the historical failures and keep the pre-descent pilot separate.
 2. **Measure and qualify #251.** Replay cylinder right and time solid creation,
    map admission, arm paths, base sweeps, and release separately. Require
    collision-decision parity before timing comparisons. Rerun both cylinder

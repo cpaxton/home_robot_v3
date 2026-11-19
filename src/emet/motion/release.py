@@ -64,7 +64,7 @@ class ReleaseLimits:
             or tuple(sorted(set(self.lateral_offsets_m))) != self.lateral_offsets_m
             or len(self.lateral_offsets_m) > 3
             or any(value <= 0 for value in self.lateral_offsets_m)
-            or not self.lateral_directions
+            or (bool(self.lateral_offsets_m) and not self.lateral_directions)
             or len(self.lateral_directions) > 4
             or any(len(direction) != 2 or not np.isfinite(direction).all()
                    or not np.isclose(np.linalg.norm(direction), 1.0, atol=1e-9)

@@ -17,6 +17,20 @@ Current slice ownership, reproduced failures and exact-head gates are tracked in
 [the stack readiness ledger](plans/shared_stack_readiness.md). Coverage is now
 separate PR #198; integrated pilot results do not clear the public slice heads.
 
+### TAMP contracts
+
+The [TAMP workflow](../.github/workflows/tamp.yml) runs on pull requests in a
+CPU environment with the locked development and simulation dependencies.
+It checks native dispatch, fresh-source revalidation, observed collision
+admission, release planning, and the mobile regression harness. Each test file
+runs in its own process so a native MuJoCo crash fails the job and leaves the
+other files runnable. The workflow uploads JUnit results as
+`tamp-contract-reports`.
+
+To reproduce the gate locally, use the install and test commands from the
+workflow with rendering disabled. Live observed transfers and agent trials
+have separate acceptance gates in the [TAMP qualification plan](plans/2026-11-18_tamp_agent_closeout.md).
+
 ### Extracted shared-agent stack (October 2026)
 
 #### Current closeout status (2026-10-16)

@@ -789,7 +789,8 @@ The opt-in native bounded-release policy first checks the measured pose and its
 existing vertical corrections. If none certifies opening the whole hand, it
 also searches horizontal destination offsets. `ReleaseLimits.lateral_offsets_m`
 defaults to `(0.01, 0.02, 0.03)` metres, with the four cardinal
-`lateral_directions`; an empty offset tuple disables this fallback. Up to three
+`lateral_directions`. An empty offset tuple disables this fallback and permits
+an empty direction tuple. Up to three
 horizontal magnitudes and four unit directions are supported. With the default
 three height increments this is at most 36 lateral candidates per planning pass.
 These are generic geometry candidates, independent of object labels.

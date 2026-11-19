@@ -11,6 +11,9 @@ class CommandBoundary:
 
     def __getattr__(self, name):
         target = getattr(self._robot, name)
+        # Native executor send methods. Route new transports through a guarded
+        # command callback or extend this set and its dispatch tests. A method
+        # forwarded here without entering() cannot record a possible send.
         if name not in {"open_gripper", "close_gripper", "gripper_to", "arm_to", "move_base_to"}:
             return target
 

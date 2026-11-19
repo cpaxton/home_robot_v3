@@ -510,6 +510,7 @@ def test_shared_place_executor_stops_before_next_command_on_release_failure(fail
         {"max_adjustments": True},
         {"offsets_m": (0.003, 0.003)},
         {"offsets_m": ()},
+        {"lateral_directions": ()},
     ],
 )
 def test_invalid_limits_rejected(kwargs):
@@ -604,7 +605,7 @@ def test_lateral_fallback_shifts_destination_when_vertical_opening_stays_blocked
 
 def test_disabled_lateral_fallback_preserves_vertical_only_verdict():
     ex = rig_xy('<body name="wall" pos=".05 0 .075"><geom type="box" size=".005 .1 .075"/></body>')
-    limits = ReleaseLimits(.04, .04, height_joint="height", lateral_offsets_m=())
+    limits = ReleaseLimits(.04, .04, height_joint="height", lateral_offsets_m=(), lateral_directions=())
     plan, error = plan_release(ex, support="table", region=None, limits=limits, initial_z=.025)
     assert plan is None and "collision" in error
     ex.command_joints.assert_not_called()
