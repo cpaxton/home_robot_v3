@@ -37,6 +37,16 @@ from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
 from emet.rl.manipulation.whole_body_observation import actor_observation
 
 
+# Physical hold envelope for the base during a rehearsal: the independent
+# hold-XY / bounded-yaw region the running robot permits before its hold
+# actuators give way. This is a safety stop, distinct from the reward's
+# acceptance tolerance (`base_xy_tolerance`); the reward dead-zone must stay
+# well inside it so the policy holds the base with margin rather than riding
+# the boundary. See `whole_body_reward.py` for the reward side.
+HOLD_XY_ENVELOPE_M = 0.05
+HOLD_YAW_ENVELOPE_RAD = np.deg2rad(47)
+
+
 def save(path, record):
     path = Path(path)
     temporary = path.with_suffix(path.suffix + ".partial")
@@ -192,7 +202,10 @@ def evaluate(env, case, policy, output, name):
             delivered = True
         # Match the independent physical hold-XY / bounded-yaw envelope.
         base = control.base_pose()
-        if np.linalg.norm(base[:2]) > 0.05 or abs(np.arctan2(np.sin(base[2]), np.cos(base[2]))) > np.deg2rad(47):
+        if (
+            np.linalg.norm(base[:2]) > HOLD_XY_ENVELOPE_M
+            or abs(np.arctan2(np.sin(base[2]), np.cos(base[2]))) > HOLD_YAW_ENVELOPE_RAD
+        ):
             control.stop()
             terminal = {**terminal, "is_success": False, "code": "rehearsal_boundary"}
             break

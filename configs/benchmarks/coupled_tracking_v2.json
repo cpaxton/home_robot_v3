@@ -218,6 +218,48 @@
           "travel_m": -0.15
         },
         "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:train:arm_only:10",
+        "seed": 35700010,
+        "split": "train",
+        "mode": "arm_only",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0.06,
+          0.07,
+          -0.06,
+          0.05,
+          -0.04
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:audit:arm_only:11",
+        "seed": 35700011,
+        "split": "audit",
+        "mode": "arm_only",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          -0.07,
+          -0.05,
+          0.06,
+          -0.05,
+          0.04
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
       }
     ],
     "stretch": [
@@ -435,6 +477,48 @@
           "at_fraction": 0.5,
           "travel_m": -0.15
         },
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:arm_only:10",
+        "seed": 35710010,
+        "split": "train",
+        "mode": "arm_only",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0.06,
+          0.07,
+          -0.06,
+          0.05,
+          -0.04
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:audit:arm_only:11",
+        "seed": 35710011,
+        "split": "audit",
+        "mode": "arm_only",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          -0.07,
+          -0.05,
+          0.06,
+          -0.05,
+          0.04
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
         "purpose": "tracking"
       }
     ]

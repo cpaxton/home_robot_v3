@@ -1,0 +1,642 @@
+[
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:0",
+    "seed": 35900000,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": 0.09,
+    "turn_rad": -0.16,
+    "arm_delta": [
+      0.0,
+      -0.04,
+      0.04,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:1",
+    "seed": 35900001,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": -0.09,
+    "turn_rad": -0.18,
+    "arm_delta": [
+      0.0,
+      0.06,
+      -0.06,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:2",
+    "seed": 35900002,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": 0.12,
+    "turn_rad": 0.19,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.08
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:3",
+    "seed": 35900003,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": -0.12,
+    "turn_rad": 0.16,
+    "arm_delta": [
+      0.0,
+      -0.03,
+      0.03,
+      0.0,
+      0.06
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:4",
+    "seed": 35900004,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": 0.1,
+    "turn_rad": 0.14,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.06
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:5",
+    "seed": 35900005,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": -0.1,
+    "turn_rad": -0.14,
+    "arm_delta": [
+      0.0,
+      0.04,
+      -0.04,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:6",
+    "seed": 35900006,
+    "split": "train",
+    "mode": "hand_free_base",
+    "travel_m": 0.06,
+    "turn_rad": -0.1,
+    "arm_delta": [
+      0.0,
+      -0.03,
+      0.03,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:hand:7",
+    "seed": 35900007,
+    "split": "train",
+    "mode": "coupled",
+    "travel_m": -0.06,
+    "turn_rad": 0.1,
+    "arm_delta": [
+      0.0,
+      0.03,
+      -0.03,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:base:0",
+    "seed": 35900020,
+    "split": "train",
+    "mode": "base_only",
+    "travel_m": 0.1,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:base:1",
+    "seed": 35900021,
+    "split": "train",
+    "mode": "base_only",
+    "travel_m": -0.1,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:base:2",
+    "seed": 35900022,
+    "split": "train",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": 0.18,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:base:3",
+    "seed": 35900023,
+    "split": "train",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": -0.18,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:0",
+    "seed": 35901000,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.09720000000000001,
+    "turn_rad": -0.1728,
+    "arm_delta": [
+      0.0,
+      -0.0432,
+      0.0432,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:1",
+    "seed": 35901001,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.09720000000000001,
+    "turn_rad": -0.19440000000000002,
+    "arm_delta": [
+      0.0,
+      0.0648,
+      -0.0648,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:2",
+    "seed": 35901002,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.1296,
+    "turn_rad": 0.20520000000000002,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.08
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:3",
+    "seed": 35901003,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.1296,
+    "turn_rad": 0.1728,
+    "arm_delta": [
+      0.0,
+      -0.0324,
+      0.0324,
+      0.0,
+      0.0648
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:4",
+    "seed": 35901004,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.10800000000000001,
+    "turn_rad": 0.15120000000000003,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0648
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:5",
+    "seed": 35901005,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.10800000000000001,
+    "turn_rad": -0.15120000000000003,
+    "arm_delta": [
+      0.0,
+      0.0432,
+      -0.0432,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:6",
+    "seed": 35901006,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0648,
+    "turn_rad": -0.10800000000000001,
+    "arm_delta": [
+      0.0,
+      -0.0324,
+      0.0324,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:hand:7",
+    "seed": 35901007,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": -0.0648,
+    "turn_rad": 0.10800000000000001,
+    "arm_delta": [
+      0.0,
+      0.0324,
+      -0.0324,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:base:0",
+    "seed": 35901020,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.10800000000000001,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:base:1",
+    "seed": 35901021,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.10800000000000001,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:base:2",
+    "seed": 35901022,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": 0.19440000000000002,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:base:3",
+    "seed": 35901023,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": -0.19440000000000002,
+    "arm_delta": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:arm_only:0",
+    "seed": 35900030,
+    "split": "train",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      0.05,
+      0.06,
+      -0.06,
+      0.05,
+      -0.04
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:arm_only:1",
+    "seed": 35900031,
+    "split": "train",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      -0.06,
+      0.05,
+      0.06,
+      -0.05,
+      0.04
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:arm_only:2",
+    "seed": 35900032,
+    "split": "train",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      0.06,
+      -0.05,
+      0.05,
+      0.06,
+      -0.05
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:train:arm_only:3",
+    "seed": 35900033,
+    "split": "train",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      -0.05,
+      -0.06,
+      -0.05,
+      0.05,
+      0.05
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:arm_only:0",
+    "seed": 35901030,
+    "split": "audit",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      -0.05,
+      -0.06,
+      0.06,
+      -0.05,
+      0.05
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:arm_only:1",
+    "seed": 35901031,
+    "split": "audit",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      0.06,
+      -0.05,
+      -0.06,
+      0.05,
+      0.05
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:arm_only:2",
+    "seed": 35901032,
+    "split": "audit",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      -0.06,
+      0.06,
+      0.05,
+      -0.05,
+      -0.05
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "mars:wrapper-reward-v2:audit:arm_only:3",
+    "seed": 35901033,
+    "split": "audit",
+    "mode": "arm_only",
+    "travel_m": 0.0,
+    "turn_rad": 0,
+    "arm_delta": [
+      0.05,
+      0.05,
+      -0.05,
+      -0.06,
+      0.04
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  }
+]

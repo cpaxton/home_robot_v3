@@ -133,10 +133,14 @@ class RewardMeter:
         self.before_hand = None
         delta = c.base_goal - c.base_pose()
         delta[2] = np.arctan2(np.sin(delta[2]), np.cos(delta[2]))
-        outside = max(0, np.linalg.norm(delta[:2] * c.base_mask[:2]) - e.config.base_xy_tolerance)
+        # Use the active tolerance, which tightens to the fixed-base contract
+        # (5 mm) for arm-only trials instead of granting full base credit out
+        # to the full acceptance radius. The acceptance radius must stay well
+        # inside the hard hold envelope, never equal to it.
+        outside = max(0, np.linalg.norm(delta[:2] * c.base_mask[:2]) - e.active_base_xy_tolerance)
         heading_error = abs(delta[2] * c.base_mask[2])
         if self.base_heading_region:
-            heading_error = max(0, heading_error - e.config.base_heading_tolerance)
+            heading_error = max(0, heading_error - e.active_base_heading_tolerance)
         base_score = (
             settings.base_pose_weight
             * np.exp(-outside / settings.base_position_scale_m - heading_error / settings.base_heading_scale_rad)

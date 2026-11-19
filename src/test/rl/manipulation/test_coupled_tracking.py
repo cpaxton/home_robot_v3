@@ -74,6 +74,8 @@ def test_coarse_distribution_keeps_precise_hand_and_requires_real_base_progress(
     for c in all_new:
         if c["mode"] == "fixed_world_hand":
             assert c["purpose"] == "hand_hold_nullspace_diagnostic"
+        elif c["mode"] == "arm_only":
+            assert c["travel_m"] == 0 and c["turn_rad"] == 0 and any(c["arm_delta"])
         elif any(c["base_mask"][:2]):
             assert abs(c["travel_m"]) > 2 * after["base_xy_tolerance"]
 
@@ -127,6 +129,35 @@ def test_coarse_general_reward_has_no_in_region_heading_precision_pressure(robot
         c.base_goal[2] += np.deg2rad(4)
         old.tick(action, motion)
         assert old.last_terms["base_pose_score"] < original
+    finally:
+        env.close()
+
+
+@pytest.mark.sim
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_arm_only_case_holds_base_with_fixed_base_tolerance(robot):
+    """Arm-only cases must keep the fixed-base hold, not the 5 cm acceptance radius."""
+    from emet.rl.manipulation.whole_body_reward import RewardMeter
+
+    case = next(c for c in load_suite(COARSE_SUITE)["robots"][robot] if c["mode"] == "arm_only")
+    env = CoupledTrackingEnv(robot, [case], suite_path=COARSE_SUITE)
+    try:
+        env.reset()
+        e, c = env.unwrapped, env.unwrapped.control
+        assert e.fixed_base_trial is True
+        assert e.active_base_xy_tolerance == pytest.approx(e.config.fixed_base_xy_tolerance)
+        assert c.base_xy_tolerance == e.active_base_xy_tolerance
+        assert c.base_goal is not None and c.hand_mask
+        # A 1 cm base drift is inside the 5 cm acceptance radius but outside the
+        # fixed-base hold, so the reward must already be penalizing it.
+        c.base_goal = c.base_pose().copy()
+        action, motion = np.zeros(e.profile.action_size), np.zeros(9)
+        meter = RewardMeter(e, base_heading_region=True)
+        meter.tick(action, motion)
+        settled = meter.last_terms["base_pose_score"]
+        c.base_goal[:2] += [0.01, 0.0]
+        meter.tick(action, motion)
+        assert meter.last_terms["base_pose_score"] < settled
     finally:
         env.close()
 

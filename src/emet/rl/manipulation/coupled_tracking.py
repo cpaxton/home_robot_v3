@@ -23,7 +23,7 @@ from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 ROOT = Path(__file__).resolve().parents[4]
 SUITE = ROOT / "configs/benchmarks/coupled_tracking_v1.json"
 COARSE_SUITE = ROOT / "configs/benchmarks/coupled_tracking_v2.json"
-MODES = {"hand_free_base", "coupled", "base_only", "fixed_world_hand"}
+MODES = {"hand_free_base", "coupled", "base_only", "fixed_world_hand", "arm_only"}
 
 
 def suite_contract(suite):
@@ -88,9 +88,10 @@ def load_suite(path=SUITE):
                 or len(mask) != 3
                 or any(type(v) is not bool for v in mask)
                 or (case["mode"] == "hand_free_base" and any(mask))
-                or (case["mode"] in {"base_only", "fixed_world_hand"} and not all(mask))
+                or (case["mode"] in {"base_only", "fixed_world_hand", "arm_only"} and not all(mask))
                 or (case["mode"] == "base_only" and np.any(motion[2:]))
                 or (case["mode"] == "fixed_world_hand" and np.any(motion))
+                or (case["mode"] == "arm_only" and (np.any(motion[:2]) or not np.any(motion[2:])))
                 or (case["mode"] == "coupled" and not any(mask))
             ):
                 raise ValueError("invalid coupled geometry or masks")
@@ -99,7 +100,7 @@ def load_suite(path=SUITE):
                 if case.get("purpose") != purpose:
                     raise ValueError("v2 must distinguish optional nullspace motion from required base progress")
                 if (
-                    case["mode"] != "fixed_world_hand"
+                    case["mode"] not in {"fixed_world_hand", "arm_only"}
                     and any(mask[:2])
                     and abs(motion[0]) <= 2 * contract["base_xy_tolerance"]
                 ):
@@ -498,10 +499,13 @@ class CoupledTrackingEnv(gym.Wrapper):
         if not self.admission["accepted"]:
             raise ValueError("coupled_reference_rejected:" + str(self.admission["reason"]))
         e.reach_hold_trial = False
-        e.fixed_base_trial = False
+        e.fixed_base_trial = case["mode"] == "arm_only"
         # The reset uses a fixed-base hold fixture. Once that fixture is no
         # longer the task, the servo must use the same region as the scorer;
         # otherwise its stale 5 mm tolerance silently overrides the 5 cm task.
+        # Arm-only cases keep the fixed-base hold so the policy must hold the
+        # base still (5 mm) while tracking the hand, instead of drifting it
+        # toward the 5 cm acceptance radius that matches the hard hold envelope.
         e.control.base_xy_tolerance = e.active_base_xy_tolerance
         e.control.pose_only_targets = True
         e.set_task_trajectory(reference)
