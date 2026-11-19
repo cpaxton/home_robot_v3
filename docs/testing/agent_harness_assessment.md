@@ -74,7 +74,10 @@ PYTHONPATH=src python scripts/summarize_harness_assessment.py \
 ```
 
 The exporter also accepts no results to materialize the assignments and
-capability matrix. Supply one JSONL row per evaluated assignment, using
+capability matrix. Pass `--recorded-geometry` and `--recorded-replay` with the
+corresponding raw directories to render an example history success and a retained
+abstention failure. The exporter cross-checks the replay and image hashes.
+Supply one JSONL row per evaluated assignment, using
 `stage`, `id`, `status`, `source_sha`, and an `artifact` path relative to the
 JSONL file or absolute. Include the independently checked result for
 `passed` and `failed` rows as `independent_check`. Put the blocker in `reason`

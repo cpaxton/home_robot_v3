@@ -194,17 +194,99 @@ def plot_outcomes(rows, out):
     plt.close(fig)
 
 
+def plot_recorded_examples(geometry, replay, out):
+    """Show one history-dependent success and one retained abstention failure."""
+    import matplotlib.pyplot as plt
+    from PIL import Image
+
+    manifest_path = geometry / "evidence_manifest.json"
+    protocol = json.loads((replay / "protocol.json").read_text())
+    if hashlib.sha256(manifest_path.read_bytes()).hexdigest() != protocol["evidence_sha256"]:
+        raise ValueError("Replay refers to a different recorded-evidence manifest")
+    manifest = json.loads(manifest_path.read_text())
+    rows = [json.loads(line) for line in (replay / "results.jsonl").read_text().splitlines() if line.strip()]
+    paired = {}
+    for row in rows:
+        paired.setdefault(row["episode_id"], {})[row["arm"]] = row
+    eligible = [
+        (case_id, arms)
+        for case_id, arms in sorted(paired.items())
+        if set(arms) == {"full_history", "current_only"} and not any(r.get("error") for r in arms.values())
+    ]
+    pass_example = next(
+        (
+            (case, arms)
+            for case, arms in eligible
+            if arms["full_history"]["correct"] and not arms["current_only"]["correct"]
+        ),
+        None,
+    )
+    fail_example = next(
+        (
+            (case, arms)
+            for case, arms in eligible
+            if arms["full_history"]["reference_answer"] == "abstain" and not arms["full_history"]["correct"]
+        ),
+        None,
+    )
+    selected = [example for example in (pass_example, fail_example) if example is not None]
+    if not selected:
+        return
+    fig, axes = plt.subplots(len(selected), 2, figsize=(9, 3.5 * len(selected)), squeeze=False)
+    provenance = []
+    try:
+        for index, (case_id, arms) in enumerate(selected):
+            case = manifest["episodes"][case_id]
+            frames = sorted(case["frames"], key=lambda item: item["index"])
+            for axis, frame, role in zip(axes[index], frames, ("Earlier view", "Current view"), strict=True):
+                path = geometry / frame["rgb"]
+                if hashlib.sha256(path.read_bytes()).hexdigest() != frame["sha256"]:
+                    raise ValueError(f"Recorded image hash mismatch for {case_id}")
+                with Image.open(path) as image:
+                    axis.imshow(image)
+                axis.set_title(role)
+                axis.set_axis_off()
+            expected = arms["full_history"]["reference_answer"]
+            history = arms["full_history"]["parsed"]
+            current = arms["current_only"]["parsed"]
+            history_answer = "abstain" if history.get("abstain") else history["answer"]
+            current_answer = "abstain" if current.get("abstain") else current["answer"]
+            axes[index, 0].set_title(f"{case_id} · Earlier view")
+            axes[index, 0].text(
+                0,
+                -0.05,
+                f"Expected: {expected} · History: {history_answer} · Current only: {current_answer}",
+                transform=axes[index, 0].transAxes,
+                va="top",
+                fontsize=9,
+            )
+            provenance.append({"case_id": case_id, "frames": frames, "responses": arms})
+        fig.suptitle("Recorded evidence and model answers")
+        fig.tight_layout()
+        for suffix in ("pdf", "png"):
+            fig.savefig(out / f"recorded_examples.{suffix}", dpi=160)
+        (out / "recorded_examples.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    finally:
+        plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=Path("configs/eval/harness_assessment_20261119.json"))
     parser.add_argument("--results", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--plot", action="store_true")
+    parser.add_argument("--recorded-geometry", type=Path)
+    parser.add_argument("--recorded-replay", type=Path)
     args = parser.parse_args()
+    if bool(args.recorded_geometry) != bool(args.recorded_replay):
+        parser.error("--recorded-geometry and --recorded-replay must be supplied together")
     root = Path(__file__).resolve().parents[1]
     rows = export(args.manifest, args.results, args.output, root)
     if args.plot:
         plot_outcomes(rows, args.output)
+    if args.recorded_geometry:
+        plot_recorded_examples(args.recorded_geometry, args.recorded_replay, args.output)
 
 
 if __name__ == "__main__":
