@@ -27,8 +27,9 @@ runs in its own process so a native MuJoCo crash fails the job and leaves the
 other files runnable. The workflow uploads JUnit results as
 `tamp-contract-reports`.
 
-To reproduce the gate locally, use the install and test commands from the
-workflow with rendering disabled. Live observed transfers and agent trials
+To reproduce the gate locally, fetch the Stretch meshes through Git LFS and
+use the install and test commands from the workflow with rendering disabled.
+Live observed transfers and agent trials
 have separate acceptance gates in the [TAMP qualification plan](plans/2026-11-18_tamp_agent_closeout.md).
 
 ### Extracted shared-agent stack (October 2026)
