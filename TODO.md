@@ -1,6 +1,31 @@
 # Living TODOs (small / near-term)
 
-- [ ] Close out #250 and follow the [TAMP qualification plan](docs/plans/2026-11-18_tamp_agent_closeout.md) for search cost, observed admission (#245), and agent trials.
+## Next gate — current-main TAMP agent trial
+
+- [x] Land [#250](https://github.com/cpaxton/home_robot_v3/pull/250) and
+      [#251](https://github.com/cpaxton/home_robot_v3/pull/251). The original
+      assisted clutter cohort completed 2/7. The collision-check shortcut saved
+      0.37 s in the matched admission replay, and both full searches still expired
+      after about 275 s.
+- [ ] Freeze current main and run one remote-CHAT startup check, one
+      reference-certified stationary transfer through `emet run agent`, and a
+      stop-only control with a separately authorized recovery trial. Use the
+      [first agent test protocol](docs/plans/2026-11-18_tamp_agent_closeout.md#first-agent-test).
+- [ ] Profile time to a certified plan and replay cube-back release plus the
+      unknown starting volumes against passing controls. Keep source age,
+      clearance, and contact checks fixed.
+- [ ] Close the live stationary observed-input gate in
+      [#245](https://github.com/cpaxton/home_robot_v3/issues/245) with stale-source
+      and post-grasp evidence-loss controls. Then repeat the bounded agent trial
+      with observed input and qualify the stopped base handoff.
+- [x] Reconcile [#228](https://github.com/cpaxton/home_robot_v3/pull/228) with
+      [#231](https://github.com/cpaxton/home_robot_v3/pull/231) and
+      [#229](https://github.com/cpaxton/home_robot_v3/pull/229) with
+      [#247](https://github.com/cpaxton/home_robot_v3/pull/247). The Stretch clock
+      cache and grounding-range feedback are on main. Loaded episode timing and
+      the safe closer-view Molmo check remain open below.
+
+## Shared-agent and benchmark work
 
 - [x] Reconcile #247 with main #246 and address the posted review. Preserve
       public TAMP receipts and measured settling; throttle capability retries,
