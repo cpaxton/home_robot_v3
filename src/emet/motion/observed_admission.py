@@ -163,6 +163,15 @@ class ObservedEnvironmentAdmission:
                 (assumption.scene_epoch == self.background.scene_epoch
                  and assumption.started_monotonic <= now <= assumption.expires_monotonic)
                 & (assumption.started_monotonic <= stamps) & (stamps <= now))
+            # Fast path: a solid whose closed AABB lies entirely inside the map
+            # and over only fresh, free cells is provably clear, so the ordinary
+            # subdivision/ownership query is unnecessary. It only ever accepts;
+            # any unknown/stale/occupied cell, support contact, captured-robot
+            # ownership or out-of-map volume falls through unchanged.
+            if (support_contact is None and not allow_captured_robot
+                    and np.all(bounds[0] >= grid_bounds[0]) and np.all(bounds[1] <= grid_bounds[1])
+                    and np.all(cells == 1) and np.all(fresh)):
+                return AdmissionDecision(True, 'observed_free_fast_path', nodes)
             # Preserve obstacle/mixed evidence before any ownership shortcut.
             for local in np.argwhere(cells == 2):
                 nodes += 1

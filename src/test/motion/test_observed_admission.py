@@ -301,3 +301,47 @@ def test_real_prescan_free_evidence_allows_shadow_without_renewing_hidden_age():
     qualified = ObservedMaterialAdmission(background, fresh_robot, static_assumption=assumption,
         query_robot_geometry=original.query_robot_geometry)
     assert qualified.query(replace(shifted, world_from_local=pose), now=12.02, allow_captured_robot=True).allowed
+
+
+def test_free_aabb_shortcut_accepts_fresh_free_volume_without_subdivision():
+    cells = np.ones(grid().cells.shape, np.uint8)
+    source = evidence(grid(cells), (solid(),))
+    admission = ObservedMaterialAdmission(source.background, source.robot_material,
+        static_assumption=StaticBackgroundAssumption('epoch', 9., 20., 'isolated-static-scene'),
+        query_robot_geometry=source.query_robot_geometry)
+    result = admission.query(solid(), now=13., allow_captured_robot=False)
+    assert result.allowed and result.reason == 'observed_free_fast_path'
+
+
+@pytest.mark.parametrize('cell_code,reason', [(2, 'occupied_environment'), (0, 'unknown_swept_volume')])
+def test_free_aabb_shortcut_falls_through_to_detailed_query(cell_code, reason):
+    cells = np.ones(grid().cells.shape, np.uint8)
+    cells[6, 6, 8] = cell_code
+    source = evidence(grid(cells), (solid(),))
+    admission = ObservedMaterialAdmission(source.background, source.robot_material,
+        static_assumption=StaticBackgroundAssumption('epoch', 9., 20., 'isolated-static-scene'),
+        query_robot_geometry=source.query_robot_geometry)
+    result = admission.query(solid(), now=13., allow_captured_robot=False)
+    assert not result.allowed and result.reason == reason
+
+
+def test_free_aabb_shortcut_requires_fresh_cells():
+    cells = np.ones(grid().cells.shape, np.uint8)
+    source = evidence(grid(cells), (solid(),), stamp=8.)
+    admission = ObservedMaterialAdmission(source.background, source.robot_material,
+        static_assumption=StaticBackgroundAssumption('epoch', 9., 20., 'isolated-static-scene'),
+        query_robot_geometry=source.query_robot_geometry)
+    result = admission.query(solid(), now=13., allow_captured_robot=False)
+    assert not result.allowed and result.reason == 'unknown_swept_volume'
+
+
+def test_free_aabb_shortcut_is_conservative_near_map_boundary():
+    cells = np.ones(grid().cells.shape, np.uint8)
+    source = evidence(grid(cells), (solid(),))
+    admission = ObservedMaterialAdmission(source.background, source.robot_material,
+        static_assumption=StaticBackgroundAssumption('epoch', 9., 20., 'isolated-static-scene'),
+        query_robot_geometry=source.query_robot_geometry)
+    # A solid whose AABB overhangs the map must not take the shortcut.
+    overhanging = solid(center=(0.28, 0., .5))
+    result = admission.query(overhanging, now=13., allow_captured_robot=False)
+    assert not result.allowed and result.reason != 'observed_free_fast_path'
