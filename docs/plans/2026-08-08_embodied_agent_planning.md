@@ -197,6 +197,15 @@ semantics, and prevent unchanged duplicate work before the router chooses it.
   complete. The managed `6,11,12,47` shadow/enforce comparison remains a
   separate GPU gate.
 
+## Phase 6 — Persistent interaction memory (proposed)
+
+**Objective:** extend attempt history into uncertain interaction-derived beliefs
+and linked visual recall across tasks. The [2026-11-11 follow-up](2026-11-11_interaction_memory.md)
+defines M1 capture/persistence, M2 shadow analysis, M3 bounded retrieval, M4 dynamic
+invalidation, and a matched model × memory evaluation. These slices are planned,
+not shipped; Phase 5 static suppression is not a lifelong-memory policy. Preserve
+measured execution authority and historical benchmark settings.
+
 ## Non-goals / guardrails
 
 - No changes to pinned paper configs (`configs/benchmarks/dynagraph.yaml`),

@@ -367,6 +367,16 @@ GPU A/B (ledger on vs off) must use `uv run emet jobs run …` — never inline 
 
 ---
 
+## Planned extension: learning from interactions
+
+The ledger records attempts; it does not by itself establish persistent object
+properties such as locked, heavy, or empty. The
+[interaction-memory plan](plans/2026-11-11_interaction_memory.md) proposes linking
+attempts to immutable action-window views, uncertain property claims, and bounded
+cross-task retrieval using existing world-evidence identities. Historical images
+may inform planning but cannot certify current geometry or execution. No new
+runtime settings or analyzer are introduced by that plan.
+
 ## Related docs
 
 - [AGENT_RUN.md](AGENT_RUN.md) — CHAT vs EQA_EPISODE
