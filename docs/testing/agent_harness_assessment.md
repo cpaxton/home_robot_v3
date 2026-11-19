@@ -77,6 +77,8 @@ The exporter also accepts no results to materialize the assignments and
 capability matrix. Pass `--recorded-geometry` and `--recorded-replay` with the
 corresponding raw directories to render an example history success and a retained
 abstention failure. The exporter cross-checks the replay and image hashes.
+Pass `--active-trace` a completed authored CHAT case directory for the
+sampled XY/yaw and turn-boundary camera panel.
 Supply one JSONL row per evaluated assignment, using
 `stage`, `id`, `status`, `source_sha`, and an `artifact` path relative to the
 JSONL file or absolute. Include the independently checked result for

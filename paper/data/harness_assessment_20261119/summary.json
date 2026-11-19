@@ -1,0 +1,28 @@
+{
+  "base_source": "6826582673e3163d2677150ae3c63db73b56b19a",
+  "manifest_sha256": "c309c61ef80965ee6b01d1fae2e9b1f7084cc92f03ed040e341b405771b0a435",
+  "assigned": 57,
+  "counts_by_evidence_tier": {
+    "privileged simulation": {
+      "failed": 3
+    },
+    "observed simulation": {
+      "pending": 16,
+      "blocked": 9,
+      "failed": 2
+    },
+    "supervised simulation": {
+      "blocked": 1
+    },
+    "stationary hardware": {
+      "blocked": 2
+    },
+    "geometry control": {
+      "passed": 12
+    },
+    "recorded evidence": {
+      "passed": 4,
+      "failed": 8
+    }
+  }
+}

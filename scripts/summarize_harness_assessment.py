@@ -270,6 +270,76 @@ def plot_recorded_examples(geometry, replay, out):
         plt.close(fig)
 
 
+def plot_active_trace(case_dir, out):
+    """Pair recorded turn-boundary images with the measured base samples."""
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from PIL import Image
+
+    result = json.loads((case_dir / "result.json").read_text())
+    samples = json.loads((case_dir / "measured.json").read_text())
+    if not result["complete"] or len(samples) < 2:
+        raise ValueError("Active trace requires a completed capture protocol")
+    world_poses = all("base_world_xyt" in sample for sample in samples)
+    poses = np.array([sample["base_world_xyt" if world_poses else "base_xyt"] for sample in samples], dtype=float)
+    if poses.shape != (len(samples), 3) or not np.isfinite(poses).all():
+        raise ValueError("Active trace requires finite XY/yaw samples in one frame")
+
+    case = result["episode_id"]
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    route = axes[1]
+    route.plot(poses[:, 0], poses[:, 1], "o-", color="#264867", alpha=0.75)
+    route.quiver(
+        poses[:, 0],
+        poses[:, 1],
+        np.cos(poses[:, 2]),
+        np.sin(poses[:, 2]),
+        angles="xy",
+        scale_units="xy",
+        scale=12,
+        color="#a13c35",
+    )
+    route.set(title="Measured base samples", xlabel="X (m)", ylabel="Y (m)")
+    center = (poses[:, :2].min(axis=0) + poses[:, :2].max(axis=0)) / 2
+    radius = max(0.15, 0.6 * float(np.ptp(poses[:, :2], axis=0).max()))
+    route.set_xlim(center[0] - radius, center[0] + radius)
+    route.set_ylim(center[1] - radius, center[1] + radius)
+    route.set_aspect("equal", adjustable="box")
+    route.grid(alpha=0.25)
+    frame_rows = []
+    try:
+        for axis, sample in zip((axes[0], axes[2]), (samples[0], samples[-1]), strict=True):
+            image_path = case_dir / f"{sample['tag']}.png"
+            with Image.open(image_path) as image:
+                axis.imshow(image)
+            axis.set_title(sample["tag"].replace("-", " "))
+            axis.set_axis_off()
+            frame_rows.append(
+                {
+                    "tag": sample["tag"],
+                    "path": str(image_path),
+                    "sha256": hashlib.sha256(image_path.read_bytes()).hexdigest(),
+                    "image_timing": sample.get("image_timing"),
+                }
+            )
+        fig.suptitle(f"{case} · RGB-D bridge observations at tool-turn boundaries")
+        fig.tight_layout()
+        for suffix in ("png", "pdf"):
+            fig.savefig(out / f"active_trace_{case}.{suffix}", dpi=160)
+        provenance = {
+            "source_sha": result["source_sha"],
+            "episode_id": case,
+            "frames": frame_rows,
+            "frame": "world" if world_poses else "local",
+            "measured_xyt": poses.tolist(),
+            "measured_tags": [sample["tag"] for sample in samples],
+            "requests": str(case_dir / "model_requests"),
+        }
+        (out / f"active_trace_{case}.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    finally:
+        plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=Path("configs/eval/harness_assessment_20261119.json"))
@@ -278,6 +348,7 @@ def main():
     parser.add_argument("--plot", action="store_true")
     parser.add_argument("--recorded-geometry", type=Path)
     parser.add_argument("--recorded-replay", type=Path)
+    parser.add_argument("--active-trace", type=Path, action="append", default=[])
     args = parser.parse_args()
     if bool(args.recorded_geometry) != bool(args.recorded_replay):
         parser.error("--recorded-geometry and --recorded-replay must be supplied together")
@@ -287,6 +358,8 @@ def main():
         plot_outcomes(rows, args.output)
     if args.recorded_geometry:
         plot_recorded_examples(args.recorded_geometry, args.recorded_replay, args.output)
+    for path in args.active_trace:
+        plot_active_trace(path, args.output)
 
 
 if __name__ == "__main__":
