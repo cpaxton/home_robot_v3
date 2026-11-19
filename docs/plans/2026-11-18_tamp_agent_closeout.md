@@ -4,30 +4,53 @@
 
 | Work | Evidence and disposition |
 |---|---|
-| [#250](https://github.com/cpaxton/home_robot_v3/pull/250), assisted transfer and diagnostics | Ready for review as a development slice. Includes capture-bound collision maps, fresh-source path validation, bounded lateral release, checkpoints, and failed-tool bundles. The original expanded cohort completed **2/7**. The current release-focused suite retains four layouts, with the original seven outcomes preserved. |
+| [#250](https://github.com/cpaxton/home_robot_v3/pull/250), assisted transfer and diagnostics | Merged. Includes capture-bound collision maps, fresh-source path validation, bounded lateral release, checkpoints, and failed-tool bundles. The original expanded cohort completed **2/7**. The current release-focused suite retains four layouts, with the original seven outcomes preserved. |
 | Cube-back placement | The pre-descent pilot stopped safely after grasp and carry. All 11 candidate destinations failed. It remains on the local `experiment/tamp-pre-descent-admission` branch at `8c8d03d3` pending a passing transfer and positive controls. |
-| [#251](https://github.com/cpaxton/home_robot_v3/pull/251), collision-check cost | Draft stacked on #250. It adds an all-fresh/free AABB shortcut and reports 121 passing tests. Runtime benefit on the transfer workload still needs a matched comparison. |
+| [#251](https://github.com/cpaxton/home_robot_v3/pull/251), collision-check cost | Merged. The assisted cylinder-right replay matched 50,000 admission decisions. Admission took 16.06 s on the base and 15.69 s with the shortcut. Both full searches expired after about 275 s. Time to a certified plan remains open. |
 | [#245](https://github.com/cpaxton/home_robot_v3/issues/245), observed execution | Capture, geometry, and contact components have evidence. A complete live observed-input transfer remains open. |
-| Remote CHAT startup | Local `fix/tamp-remote-chat-startup` preserves `27dded16` for separate review and validation. |
+| Remote CHAT startup | Preflight the frozen source with a read-only remote turn. If startup fails, validate the local `fix/tamp-remote-chat-startup` repair at `27dded16` separately and record the source actually used. |
 
 The [transfer blocker catalogue](../experiments/mobile_transfer_blockers_20261118.md)
 and [hard-case index](../../configs/eval/mobile_transfer_hard_cases_20261118.json)
 give exact cases and replay inputs. The [observed admission development history](../experiments/observed_admission_development_20261116.md)
 preserves capture, geometry, and prior integration evidence.
 
-## Work in dependency order
+## First agent test
 
-1. **Land the scoped #250 changes after the [TAMP contract checks](../TESTING.md#tamp-contracts).**
-   The review covered partial receipts, unknown-space rejection, and evidence
-   boundaries. Use the two successful layouts as positive controls. Preserve
-   the historical failures and keep the pre-descent pilot separate.
-2. **Measure and qualify #251.** Replay cylinder right and time solid creation,
-   map admission, arm paths, base sweeps, and release separately. Require
-   collision-decision parity before timing comparisons. Rerun both cylinder
-   cases with the same 299-second source lifetime and sweep spacing. Cache
-   validated local geometry if the profile shows it dominates. Existing code
-   already caches hull planes.
-3. **Resolve placement and source coverage.** Replay cube-back with the saved
+Use a clean, frozen main revision and the existing
+[prospective agent protocol](2026-11-16_tamp_prospective_evaluation.md) and
+[contextual recovery control](../experiments/tamp_contextual_recovery_20261116.md)
+as references. Pin the selected fixture and reset, exact remote model and
+endpoint, tool-call and wall-time budgets, and artifact directory before
+launch. Run the [TAMP contract checks](../TESTING.md#tamp-contracts) on that
+source and verify one read-only remote CHAT turn before enabling motion.
+
+1. In a reference-certified Stretch/MuJoCo table scene, have the model use
+   `emet run agent` and the public discovery, planning and execution tools for
+   one stationary transfer. Require a successful tool receipt and independently
+   verify the object is supported, inside the goal region and settled.
+2. Run the stop-only and explicit retry controls with the declared preflight
+   refusal. Require no commands from the refused step and rejection of the
+   consumed handle. In the retry case, send a separate authorization and check
+   that fresh discovery and planning complete only the remaining goal.
+3. Save actual tool selections and receipts, independent goal checks, command
+   ranges, source and fixture identifiers, assistance mode, and failures.
+   Record elapsed wall and simulator time when available, plus model and
+   planning time. Label this native simulated control with its privileged inputs.
+
+The native control can run while placement and observed-admission work
+continues. Repeat the single-transfer agent test with observed inputs after the
+stationary observed public-tool controls pass.
+
+## Remaining execution qualification
+
+1. **Reduce time to a certified plan.** Replay cylinder right and time solid
+   creation, map admission, arm paths, base sweeps, and release separately.
+   Require collision-decision parity before timing comparisons. Rerun both
+   cylinder cases with the same 299-second source lifetime and sweep spacing.
+   Cache validated local geometry if the profile shows it dominates. Existing
+   code already caches hull planes.
+2. **Resolve placement and source coverage.** Replay cube-back with the saved
    destination scan. Identify the solid and height that first fail during the
    sampled fall and retreat. Test a different certified destination or a
    calibrated view that covers the missing volume. Compare candidate ranking
@@ -36,24 +59,22 @@ preserves capture, geometry, and prior integration evidence.
    stricter preflight. For cube left and front, replay the starting payload
    check with a second view and expose the geometry rejection in the tool
    receipt. For cylinder left, distinguish unknown support from expiry.
-4. **Qualify live observed input.** Bind synchronized simulated Stretch RGBD,
+3. **Qualify live observed input.** Bind synchronized simulated Stretch RGBD,
    measured robot joints, calibrated robot and target envelopes, support and
    background evidence, and the motion refiner. Require a stationary
    public-tool transfer, a stale-source preflight stop, and a post-grasp
    evidence-loss control. Then add a stopped base handoff with fresh
    destination evidence. Use independently measured outcomes for scoring.
-5. **Qualify agent composition.** Use the same `run agent` entry point and remote
-   model configuration on reference-certified MuJoCo episodes. Start with one
-   transfer and an explicit recovery turn. Then test protected multi-object
-   goals, swaps, authorized clutter clearing, and exploration or navigation
-   for missing evidence. Report full goals, partial progress, tool and model
-   calls, search time, and failures on held-out layouts before updating
-   paper claims.
+4. **Expand agent composition after the single-transfer gate.** Test protected
+   multi-object goals, swaps, authorized clutter clearing, and exploration or
+   navigation for missing evidence. Report full goals, partial progress, tool
+   and model calls, search time, and failures on held-out layouts before
+   updating paper claims.
 
-Parallel PRs are #228 (Stretch model fingerprint and clock), #229 (grounding
-feedback), #241 (draft controller tracking), and #230 (interaction memory and
-matched model evaluation). Review those in their own scope. Test #229 feedback
-at the observed-agent gate and use #230 for matched evaluation once execution
+The Stretch fingerprint cache and grounding-range feedback are already on
+main. Capture the range rejection at the observed-agent gate if it occurs.
+Controller tracking (#241) and the interaction-memory plan (#230) are parallel
+work. Use the interaction-memory plan for matched evaluation once execution
 is stable.
 
 ## Transfer rules and replay
