@@ -1,0 +1,203 @@
+{
+  "scope": "Mars shared actor simulator screening, two cases per family",
+  "cases": [
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:0",
+      "seed": 35901020,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.10800000000000001,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "family": "base"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:1",
+      "seed": 35901021,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": -0.10800000000000001,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "family": "base"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:arm_only:0",
+      "seed": 35901030,
+      "split": "audit",
+      "mode": "arm_only",
+      "travel_m": 0.0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.05,
+        -0.06,
+        0.06,
+        -0.05,
+        0.05
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "family": "arm"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:arm_only:1",
+      "seed": 35901031,
+      "split": "audit",
+      "mode": "arm_only",
+      "travel_m": 0.0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.06,
+        -0.05,
+        -0.06,
+        0.05,
+        0.05
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "family": "arm"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:0",
+      "seed": 35901000,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.09720000000000001,
+      "turn_rad": -0.1728,
+      "arm_delta": [
+        0.0,
+        -0.0432,
+        0.0432,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "family": "coupled"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "seed": 35901001,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": -0.09720000000000001,
+      "turn_rad": -0.19440000000000002,
+      "arm_delta": [
+        0.0,
+        0.0648,
+        -0.0648,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "family": "coupled"
+    },
+    {
+      "id": "audit-20-24g-translation-nominal-0",
+      "seed": 64700000,
+      "payload_mass_kg": 0.02155375832066014,
+      "randomization_scale": 0.4326033984731145,
+      "grasp_pitch_rad": 0.04338190026137667,
+      "prefer_nominal_grasp": false,
+      "motion": "translation",
+      "pushed": false,
+      "family": "carry",
+      "split": "audit"
+    },
+    {
+      "id": "audit-28-34g-combined-push-0",
+      "seed": 64701100,
+      "payload_mass_kg": 0.031016838976250394,
+      "randomization_scale": 0.4166767068146845,
+      "grasp_pitch_rad": -0.008184723996059573,
+      "prefer_nominal_grasp": false,
+      "motion": "combined",
+      "pushed": true,
+      "family": "carry",
+      "split": "audit"
+    },
+    {
+      "id": "audit:left:20g:0",
+      "layout": "left",
+      "seed": 34610000,
+      "mass_kg": 0.02,
+      "yaw_offset_rad": 0.6,
+      "family": "tamp",
+      "split": "audit"
+    },
+    {
+      "id": "audit:right:50g:1",
+      "layout": "right",
+      "seed": 34610001,
+      "mass_kg": 0.05,
+      "yaw_offset_rad": -0.6,
+      "family": "tamp",
+      "split": "audit"
+    },
+    {
+      "id": "audit:lift:65700500",
+      "seed": 65700500,
+      "family": "lift",
+      "split": "audit"
+    },
+    {
+      "id": "audit:lift:65700501",
+      "seed": 65700501,
+      "family": "lift",
+      "split": "audit"
+    },
+    {
+      "id": "audit:preplace:65700600",
+      "seed": 65700600,
+      "layout": "left",
+      "mass_kg": 0.02,
+      "yaw_offset_rad": 0.56,
+      "family": "preplace",
+      "split": "audit"
+    },
+    {
+      "id": "audit:preplace:65700601",
+      "seed": 65700601,
+      "layout": "right",
+      "mass_kg": 0.035,
+      "yaw_offset_rad": -0.54,
+      "family": "preplace",
+      "split": "audit"
+    }
+  ]
+}

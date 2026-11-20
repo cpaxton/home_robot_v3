@@ -1,0 +1,261 @@
+{
+  "source_commit": "41776af46882c38e426685237240bb9fcc52102c",
+  "runs": {
+    "caliban": {
+      "device": "Orin",
+      "updates": 54000,
+      "bootstrap_updates": 6000,
+      "datasets": {
+        "base": {
+          "rows": 2000,
+          "sha256": "06d7425f05dbe825f499ad3b64c060386ec81fd66b9eab3812697bf0941e9505"
+        },
+        "arm": {
+          "rows": 8868,
+          "sha256": "25408e914506ae9fe8f01d202f1a1bcfbe914980a99ad2e8b141959a1584071d"
+        },
+        "coupled": {
+          "rows": 693,
+          "sha256": "2d84628cfe8c0f86c77414b89d38cfb335b536c079bf8af28fd6fb8889fae5a3"
+        },
+        "carry": {
+          "rows": 10000,
+          "sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc"
+        },
+        "tamp": {
+          "rows": 563,
+          "sha256": "d7d70d645d82dde96b687b3c882b124e3a1962073abcc0b99c75531bc308c84f"
+        },
+        "lift": {
+          "rows": 1475,
+          "sha256": "8157251ebd2ca873e57a713fd0a27b179f7ba411b51005b96ead76c0a5955972"
+        },
+        "preplace": {
+          "rows": 4645,
+          "sha256": "626e4da641cbbec251cefd7e141b4c8970df30a2cf7bf7ca050be73dfb64b85a"
+        }
+      },
+      "online_datasets": {
+        "lift": {
+          "rows": 240,
+          "sha256": "a98cb95e9cdcaf5f024acb744ad5ee9ba77f4b76c17749f86e28ae78e313b589"
+        },
+        "carry": {
+          "rows": 300,
+          "sha256": "b72fd4f8ad019ddbd1782e269850f03f75fb0f65af52392565cb5608cda0a5da"
+        },
+        "preplace": {
+          "rows": 1082,
+          "sha256": "ba5836cadd1c29ea997928dae1c1a13bef1ef0aa87909045e7bdc840d201ecbb"
+        },
+        "tamp": {
+          "rows": 240,
+          "sha256": "0da71da4efdfa75b3e10e3516f983628e87f4d49c71671c17f517b957fa7415e"
+        },
+        "base": {
+          "rows": 200,
+          "sha256": "ab92bd5fa8625c38d20fcc88f0aeaa932df5cb365dd15ee7b3b528719031b32c"
+        },
+        "arm": {
+          "rows": 300,
+          "sha256": "4193801755bba6ff66f129ecd46e160aa4ccd8e1acbdf6a8075974620bdf7997"
+        },
+        "coupled": {
+          "rows": 300,
+          "sha256": "3f9a610c1febde269d585d026fe1d0f30b2293f0a0e77018ce561fc1d298ef49"
+        }
+      },
+      "checkpoints": [
+        {
+          "step": 1000,
+          "weights": "9f184cbd6c39003780b625f89925294b857604d8449e4436ca92e3ebc6d9e1d8",
+          "path": "actor-001000"
+        },
+        {
+          "step": 6000,
+          "weights": "5a60d5500ff09ca4187f5963fa02d0eabd91f279c2dfbbcdf493e10f55bcef16",
+          "path": "actor-006000"
+        },
+        {
+          "step": 12000,
+          "weights": "be98c48e3e626be75c17854d3d2a3dd7a0b9b69d23ce6a3e9ff09c124de48086",
+          "path": "actor-012000"
+        },
+        {
+          "step": 24000,
+          "weights": "a8179b16d7ca906d076c25112ab8f4229c436c680ecf4862da9ba3c53701caf4",
+          "path": "actor-024000"
+        },
+        {
+          "step": 36000,
+          "weights": "6d3d332a40c2b3b6f7d11744249b7042195735f3cd77078e764ce44a349361f1",
+          "path": "actor-036000"
+        },
+        {
+          "step": 48000,
+          "weights": "7a08f1578c573074dff9715c06efe8a753d6d129534445d7695c0a28fed7cdd9",
+          "path": "actor-048000"
+        },
+        {
+          "step": 54000,
+          "weights": "f621006aca7171f351b30328e50cdda3c4725501ae8b3f413e4d4f4767cb9252",
+          "path": "actor-054000"
+        }
+      ]
+    },
+    "local": {
+      "device": "cpu",
+      "updates": 6000,
+      "bootstrap_updates": 1000,
+      "datasets": {
+        "base": {
+          "rows": 2000,
+          "sha256": "06d7425f05dbe825f499ad3b64c060386ec81fd66b9eab3812697bf0941e9505"
+        },
+        "arm": {
+          "rows": 8868,
+          "sha256": "25408e914506ae9fe8f01d202f1a1bcfbe914980a99ad2e8b141959a1584071d"
+        },
+        "coupled": {
+          "rows": 693,
+          "sha256": "2d84628cfe8c0f86c77414b89d38cfb335b536c079bf8af28fd6fb8889fae5a3"
+        },
+        "carry": {
+          "rows": 10000,
+          "sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc"
+        },
+        "tamp": {
+          "rows": 563,
+          "sha256": "d7d70d645d82dde96b687b3c882b124e3a1962073abcc0b99c75531bc308c84f"
+        },
+        "lift": {
+          "rows": 1475,
+          "sha256": "8157251ebd2ca873e57a713fd0a27b179f7ba411b51005b96ead76c0a5955972"
+        },
+        "preplace": {
+          "rows": 4645,
+          "sha256": "626e4da641cbbec251cefd7e141b4c8970df30a2cf7bf7ca050be73dfb64b85a"
+        }
+      },
+      "online_datasets": {
+        "base": {
+          "rows": 200,
+          "sha256": "ab92bd5fa8625c38d20fcc88f0aeaa932df5cb365dd15ee7b3b528719031b32c"
+        },
+        "arm": {
+          "rows": 300,
+          "sha256": "4193801755bba6ff66f129ecd46e160aa4ccd8e1acbdf6a8075974620bdf7997"
+        },
+        "coupled": {
+          "rows": 300,
+          "sha256": "3f9a610c1febde269d585d026fe1d0f30b2293f0a0e77018ce561fc1d298ef49"
+        },
+        "carry": {
+          "rows": 300,
+          "sha256": "b72fd4f8ad019ddbd1782e269850f03f75fb0f65af52392565cb5608cda0a5da"
+        },
+        "tamp": {
+          "rows": 240,
+          "sha256": "0da71da4efdfa75b3e10e3516f983628e87f4d49c71671c17f517b957fa7415e"
+        },
+        "lift": {
+          "rows": 240,
+          "sha256": "a98cb95e9cdcaf5f024acb744ad5ee9ba77f4b76c17749f86e28ae78e313b589"
+        },
+        "preplace": {
+          "rows": 1082,
+          "sha256": "ba5836cadd1c29ea997928dae1c1a13bef1ef0aa87909045e7bdc840d201ecbb"
+        }
+      },
+      "checkpoints": [
+        {
+          "step": 1000,
+          "weights": "9662fec3f29d67ec6af2b286f68dc765f3b847f53d22217a0e19232974359aa2",
+          "path": "actor-001000"
+        },
+        {
+          "step": 6000,
+          "weights": "3e4b099fe6e92951b765cf84b97b41ec8dbcfec657549421d1c7953b40bcf084",
+          "path": "actor-006000"
+        }
+      ]
+    },
+    "workstation": {
+      "device": "NVIDIA GeForce RTX 4090",
+      "updates": 12000,
+      "bootstrap_updates": 1000,
+      "datasets": {
+        "base": {
+          "rows": 2000,
+          "sha256": "06d7425f05dbe825f499ad3b64c060386ec81fd66b9eab3812697bf0941e9505"
+        },
+        "arm": {
+          "rows": 8868,
+          "sha256": "25408e914506ae9fe8f01d202f1a1bcfbe914980a99ad2e8b141959a1584071d"
+        },
+        "coupled": {
+          "rows": 693,
+          "sha256": "2d84628cfe8c0f86c77414b89d38cfb335b536c079bf8af28fd6fb8889fae5a3"
+        },
+        "carry": {
+          "rows": 10000,
+          "sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc"
+        },
+        "tamp": {
+          "rows": 563,
+          "sha256": "d7d70d645d82dde96b687b3c882b124e3a1962073abcc0b99c75531bc308c84f"
+        },
+        "lift": {
+          "rows": 1475,
+          "sha256": "8157251ebd2ca873e57a713fd0a27b179f7ba411b51005b96ead76c0a5955972"
+        },
+        "preplace": {
+          "rows": 4645,
+          "sha256": "626e4da641cbbec251cefd7e141b4c8970df30a2cf7bf7ca050be73dfb64b85a"
+        }
+      },
+      "online_datasets": {
+        "base": {
+          "rows": 200,
+          "sha256": "ab92bd5fa8625c38d20fcc88f0aeaa932df5cb365dd15ee7b3b528719031b32c"
+        },
+        "arm": {
+          "rows": 300,
+          "sha256": "4193801755bba6ff66f129ecd46e160aa4ccd8e1acbdf6a8075974620bdf7997"
+        },
+        "coupled": {
+          "rows": 300,
+          "sha256": "3f9a610c1febde269d585d026fe1d0f30b2293f0a0e77018ce561fc1d298ef49"
+        },
+        "carry": {
+          "rows": 300,
+          "sha256": "b72fd4f8ad019ddbd1782e269850f03f75fb0f65af52392565cb5608cda0a5da"
+        },
+        "tamp": {
+          "rows": 240,
+          "sha256": "0da71da4efdfa75b3e10e3516f983628e87f4d49c71671c17f517b957fa7415e"
+        },
+        "lift": {
+          "rows": 240,
+          "sha256": "a98cb95e9cdcaf5f024acb744ad5ee9ba77f4b76c17749f86e28ae78e313b589"
+        },
+        "preplace": {
+          "rows": 1082,
+          "sha256": "ba5836cadd1c29ea997928dae1c1a13bef1ef0aa87909045e7bdc840d201ecbb"
+        }
+      },
+      "checkpoints": [
+        {
+          "step": 1000,
+          "weights": "cc16b67bb70543810c7ecd29e25f3ebf60e615414ea0c44ad8e8cf8d04c2a475",
+          "path": "actor-001000"
+        },
+        {
+          "step": 12000,
+          "weights": "6a779c6e9b37cb65baae4f882267a6f96d4763dc225a6d9f65649d1d3b502e34",
+          "path": "actor-012000"
+        }
+      ]
+    }
+  }
+}

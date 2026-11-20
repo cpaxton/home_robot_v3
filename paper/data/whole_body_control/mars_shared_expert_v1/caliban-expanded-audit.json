@@ -1,0 +1,392 @@
+{
+  "fixed-base-lift": {
+    "mode": "audit",
+    "weights_sha256": "f621006aca7171f351b30328e50cdda3c4725501ae8b3f413e4d4f4767cb9252",
+    "rows": [
+      {
+        "id": "audit:lift:65700500",
+        "seed": 65700500,
+        "family": "lift",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "stop_slip_m": 0.0005574130065183206,
+        "stop_rotation_rad": 0.004197227815000741
+      },
+      {
+        "id": "audit:lift:65700501",
+        "seed": 65700501,
+        "family": "lift",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "stop_slip_m": 0.0007674159233678025,
+        "stop_rotation_rad": 0.01540547517781557
+      }
+    ]
+  },
+  "extended-arm": {
+    "mode": "audit",
+    "weights_sha256": "f621006aca7171f351b30328e50cdda3c4725501ae8b3f413e4d4f4767cb9252",
+    "rows": [
+      {
+        "id": "mars:wrapper-reward-v2:audit:arm_only:0",
+        "seed": 35901030,
+        "family": "arm",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.00021686191253977678,
+        "peak_hand_orientation_rad": 0.0010121117683878772,
+        "arm_only_peak_base_drift_m": 3.721275670624086e-05,
+        "arm_only_peak_joint_speed_rad_s": 0.023882390758267896
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:arm_only:1",
+        "seed": 35901031,
+        "family": "arm",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.000509507931543348,
+        "peak_hand_orientation_rad": 0.0014813950947253666,
+        "arm_only_peak_base_drift_m": 2.9333634334609747e-05,
+        "arm_only_peak_joint_speed_rad_s": 0.023715251152826012
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:arm_only:2",
+        "seed": 35901032,
+        "family": "arm",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.00043554930661701875,
+        "peak_hand_orientation_rad": 0.0011791658274022206,
+        "arm_only_peak_base_drift_m": 2.6096077611170802e-05,
+        "arm_only_peak_joint_speed_rad_s": 0.023722154460381395
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:arm_only:3",
+        "seed": 35901033,
+        "family": "arm",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.00035495173771137235,
+        "peak_hand_orientation_rad": 0.0011483890778194931,
+        "arm_only_peak_base_drift_m": 3.5036683322655134e-05,
+        "arm_only_peak_joint_speed_rad_s": 0.023873001491989287
+      }
+    ]
+  },
+  "extended-base": {
+    "mode": "audit",
+    "weights_sha256": "f621006aca7171f351b30328e50cdda3c4725501ae8b3f413e4d4f4767cb9252",
+    "rows": [
+      {
+        "id": "mars:wrapper-reward-v2:audit:base:0",
+        "seed": 35901020,
+        "family": "base",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.0,
+        "peak_hand_orientation_rad": 0.0,
+        "arm_only_peak_base_drift_m": null,
+        "arm_only_peak_joint_speed_rad_s": null
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:base:1",
+        "seed": 35901021,
+        "family": "base",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.0,
+        "peak_hand_orientation_rad": 0.0,
+        "arm_only_peak_base_drift_m": null,
+        "arm_only_peak_joint_speed_rad_s": null
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:base:2",
+        "seed": 35901022,
+        "family": "base",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.0,
+        "peak_hand_orientation_rad": 0.0,
+        "arm_only_peak_base_drift_m": null,
+        "arm_only_peak_joint_speed_rad_s": null
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:base:3",
+        "seed": 35901023,
+        "family": "base",
+        "success": false,
+        "code": "wheel_lift",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": true,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true,
+        "peak_hand_position_m": 0.0,
+        "peak_hand_orientation_rad": 0.0,
+        "arm_only_peak_base_drift_m": null,
+        "arm_only_peak_joint_speed_rad_s": null
+      }
+    ]
+  },
+  "extended-coupled": {
+    "mode": "audit",
+    "weights_sha256": "f621006aca7171f351b30328e50cdda3c4725501ae8b3f413e4d4f4767cb9252",
+    "rows": [
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:0",
+        "seed": 35901000,
+        "family": "coupled",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:1",
+        "seed": 35901001,
+        "family": "coupled",
+        "success": false,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:2",
+        "seed": 35901002,
+        "family": "coupled",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:3",
+        "seed": 35901003,
+        "family": "coupled",
+        "success": false,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:4",
+        "seed": 35901004,
+        "family": "coupled",
+        "success": false,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:5",
+        "seed": 35901005,
+        "family": "coupled",
+        "success": false,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:6",
+        "seed": 35901006,
+        "family": "coupled",
+        "success": true,
+        "code": "ok",
+        "flags": {
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      },
+      {
+        "id": "mars:wrapper-reward-v2:audit:hand:7",
+        "seed": 35901007,
+        "family": "coupled",
+        "success": false,
+        "code": "unsafe_contact",
+        "flags": {
+          "unsafe_contact": true,
+          "retention_lost": false,
+          "wheel_lift": false,
+          "invalid_physics": false
+        },
+        "stop_confirmed": true
+      }
+    ]
+  },
+  "extended-preplace": {
+    "mode": "audit",
+    "weights_sha256": "f621006aca7171f351b30328e50cdda3c4725501ae8b3f413e4d4f4767cb9252",
+    "rows": [
+      {
+        "id": "left:20g:2",
+        "seed": 1861002,
+        "family": "preplace",
+        "success": true,
+        "code": null,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        },
+        "actor_calls": 443
+      },
+      {
+        "id": "left:50g:2",
+        "seed": 1861002,
+        "family": "preplace",
+        "success": true,
+        "code": null,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        },
+        "actor_calls": 444
+      },
+      {
+        "id": "right:50g:2",
+        "seed": 1861002,
+        "family": "preplace",
+        "success": true,
+        "code": null,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        },
+        "actor_calls": 465
+      },
+      {
+        "id": "right:20g:3",
+        "seed": 1861003,
+        "family": "preplace",
+        "success": true,
+        "code": null,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        },
+        "actor_calls": 472
+      }
+    ]
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "complete": true,
+  "mode": "audit",
+  "weights_sha256": "6a779c6e9b37cb65baae4f882267a6f96d4763dc225a6d9f65649d1d3b502e34",
+  "cases_sha256": "853d1db8bd6bfff7cfd6f9eeaa98b79f48058a7bfeea55635123345c3506e614",
+  "rows": [
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:0",
+      "seed": 35901000,
+      "family": "coupled",
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.0024849432775643685,
+      "peak_hand_orientation_rad": 0.006039325755464977,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "seed": 35901001,
+      "family": "coupled",
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.0024986754618362885,
+      "peak_hand_orientation_rad": 0.007882724937067653,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:2",
+      "seed": 35901002,
+      "family": "coupled",
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.0017315309065128297,
+      "peak_hand_orientation_rad": 0.004404951075379214,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:3",
+      "seed": 35901003,
+      "family": "coupled",
+      "success": false,
+      "code": "tracking_timeout",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.008423265338145617,
+      "peak_hand_orientation_rad": 0.02761445195361644,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:4",
+      "seed": 35901004,
+      "family": "coupled",
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.0027973084473198752,
+      "peak_hand_orientation_rad": 0.004902806844976781,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:5",
+      "seed": 35901005,
+      "family": "coupled",
+      "success": false,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.0032862719992743637,
+      "peak_hand_orientation_rad": 0.011942958750946942,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:6",
+      "seed": 35901006,
+      "family": "coupled",
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.0021739028822047677,
+      "peak_hand_orientation_rad": 0.004899452053973201,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:7",
+      "seed": 35901007,
+      "family": "coupled",
+      "success": false,
+      "code": "unsafe_contact",
+      "flags": {
+        "unsafe_contact": true,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "peak_hand_position_m": 0.008359287819795069,
+      "peak_hand_orientation_rad": 0.018825216785971773,
+      "arm_only_peak_base_drift_m": null,
+      "arm_only_peak_joint_speed_rad_s": null
+    }
+  ]
+}

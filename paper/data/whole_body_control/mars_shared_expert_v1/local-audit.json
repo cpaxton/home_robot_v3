@@ -1,0 +1,702 @@
+{
+  "weights_sha256": "3e4b099fe6e92951b765cf84b97b41ec8dbcfec657549421d1c7953b40bcf084",
+  "scope": "closed-loop simulator screening by task family",
+  "family_results": {
+    "arm": {
+      "passed": 2,
+      "cases": 2
+    },
+    "base": {
+      "passed": 1,
+      "cases": 2
+    },
+    "carry": {
+      "passed": 2,
+      "cases": 2
+    },
+    "coupled": {
+      "passed": 0,
+      "cases": 2
+    },
+    "lift": {
+      "passed": 2,
+      "cases": 2
+    },
+    "preplace": {
+      "passed": 2,
+      "cases": 2
+    },
+    "tamp": {
+      "passed": 2,
+      "cases": 2
+    }
+  },
+  "all_cases_passed": false,
+  "rows": [
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:0",
+      "seed": 35901020,
+      "success": false,
+      "code": "tracking_timeout",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 500,
+      "samples": 0,
+      "family": "base"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:1",
+      "seed": 35901021,
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 500,
+      "samples": 0,
+      "family": "base"
+    },
+    {
+      "id": "audit:preplace:65700600",
+      "seed": 65700600,
+      "mass_kg": 0.02,
+      "success": true,
+      "failure": null,
+      "stage": null,
+      "safety": {
+        "peak_contact_force": 3.333191323456132,
+        "contact_impulse": 257.20382435248166,
+        "contact": true,
+        "max_penetration": 0.00026698770708730884,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          2.182254593382411,
+          0.3169598312803617,
+          0.002471283462151681
+        ]
+      },
+      "final_predicates": {
+        "inside_goal_region": true,
+        "destination_support": true,
+        "gripper_open": true,
+        "fingers_clear": true,
+        "object_still": true,
+        "safe": true,
+        "robot_still": true,
+        "base_goal_within_tolerance": true
+      },
+      "frozen_fixture_verified": false,
+      "preplace_calls": 398,
+      "learner_ticks": 0,
+      "samples": 0,
+      "family": "preplace"
+    },
+    {
+      "id": "audit:preplace:65700601",
+      "seed": 65700601,
+      "mass_kg": 0.035,
+      "success": true,
+      "failure": null,
+      "stage": null,
+      "safety": {
+        "peak_contact_force": 5.107475510618467,
+        "contact_impulse": 275.21139927756394,
+        "contact": true,
+        "max_penetration": 0.0002529156137475383,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          1.631947205803924e-05
+        ],
+        "min_wheel_load": [
+          0.7867663297562477,
+          0.23023120405421954,
+          0.0
+        ]
+      },
+      "final_predicates": {
+        "inside_goal_region": true,
+        "destination_support": true,
+        "gripper_open": true,
+        "fingers_clear": true,
+        "object_still": true,
+        "safe": true,
+        "robot_still": true,
+        "base_goal_within_tolerance": true
+      },
+      "frozen_fixture_verified": false,
+      "preplace_calls": 387,
+      "learner_ticks": 0,
+      "samples": 0,
+      "family": "preplace"
+    },
+    {
+      "id": "audit:left:20g:0",
+      "seed": 34610000,
+      "success": true,
+      "code": "grasp_pose_complete",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 131,
+      "samples": 16,
+      "family": "tamp"
+    },
+    {
+      "id": "audit:right:50g:1",
+      "seed": 34610001,
+      "success": true,
+      "code": "grasp_pose_complete",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 129,
+      "samples": 16,
+      "family": "tamp"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:0",
+      "seed": 35901000,
+      "success": false,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 500,
+      "samples": 0,
+      "family": "coupled"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "seed": 35901001,
+      "success": false,
+      "code": "tracking_timeout",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 500,
+      "samples": 0,
+      "family": "coupled"
+    },
+    {
+      "id": "audit:lift:65700500",
+      "seed": 65700500,
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 205,
+      "samples": 16,
+      "family": "lift"
+    },
+    {
+      "id": "audit:lift:65700501",
+      "seed": 65700501,
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 195,
+      "samples": 16,
+      "family": "lift"
+    },
+    {
+      "id": "audit-20-24g-translation-nominal-0",
+      "split": "audit",
+      "seed": 64700000,
+      "worker": 0,
+      "mass_band_g": [
+        20,
+        24
+      ],
+      "payload_mass_kg": 0.02155375832066014,
+      "motion": "translation",
+      "pushed": false,
+      "grasp_pitch_rad": 0.04338190026137667,
+      "randomization_scale": 0.4326033984731145,
+      "prefer_nominal_grasp": false,
+      "initial_sha256": "35294774d77792275e046fab418b207b6e16a2a17aed0f6067a3c7c754d46a53",
+      "initial_joints_rad": [
+        -1.4053664985464698,
+        -0.23882527345196772,
+        -0.3385403753652017,
+        0.6269327131598053,
+        0.0005236162369816416
+      ],
+      "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "config": {
+        "robot": "innate_mars",
+        "scenario": "carry",
+        "horizon": 15,
+        "initialization_attempts": 20,
+        "diagnostics": false,
+        "disturbance_curriculum": false,
+        "randomization_scale": 0.4326033984731145,
+        "payload_mass_kg": null,
+        "payload_asset_set": "training",
+        "two_supports": false,
+        "contact_cone": "elliptic",
+        "contact_impratio": 3,
+        "balanced_grasp_setup": true,
+        "grasp_setup_prefer_nominal": false,
+        "tamp_carry_trajectories": true,
+        "carry_target_mode": "translation",
+        "carry_push_scale": 0.0,
+        "carry_push_probability": 0.0,
+        "payload_object": "object1",
+        "initial_heading_range": 0.0,
+        "target_scale": 1.0,
+        "retarget_probability": 0.0,
+        "reach_push_probability": 0.0,
+        "certify_reach_paths": false,
+        "dynamic_references": false,
+        "action_mode": "direct_velocity",
+        "base_xy_tolerance": 0.005,
+        "base_heading_tolerance": 0.04,
+        "base_only_min_distance": 0.0,
+        "base_only_max_distance": 0.0,
+        "reach_target_mode": "mixed",
+        "differential_base_reward": false,
+        "grasp_lift_height": 0.045,
+        "support_half_width": 0.04,
+        "grasp_depth": 0.03,
+        "grasp_pitch_rad": 0.04338190026137667,
+        "hand_position_tolerance": 0.005,
+        "hand_orientation_tolerance": 0.05,
+        "trajectory_preview": true,
+        "tracking_reward": true,
+        "tracking_precision": 4,
+        "endpoint_motion_weight": 0.0,
+        "goal_gated_settling": true,
+        "hand_gated_base_reward": false,
+        "motion_penalty_scale": 1.0,
+        "smoothness_curriculum": false,
+        "jerk_limited_lift_reference": false,
+        "grasp_lift_phase_weights": null,
+        "scenario_weights": null,
+        "retention_context": true,
+        "empty_grasp_probability": 0.0,
+        "carry_hold_probability": 0.0,
+        "grasp_lift_probability": 0.0,
+        "grasp_lift_payload_object": null,
+        "payload_mass_range_kg": [
+          0.02155375832066014,
+          0.02155375832066014
+        ],
+        "payload_com_randomization_m": 0.003,
+        "reach_hold_probability": 0.0,
+        "hold_pregrasp_fixture": false,
+        "fixed_base_probability": 0.0,
+        "fixed_base_xy_tolerance": 0.005,
+        "categorical_features_unscaled": false,
+        "body_motion_weight": 0.0,
+        "feedback_policy": false,
+        "restoring_yaw_feedback": false,
+        "feedback_orientation_scale": 1.0,
+        "feedback_orientation_error": "rotation6",
+        "feedback_reference_velocity": false,
+        "wheel_feedback_gain": 2.0,
+        "wheel_feedback_base_only_gains": null,
+        "wheel_feedback_current_velocity": false,
+        "physical_wheel_slew": false,
+        "wheel_jerk_limits": null,
+        "precision_tracking_reward": false,
+        "terminal_hold_seconds": 1.0,
+        "normalized_jerk_weight": 0.0,
+        "command_smoothness_weight": 0.0,
+        "base_turn_progress_guard": false,
+        "whole_body_settling": false,
+        "reach_local_probability": 0.0,
+        "reach_local_translation_probability": 0.0,
+        "fixed_base_contract": false,
+        "pose_progress_weight": 0.0
+      },
+      "randomization": {
+        "asset_set": "training",
+        "contact_cone": "elliptic",
+        "contact_impratio": 3,
+        "mass_factor": 1.077687916033007,
+        "payload_mass_kg": 0.02155375832066014,
+        "payload_inertia_kg_m2": [
+          6.925941007038793e-06,
+          6.925941007038793e-06,
+          9.196270216814993e-07
+        ],
+        "payload_com_local_m": [
+          -1.3415539283121326e-05,
+          -0.0004531831950782807,
+          -0.0007288131749130482
+        ],
+        "friction_factor": 0.962661003820807,
+        "scale": 0.4326033984731145,
+        "grasp_setup": {
+          "base": [
+            0.01930180748068916,
+            -0.12861591327672983,
+            1.4
+          ],
+          "arm": [
+            -1.4,
+            -0.42923584061822495,
+            0.22322089960081326,
+            0.24939684127878836,
+            0.0
+          ],
+          "hand": [
+            0.3056315260861337,
+            -0.05285,
+            0.237232754019337,
+            0.9990591529340823,
+            0.0,
+            0.0,
+            1.0000000000000002,
+            -0.0433682941632969,
+            0.0
+          ],
+          "azimuth_offset_rad": -1.4,
+          "minimum_sampled_margin_m": 0.02424283751825594,
+          "original_loaded_margin_m": 0.01375006993326174,
+          "initial_base": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "carry_joint_offset": [
+            0.0,
+            -0.06669735383184905,
+            0.1891746278669254,
+            -0.11996187947414139,
+            0.0
+          ],
+          "setup_margin_required_m": 0.007,
+          "selection_reason": "maximum_margin"
+        }
+      },
+      "path_admission": {
+        "candidate_id": 0,
+        "accepted": true,
+        "endpoint_translation_m": 0.015011041191048383,
+        "endpoint_orientation_rad": 0.0025153945606577557,
+        "goal": [
+          -1.4053664985464698,
+          -0.30552262728381674,
+          -0.1493657474982763,
+          0.5069708336856639,
+          0.0005236162369816416
+        ],
+        "reason": "timed_tamp_carry",
+        "planner": "PhysicalPickPlaceExecutor.plan_joint_target",
+        "minimum_sampled_margin_m": 0.023858388150356877,
+        "dynamic_feasibility_verified": false
+      },
+      "initialization_failed": false,
+      "code": "ok",
+      "stop_confirmed": true,
+      "success": true,
+      "flags": {
+        "unsafe_contact": false,
+        "wheel_lift": false,
+        "invalid_physics": false,
+        "retention_lost": false,
+        "motion_fault": false
+      },
+      "stop_slip_m": 4.649102698664526e-05,
+      "stop_rotation_rad": 0.0019289564136686231,
+      "disturbance_force_N": 0.0,
+      "disturbance_torque_Nm": 0.0,
+      "push_observed": false,
+      "admitted_samples": 108,
+      "attempts": 1,
+      "learner_ticks": 175,
+      "samples": 0,
+      "family": "carry"
+    },
+    {
+      "id": "audit-28-34g-combined-push-0",
+      "split": "audit",
+      "seed": 64701100,
+      "worker": 3,
+      "mass_band_g": [
+        28,
+        34
+      ],
+      "payload_mass_kg": 0.031016838976250394,
+      "motion": "combined",
+      "pushed": true,
+      "grasp_pitch_rad": -0.008184723996059573,
+      "randomization_scale": 0.4166767068146845,
+      "prefer_nominal_grasp": false,
+      "initial_sha256": "7c33fe79858577f2ccffc4b28d14d9cb16ce2e5b2d56c1614ae21b989938701c",
+      "initial_joints_rad": [
+        -1.4072746698053609,
+        -0.18514689777837723,
+        -0.3833520904725681,
+        0.564716395164756,
+        0.0006819567463551686
+      ],
+      "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "config": {
+        "robot": "innate_mars",
+        "scenario": "carry",
+        "horizon": 15,
+        "initialization_attempts": 20,
+        "diagnostics": false,
+        "disturbance_curriculum": false,
+        "randomization_scale": 0.4166767068146845,
+        "payload_mass_kg": null,
+        "payload_asset_set": "training",
+        "two_supports": false,
+        "contact_cone": "elliptic",
+        "contact_impratio": 3,
+        "balanced_grasp_setup": true,
+        "grasp_setup_prefer_nominal": false,
+        "tamp_carry_trajectories": true,
+        "carry_target_mode": "combined",
+        "carry_push_scale": 0.1,
+        "carry_push_probability": 1.0,
+        "payload_object": "object1",
+        "initial_heading_range": 0.0,
+        "target_scale": 1.0,
+        "retarget_probability": 0.0,
+        "reach_push_probability": 0.0,
+        "certify_reach_paths": false,
+        "dynamic_references": false,
+        "action_mode": "direct_velocity",
+        "base_xy_tolerance": 0.005,
+        "base_heading_tolerance": 0.04,
+        "base_only_min_distance": 0.0,
+        "base_only_max_distance": 0.0,
+        "reach_target_mode": "mixed",
+        "differential_base_reward": false,
+        "grasp_lift_height": 0.045,
+        "support_half_width": 0.04,
+        "grasp_depth": 0.03,
+        "grasp_pitch_rad": -0.008184723996059573,
+        "hand_position_tolerance": 0.005,
+        "hand_orientation_tolerance": 0.05,
+        "trajectory_preview": true,
+        "tracking_reward": true,
+        "tracking_precision": 4,
+        "endpoint_motion_weight": 0.0,
+        "goal_gated_settling": true,
+        "hand_gated_base_reward": false,
+        "motion_penalty_scale": 1.0,
+        "smoothness_curriculum": false,
+        "jerk_limited_lift_reference": false,
+        "grasp_lift_phase_weights": null,
+        "scenario_weights": null,
+        "retention_context": true,
+        "empty_grasp_probability": 0.0,
+        "carry_hold_probability": 0.0,
+        "grasp_lift_probability": 0.0,
+        "grasp_lift_payload_object": null,
+        "payload_mass_range_kg": [
+          0.031016838976250394,
+          0.031016838976250394
+        ],
+        "payload_com_randomization_m": 0.003,
+        "reach_hold_probability": 0.0,
+        "hold_pregrasp_fixture": false,
+        "fixed_base_probability": 0.0,
+        "fixed_base_xy_tolerance": 0.005,
+        "categorical_features_unscaled": false,
+        "body_motion_weight": 0.0,
+        "feedback_policy": false,
+        "restoring_yaw_feedback": false,
+        "feedback_orientation_scale": 1.0,
+        "feedback_orientation_error": "rotation6",
+        "feedback_reference_velocity": false,
+        "wheel_feedback_gain": 2.0,
+        "wheel_feedback_base_only_gains": null,
+        "wheel_feedback_current_velocity": false,
+        "physical_wheel_slew": false,
+        "wheel_jerk_limits": null,
+        "precision_tracking_reward": false,
+        "terminal_hold_seconds": 1.0,
+        "normalized_jerk_weight": 0.0,
+        "command_smoothness_weight": 0.0,
+        "base_turn_progress_guard": false,
+        "whole_body_settling": false,
+        "reach_local_probability": 0.0,
+        "reach_local_translation_probability": 0.0,
+        "fixed_base_contract": false,
+        "pose_progress_weight": 0.0
+      },
+      "randomization": {
+        "asset_set": "training",
+        "contact_cone": "elliptic",
+        "contact_impratio": 3,
+        "mass_factor": 1.5508419488125198,
+        "payload_mass_kg": 0.031016838976250394,
+        "payload_inertia_kg_m2": [
+          9.966744257701794e-06,
+          9.966744257701794e-06,
+          1.32338512965335e-06
+        ],
+        "payload_com_local_m": [
+          5.75472118219541e-05,
+          -0.00013944141873477832,
+          -0.0010468199770506544
+        ],
+        "friction_factor": 0.9658144568229878,
+        "scale": 0.4166767068146845,
+        "grasp_setup": {
+          "base": [
+            0.019301807480689104,
+            -0.12861591327672983,
+            1.4
+          ],
+          "arm": [
+            -1.4,
+            -0.3839577463723341,
+            0.1928020273858151,
+            0.18297099499045943,
+            0.0
+          ],
+          "hand": [
+            0.3117484975017921,
+            -0.05285,
+            0.24195329558254197,
+            0.999966505333538,
+            -0.0,
+            0.0,
+            1.0,
+            0.008184632614322035,
+            0.0
+          ],
+          "azimuth_offset_rad": -1.4,
+          "minimum_sampled_margin_m": 0.02312784424842961,
+          "original_loaded_margin_m": 0.010918219884788413,
+          "initial_base": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "carry_joint_offset": [
+            -0.01562057962194731,
+            0.004005153167370827,
+            -0.08487661809950327,
+            0.054921357239225393,
+            -0.0293017289836423
+          ],
+          "setup_margin_required_m": 0.007,
+          "selection_reason": "maximum_margin_for_disturbance"
+        }
+      },
+      "path_admission": {
+        "candidate_id": 0,
+        "accepted": true,
+        "endpoint_translation_m": 0.01376370310547457,
+        "endpoint_orientation_rad": 0.0423233102035641,
+        "goal": [
+          -1.4228952494273082,
+          -0.1811417446110064,
+          -0.46822870857207133,
+          0.6196377524039814,
+          -0.02861977223728713
+        ],
+        "reason": "timed_tamp_carry",
+        "planner": "PhysicalPickPlaceExecutor.plan_joint_target",
+        "minimum_sampled_margin_m": 0.022739586868817382,
+        "dynamic_feasibility_verified": false
+      },
+      "initialization_failed": false,
+      "code": "ok",
+      "stop_confirmed": true,
+      "success": true,
+      "flags": {
+        "unsafe_contact": false,
+        "wheel_lift": false,
+        "invalid_physics": false,
+        "retention_lost": false,
+        "motion_fault": false
+      },
+      "stop_slip_m": 3.611924426158002e-05,
+      "stop_rotation_rad": 0.0015814750411273755,
+      "disturbance_force_N": 0.22279335211512233,
+      "disturbance_torque_Nm": 0.006359732723697312,
+      "push_observed": true,
+      "admitted_samples": 84,
+      "attempts": 1,
+      "learner_ticks": 161,
+      "samples": 0,
+      "family": "carry"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:arm_only:0",
+      "seed": 35901030,
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 500,
+      "samples": 0,
+      "family": "arm"
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:arm_only:1",
+      "seed": 35901031,
+      "success": true,
+      "code": "ok",
+      "flags": {
+        "unsafe_contact": false,
+        "retention_lost": false,
+        "wheel_lift": false,
+        "invalid_physics": false
+      },
+      "stop_confirmed": true,
+      "learner_ticks": 500,
+      "samples": 0,
+      "family": "arm"
+    }
+  ],
+  "cases_sha256": "9fca6bc38290fc82548f0781cef1ca8855f56b7bb684aad8976ca5edb63b9f97"
+}
