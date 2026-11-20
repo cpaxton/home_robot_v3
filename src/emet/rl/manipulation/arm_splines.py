@@ -347,6 +347,7 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         maximum_attempts=64,
         timing="legacy_v1",
         finish_after_hold=False,
+        tracking_first=False,
         spread_requirements=None,
     ):
         from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
@@ -354,6 +355,7 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         if timing not in {"legacy_v1", "bounded_v2"} or type(finish_after_hold) is not bool:
             raise ValueError("declared timing and quiet-hold completion required")
         self.timing, self.finish_after_hold = timing, finish_after_hold
+        self.tracking_first = tracking_first
         self.spread_requirements = (
             SpreadRequirements(**spread_requirements) if spread_requirements is not None else None
         )
@@ -402,6 +404,8 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         points = np.vstack([initial, rng.uniform(low, high, size=(level.knot_count - 1, e.profile.arm_size))])
         if rng.random() < 0.5:
             points[-1] = initial
+        if self.tracking_first:
+            level = replace(level, initial_hold_s=0.0)
         return ArmSplineReference(e.control, points, level, timing=self.timing)
 
     def settling_budget(self):
@@ -501,7 +505,13 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         )
         native_done, native_truncated = bool(done), bool(truncated)
         early_hold = bool(self.finish_after_hold and info.get("is_success") and phase >= self.reference.end)
-        if early_hold and not (done or truncated):
+        if self.tracking_first and phase >= self.reference.end - 1e-8 and not (done or truncated):
+            # End after measuring the moving reference, before terminal dwell.
+            success = bool(np.all(self.peak_path_error <= [0.003, 0.02]))
+            info = {**info, "code": "ok" if success else "spline_path_tracking_failed"}
+            e.control.stop()
+            done = True
+        elif early_hold and not (done or truncated):
             e.control.stop()
             done = True
         if done or truncated:
@@ -551,7 +561,7 @@ def training_mixture(environments, splines):
     return ControlStepMixture({name: members[name] for name in MIXTURE}, list(MIXTURE.values()))
 
 
-def make_training_environment(manifest_path, *, level=0, reward_config=None):
+def make_training_environment(manifest_path, *, level=0, reward_config=None, tracking_first=False):
     """Use the existing general/TAMP sources with a dedicated random-arm share.
 
     The level is explicit. Its teacher preflight and development evaluation
@@ -568,6 +578,22 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
     spec = load_manifest(manifest_path)
     if type(level) is not int or not 0 <= level < len(spec["levels"]):
         raise ValueError("declared curriculum level required")
+
+    def make_splines():
+        return ArmSplineTrackingEnv(
+            [c for c in spec["cases"] if c["split"] == "train" and c["level"] == level],
+            levels=tuple(SplineLevel(**v) for v in spec["levels"]),
+            reward_config=reward_config,
+            timing=spec.get("reference_timing", "legacy_v1"),
+            finish_after_hold=spec.get("finish_after_hold", False),
+            tracking_first=tracking_first,
+            spread_requirements=spec.get("spread_requirements"),
+        )
+
+    if tracking_first:
+        from emet.rl.manipulation.whole_body_env import ControlStepMixture
+
+        return ControlStepMixture({"arm_splines": make_splines()})
     cases = json.loads((root / "paper/data/whole_body_control/long_finetune_v1/cases.json").read_text())
     broad = spec["format"] == "mars-arm-splines-v2"
     if broad:
@@ -624,14 +650,7 @@ def make_training_environment(manifest_path, *, level=0, reward_config=None):
             wheel_feedback_base_only_gains=(0.0, 0.5),
             reward_config=reward_config,
         )
-        splines = ArmSplineTrackingEnv(
-            [c for c in spec["cases"] if c["split"] == "train" and c["level"] == level],
-            levels=tuple(SplineLevel(**v) for v in spec["levels"]),
-            reward_config=reward_config,
-            timing=timing,
-            finish_after_hold=finish,
-            spread_requirements=spec.get("spread_requirements"),
-        )
+        splines = make_splines()
         environments["arm_splines"] = splines
         return training_mixture({k: v for k, v in environments.items() if k != "arm_splines"}, splines)
     except Exception:

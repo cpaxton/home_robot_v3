@@ -68,7 +68,8 @@ def train(args):
     ):
         raise ValueError("bounded whole 1024-decision rollouts and a shorter critic warmup required")
     receipt = verify_regressions(args.regression_receipt)
-    preflight = require_preflight(args.preflight, args.manifest, args.level)
+    tracking_first = getattr(args, "tracking_first", False)
+    preflight = require_preflight(args.preflight, args.manifest, args.level, tracking_first=tracking_first)
     state = source_state(ROOT)
     initializer = WholeBodyBundle(args.initializer, robot="innate_mars", fingerprint=preflight["fingerprint"])
     saved = torch.load(args.training_state, map_location="cpu", weights_only=False)
@@ -120,7 +121,8 @@ def train(args):
         "critic_warmup_decisions": args.critic_warmup_steps,
         "level": args.level,
         "curriculum_advance": "manual; development probes only",
-        "training_mix": MIXTURE,
+        "training_mix": {"arm_splines": 1.0} if tracking_first else MIXTURE,
+        "tracking_first": tracking_first,
         "reward_configuration": reward.record(),
         "ppo": asdict(cfg),
         "teacher_actions_in_loss": False,
@@ -144,7 +146,9 @@ def train(args):
                 config=metadata,
                 settings=wandb.Settings(disable_git=True, save_code=False),
             )
-        env = make_training_environment(args.manifest, level=args.level, reward_config=reward)
+        env = make_training_environment(
+            args.manifest, level=args.level, reward_config=reward, tracking_first=tracking_first
+        )
         native = env.environments["arm_splines"].unwrapped
         if native.fingerprint != preflight["fingerprint"]:
             raise ValueError("training model differs from teacher preflight")
@@ -261,6 +265,9 @@ def main():
     parser.add_argument("--critic-warmup-steps", type=int, default=4096)
     parser.add_argument("--seed", type=int, default=20261118)
     parser.add_argument("--wandb-mode", choices=("offline", "online", "disabled"), default="offline")
+    parser.add_argument(
+        "--tracking-first", action="store_true", help="train on moving arm splines before hold practice"
+    )
     train(parser.parse_args())
 
 

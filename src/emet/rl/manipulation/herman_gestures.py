@@ -7,11 +7,16 @@ from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 
 def wave_case(gesture="elbow_wrist_wave"):
-    if gesture not in {"wrist_wave", "elbow_wrist_wave"}:
+    if gesture not in {"wrist_wave", "elbow_wrist_wave", "normal_wave"}:
         raise ValueError("unknown wave gesture")
+    version, seed = {
+        "wrist_wave": (1, 430_010_000),
+        "elbow_wrist_wave": (2, 430_020_000),
+        "normal_wave": (3, 430_030_000),
+    }[gesture]
     return {
-        "id": ("herman-wave-v1:" if gesture == "wrist_wave" else "herman-wave-v2:") + gesture,
-        "seed": 430_010_000 if gesture == "wrist_wave" else 430_020_000,
+        "id": f"herman-wave-v{version}:{gesture}",
+        "seed": seed,
         "split": "audit",
         "mode": "coupled",
         "travel_m": 0.0,
@@ -51,6 +56,11 @@ class HermanWaveReference(TaskPoseTrajectory):
             right = raised + [0, 0, -0.20, 0.12, -0.30]
             points = np.array([initial, raised, left, right, left, raised, initial])
             speed, acceleration, jerk = 0.25, 0.5, 2.0
+        elif gesture == "normal_wave":
+            self.initial_hold_s = 0.2
+            raised = initial + [0, 0.035, -0.12, 0.085, 0.26]
+            points = np.array([initial, raised, initial])
+            speed, acceleration, jerk = 0.6, 1.5, 6.0
         else:
             raise ValueError("unknown wave gesture")
         if np.any(points < control.limits[:, 0] + 0.002) or np.any(points > control.limits[:, 1] - 0.002):
@@ -107,13 +117,13 @@ class HermanWaveReference(TaskPoseTrajectory):
         }
 
 
-def wave_tracking_gate(trace, end):
+def wave_tracking_gate(trace, end, *, initial_hold_s=2.0):
     """Require tracking through the wave, not merely returning to its endpoint."""
 
     def reference_time(sample):
         return sample.get("reference_time_s", sample["time_s"])
 
-    samples = [s for s in trace if 2.0 - 1e-8 <= reference_time(s) <= end + 1e-8]
+    samples = [s for s in trace if initial_hold_s - 1e-8 <= reference_time(s) <= end + 1e-8]
     complete = bool(trace and reference_time(trace[-1]) >= end - 1e-8 and samples)
     errors = np.array([[s["position_error_m"], s["rotation_error_rad"]] for s in samples])
     finite = bool(len(samples) and np.isfinite(errors).all() and np.all(errors >= 0))

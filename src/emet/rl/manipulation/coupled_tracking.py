@@ -537,15 +537,22 @@ class CoupledTrackingEnv(gym.Wrapper):
         self.meter = RewardMeter(
             e, base_heading_region=self.suite_format == "coupled-tracking-v2", config=self.reward_config
         )
+        self.reward_hand_path_gate = case["mode"] in {"coupled", "hand_free_base"}
         raw = e.control.observe()
         return self.observe(raw), {
             **info,
             "case_id": case["id"],
             "coupled_case_id": case["id"],
             "coupled_admission": self.admission,
-            "reward_contract": self.meter.record(),
+            "reward_contract": self.reward_contract(),
             "reference_sha256": digest(reference.record()),
             "trajectory_spread": self.reference_spread,
+        }
+
+    def reward_contract(self):
+        return self.meter.record() | {
+            "reference_velocity_sample": "poststep",
+            "terminal_hand_path_gate": self.reward_hand_path_gate,
         }
 
     def step(self, action):
@@ -577,15 +584,20 @@ class CoupledTrackingEnv(gym.Wrapper):
 
         self.meter.before_step()
         raw, _, done, truncated, info = e.step(action)
-        rewards = self.meter.tick(action, motion)
+        # Score twist against the same reference time as the post-step pose.
+        rewards = self.meter.tick(action, reference_velocity(e.control))
         success = bool(info.get("is_success", False))
+        hand_path_passed = not self.reward_hand_path_gate or (
+            info["peak_hand_position_error"] <= e.config.hand_position_tolerance
+            and info["peak_hand_orientation_error"] <= e.config.hand_orientation_tolerance
+        )
         native_done, native_truncated = bool(done), bool(truncated)
         early_success = bool(self.finish_after_hold and success and self.may_finish_reference())
         if early_success and not (done or truncated):
             e.control.stop()
             done = True
         if done or truncated:
-            rewards[0] += self.meter.terminal_bonus(success)
+            rewards[0] += self.meter.terminal_bonus(success and hand_path_passed)
             self.episode_closed = True
         return (
             self.observe(raw),
@@ -601,13 +613,14 @@ class CoupledTrackingEnv(gym.Wrapper):
                 "elapsed_control_ticks": 1,
                 "reference_motion_ticks": int(reference_is_moving(motion)),
                 "primitive_success": success,
+                "reward_hand_path_passed": hand_path_passed,
                 "full_pick_place_success": False,
                 "case_id": self.case["id"],
                 "coupled_case_id": self.case["id"],
                 "retarget_delivered": self.retargeted,
                 "coupled_admission": self.admission,
                 "reward_terms": self.meter.last_terms.copy(),
-                "reward_contract": self.meter.record(),
+                "reward_contract": self.reward_contract(),
                 "reference_timing": self.timing,
                 "ended_after_quiet_hold": early_success,
                 "trajectory_spread": self.reference_spread,

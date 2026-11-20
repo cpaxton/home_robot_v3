@@ -310,3 +310,21 @@ def test_new_family_rollout_and_critic_warmup_use_existing_policy_contract():
         assert stats and any(not torch.equal(v, before[k]) for k, v in policy.actor.state_dict().items())
     finally:
         env.close()
+
+
+@pytest.mark.sim
+def test_tracking_first_runs_moving_splines_without_endpoint_dwell():
+    from emet.rl.manipulation.arm_spline_benchmark import DEFAULT
+
+    mixture = make_training_environment(DEFAULT, tracking_first=True)
+    try:
+        assert mixture.names == ("arm_splines",)
+        env = mixture.environments["arm_splines"]
+        assert all(case["split"] == "train" for case in env.cases)
+        row = episode(env, env.cases[0])
+        assert env.reference.initial_hold_s == 0
+        assert row["success"] and row["stop_confirmed"], row
+        assert row["ticks"] <= np.ceil(env.reference.end / env.unwrapped.profile.dt) + 1
+        assert row["reference_motion_ticks"] > row["ticks"] * 0.8
+    finally:
+        mixture.close()

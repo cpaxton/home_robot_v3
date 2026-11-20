@@ -39,6 +39,7 @@ def episode(env, case, policy=None):
     identity = digest({"qpos": e.data.qpos.tolist(), "qvel": e.data.qvel.tolist()})
     # Decimal horizons can divide to just below an integer. Do not stop one
     # physical tick before the environment emits its terminal receipt.
+    moving_ticks = 0
     for _ in range(int(np.ceil(e.config.horizon / e.profile.dt)) + 1):
         action = (
             task_pose_teacher_action(e.control)
@@ -46,6 +47,7 @@ def episode(env, case, policy=None):
             else policy({k: observation[k] for k in ("history", "preview", "motion")})
         )
         observation, _, done, truncated, info = env.step(action)
+        moving_ticks += int(info.get("reference_motion_ticks", 0))
         if done or truncated:
             break
     else:
@@ -58,6 +60,7 @@ def episode(env, case, policy=None):
         "code": info["code"],
         "stop_confirmed": confirmed,
         "ticks": e.steps,
+        "reference_motion_ticks": moving_ticks,
         "reference_sha256": initial["reference_sha256"],
         "initial_state_sha256": identity,
         "admission": initial["spline_admission"],
@@ -84,7 +87,7 @@ def episode(env, case, policy=None):
     }
 
 
-def require_preflight(path, manifest_path, level):
+def require_preflight(path, manifest_path, level, *, tracking_first=False):
     report = json.loads(Path(path).read_text())
     spec = load_manifest(manifest_path)
     expected = [c for c in spec["cases"] if c["level"] == level]
@@ -96,6 +99,7 @@ def require_preflight(path, manifest_path, level):
         or report.get("sources") != source_hashes()
         or report.get("source_state") != source_state(ROOT)
         or report.get("level") != level
+        or report.get("tracking_first", False) != tracking_first
         or [r.get("case") for r in rows] != expected
         or not rows
         or any(not r.get("admitted") or not r.get("stop_confirmed") or r.get("invalid_physics") for r in rows)
@@ -106,7 +110,7 @@ def require_preflight(path, manifest_path, level):
         r["metrics"]["unsafe_contact"] or r["metrics"]["wheel_lift"] for r in train
     ):
         raise ValueError("teacher training distribution is not reliable enough for this curriculum level")
-    if spec["format"] == "mars-arm-splines-v2":
+    if spec["format"] == "mars-arm-splines-v2" and not tracking_first:
         from emet.rl.manipulation.motion_distribution import preflight_pools
 
         for family, cases in preflight_pools().items():
@@ -124,7 +128,7 @@ def require_preflight(path, manifest_path, level):
     return report
 
 
-def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
+def run(manifest_path, output, *, level=0, teacher=False, policy_paths=(), tracking_first=False):
     output = Path(output)
     if output.exists():
         raise ValueError("fresh arm-spline output directory required")
@@ -141,6 +145,7 @@ def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
         levels=levels,
         timing=spec.get("reference_timing", "legacy_v1"),
         finish_after_hold=spec.get("finish_after_hold", False),
+        tracking_first=tracking_first,
         spread_requirements=spec.get("spread_requirements"),
     )
     report = {
@@ -154,7 +159,8 @@ def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
         "complete": False,
         "hardware_used": False,
         "safety_promoted": False,
-        "training_mix": spec["training_mix"],
+        "training_mix": {"arm_splines": 1.0} if tracking_first else spec["training_mix"],
+        "tracking_first": tracking_first,
         "fingerprint": env.unwrapped.fingerprint,
     }
     try:
@@ -209,7 +215,7 @@ def run(manifest_path, output, *, level=0, teacher=False, policy_paths=()):
                 report["results"][name].append(row)
                 save(output / "report.json", report)
                 print(name, case["id"], row["success"], row["code"], flush=True)
-        if teacher and spec["format"] == "mars-arm-splines-v2":
+        if teacher and spec["format"] == "mars-arm-splines-v2" and not tracking_first:
             from emet.rl.manipulation.motion_distribution import preflight_pools, teacher_preflight
 
             report["general_teacher"] = teacher_preflight(
@@ -242,8 +248,16 @@ def main():
     parser.add_argument("--level", type=int, default=0)
     parser.add_argument("--teacher", action="store_true")
     parser.add_argument("--policy", type=Path, action="append", default=[])
+    parser.add_argument("--tracking-first", action="store_true", help="score moving arm splines without endpoint dwell")
     args = parser.parse_args()
-    run(args.manifest, args.output, level=args.level, teacher=args.teacher, policy_paths=args.policy)
+    run(
+        args.manifest,
+        args.output,
+        level=args.level,
+        teacher=args.teacher,
+        policy_paths=args.policy,
+        tracking_first=args.tracking_first,
+    )
 
 
 if __name__ == "__main__":

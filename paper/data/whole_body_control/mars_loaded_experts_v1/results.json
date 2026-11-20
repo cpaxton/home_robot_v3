@@ -1,0 +1,5194 @@
+{
+  "scope": "Mars simulator loaded expert development. No hardware deployment evidence.",
+  "datasets": {
+    "loaded-diversity-v1": {
+      "training_samples": 10000,
+      "training_sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc",
+      "outcomes": {
+        "train": {
+          "ok": 95,
+          "wheel_lift": 1
+        },
+        "audit": {
+          "ok": 24
+        }
+      },
+      "coverage": {
+        "train|[20, 24]|translation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 412
+        },
+        "audit|[20, 24]|translation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 24]|translation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 482
+        },
+        "audit|[20, 24]|translation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 24]|orientation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 357
+        },
+        "audit|[20, 24]|orientation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 24]|orientation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 561
+        },
+        "audit|[20, 24]|orientation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 24]|combined|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 257
+        },
+        "audit|[20, 24]|combined|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 24]|combined|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 324
+        },
+        "audit|[20, 24]|combined|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[28, 34]|translation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 414
+        },
+        "audit|[28, 34]|translation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[28, 34]|translation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 459
+        },
+        "audit|[28, 34]|translation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[28, 34]|orientation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 509
+        },
+        "audit|[28, 34]|orientation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[28, 34]|orientation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 572
+        },
+        "audit|[28, 34]|orientation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[28, 34]|combined|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 243
+        },
+        "audit|[28, 34]|combined|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[28, 34]|combined|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 338
+        },
+        "audit|[28, 34]|combined|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[36, 42]|translation|nominal": {
+          "attempted": 4,
+          "passed": 3,
+          "training_samples": 309
+        },
+        "audit|[36, 42]|translation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[36, 42]|translation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 500
+        },
+        "audit|[36, 42]|translation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[36, 42]|orientation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 573
+        },
+        "audit|[36, 42]|orientation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[36, 42]|orientation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 512
+        },
+        "audit|[36, 42]|orientation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[36, 42]|combined|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 276
+        },
+        "audit|[36, 42]|combined|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[36, 42]|combined|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 319
+        },
+        "audit|[36, 42]|combined|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[46, 50]|translation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 429
+        },
+        "audit|[46, 50]|translation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[46, 50]|translation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 483
+        },
+        "audit|[46, 50]|translation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[46, 50]|orientation|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 539
+        },
+        "audit|[46, 50]|orientation|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[46, 50]|orientation|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 542
+        },
+        "audit|[46, 50]|orientation|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[46, 50]|combined|nominal": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 279
+        },
+        "audit|[46, 50]|combined|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[46, 50]|combined|push": {
+          "attempted": 4,
+          "passed": 4,
+          "training_samples": 311
+        },
+        "audit|[46, 50]|combined|push": {
+          "attempted": 1,
+          "passed": 1
+        }
+      },
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "generator_sha256": "687133b44c5028ca08aeaf468c4955c3da0b83165bf6b79385a03e599a246776",
+      "manifest_sha256": "65c7a2fb75acc15ece49e3540bed999c245fc011f123f8b22730584ed97698be",
+      "training_episodes": 95,
+      "audit_episodes": 24
+    },
+    "loaded-stress-v1": {
+      "training_samples": 3526,
+      "training_sha256": "960a55ec47f470262b39e74b0be65c680e7e7daf21d79e8680be97da65ef302d",
+      "outcomes": {
+        "train": {
+          "ok": 34,
+          "retention_lost": 2,
+          "None": 12,
+          "nominal_pinch_clearance": 24
+        },
+        "audit": {
+          "ok": 17,
+          "retention_lost": 2,
+          "None": 5,
+          "nominal_pinch_clearance": 12
+        }
+      },
+      "coverage": {
+        "train|[55, 80]|translation|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 212
+        },
+        "audit|[55, 80]|translation|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[55, 80]|translation|training|object1|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 240
+        },
+        "audit|[55, 80]|translation|training|object1|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[55, 80]|orientation|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 239
+        },
+        "audit|[55, 80]|orientation|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[55, 80]|orientation|training|object1|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 302
+        },
+        "audit|[55, 80]|orientation|training|object1|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[55, 80]|combined|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 102
+        },
+        "audit|[55, 80]|combined|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[55, 80]|combined|training|object1|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 111
+        },
+        "audit|[55, 80]|combined|training|object1|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[85, 120]|translation|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 200
+        },
+        "audit|[85, 120]|translation|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[85, 120]|translation|training|object1|push": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 119
+        },
+        "audit|[85, 120]|translation|training|object1|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[85, 120]|orientation|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 152
+        },
+        "audit|[85, 120]|orientation|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[85, 120]|orientation|training|object1|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 290
+        },
+        "audit|[85, 120]|orientation|training|object1|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[85, 120]|combined|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 144
+        },
+        "audit|[85, 120]|combined|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[85, 120]|combined|training|object1|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 163
+        },
+        "audit|[85, 120]|combined|training|object1|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[125, 180]|translation|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 106
+        },
+        "audit|[125, 180]|translation|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[125, 180]|translation|training|object1|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[125, 180]|translation|training|object1|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[125, 180]|orientation|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 85
+        },
+        "audit|[125, 180]|orientation|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[125, 180]|orientation|training|object1|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[125, 180]|orientation|training|object1|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[125, 180]|combined|training|object1|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[125, 180]|combined|training|object1|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[125, 180]|combined|training|object1|push": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 73
+        },
+        "audit|[125, 180]|combined|training|object1|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|translation|training|object2|nominal": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 100
+        },
+        "audit|[20, 50]|translation|training|object2|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 50]|translation|training|object2|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 224
+        },
+        "audit|[20, 50]|translation|training|object2|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 50]|orientation|training|object2|nominal": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 171
+        },
+        "audit|[20, 50]|orientation|training|object2|nominal": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 50]|orientation|training|object2|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 242
+        },
+        "audit|[20, 50]|orientation|training|object2|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|combined|training|object2|nominal": {
+          "attempted": 2,
+          "passed": 1,
+          "training_samples": 78
+        },
+        "audit|[20, 50]|combined|training|object2|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|combined|training|object2|push": {
+          "attempted": 2,
+          "passed": 2,
+          "training_samples": 173
+        },
+        "audit|[20, 50]|combined|training|object2|push": {
+          "attempted": 1,
+          "passed": 1
+        },
+        "train|[20, 50]|translation|native_table|object1|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|translation|native_table|object1|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|translation|native_table|object1|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|translation|native_table|object1|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|orientation|native_table|object1|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|orientation|native_table|object1|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|orientation|native_table|object1|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|orientation|native_table|object1|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|combined|native_table|object1|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|combined|native_table|object1|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|combined|native_table|object1|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|combined|native_table|object1|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|translation|native_table|object2|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|translation|native_table|object2|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|translation|native_table|object2|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|translation|native_table|object2|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|orientation|native_table|object2|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|orientation|native_table|object2|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|orientation|native_table|object2|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|orientation|native_table|object2|push": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|combined|native_table|object2|nominal": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|combined|native_table|object2|nominal": {
+          "attempted": 1,
+          "passed": 0
+        },
+        "train|[20, 50]|combined|native_table|object2|push": {
+          "attempted": 2,
+          "passed": 0
+        },
+        "audit|[20, 50]|combined|native_table|object2|push": {
+          "attempted": 1,
+          "passed": 0
+        }
+      },
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "generator_sha256": "87f5632ecf60df4bf35f6c7258d19b815caba80657d592f98bda7d9fb30181bf",
+      "manifest_sha256": "8ab8cb960dd804b8cd6c6bc874d9db4717997e7e9741c87de5abc5f59119d24e",
+      "training_episodes": 34,
+      "audit_episodes": 36
+    },
+    "loaded-width-v1": {
+      "training_samples": 555,
+      "training_sha256": "bf54ea2bbf66e71d3479a26b19bf4df30c4173704106d011afdc59957485e30c",
+      "outcomes": {
+        "train": {
+          "ok": 5,
+          "retention_lost": 1
+        },
+        "audit": {
+          "ok": 6
+        }
+      },
+      "coverage": {
+        "train|[35, 50]|orientation|training_wide|object1|nominal": {
+          "attempted": 3,
+          "passed": 2,
+          "training_samples": 199
+        },
+        "audit|[35, 50]|combined|training_wide|object1|nominal": {
+          "attempted": 3,
+          "passed": 3
+        },
+        "train|[35, 50]|orientation|training_wide|object2|nominal": {
+          "attempted": 3,
+          "passed": 3,
+          "training_samples": 356
+        },
+        "audit|[35, 50]|combined|training_wide|object2|nominal": {
+          "attempted": 3,
+          "passed": 3
+        }
+      },
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "generator_sha256": "78fb70f84205ee583b023cdb28a7bc6afc22e097063a6f468920fe1ef71806d7",
+      "manifest_sha256": "4949c2b1e628c3c77481393e6626f7c8f502f796310db8b0e3e27284b45806d8",
+      "training_episodes": 5,
+      "audit_episodes": 6
+    }
+  },
+  "fits": {
+    "nominal": {
+      "stage": "nominal",
+      "nominal_samples": 10000,
+      "stress_samples": 0,
+      "nominal_dataset_sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc",
+      "complete": true,
+      "updates": 3000,
+      "initializer_sha256": "a5fea36938844796a24240a5c2995520a2139eb3a4556cf38a0246dae019748f",
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "initial_action_mse": 6.58813733025454e-05,
+      "final_action_mse": 6.1810214901925065e-06
+    },
+    "stress": {
+      "stage": "stress",
+      "nominal_samples": 10000,
+      "stress_samples": 3526,
+      "nominal_dataset_sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc",
+      "complete": true,
+      "stress_dataset_sha256": "960a55ec47f470262b39e74b0be65c680e7e7daf21d79e8680be97da65ef302d",
+      "stress_sampling_probability": 0.2,
+      "updates": 2000,
+      "initializer_sha256": "fb1f7aeae93cca23ff592d30d0e5ceb19de5e0c65fe63785a9ca83542cf17a0e",
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "initial_action_mse": 5.829208475915948e-06,
+      "final_action_mse": 3.088158564423793e-06
+    },
+    "width": {
+      "stage": "width",
+      "nominal_samples": 10000,
+      "stress_samples": 3526,
+      "nominal_dataset_sha256": "912417ae5f1125a5253d0657b90247f9b6ebd62beeb36545e3f4efe99f42dafc",
+      "complete": true,
+      "width_samples": 555,
+      "stress_dataset_sha256": "960a55ec47f470262b39e74b0be65c680e7e7daf21d79e8680be97da65ef302d",
+      "width_dataset_sha256": "bf54ea2bbf66e71d3479a26b19bf4df30c4173704106d011afdc59957485e30c",
+      "sampling_fractions": [
+        0.75,
+        0.15,
+        0.1
+      ],
+      "updates": 1500,
+      "initializer_sha256": "992c4e430ca96ae1a0c1870dfa78404140ae0c7ab44c5078e1e62648c4f33c42",
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "initial_action_mse": 8.744422302697785e-06,
+      "final_action_mse": 2.3854986466176342e-06
+    }
+  },
+  "nominal_audits": {
+    "initializer": {
+      "mode": "nominal",
+      "policy": "initializer",
+      "partition": "all",
+      "weights_sha256": "a5fea36938844796a24240a5c2995520a2139eb3a4556cf38a0246dae019748f",
+      "cases": [
+        {
+          "id": "audit-20-24g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.903055709295044e-05,
+          "stop_rotation_rad": 0.00194542422865353,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-translation-push-0",
+          "code": "tracking_timeout",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.0001424807526683127,
+          "stop_rotation_rad": 0.0019155082424638168,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.209365435710146e-05,
+          "stop_rotation_rad": 0.003976468438854456,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.2466557546952024e-05,
+          "stop_rotation_rad": 0.004829896831544784,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.064819451233196e-05,
+          "stop_rotation_rad": 0.0019629350515779184,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-push-0",
+          "code": "tracking_timeout",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.391632972150782e-05,
+          "stop_rotation_rad": 0.0022813783788425412,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.821089209522034e-05,
+          "stop_rotation_rad": 0.002179163683673816,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.015729474608502e-05,
+          "stop_rotation_rad": 0.0020669129786666223,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-nominal-0",
+          "code": "retention_lost",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": true,
+            "invalid_physics": false,
+            "retention_lost": true,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.005804132892958627,
+          "stop_rotation_rad": 0.12709883247476655,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.581668499657036e-05,
+          "stop_rotation_rad": 0.003054408455625295,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.371115112778312e-05,
+          "stop_rotation_rad": 0.0017536733416107448,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.2403374028433096e-05,
+          "stop_rotation_rad": 0.0019058918260252645,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-nominal-0",
+          "code": "tracking_timeout",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00010319777838458177,
+          "stop_rotation_rad": 0.003647733447163362,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.840952088250114e-05,
+          "stop_rotation_rad": 0.002596675221865947,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.533448993766606e-05,
+          "stop_rotation_rad": 0.0015685604282016127,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.112869127294785e-05,
+          "stop_rotation_rad": 0.005525056066445894,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-nominal-0",
+          "code": "tracking_timeout",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00041662022513250143,
+          "stop_rotation_rad": 0.026438263155541084,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.1032315704821534e-05,
+          "stop_rotation_rad": 0.0024433104638223505,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.048239515793893e-05,
+          "stop_rotation_rad": 0.003142148314512974,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.778596323864275e-05,
+          "stop_rotation_rad": 0.00352416837516487,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.479483647580845e-05,
+          "stop_rotation_rad": 0.004647118835222286,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-push-0",
+          "code": "retention_lost",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": true,
+            "invalid_physics": false,
+            "retention_lost": true,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.0034190717702548947,
+          "stop_rotation_rad": 0.14283462916437079,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-nominal-0",
+          "code": "retention_lost",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": true,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.003406170380344846,
+          "stop_rotation_rad": 0.12736456913541402,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-push-0",
+          "code": "tracking_timeout",
+          "success": false,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00011176830666117167,
+          "stop_rotation_rad": 0.013542836318121162,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        }
+      ],
+      "complete": true,
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "passed": 16
+    },
+    "nominal": {
+      "mode": "nominal",
+      "policy": "nominal",
+      "partition": "all",
+      "weights_sha256": "fb1f7aeae93cca23ff592d30d0e5ceb19de5e0c65fe63785a9ca83542cf17a0e",
+      "cases": [
+        {
+          "id": "audit-20-24g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.717789035564012e-05,
+          "stop_rotation_rad": 0.0019155075989946133,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.264339390406721e-05,
+          "stop_rotation_rad": 0.001973975115814656,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 2.943892906644116e-05,
+          "stop_rotation_rad": 0.004112959263364899,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.395387374345876e-05,
+          "stop_rotation_rad": 0.005630195730231569,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.164847324693963e-05,
+          "stop_rotation_rad": 0.0018929818960631954,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.0431453576037603e-05,
+          "stop_rotation_rad": 0.0015127840421861086,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.7682830473193856e-05,
+          "stop_rotation_rad": 0.002181043779885524,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.906752933845836e-05,
+          "stop_rotation_rad": 0.0020505134778984616,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.9773638400345574e-05,
+          "stop_rotation_rad": 0.0041183454800718215,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00014395478211742368,
+          "stop_rotation_rad": 0.007026202520924823,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.1872949947073967e-05,
+          "stop_rotation_rad": 0.0016325617280192315,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.653871427678769e-05,
+          "stop_rotation_rad": 0.001574625086674801,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.096100726913945e-05,
+          "stop_rotation_rad": 0.0030991689003947048,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.587334095873104e-05,
+          "stop_rotation_rad": 0.002584946316467537,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00010290910663195273,
+          "stop_rotation_rad": 0.00205286982698396,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.375999422806985e-05,
+          "stop_rotation_rad": 0.006114113369083226,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 1.324710611090269e-05,
+          "stop_rotation_rad": 0.004370741332562596,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.732871114864843e-05,
+          "stop_rotation_rad": 0.0019242241678006488,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.136418351644027e-05,
+          "stop_rotation_rad": 0.0031623836983868314,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.825618886968854e-05,
+          "stop_rotation_rad": 0.003543911032519265,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.909669813505228e-05,
+          "stop_rotation_rad": 0.0054787505530940715,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.591529859750758e-05,
+          "stop_rotation_rad": 0.004080312566622137,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.708577986644984e-05,
+          "stop_rotation_rad": 0.0021090192366651785,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 2.4920322752649197e-05,
+          "stop_rotation_rad": 0.0014462408744875864,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        }
+      ],
+      "complete": true,
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "passed": 24
+    },
+    "stress": {
+      "mode": "nominal",
+      "policy": "stress",
+      "partition": "all",
+      "weights_sha256": "992c4e430ca96ae1a0c1870dfa78404140ae0c7ab44c5078e1e62648c4f33c42",
+      "cases": [
+        {
+          "id": "audit-20-24g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.706974866447921e-05,
+          "stop_rotation_rad": 0.0019099756666547548,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.2608221967764775e-05,
+          "stop_rotation_rad": 0.001988338109453651,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 2.9985143524253956e-05,
+          "stop_rotation_rad": 0.004105892196262691,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.537120918192735e-05,
+          "stop_rotation_rad": 0.005705718039287443,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.122355268669854e-05,
+          "stop_rotation_rad": 0.0018903853248755987,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.0106989244174047e-05,
+          "stop_rotation_rad": 0.0015315884316603647,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.774693959041682e-05,
+          "stop_rotation_rad": 0.0022028468325436304,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.010649360867496e-05,
+          "stop_rotation_rad": 0.002070653469060649,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.2533116799952564e-05,
+          "stop_rotation_rad": 0.004412981057780725,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.000163724861369979,
+          "stop_rotation_rad": 0.010963757680013229,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.209373072628707e-05,
+          "stop_rotation_rad": 0.0016331843980641179,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.624789191741405e-05,
+          "stop_rotation_rad": 0.0015743211892426086,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.98404847885963e-05,
+          "stop_rotation_rad": 0.0030606971325330893,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.614136162115589e-05,
+          "stop_rotation_rad": 0.0025729591248454344,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00011044967980806956,
+          "stop_rotation_rad": 0.0021083191820539656,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.338709341739365e-05,
+          "stop_rotation_rad": 0.006034534757541382,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 9.898792579647608e-06,
+          "stop_rotation_rad": 0.004096077938042865,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.882814586559085e-05,
+          "stop_rotation_rad": 0.002167008216117976,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.137487888553467e-05,
+          "stop_rotation_rad": 0.0032058120646983215,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.785644847705165e-05,
+          "stop_rotation_rad": 0.003525077227341043,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.987110289840142e-05,
+          "stop_rotation_rad": 0.0053812111776280315,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.53567245460961e-05,
+          "stop_rotation_rad": 0.004043948560811794,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.683263046744905e-05,
+          "stop_rotation_rad": 0.002136037366757669,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 2.4876930753593735e-05,
+          "stop_rotation_rad": 0.0014421299019241698,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "payload_object": "object1",
+          "geometry": "training"
+        }
+      ],
+      "complete": true,
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "passed": 24
+    },
+    "width": {
+      "mode": "nominal",
+      "policy": "width",
+      "partition": "all",
+      "weights_sha256": "67bea76b27c4a80609f25d75cda16fe8eac35319fd046e02650ede945a48ec87",
+      "cases": [
+        {
+          "id": "audit-20-24g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.6618464273543086e-05,
+          "stop_rotation_rad": 0.0019195138423714136,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.338322287101084e-05,
+          "stop_rotation_rad": 0.0020079552940598074,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.001797769969985e-05,
+          "stop_rotation_rad": 0.004066989671048908,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.7061472266003345e-05,
+          "stop_rotation_rad": 0.005806878059693784,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.112241183511643e-05,
+          "stop_rotation_rad": 0.001885930113374886,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-20-24g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.0812592023799934e-05,
+          "stop_rotation_rad": 0.0015053190981986766,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            20,
+            24
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.7924153210530474e-05,
+          "stop_rotation_rad": 0.0021958859848920987,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.018046442029136e-05,
+          "stop_rotation_rad": 0.002063742770768185,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.2716712370863466e-05,
+          "stop_rotation_rad": 0.004430791336136521,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00014031589202061776,
+          "stop_rotation_rad": 0.0028692785032748704,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.2165039559559134e-05,
+          "stop_rotation_rad": 0.0016537059477794442,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-28-34g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.595055184611066e-05,
+          "stop_rotation_rad": 0.00157654544373483,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            28,
+            34
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.044366853032549e-05,
+          "stop_rotation_rad": 0.0030929649078008255,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.509749659288749e-05,
+          "stop_rotation_rad": 0.0025403287885475425,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00011672661110811118,
+          "stop_rotation_rad": 0.0020850549381810453,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.303559147232114e-05,
+          "stop_rotation_rad": 0.006002320259429823,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.969673942100958e-06,
+          "stop_rotation_rad": 0.004163479624512467,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-36-42g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 3.931936380979246e-05,
+          "stop_rotation_rad": 0.0022082198746568205,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            36,
+            42
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.092549543764043e-05,
+          "stop_rotation_rad": 0.003206872217957931,
+          "motion": "translation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-translation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.715837941001786e-05,
+          "stop_rotation_rad": 0.0034405777127014757,
+          "motion": "translation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.232220254312107e-05,
+          "stop_rotation_rad": 0.005067531692865316,
+          "motion": "orientation",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-orientation-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.462415740959656e-05,
+          "stop_rotation_rad": 0.004034961488116142,
+          "motion": "orientation",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-nominal-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.686626318848979e-05,
+          "stop_rotation_rad": 0.0021112097495180728,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        },
+        {
+          "id": "audit-46-50g-combined-push-0",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 2.4800470078185324e-05,
+          "stop_rotation_rad": 0.0014400139960254908,
+          "motion": "combined",
+          "pushed": true,
+          "mass_band_g": [
+            46,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training"
+        }
+      ],
+      "complete": true,
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "passed": 24
+    }
+  },
+  "width_audits": {
+    "stress": {
+      "mode": "width",
+      "policy": "stress",
+      "partition": "all",
+      "weights_sha256": "992c4e430ca96ae1a0c1870dfa78404140ae0c7ab44c5078e1e62648c4f33c42",
+      "cases": [
+        {
+          "id": "audit-22mm-object1",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.821759940884367e-05,
+          "stop_rotation_rad": 0.002817138977838555,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-22mm-object2",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.718204047724069e-05,
+          "stop_rotation_rad": 0.001791536323291703,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object2",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-28mm-object1",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00026926598070055785,
+          "stop_rotation_rad": 0.015804767331977214,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-28mm-object2",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 6.002463030993149e-05,
+          "stop_rotation_rad": 0.0016473377176136948,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object2",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-34mm-object1",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.012557558961346e-05,
+          "stop_rotation_rad": 0.002537076106740208,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-34mm-object2",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.942655078521464e-05,
+          "stop_rotation_rad": 0.003139717770476308,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object2",
+          "geometry": "training_wide"
+        }
+      ],
+      "complete": true,
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "passed": 6
+    },
+    "width": {
+      "mode": "width",
+      "policy": "width",
+      "partition": "all",
+      "weights_sha256": "67bea76b27c4a80609f25d75cda16fe8eac35319fd046e02650ede945a48ec87",
+      "cases": [
+        {
+          "id": "audit-22mm-object1",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 4.8739876180029614e-05,
+          "stop_rotation_rad": 0.0028310743073420614,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-22mm-object2",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.791973404422784e-05,
+          "stop_rotation_rad": 0.0018129453409758706,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object2",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-28mm-object1",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 0.00026862660644017363,
+          "stop_rotation_rad": 0.015789807931721158,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-28mm-object2",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 5.953234002912628e-05,
+          "stop_rotation_rad": 0.0016408767139686718,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object2",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-34mm-object1",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 7.067669551489898e-05,
+          "stop_rotation_rad": 0.0025405544092128004,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object1",
+          "geometry": "training_wide"
+        },
+        {
+          "id": "audit-34mm-object2",
+          "code": "ok",
+          "success": true,
+          "flags": {
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "retention_lost": false,
+            "motion_fault": false
+          },
+          "stop_confirmed": true,
+          "stop_slip_m": 8.334678706744832e-05,
+          "stop_rotation_rad": 0.002760368282987518,
+          "motion": "combined",
+          "pushed": false,
+          "mass_band_g": [
+            35,
+            50
+          ],
+          "teacher_success": true,
+          "shared_initialization_failure": false,
+          "payload_object": "object2",
+          "geometry": "training_wide"
+        }
+      ],
+      "complete": true,
+      "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb",
+      "passed": 6
+    }
+  },
+  "broader_audit": {
+    "complete": true,
+    "policies": {
+      "nominal": {
+        "weights_sha256": "fb1f7aeae93cca23ff592d30d0e5ceb19de5e0c65fe63785a9ca83542cf17a0e",
+        "completed": 17,
+        "cases": [
+          {
+            "id": "audit-55-80g-training-object1-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-orientation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "orientation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-orientation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "orientation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-combined-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-combined-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-orientation-nominal-0",
+            "success": false,
+            "code": "retention_lost",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": true,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-orientation-push-0",
+            "success": false,
+            "code": "retention_lost",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": true,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-combined-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-combined-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-orientation-nominal-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-orientation-push-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-combined-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-combined-push-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-training-object2-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-orientation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-orientation-push-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-combined-nominal-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-combined-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-translation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-translation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-orientation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-orientation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-combined-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-combined-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-translation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-translation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-orientation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-orientation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-combined-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-combined-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          }
+        ],
+        "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb"
+      },
+      "stress": {
+        "weights_sha256": "992c4e430ca96ae1a0c1870dfa78404140ae0c7ab44c5078e1e62648c4f33c42",
+        "completed": 17,
+        "cases": [
+          {
+            "id": "audit-55-80g-training-object1-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-orientation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "orientation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-orientation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "orientation",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-combined-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-55-80g-training-object1-combined-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              55,
+              80
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-orientation-nominal-0",
+            "success": false,
+            "code": "retention_lost",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": true,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-orientation-push-0",
+            "success": false,
+            "code": "retention_lost",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": true,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-combined-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-85-120g-training-object1-combined-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              85,
+              120
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-orientation-nominal-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-orientation-push-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-combined-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-125-180g-training-object1-combined-push-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              125,
+              180
+            ],
+            "geometry": "training",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-training-object2-translation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-translation-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-orientation-nominal-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-orientation-push-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-combined-nominal-0",
+            "success": false,
+            "code": null,
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-training-object2-combined-push-0",
+            "success": true,
+            "code": "ok",
+            "shared_initialization_failure": null,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": true,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "training",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-translation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-translation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-orientation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-orientation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-combined-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object1-combined-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object1"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-translation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-translation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "translation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-orientation-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-orientation-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "orientation",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-combined-nominal-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          },
+          {
+            "id": "audit-20-50g-native_table-object2-combined-push-0",
+            "success": false,
+            "code": "nominal_pinch_clearance",
+            "shared_initialization_failure": true,
+            "flags": {
+              "unsafe_contact": false,
+              "wheel_lift": true,
+              "invalid_physics": false,
+              "retention_lost": false,
+              "motion_fault": false
+            },
+            "teacher_success": false,
+            "motion": "combined",
+            "mass_band_g": [
+              20,
+              50
+            ],
+            "geometry": "native_table",
+            "payload_object": "object2"
+          }
+        ],
+        "source_manifest_sha256": "abf46dcca5505f9aff003495e2a42adaa76a83c4a23f9a24b18964d330fd81fb"
+      }
+    }
+  },
+  "tamp_preplace": {
+    "train_ids": [
+      "left:20g:new:0",
+      "left:35g:new:1",
+      "left:50g:new:2",
+      "right:20g:new:0",
+      "right:35g:new:1"
+    ],
+    "samples": 2156,
+    "updates": 1500,
+    "source_manifest_sha256": "117773876b733dbb82761a7ebbfb7d62078400f316f3d1d9f6068c58409dc7ed",
+    "audit": [
+      {
+        "id": "left:20g:2",
+        "policy": "teacher",
+        "success": true,
+        "failure": null,
+        "preplace_policy_calls": 435,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "left:20g:2",
+        "policy": "candidate",
+        "success": false,
+        "failure": "tracking_timeout",
+        "preplace_policy_calls": 414,
+        "final_predicates": {
+          "inside_goal_region": false,
+          "destination_support": false,
+          "gripper_open": false,
+          "fingers_clear": false,
+          "object_still": true,
+          "safe": false,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "left:50g:2",
+        "policy": "teacher",
+        "success": true,
+        "failure": null,
+        "preplace_policy_calls": 435,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "left:50g:2",
+        "policy": "candidate",
+        "success": false,
+        "failure": "tracking_timeout",
+        "preplace_policy_calls": 214,
+        "final_predicates": {
+          "inside_goal_region": false,
+          "destination_support": false,
+          "gripper_open": false,
+          "fingers_clear": false,
+          "object_still": true,
+          "safe": false,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "right:50g:2",
+        "policy": "teacher",
+        "success": true,
+        "failure": null,
+        "preplace_policy_calls": 434,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "right:50g:2",
+        "policy": "candidate",
+        "success": false,
+        "failure": "tracking_timeout",
+        "preplace_policy_calls": 148,
+        "final_predicates": {
+          "inside_goal_region": false,
+          "destination_support": false,
+          "gripper_open": false,
+          "fingers_clear": false,
+          "object_still": true,
+          "safe": false,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "right:20g:3",
+        "policy": "teacher",
+        "success": true,
+        "failure": null,
+        "preplace_policy_calls": 434,
+        "final_predicates": {
+          "inside_goal_region": true,
+          "destination_support": true,
+          "gripper_open": true,
+          "fingers_clear": true,
+          "object_still": true,
+          "safe": true,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      },
+      {
+        "id": "right:20g:3",
+        "policy": "candidate",
+        "success": false,
+        "failure": "tracking_timeout",
+        "preplace_policy_calls": 177,
+        "final_predicates": {
+          "inside_goal_region": false,
+          "destination_support": false,
+          "gripper_open": false,
+          "fingers_clear": false,
+          "object_still": true,
+          "safe": false,
+          "robot_still": true,
+          "base_goal_within_tolerance": true
+        }
+      }
+    ]
+  },
+  "stability_probe": {
+    "pulse_seconds": 0.2,
+    "pulse_fraction_of_robot_weight": 0.05,
+    "max_caster_gap_m": 0.002,
+    "max_caster_lift_s": 0.2,
+    "max_chassis_tilt_deg": 3.0,
+    "source_manifest_sha256": "117773876b733dbb82761a7ebbfb7d62078400f316f3d1d9f6068c58409dc7ed",
+    "cases": [
+      {
+        "id": "left:20g:0",
+        "allow_transient_caster_lift": false,
+        "push_direction": 0,
+        "success": true,
+        "robot_failure": null,
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.32581548194486737,
+        "max_caster_gap_m": 0.0,
+        "max_caster_lift_s": 0.0,
+        "push_peak_N": 0.0
+      },
+      {
+        "id": "left:20g:0",
+        "allow_transient_caster_lift": true,
+        "push_direction": 0,
+        "success": true,
+        "robot_failure": null,
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.32581548194486737,
+        "max_caster_gap_m": 0.0,
+        "max_caster_lift_s": 0.0,
+        "push_peak_N": 0.0
+      },
+      {
+        "id": "left:20g:0",
+        "allow_transient_caster_lift": true,
+        "push_direction": 1,
+        "success": true,
+        "robot_failure": null,
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.3530184497639863,
+        "max_caster_gap_m": 0.0,
+        "max_caster_lift_s": 0.0,
+        "push_peak_N": 0.669532987933295
+      },
+      {
+        "id": "left:20g:0",
+        "allow_transient_caster_lift": true,
+        "push_direction": -1,
+        "success": true,
+        "robot_failure": null,
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.3378870471865592,
+        "max_caster_gap_m": 0.0,
+        "max_caster_lift_s": 0.0,
+        "push_peak_N": 0.6695329769896637
+      },
+      {
+        "id": "left:50g:1",
+        "allow_transient_caster_lift": false,
+        "push_direction": 0,
+        "success": false,
+        "robot_failure": "wheel_lift",
+        "stop_cause": "strict_caster",
+        "max_base_tilt_deg": 0.5296728057036364,
+        "max_caster_gap_m": 0.0004040458668930127,
+        "max_caster_lift_s": 0.05399999999997118,
+        "push_peak_N": 0.0
+      },
+      {
+        "id": "left:50g:1",
+        "allow_transient_caster_lift": true,
+        "push_direction": 0,
+        "success": false,
+        "robot_failure": "retention_lost",
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.530023994580894,
+        "max_caster_gap_m": 0.00040365645492640954,
+        "max_caster_lift_s": 0.05399999999997118,
+        "push_peak_N": 0.0
+      },
+      {
+        "id": "left:50g:1",
+        "allow_transient_caster_lift": true,
+        "push_direction": 1,
+        "success": false,
+        "robot_failure": "retention_lost",
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.38752079047590643,
+        "max_caster_gap_m": 4.572557623898528e-05,
+        "max_caster_lift_s": 0.0,
+        "push_peak_N": 0.6695329879798423
+      },
+      {
+        "id": "left:50g:1",
+        "allow_transient_caster_lift": true,
+        "push_direction": -1,
+        "success": true,
+        "robot_failure": null,
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.3727816878846827,
+        "max_caster_gap_m": 3.8808016828505154e-05,
+        "max_caster_lift_s": 0.0,
+        "push_peak_N": 0.6695329769161434
+      },
+      {
+        "id": "right:100g:0",
+        "allow_transient_caster_lift": false,
+        "push_direction": 0,
+        "success": false,
+        "robot_failure": "wheel_lift",
+        "stop_cause": "strict_caster",
+        "max_base_tilt_deg": 0.4642206707184886,
+        "max_caster_gap_m": 0.00011342499084691059,
+        "max_caster_lift_s": 0.005999999999997783,
+        "push_peak_N": 0.0
+      },
+      {
+        "id": "right:100g:0",
+        "allow_transient_caster_lift": true,
+        "push_direction": 0,
+        "success": false,
+        "robot_failure": "retention_lost",
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.4917230114402573,
+        "max_caster_gap_m": 0.00013577673534084095,
+        "max_caster_lift_s": 0.029999999999984484,
+        "push_peak_N": 0.0
+      },
+      {
+        "id": "right:100g:0",
+        "allow_transient_caster_lift": true,
+        "push_direction": 1,
+        "success": false,
+        "robot_failure": "retention_lost",
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.479539927649904,
+        "max_caster_gap_m": 0.00011343017675477171,
+        "max_caster_lift_s": 0.01399999999999335,
+        "push_peak_N": 0.669532900017278
+      },
+      {
+        "id": "right:100g:0",
+        "allow_transient_caster_lift": true,
+        "push_direction": -1,
+        "success": false,
+        "robot_failure": "retention_lost",
+        "stop_cause": null,
+        "max_base_tilt_deg": 0.4893267557993595,
+        "max_caster_gap_m": 0.00016371465357084558,
+        "max_caster_lift_s": 0.031999999999983375,
+        "push_peak_N": 0.6695328441007792
+      }
+    ]
+  }
+}

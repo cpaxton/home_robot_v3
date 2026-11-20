@@ -110,7 +110,8 @@ def test_new_manifest_has_fresh_identities_and_explicit_quality():
 
 
 @pytest.mark.sim
-def test_short_reference_ends_after_real_quiet_hold_without_25s_padding():
+@pytest.mark.parametrize("earlier_path_miss", [False, True])
+def test_short_reference_ends_after_real_quiet_hold_without_25s_padding(earlier_path_miss):
     from emet.rl.manipulation.command_runtime import task_pose_teacher_action
     from emet.rl.manipulation.coupled_tracking import COARSE_SUITE, CoupledTrackingEnv
 
@@ -132,11 +133,18 @@ def test_short_reference_ends_after_real_quiet_hold_without_25s_padding():
         e = env.unwrapped
         end = e.control.task_trajectory.end
         assert end < 1 and e.config.horizon < 4
+        if earlier_path_miss:
+            e.peak_hand_position_error = 2 * e.config.hand_position_tolerance
         for _ in range(150):
             _, _, done, truncated, info = env.step(task_pose_teacher_action(e.control))
             if done or truncated:
                 break
         assert done and not truncated and info["primitive_success"]
+        assert info["reward_hand_path_passed"] is not earlier_path_miss
+        terms = info["reward_terms"]
+        tracking = e.profile.dt * (terms["hand_pose_score"] + terms["base_pose_score"])
+        terminal = env.reward_config.failure_penalty * -1 if earlier_path_miss else env.reward_config.success_bonus
+        assert info["reward_groups"][0] == pytest.approx(tracking + terminal)
         assert info["settled_seconds"] >= 2 and info["ended_after_quiet_hold"]
         assert not info["native_terminated"] and not info["native_truncated"]
         assert e.control.stopped

@@ -866,3 +866,29 @@ def test_navigation_feedback_cannot_be_silently_downgraded_to_legacy_format(tmp_
     (path / "manifest.json").write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="requires the configured v3 format"):
         WholeBodyBundle(path)
+
+
+@pytest.mark.sim
+def test_simulator_hold_preview_triggers_reduced_exploration():
+    from emet.rl.manipulation.arm_splines import ArmSplineTrackingEnv, motion_manifest
+    from emet.rl.manipulation.tracking import TaskPoseTrajectory
+    from emet.rl.manipulation.whole_body_observation import actor_observation
+
+    env = ArmSplineTrackingEnv([motion_manifest()["cases"][0]])
+    try:
+        env.reset()
+        control = env.unwrapped.control
+        base, hand, grip = control.task_trajectory.sample(0)
+        control.set_task_trajectory(
+            TaskPoseTrajectory([0, 1], [base, base], [hand, hand], [grip, grip], base_mask=[True] * 3)
+        )
+        model = MultiCriticPolicy(hidden=16, quiet_reference_std_scale=0.25, stationary_base_std_scale=0.1)
+        obs = {key: torch.from_numpy(value)[None] for key, value in actor_observation(control).items()}
+        assert model.quiet_reference_condition(obs).item()
+        assert model.base_exploration_condition(obs).item()
+        expected = model.log_std.clamp(-6, 0).exp()[None].clone()
+        expected[:, :2] *= 0.1
+        expected[:, 2:-1] *= 0.25
+        torch.testing.assert_close(model.distribution(obs).scale, expected)
+    finally:
+        env.close()

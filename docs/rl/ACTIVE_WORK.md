@@ -592,3 +592,55 @@ existing CPU14 viewer remains. The next implementation is explicit wrapper
 reward/contract alignment, analogous non-audit coupled/mask training cases and
 bounded direct-PPO mastery with trajectory/force/jerk comparisons. Preserve
 ordinary tracking and outer 50/50 general/TAMP physical ticks.
+
+**Wider spline follow-up:** the source-feedback fit scores 18/32 splines,
+15/16 hand, 8/8 base, 16/16 goal changes and 6/6 unloaded TAMP. Adding eight
+level-one training identities with the same fitting budget gives 21/32
+splines (14/16 nearby, 6/8 medium, 1/8 fast/wide), 14/16 hand, 8/8 base,
+15/16 goal changes and 6/6 unloaded TAMP. Both fits confirm all 78 actor stops.
+The wider fit has two wheel-lift events at level two. Retain the source-feedback
+fit as the baseline and compare matched geometry at different speeds to isolate
+the fast/wide failures. These runs use the frozen simulator overlay. Reports
+are under `logs/eval/gain-{source-feedback,wider-splines}-confirmation-v1`.
+
+The paired speed-cap sweep on those eight fast/wide geometries found teacher
+success of 7/8, 8/8 and 7/8 at 100%, 80% and 65% of the original speed cap.
+The wider fit reached 1/8, 2/8 and 3/8, with two, two and one wheel-lift events.
+One path exceeded the 30-second duration limit at 65% for both controllers.
+All 48 stops confirmed. Executed pairs match joint-waypoint and reset-state
+hashes. These caps are relative to the simulator reference, and actual duration
+also depends on acceleration and jerk limits. Slowing alone leaves substantial
+tracking and support failures. Report: `logs/eval/gain-wider-speed-sweep-v3/report.json`.
+
+### Tracking before dedicated hold practice
+
+The arm-only mix spent only 2,135 of 65,536 control ticks on moving arm-only
+references. Its endpoint audit tied the initializer, and the new actor failed
+the matched slow wave even with zero base commands.
+
+The arm-spline benchmark and trainer now accept `--tracking-first`. This mode
+uses only the selected level's moving multi-knot splines. Each episode starts
+the reference immediately and ends at path completion without endpoint dwell.
+The benchmark checks the existing 3 mm / 0.02 rad peak path limits and confirms
+the stop. The receipt is bound to this mode, and audit cases stay out of PPO.
+Use `reference_motion_ticks` to measure exposure. Promote to the standard
+hold-inclusive mix manually after the trained actor demonstrates tracking on
+held-out splines. Run a separate held-out gesture rehearsal before considering
+a hardware trial. The stage reuses the existing task-space controller.
+
+### Simulator action experts
+
+The expert router binds an unloaded base, arm, or coupled command to a
+single actor for its lifetime. The simulator executor drops unused command
+channels and caps requested arm-only joint speeds. An unqualified learned
+route can use the teacher at command acceptance, subject to the same
+command envelope. A malformed policy action raises an error.
+
+`scripts/eval_mars_action_experts.py` compares the individually trained actors
+with the routed teacher on matched audit cases. It checks terminal success,
+full-path hand error, arm-only base drift and measured speed, and confirmed
+stops. Its report identifies the learned, teacher, or unsupported simulator
+route per family. It covers the declared audit cases, and any use on new
+trajectories requires their own admission. Corrective arm fitting and
+independent spline confirmation are tracked under
+`logs/recovery/action-experts-v1`.

@@ -35,6 +35,7 @@ def run(
     goal_queries=0,
     general_exposure=0,
     source_base_feedback=False,
+    wider_spline_count=0,
 ):
     output = Path(output)
     if output.exists() or type(count) is not int or not 1 <= count <= 16 or type(updates) is not int or updates <= 0:
@@ -47,6 +48,8 @@ def run(
         raise ValueError("bounded general exposure per family and split required")
     if type(source_base_feedback) is not bool or (source_base_feedback and heads != ("gain",)):
         raise ValueError("source base feedback requires an explicit gain-only diagnostic")
+    if type(wider_spline_count) is not int or not 0 <= wider_spline_count <= 8:
+        raise ValueError("bounded wider spline exposure required")
     teacher_config = TaskPoseTeacherConfig(coupled_base_tracking=coupled_teacher)
     output.mkdir(parents=True)
     spec = load_manifest("configs/benchmarks/mars_arm_splines_v2.json")
@@ -55,8 +58,9 @@ def run(
         for split in ("train", "audit")
         for c in [c for c in spec["cases"] if c["split"] == split and c["level"] == 0][:count]
     ]
+    wider_cases = [c for c in spec["cases"] if c["split"] == "train" and c["level"] == 1][:wider_spline_count]
     env = ArmSplineTrackingEnv(
-        cases,
+        cases + wider_cases,
         levels=tuple(SplineLevel(**x) for x in spec["levels"]),
         timing=spec["reference_timing"],
         finish_after_hold=True,
@@ -77,6 +81,7 @@ def run(
             "heads": list(heads),
             "goal_queries_every_five_ticks": goal_queries,
             "general_exposure_per_family_split": general_exposure,
+            "wider_spline_train_ids": [c["id"] for c in wider_cases],
             "source_base_feedback": source_base_feedback,
             "fitting_family_weights": {"splines": 0.5, "hand": 1 / 6, "base": 1 / 6, "goal_changes": 1 / 6}
             if general_exposure
@@ -104,7 +109,7 @@ def run(
             (case, variant)
             for case in cases
             for variant in (("nominal", "recovery") if recovery_offsets else ("nominal",))
-        ]:
+        ] + [(case, "nominal") for case in wider_cases]:
             observation, _ = env.reset(options={"case_id": case["id"]})
             acquisition = None
             if variant == "recovery":
@@ -332,6 +337,7 @@ if __name__ == "__main__":
         action="store_true",
         help="gain-only follow-up preserving source base feedback; not a matched direct-head comparison",
     )
+    p.add_argument("--wider-spline-count", type=int, default=0, help="additional level-one spline training identities")
     a = p.parse_args()
     run(
         a.output,
@@ -345,4 +351,5 @@ if __name__ == "__main__":
         goal_queries=a.goal_queries,
         general_exposure=a.general_exposure,
         source_base_feedback=a.source_base_feedback,
+        wider_spline_count=a.wider_spline_count,
     )

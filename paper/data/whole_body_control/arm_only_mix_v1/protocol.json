@@ -1,0 +1,37 @@
+{
+  "format": "arm-only-mix-v1",
+  "runtime_revision": "e90c8d7f9bc4594c1e35a9f81be70439c80160ea",
+  "source_state_digest": "3372728d25c9e4cd6a786d09fb99d821fd8ce7c94d99f994c03239a0e32ff5bf",
+  "case_manifest": "cases.json",
+  "cases_sha256": "3ea459a1acf3277d78a704877739edc0f7939a044ed59193df14cfd8804185e1",
+  "cases_by_split_and_mode": {
+    "train": {
+      "arm_only": 4,
+      "base_only": 4,
+      "coupled": 7,
+      "hand_free_base": 1
+    },
+    "audit": {
+      "arm_only": 4,
+      "base_only": 4,
+      "coupled": 6,
+      "hand_free_base": 2
+    }
+  },
+  "ppo_split": "train",
+  "initializer_candidate": "logs/manipulation/long-finetune-v1/continued/checkpoint-65536/actor",
+  "initializer_weights_sha256": "e21dafc156967cf5f098b555da5606724127576b3eb3f79b9cb7dd910d64df0a",
+  "source_training_state_candidate": "logs/manipulation/long-finetune-v1/continued/training.pt",
+  "source_training_state_sha256": "6fd733b8ebd0ceccc997340e7309e0c4442b14f9f9e336e324fa076e992ca824",
+  "teacher_policy": "task_pose_teacher_action",
+  "teacher_suite": "configs/benchmarks/coupled_tracking_v2.json",
+  "wheel_feedback_base_only_gains": [
+    0.0,
+    0.5
+  ],
+  "regression_receipt": "logs/recovery/arm-only-mix-v1/regressions.receipt.json",
+  "admission_evidence": "logs/recovery/arm-only-mix-v1/admission-recheck.jsonl",
+  "admission_attempt_log": "logs/recovery/arm-only-mix-v1/admission-attempts.jsonl",
+  "hardware_used": false,
+  "safety_promoted": false
+}

@@ -36,7 +36,6 @@ from emet.rl.manipulation.safety import whole_body_stopped
 from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
 from emet.rl.manipulation.whole_body_observation import actor_observation
 
-
 # Physical hold envelope for the base during a rehearsal: the independent
 # hold-XY / bounded-yaw region the running robot permits before its hold
 # actuators give way. This is a safety stop, distinct from the reward's
@@ -73,10 +72,10 @@ def install_posture(model, data, values, head):
 
 
 def cases(kind="tracking"):
-    if kind == "wave":
+    if kind in {"wave", "slow-wave", "normal-wave"}:
         from emet.rl.manipulation.herman_gestures import wave_case
 
-        return [wave_case()]
+        return [wave_case("normal_wave" if kind == "normal-wave" else "elbow_wrist_wave")]
     if kind == "wrist-only":
         from emet.rl.manipulation.herman_gestures import wave_case
 
@@ -131,7 +130,7 @@ def evaluate(env, case, policy, output, name):
     initial_hash = digest(
         {"qpos": env.data.qpos.tolist(), "qvel": env.data.qvel.tolist(), "ctrl": env.data.ctrl.tolist()}
     )
-    if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave"}:
+    if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave", "normal_wave"}:
         from emet.rl.manipulation.herman_gestures import HermanWaveReference
 
         reference = HermanWaveReference(control, gesture=case["gesture"])
@@ -211,10 +210,10 @@ def evaluate(env, case, policy, output, name):
             break
     metrics = env._info()
     wave_tracking = None
-    if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave"}:
+    if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave", "normal_wave"}:
         from emet.rl.manipulation.herman_gestures import wave_tracking_gate
 
-        wave_tracking = wave_tracking_gate(trace, reference.end)
+        wave_tracking = wave_tracking_gate(trace, reference.end, initial_hold_s=reference.initial_hold_s)
         if terminal.get("is_success") and not wave_tracking["passed"]:
             terminal = {**terminal, "is_success": False, "code": "wave_tracking_failed"}
     control.stop()
@@ -297,7 +296,9 @@ def main():
     parser.add_argument("--capture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--policy", action="append", type=Path, default=[])
-    parser.add_argument("--case-set", choices=("tracking", "wave", "wrist-only"), default="tracking")
+    parser.add_argument(
+        "--case-set", choices=("tracking", "wave", "slow-wave", "normal-wave", "wrist-only"), default="tracking"
+    )
     parser.add_argument(
         "--include-proposals",
         action="store_true",
@@ -395,7 +396,7 @@ def main():
         terminal_hold_seconds=2,
         horizon=25,
     )
-    if args.case_set == "wave":
+    if args.case_set in {"wave", "slow-wave"}:
         baseline = dataclasses.replace(baseline, horizon=max(35.0, baseline.horizon))
     factory = scene_factory(capture, scene)
     model, fingerprint = factory(

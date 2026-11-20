@@ -2,13 +2,21 @@
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import torch
 
 from emet.rl.manipulation.arm_spline_benchmark import episode, save, stop
-from emet.rl.manipulation.arm_splines import ANCHORS, V2_NAMESPACES, ArmSplineTrackingEnv, SplineLevel, load_manifest
+from emet.rl.manipulation.arm_splines import (
+    ANCHORS,
+    V2_NAMESPACES,
+    ArmSplineReference,
+    ArmSplineTrackingEnv,
+    SplineLevel,
+    load_manifest,
+)
 from emet.rl.manipulation.carry_benchmark import digest, source_hashes
 from emet.rl.manipulation.command_runtime import TaskPoseTeacherConfig, task_pose_teacher_action
 from emet.rl.manipulation.head_comparison import matched_heads
@@ -55,7 +63,46 @@ def check_base_feedback(actor, configuration):
     return actual
 
 
-def run(fit_path, initializer, output, *, head="gain"):
+class SpeedSweepEnv(ArmSplineTrackingEnv):
+    """Select geometry at nominal timing before applying a slower speed cap."""
+
+    speed_scale = 1.0
+
+    def reset(self, **kwargs):
+        observation, info = super().reset(**kwargs)
+        nominal = self.reference
+        points = nominal.certificate["joint_waypoints"]
+        info["geometry_sha256"] = digest(points)
+        if self.speed_scale != 1.0:
+            from emet.rl.manipulation.coupled_tracking import admit_reference
+
+            env = self.unwrapped
+            level = SplineLevel(**nominal.certificate["level"])
+            slower = replace(level, speed_fraction=level.speed_fraction * self.speed_scale, maximum_duration_s=30)
+            reference = ArmSplineReference(env.control, points, slower, timing=self.timing)
+            admission = admit_reference(env, reference)
+            if not admission["accepted"]:
+                raise ValueError("retimed reference rejected: " + str(admission["reason"]))
+            env.config = replace(
+                env.config,
+                horizon=float(
+                    np.ceil((reference.end + env.config.horizon - nominal.end) / env.profile.dt) * env.profile.dt
+                ),
+            )
+            env.set_task_trajectory(reference)
+            env.control.history = None
+            self.reference, self.admission = reference, admission
+            info.update(
+                reference_sha256=digest(reference.record()),
+                spline_admission=admission,
+                trajectory_spread=reference.spread,
+            )
+            observation = self.observe(env.control.observe())
+        self.geometry_sha256 = info["geometry_sha256"]
+        return observation, info
+
+
+def run(fit_path, initializer, output, *, head="gain", speed_sweep=False):
     fit_path, output = Path(fit_path), Path(output)
     fit = json.loads((fit_path / "report.json").read_text())
     sources = source_hashes()
@@ -63,7 +110,9 @@ def run(fit_path, initializer, output, *, head="gain"):
         raise ValueError("fresh output and completed source-matched experimental fit required")
     spec = load_manifest("configs/benchmarks/mars_arm_splines_v2.json")
     cases = confirmation_cases(spec)
-    env = ArmSplineTrackingEnv(
+    if speed_sweep:
+        cases = [case for case in cases if case["level"] == 2]
+    env = (SpeedSweepEnv if speed_sweep else ArmSplineTrackingEnv)(
         cases,
         levels=tuple(SplineLevel(**x) for x in spec["levels"]),
         timing=spec["reference_timing"],
@@ -76,7 +125,11 @@ def run(fit_path, initializer, output, *, head="gain"):
         "complete": False,
         "hardware_used": False,
         "safety_promoted": False,
-        "scope": "fresh spline seeds plus reused general/TAMP regression pools; no fitting or case pruning",
+        "scope": (
+            "matched fast/wide spline geometry at three speed caps"
+            if speed_sweep
+            else "fresh spline seeds plus reused general/TAMP regression pools; no fitting or case pruning"
+        ),
         "fit_report_sha256": file_digest(fit_path / "report.json"),
         "runner_sha256": file_digest(__file__),
         "sources": sources,
@@ -107,7 +160,11 @@ def run(fit_path, initializer, output, *, head="gain"):
             ("teacher", lambda _: task_pose_teacher_action(env.unwrapped.control, config=teacher)),
             (head, lambda obs: infer(actor, obs)),
         ):
-            for case in cases:
+            paired = {}
+            scales = (1.0, 0.8, 0.65) if speed_sweep else (1.0,)
+            for scale, case in ((scale, case) for scale in scales for case in cases):
+                if speed_sweep:
+                    env.speed_scale = scale
                 try:
                     row = episode(env, case, policy=policy)
                 except Exception as exc:
@@ -118,12 +175,20 @@ def run(fit_path, initializer, output, *, head="gain"):
                         "error_type": type(exc).__name__,
                         "stop_confirmed": stop(env),
                     }
+                if speed_sweep:
+                    row["speed_cap_scale"] = scale
+                    if "initial_state_sha256" in row:
+                        identity = (env.geometry_sha256, row["initial_state_sha256"])
+                        if paired.setdefault(case["id"], identity) != identity:
+                            raise RuntimeError("speed sweep changed geometry or initial state")
+                        row["geometry_sha256"] = identity[0]
+                        row["reference_duration_s"] = env.reference.end
                 report["splines"][name].append(row)
                 save(output / "report.json", report)
                 print(name, case["id"], row["success"], row["code"], flush=True)
     finally:
         env.close()
-    for family, population in preflight_pools().items():
+    for family, population in ({} if speed_sweep else preflight_pools()).items():
         if family == "tamp":
             report["families"][family] = primitive_rollout(
                 population,
@@ -192,6 +257,7 @@ if __name__ == "__main__":
     p.add_argument("--initializer", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--head", choices=("gain", "direct"), default="gain")
+    p.add_argument("--speed-sweep", action="store_true")
     a = p.parse_args()
     torch.set_num_threads(1)
-    run(a.fit, a.initializer, a.output, head=a.head)
+    run(a.fit, a.initializer, a.output, head=a.head, speed_sweep=a.speed_sweep)
