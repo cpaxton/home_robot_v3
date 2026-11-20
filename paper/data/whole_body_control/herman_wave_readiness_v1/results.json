@@ -1,0 +1,389 @@
+{
+  "hardware_ready": false,
+  "live_status": "Saved Emet host unreachable. SSH returned No route to host and neighbor discovery failed.",
+  "hardware_motion_commands_sent": 0,
+  "runs": {
+    "arm-only": {
+      "report_sha256": "84cb63cbf84eb5d8a59aac16bfb312b7702288f0f015e755da6494e2bba324ec",
+      "controllers": {
+        "teacher": {
+          "success": true,
+          "code": "ok",
+          "wave_tracking": {
+            "complete_wave_observed": true,
+            "peak_position_error_m": 0.001938472985780003,
+            "peak_orientation_error_rad": 0.011705061454104012,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "passed": true,
+            "arm_speed_limit_rad_s": 0.25,
+            "peak_measured_speed_rad_s": 0.20989589463871677,
+            "speed_passed": true,
+            "base_drift_tolerance_m": 0.01,
+            "peak_measured_base_drift_m": 0.006339606174708459,
+            "base_drift_passed": true
+          },
+          "joint_motion": {
+            "names": [
+              "joint1",
+              "joint2",
+              "joint3",
+              "joint4",
+              "joint5"
+            ],
+            "reference_span_deg": [
+              0.0,
+              6.875493541569885,
+              37.242217712738345,
+              25.783077398427924,
+              34.37735079555393
+            ],
+            "measured_span_deg": [
+              2.29855161866635,
+              9.379466772722505,
+              37.10561399054653,
+              30.857851012410947,
+              35.04996589679792
+            ],
+            "peak_measured_speed_rad_s": [
+              0.00897074945403422,
+              0.053036648683592584,
+              0.2062157818652516,
+              0.1817223537597488,
+              0.20989589463871677
+            ]
+          },
+          "stop_confirmed": true,
+          "metrics": {
+            "ee_position_error": 0.0013356735524885546,
+            "ee_orientation_error": 0.00016490434938715187,
+            "base_goal_error": 0.006312490177416448,
+            "base_heading_error_rad": 0.036500615009490645,
+            "peak_contact_force": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.29707226073694665,
+            "peak_base_yaw_jerk_rad_s3": 0.6264516412262305,
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "settled_seconds": 12.750000000000046
+          },
+          "peak_base_action": 0.0
+        },
+        "long_arm_specialist": {
+          "success": true,
+          "code": "ok",
+          "wave_tracking": {
+            "complete_wave_observed": true,
+            "peak_position_error_m": 0.002140182508482782,
+            "peak_orientation_error_rad": 0.01803175189758718,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "passed": true,
+            "arm_speed_limit_rad_s": 0.25,
+            "peak_measured_speed_rad_s": 0.20959596936447084,
+            "speed_passed": true,
+            "base_drift_tolerance_m": 0.01,
+            "peak_measured_base_drift_m": 0.006093851226066714,
+            "base_drift_passed": true
+          },
+          "joint_motion": {
+            "names": [
+              "joint1",
+              "joint2",
+              "joint3",
+              "joint4",
+              "joint5"
+            ],
+            "reference_span_deg": [
+              0.0,
+              6.875493541569885,
+              37.242217712738345,
+              25.783077398427924,
+              34.37735079555393
+            ],
+            "measured_span_deg": [
+              2.315144142496921,
+              9.291786778216448,
+              37.087914342191745,
+              30.16227237400006,
+              35.19445209793764
+            ],
+            "peak_measured_speed_rad_s": [
+              0.010980357805867673,
+              0.05345880238622286,
+              0.2071084764309381,
+              0.17413271243335793,
+              0.20959596936447084
+            ]
+          },
+          "stop_confirmed": true,
+          "metrics": {
+            "ee_position_error": 0.0010147655480451658,
+            "ee_orientation_error": 0.00370578390236828,
+            "base_goal_error": 0.006072400494307867,
+            "base_heading_error_rad": 0.03510698201671026,
+            "peak_contact_force": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.31223874757919756,
+            "peak_base_yaw_jerk_rad_s3": 0.6374390086871837,
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "settled_seconds": 12.750000000000046
+          },
+          "peak_base_action": 0.0,
+          "weights_sha256": "1295c0d30629014c688accde0eda255a45244ce69f07aca6ee5fac015db3fd6c"
+        },
+        "shared_actor_12000": {
+          "success": true,
+          "code": "ok",
+          "wave_tracking": {
+            "complete_wave_observed": true,
+            "peak_position_error_m": 0.0017879635828409702,
+            "peak_orientation_error_rad": 0.019510641764285623,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "passed": true,
+            "arm_speed_limit_rad_s": 0.25,
+            "peak_measured_speed_rad_s": 0.2097735688047463,
+            "speed_passed": true,
+            "base_drift_tolerance_m": 0.01,
+            "peak_measured_base_drift_m": 0.0061700003874624485,
+            "base_drift_passed": true
+          },
+          "joint_motion": {
+            "names": [
+              "joint1",
+              "joint2",
+              "joint3",
+              "joint4",
+              "joint5"
+            ],
+            "reference_span_deg": [
+              0.0,
+              6.875493541569885,
+              37.242217712738345,
+              25.783077398427924,
+              34.37735079555393
+            ],
+            "measured_span_deg": [
+              2.445678295562697,
+              9.05915870012965,
+              37.0442991119906,
+              30.262184083189478,
+              35.26322676323924
+            ],
+            "peak_measured_speed_rad_s": [
+              0.009702645285634469,
+              0.05103661774095686,
+              0.20682013637780433,
+              0.17450425523039792,
+              0.2097735688047463
+            ]
+          },
+          "stop_confirmed": true,
+          "metrics": {
+            "ee_position_error": 0.001097235726097365,
+            "ee_orientation_error": 0.0068905893705351,
+            "base_goal_error": 0.0061466545642003155,
+            "base_heading_error_rad": 0.035018568173094136,
+            "peak_contact_force": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.3151211002709402,
+            "peak_base_yaw_jerk_rad_s3": 0.6235530636619977,
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "settled_seconds": 12.750000000000046
+          },
+          "peak_base_action": 0.0,
+          "weights_sha256": "6a779c6e9b37cb65baae4f882267a6f96d4763dc225a6d9f65649d1d3b502e34"
+        }
+      }
+    },
+    "unrestricted": {
+      "report_sha256": "6851c70299288069e921af40d59f1562b16645b6a493f2b456e278d42fab7240",
+      "controllers": {
+        "teacher": {
+          "success": true,
+          "code": "ok",
+          "wave_tracking": {
+            "complete_wave_observed": true,
+            "peak_position_error_m": 0.0016081850425822349,
+            "peak_orientation_error_rad": 0.01164184395062756,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "passed": true
+          },
+          "joint_motion": {
+            "names": [
+              "joint1",
+              "joint2",
+              "joint3",
+              "joint4",
+              "joint5"
+            ],
+            "reference_span_deg": [
+              0.0,
+              6.875493541569885,
+              37.242217712738345,
+              25.783077398427924,
+              34.37735079555393
+            ],
+            "measured_span_deg": [
+              1.1649564883774617,
+              9.022840071832897,
+              37.20934260916393,
+              29.64614690966634,
+              35.04499760735701
+            ],
+            "peak_measured_speed_rad_s": [
+              0.019057548446095234,
+              0.053036648683592584,
+              0.20622507547783034,
+              0.17696729318396845,
+              0.21175921084039484
+            ]
+          },
+          "stop_confirmed": true,
+          "metrics": {
+            "ee_position_error": 0.00016702646028138643,
+            "ee_orientation_error": 2.0043297068717317e-05,
+            "base_goal_error": 0.00614285899497521,
+            "base_heading_error_rad": 0.014900712472119807,
+            "peak_contact_force": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.34382839039127117,
+            "peak_base_yaw_jerk_rad_s3": 25.3773166189992,
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "settled_seconds": 12.750000000000046
+          },
+          "peak_base_action": 0.07759538226265292
+        },
+        "long_arm_specialist": {
+          "success": false,
+          "code": "tracking_timeout",
+          "wave_tracking": {
+            "complete_wave_observed": true,
+            "peak_position_error_m": 0.0054844342704800705,
+            "peak_orientation_error_rad": 0.03776725682470434,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "passed": false
+          },
+          "joint_motion": {
+            "names": [
+              "joint1",
+              "joint2",
+              "joint3",
+              "joint4",
+              "joint5"
+            ],
+            "reference_span_deg": [
+              0.0,
+              6.875493541569885,
+              37.242217712738345,
+              25.783077398427924,
+              34.37735079555393
+            ],
+            "measured_span_deg": [
+              2.3669347860040477,
+              9.411243968835686,
+              37.154454835630766,
+              30.763946822389784,
+              35.288607535245795
+            ],
+            "peak_measured_speed_rad_s": [
+              0.009141818507224309,
+              0.053987244314239256,
+              0.20721760710094894,
+              0.17404245889450548,
+              0.2091600255030013
+            ]
+          },
+          "stop_confirmed": true,
+          "metrics": {
+            "ee_position_error": 0.003399228118046629,
+            "ee_orientation_error": 0.014366648490702065,
+            "base_goal_error": 0.006457788351939444,
+            "base_heading_error_rad": 0.051008611476042076,
+            "peak_contact_force": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.28633826066071677,
+            "peak_base_yaw_jerk_rad_s3": 0.6159224726224755,
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "settled_seconds": 0
+          },
+          "peak_base_action": 0.008028056472539902,
+          "weights_sha256": "1295c0d30629014c688accde0eda255a45244ce69f07aca6ee5fac015db3fd6c"
+        },
+        "shared_actor_12000": {
+          "success": false,
+          "code": "tracking_timeout",
+          "wave_tracking": {
+            "complete_wave_observed": true,
+            "peak_position_error_m": 0.01068873500799733,
+            "peak_orientation_error_rad": 0.06791424635917181,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "passed": false
+          },
+          "joint_motion": {
+            "names": [
+              "joint1",
+              "joint2",
+              "joint3",
+              "joint4",
+              "joint5"
+            ],
+            "reference_span_deg": [
+              0.0,
+              6.875493541569885,
+              37.242217712738345,
+              25.783077398427924,
+              34.37735079555393
+            ],
+            "measured_span_deg": [
+              6.988120173442918,
+              10.265477040343823,
+              39.29422685299543,
+              29.213471175828225,
+              37.78124230074085
+            ],
+            "peak_measured_speed_rad_s": [
+              0.07110724704910826,
+              0.11758974284437476,
+              0.2548127443823279,
+              0.1887223874992744,
+              0.27264060847786786
+            ]
+          },
+          "stop_confirmed": true,
+          "metrics": {
+            "ee_position_error": 0.009484505919861727,
+            "ee_orientation_error": 0.066034887648234,
+            "base_goal_error": 0.017242816717590856,
+            "base_heading_error_rad": 0.05088701186910971,
+            "peak_contact_force": 0.0,
+            "peak_base_linear_jerk_m_s3": 10.441160733249788,
+            "peak_base_yaw_jerk_rad_s3": 87.46456668105871,
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "settled_seconds": 0
+          },
+          "peak_base_action": 0.30478668212890625,
+          "weights_sha256": "6a779c6e9b37cb65baae4f882267a6f96d4763dc225a6d9f65649d1d3b502e34"
+        }
+      }
+    }
+  },
+  "captured": {
+    "admitted": false,
+    "physics_steps": 0,
+    "reason": [
+      "published_joint_limit:joint1",
+      "published_joint_limit:joint2",
+      "captured_link3_chassis_proxy_penetration"
+    ]
+  },
+  "capture_sha256": "0a1ce7909e179c2d7121453afaf907d523e5a3b9a01b54093bb6336b2662826b",
+  "runner_sha256": "cddaca00c4b31d446b68827e736dc85b22bbbcb2c4a7636a4dd95cea1eae21ba",
+  "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+  "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+  "reference_sha256": "f200b0632e150a894577f3839a52627259c4ea0566daeb4675a7a71fc36b8709"
+}

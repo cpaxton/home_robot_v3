@@ -44,6 +44,7 @@ from emet.rl.manipulation.whole_body_observation import actor_observation
 # the boundary. See `whole_body_reward.py` for the reward side.
 HOLD_XY_ENVELOPE_M = 0.05
 HOLD_YAW_ENVELOPE_RAD = np.deg2rad(47)
+ARM_ONLY_BASE_DRIFT_TOLERANCE_M = 0.01
 
 
 def save(path, record):
@@ -109,7 +110,7 @@ def cases(kind="tracking"):
     return rows
 
 
-def evaluate(env, case, policy, output, name):
+def evaluate(env, case, policy, output, name, *, arm_only=False):
     control = env.control
     trace = []
     qpos = []
@@ -164,15 +165,25 @@ def evaluate(env, case, policy, output, name):
             "success": False,
             "simulation_only": True,
         }
+    motion_policy = policy
+    speed_limit = None
+    if arm_only:
+        from emet.rl.manipulation.expert_routing import bind_expert
+
+        speed_limit = reference.certificate["test_speed_limit_rad_s"]
+        experts = {"arm_only": policy} if policy is not None else {}
+        motion_policy = bind_expert("arm_only", control, experts, arm_speed_limit=speed_limit)
     env.set_task_trajectory(reference)
     origin = float(env.data.time)
+    base_origin = control.base_pose()[:2].copy()
+    peak_base_drift = 0.0
     delivered = False
     for _tick in range(int(env.config.horizon / env.profile.dt)):
         # Record active-loop feedback BEFORE any native terminal stop.
         control.update_task_reference()
         info = env._info()
         obs = actor_observation(control)
-        action = task_pose_teacher_action(control) if policy is None else policy(obs)
+        action = task_pose_teacher_action(control) if motion_policy is None else motion_policy(obs)
         trace.append(
             {
                 "time_s": float(env.data.time - origin),
@@ -194,13 +205,14 @@ def evaluate(env, case, policy, output, name):
         times.append(float(env.data.time - origin))
         targets.append(np.r_[control.base_goal.copy(), control.hand_goal.copy()])
         _, _, done, truncated, terminal = env.step(action)
+        base = control.base_pose()
+        peak_base_drift = max(peak_base_drift, float(np.linalg.norm(base[:2] - base_origin)))
         if done or truncated:
             break
         if second is not None and not delivered and env.data.time - origin >= reference.end + 0.25 - 1e-8:
             env.set_task_trajectory(second)
             delivered = True
         # Match the independent physical hold-XY / bounded-yaw envelope.
-        base = control.base_pose()
         if (
             np.linalg.norm(base[:2]) > HOLD_XY_ENVELOPE_M
             or abs(np.arctan2(np.sin(base[2]), np.cos(base[2]))) > HOLD_YAW_ENVELOPE_RAD
@@ -210,10 +222,19 @@ def evaluate(env, case, policy, output, name):
             break
     metrics = env._info()
     wave_tracking = None
+    peak_speed = np.max(np.abs([row["measured_arm_velocity"] for row in trace]), axis=0)
     if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave", "normal_wave"}:
         from emet.rl.manipulation.herman_gestures import wave_tracking_gate
 
         wave_tracking = wave_tracking_gate(trace, reference.end, initial_hold_s=reference.initial_hold_s)
+        if speed_limit is not None:
+            wave_tracking["arm_speed_limit_rad_s"] = speed_limit
+            wave_tracking["peak_measured_speed_rad_s"] = float(peak_speed.max())
+            wave_tracking["speed_passed"] = bool(peak_speed.max() <= speed_limit + 1e-9)
+            wave_tracking["base_drift_tolerance_m"] = ARM_ONLY_BASE_DRIFT_TOLERANCE_M
+            wave_tracking["peak_measured_base_drift_m"] = peak_base_drift
+            wave_tracking["base_drift_passed"] = peak_base_drift <= ARM_ONLY_BASE_DRIFT_TOLERANCE_M
+            wave_tracking["passed"] &= wave_tracking["speed_passed"] and wave_tracking["base_drift_passed"]
         if terminal.get("is_success") and not wave_tracking["passed"]:
             terminal = {**terminal, "is_success": False, "code": "wave_tracking_failed"}
     control.stop()
@@ -246,9 +267,7 @@ def evaluate(env, case, policy, output, name):
             "names": list(control.profile.actuators),
             "reference_span_deg": np.rad2deg(np.ptp(reference_joints, axis=0)).tolist(),
             "measured_span_deg": np.rad2deg(np.ptp(measured_joints, axis=0)).tolist(),
-            "peak_measured_speed_rad_s": np.max(
-                np.abs([row["measured_arm_velocity"] for row in trace]), axis=0
-            ).tolist(),
+            "peak_measured_speed_rad_s": peak_speed.tolist(),
         },
         "code": terminal.get("code"),
         "second_delivered": delivered,
@@ -304,7 +323,10 @@ def main():
         action="store_true",
         help="also test explicitly synthetic valid starts, never the recorded blocked posture",
     )
+    parser.add_argument("--arm-only", action="store_true", help="Route a wave through the arm-only simulator executor")
     args = parser.parse_args()
+    if args.arm_only and args.case_set == "tracking":
+        parser.error("--arm-only applies to the wave cases")
     if args.output.exists():
         parser.error("fresh output directory required")
     sources = code_identity()
@@ -437,6 +459,7 @@ def main():
         "depth": coverage,
         "laser": {"used": bool(len(laser_points)), "pair_skew_s": laser_skew},
         "hardware_ready": False,
+        "arm_only": args.arm_only,
         "captured": {
             "admitted": audit["captured_physics_admitted"],
             "physics_steps": 0,
@@ -478,7 +501,7 @@ def main():
                 if env.fingerprint != fingerprint:
                     raise RuntimeError("replay and evaluation scene identity mismatch")
                 for case in cases(args.case_set):
-                    row = evaluate(env, case, policy, args.output, name)
+                    row = evaluate(env, case, policy, args.output, name, arm_only=args.arm_only)
                     rows.append(row)
                     report["results"][name] = rows
                     save(args.output / "report.json", report)

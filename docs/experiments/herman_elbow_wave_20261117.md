@@ -77,3 +77,29 @@ and exposes learned-controller failures; it does not qualify real robot motion.
 Validation: 24 focused gesture/replay/video tests pass, along with browser
 playback, image-pixel change, joint readout and seek checks. Ruff and runtime
 package parity pass. No new full training qualification is claimed.
+
+## Arm-only controller comparison
+
+The same slow elbow-and-wrist reference was rerun on November 20 from the
+synthetic staged start with the long-arm specialist and the 12,000-update
+workstation shared actor. All six rollouts shared the same model, initial-state
+and reference hashes. With unrestricted actions, both actors timed out on
+tracking. With the arm-only executor, both passed, along with the teacher.
+
+| Arm-only controller | Peak hand position error | Peak orientation error | Peak arm speed | Peak base drift |
+| --- | ---: | ---: | ---: | ---: |
+| Teacher | 1.94 mm | 0.01171 rad | 0.210 rad/s | 6.34 mm |
+| Long-arm specialist | 2.14 mm | 0.01803 rad | 0.210 rad/s | 6.09 mm |
+| Shared actor | 1.79 mm | 0.01951 rad | 0.210 rad/s | 6.17 mm |
+
+Use `scripts/rehearse_herman.py --case-set slow-wave --arm-only` with
+`--include-proposals` to repeat the synthetic-start run. This route suppresses
+the base and gripper action channels and checks the measured 0.25 rad/s arm
+speed and 10 mm base translation bounds alongside the hand-path gate. All
+six runs confirmed a simulator stop.
+
+The recorded parked posture still fails the joint range and link3/chassis proxy
+checks. The saved Emet address was unreachable during the November 20 check,
+so the current parked state and bridge feedback still need a live read. A
+physical staging path and the hardware stop path require verification before
+the larger wave. [Matched rehearsal results](../../paper/data/whole_body_control/herman_wave_readiness_v1/results.json)
