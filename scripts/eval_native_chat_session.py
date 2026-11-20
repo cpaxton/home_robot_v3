@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import mujoco
@@ -31,12 +32,16 @@ def main():
     parser.add_argument('--remote-model', required=True)
     parser.add_argument('--placement-regions', type=Path, required=True)
     parser.add_argument('--native-task-config', type=Path)
+    parser.add_argument('--single-transfer', action='store_true',
+                        help='Run only the red-cylinder goal using the existing placement regions')
     parser.add_argument('--task-instruction')
     parser.add_argument('--native-policy', choices=('legacy', 'bounded_release', 'bounded_approach'), default='legacy')
     parser.add_argument('--reject-first', action='store_true', help='Request one invalid-plan call, then a separate authorized task turn')
     args = parser.parse_args()
     if bool(args.native_task_config) != bool(args.task_instruction):
         parser.error("--native-task-config and --task-instruction must be supplied together")
+    if args.single_transfer and (args.native_task_config or args.native_policy == "bounded_approach"):
+        parser.error("--single-transfer requires the stationary single-object tool path")
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     repo = Path(__file__).resolve().parents[1]
@@ -47,15 +52,20 @@ def main():
         regions = load_placement_regions(args.placement_regions)
     except (OSError, ValueError, TypeError) as exc:
         parser.error(str(exc))
-    goals = dict(zip(('object2', 'object1'), regions, strict=True))
+    goals = {'object2': regions[0]}
+    public_goals = {'red cylinder': regions[0]}
+    if not args.single_transfer:
+        goals['object1'] = regions[1]
+        public_goals['blue cube'] = regions[1]
     os.environ['EMET_PHYSICAL_EXECUTION'] = '1'
     os.environ['EMET_PHYSICAL_AUDIT'] = str(out / 'actuation.jsonl')
-    public_goals = {'red cylinder': goals['object2'], 'blue cube': goals['object1']}
     instruction = (
-        'Execute both pick-and-place goals on the table. These are privileged simulator inputs. '
-        'Discover tasks, plan with placement_region, execute returned plan_ref, read results, '
-        'and rediscover before the next object. Whole footprints must fit the regions. '
-        'Return one tool call per round; do not stop at a plan. Stop on any partial or unknown '
+        ('Execute the red-cylinder pick-and-place goal on the table. ' if args.single_transfer
+         else 'Execute both pick-and-place goals on the table. ')
+        + 'These are privileged simulator inputs. Discover tasks, plan with placement_region, '
+        'execute returned plan_ref, and read results. Whole footprints must fit the regions. '
+        + ('' if args.single_transfer else 'Rediscover before the next object. ')
+        + 'Return one tool call per round; do not stop at a plan. Stop on any partial or unknown '
         'execution; no held-object recovery is available. Do not drop constraints. Goals: '
         + json.dumps(public_goals)
     )
@@ -89,10 +99,13 @@ def main():
     for command in commands:
         cli += ['--command', command]
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
+    started_at = time.monotonic()
     with live_table_robot(args.live_sim, out, model, initialize=False) as robot:
         initial = goal_predicates(robot, goals)
+        initial_sim_time = robot.data.time
         protocol = {'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
                     'cli': cli, 'goals': goals, 'initial_predicates': initial,
+                    'single_transfer': args.single_transfer,
                     'native_task_config': None if args.native_task_config is None else json.loads(args.native_task_config.read_text()),
                     'task_instruction': args.task_instruction,
                     'scope': 'actual run-agent CLI; live physics; privileged Stretch; no cameras',
@@ -100,16 +113,21 @@ def main():
                     'base_motion': 'checked_unloaded_approach' if args.native_policy == 'bounded_approach' else 'stationary',
                     'cpu_affinity': sorted(os.sched_getaffinity(0)), 'sim_config': args.live_sim.read_text()}
         (out / 'protocol.json').write_text(json.dumps(protocol, indent=2))
+        timed_out = False
         with (out / 'agent.log').open('w') as log:
             proc = popen_session(cli, cwd=out, stdout=log, stderr=subprocess.STDOUT)
             try:
                 rc = proc.wait(timeout=900)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                rc = None
             finally:
                 terminate_process_tree(proc)
-        stable = True
-        for _ in range(40):
-            robot.step(.05)
-            stable &= all(r['satisfied'] for r in goal_predicates(robot, goals).values())
+        stable = rc == 0
+        if stable:
+            for _ in range(40):
+                robot.step(.05)
+                stable &= all(r['satisfied'] for r in goal_predicates(robot, goals).values())
         rows = [json.loads(line) for p in sorted((out / 'logs/chat').glob('*.jsonl'))
                 for line in p.read_text().splitlines()]
         outcomes = [row['content'] for row in rows if row['role'] == 'tool']
@@ -130,7 +148,10 @@ def main():
         result = {'physical_goals_satisfied': physical_goals, 'execution_completion_verified': receipt_complete,
                   'task_passed': physical_goals and receipt_complete,
                   'agent_integration': integration_evidence(rows),
-                  'cli_exit_code': rc, 'failure_boundaries': failure_boundaries(rows),
+                  'cli_exit_code': rc, 'timed_out': timed_out,
+                  'wall_s': time.monotonic() - started_at,
+                  'simulation_s': robot.data.time - initial_sim_time if rc == 0 else None,
+                  'failure_boundaries': failure_boundaries(rows),
                   'requested_rejection_observed': rejection_seen if args.reject_first else None,
                   'final_predicates': goal_predicates(robot, goals), 'tool_outcomes': envelopes,
                   'audit_present': audit_path.exists(),

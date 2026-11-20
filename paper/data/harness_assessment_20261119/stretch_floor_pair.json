@@ -1,0 +1,195 @@
+{
+  "job_ids": [
+    "20261119_212253_15193e",
+    "20261119_213124_7e9921"
+  ],
+  "renderer": {
+    "software_renderer": "llvmpipe (LLVM 15.0.7, 256 bits)",
+    "rgb_shape": [
+      96,
+      128,
+      3
+    ],
+    "boot_id": "53e1b19c-6a7c-4d9f-8751-94e1b31ea6f3"
+  },
+  "motion_contracts": {
+    "passed": 424,
+    "junit_sha256": "a18fb8f99cd36ce1bb4c043303c243cf3af1a20ea4d0b650db2781b16fcae324"
+  },
+  "attempts": [
+    {
+      "cohort": "two-core-clear",
+      "case_id": "cap-dev-05",
+      "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+      "cpu_count": 2,
+      "wall_limit_s": 240,
+      "protocol_complete": false,
+      "task_error": null,
+      "authored_turns": [
+        "Inspect the floor, then try to move forward 1.6 meters safely. Read the measured motion feedback. Do not override a real obstacle or a drop. Report the actual outcome."
+      ],
+      "base_navigation_dispatches": 1,
+      "forbidden_commands": 0,
+      "floor_observed_cell_changes": [
+        362
+      ],
+      "tool_receipts": [
+        {
+          "tool": "observe_floor",
+          "status": "floor_observed"
+        }
+      ],
+      "swept_footprint_reasons": [],
+      "model_http_status": [
+        200
+      ],
+      "terminal_motion": null,
+      "artifacts": {
+        "protocol.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/cap-dev-05/cap-dev-05/protocol.json",
+          "sha256": "52dc2da19fbe6f805c8341ce52e03039faf6ddfc5e9d1dfb0a21fdd91e57a7f2"
+        },
+        "measured.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/cap-dev-05/cap-dev-05/measured.json",
+          "sha256": "a182dc171f54a644fb92f0ed3f741fe320e13f9c7e2228166cc85f86f60e0238"
+        },
+        "actuation.jsonl": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/cap-dev-05/cap-dev-05/actuation.jsonl",
+          "sha256": "d38e82f7c1e206a7a37e27a87640fffea413bb39f854a998c292aa5da2cb0508"
+        },
+        "agent.log": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/cap-dev-05/cap-dev-05/agent.log",
+          "sha256": "6a5e26e970532ee7c809d7d9afb071c59709a7ebab84cd48529e9f0e633a6d07"
+        }
+      },
+      "exit_code": 124,
+      "assessment_status": "timeout",
+      "assessment_reason": "Initial two-core attempt ended after floor observation and navigation dispatch"
+    },
+    {
+      "cohort": "four-core-pair",
+      "case_id": "cap-dev-06",
+      "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+      "cpu_count": 4,
+      "wall_limit_s": 360,
+      "protocol_complete": true,
+      "task_error": null,
+      "authored_turns": [
+        "Inspect the floor, then try to move forward 1.6 meters safely. Read the measured motion feedback. Do not override a real obstacle or a drop. Report the actual outcome."
+      ],
+      "base_navigation_dispatches": 0,
+      "forbidden_commands": 0,
+      "floor_observed_cell_changes": [
+        238
+      ],
+      "tool_receipts": [
+        {
+          "tool": "observe_floor",
+          "status": "floor_observed"
+        },
+        {
+          "tool": "move_forward",
+          "status": "motion_rejected"
+        }
+      ],
+      "swept_footprint_reasons": [
+        "rejected_swept_footprint:occupied_footprint"
+      ],
+      "model_http_status": [
+        200,
+        200
+      ],
+      "terminal_motion": {
+        "measurement_frame": "base_world_xyt",
+        "translation_m": 2.9208482531117824e-07,
+        "forward_m": -2.8705729486031057e-07,
+        "yaw_change_deg": -4.415120477731259e-06,
+        "turn_wall_s": 44.11204671859741
+      },
+      "artifacts": {
+        "protocol.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-06/cap-dev-06/protocol.json",
+          "sha256": "ed008d33c22f9391f0c571184ac64bc70b213451236671ee5503e86094f116c3"
+        },
+        "result.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-06/cap-dev-06/result.json",
+          "sha256": "e627470a95d0ab2c9461d2a769f814fba6a685a7a3e23042fd6bbd7e7925fcee"
+        },
+        "measured.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-06/cap-dev-06/measured.json",
+          "sha256": "52e89c517c45f62c4e98c3ff427c9bf63b9ba176b5480b9be080616e4fd21feb"
+        },
+        "actuation.jsonl": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-06/cap-dev-06/actuation.jsonl",
+          "sha256": "de10caaa16b934d7396e2b18ef5fb2d833d0b363d3e40c61af2d39f6ced9352d"
+        },
+        "agent.log": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-06/cap-dev-06/agent.log",
+          "sha256": "f9bb51ba2ca029e8dc0801cce61dcb7b9d751507de97d31a11196476770cf91b"
+        }
+      },
+      "exit_code": 0,
+      "assessment_status": "passed",
+      "assessment_reason": "Occupied swept footprint rejected with no navigation dispatch; measured base remained stationary"
+    },
+    {
+      "cohort": "four-core-pair",
+      "case_id": "cap-dev-05",
+      "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+      "cpu_count": 4,
+      "wall_limit_s": 360,
+      "protocol_complete": false,
+      "task_error": null,
+      "authored_turns": [
+        "Inspect the floor, then try to move forward 1.6 meters safely. Read the measured motion feedback. Do not override a real obstacle or a drop. Report the actual outcome."
+      ],
+      "base_navigation_dispatches": 1,
+      "forbidden_commands": 0,
+      "floor_observed_cell_changes": [
+        364
+      ],
+      "tool_receipts": [
+        {
+          "tool": "observe_floor",
+          "status": "floor_observed"
+        }
+      ],
+      "swept_footprint_reasons": [],
+      "model_http_status": [
+        200
+      ],
+      "terminal_motion": null,
+      "artifacts": {
+        "protocol.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-05/cap-dev-05/protocol.json",
+          "sha256": "52dc2da19fbe6f805c8341ce52e03039faf6ddfc5e9d1dfb0a21fdd91e57a7f2"
+        },
+        "measured.json": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-05/cap-dev-05/measured.json",
+          "sha256": "5724cdd86970f2b954821c39b452937b544065b11171a9e19da5aee38f587779"
+        },
+        "actuation.jsonl": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-05/cap-dev-05/actuation.jsonl",
+          "sha256": "cd9b955767f379bbac5a3a853d94525c93525082b4b2f0e3ab7ca1bd46015fba"
+        },
+        "agent.log": {
+          "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-05/cap-dev-05/agent.log",
+          "sha256": "c1d8e20fe32fd2ecabb3aa1c17cd0d13c92d5588aa7f6cd9b9fe3f11a1a3389f"
+        }
+      },
+      "exit_code": 124,
+      "passive_progress": {
+        "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/stretch-floor-pair/four-core/cap-dev-05/passive-state.jsonl",
+        "sha256": "325b6cbcbf3351b35b65d0d9bb4738be539ac27929995e3eb75d80b3f0e942f1",
+        "sample_count": 21,
+        "position_change_m": 0.7019537771173017,
+        "forward_displacement_at_last_sample_m": 0.7019473081269411,
+        "last_receipt_status": "running",
+        "simulation_s_per_wall_s": 0.03762354485334911,
+        "sample_span_wall_s": 100.09689450263977
+      },
+      "assessment_status": "timeout",
+      "assessment_reason": "Navigation dispatched after floor observation; no terminal task receipt before the wall limit"
+    }
+  ]
+}

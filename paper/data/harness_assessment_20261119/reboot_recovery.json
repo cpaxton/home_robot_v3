@@ -1,0 +1,45 @@
+{
+  "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+  "interrupted_job": "20261119_170502_21b235",
+  "interrupted_export_job": "20261119_171304_da42c8",
+  "host_reboot_local": "2026-11-19T17:50:22-05:00",
+  "current_boot_id": "53e1b19c-6a7c-4d9f-8751-94e1b31ea6f3",
+  "root_cause": null,
+  "remaining_case": "hm3d_lamp_bed_00006_nearest_v2",
+  "task_verdict": null,
+  "preflight_limits": {
+    "visible_cuda_devices": 0,
+    "cpu_ids": [
+      12,
+      14
+    ],
+    "address_space_gib": 16,
+    "wall_seconds_per_probe": [
+      75,
+      75,
+      55
+    ]
+  },
+  "retained_supervisor_log": {
+    "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/recovered/cross-simulator-job.log",
+    "sha256": "6fc6f7e3e70f0d9a3e19abcc5201efaf0b4b29bf94c07608122ef29882591b53",
+    "outcome": "Five completed case verdicts retained"
+  },
+  "preflights": [
+    {
+      "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/preflight.log",
+      "sha256": "1cdb5b4352fac3e37890a09603c619d2a61b772b51c14f50d6964a289547844a",
+      "outcome": "CUDA device 0 unavailable in the software EGL context"
+    },
+    {
+      "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/preflight-software-device.log",
+      "sha256": "a750a44f983cb97c4d3a68b4e63040374229cef5196a3671a5ccc4de0acc3dc2",
+      "outcome": "Mesa reached LLVM duplicate option registration"
+    },
+    {
+      "path": "/home/cpaxton/src/home_robot_v2/logs/harness-assessment-resume-20261119/preflight-system-loader.log",
+      "sha256": "f00a95d6bbe57e33b172b7a12d93b3a03fce7978addc186b5208547f6ff42c20",
+      "outcome": "System loader reproduced LLVM duplicate option registration"
+    }
+  ]
+}
