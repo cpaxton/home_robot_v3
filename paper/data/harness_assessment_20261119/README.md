@@ -28,3 +28,6 @@ log and Habitat bundles are in the persistent
 - [Recovered Habitat EQA maps](../../figures/harness_assessment_habitat_eqa_20261119.pdf)
   and [map hashes](recovered_eqa_maps.json).
 - [Interruption and renderer preflight receipt](reboot_recovery.json).
+
+- [Stretch floor pair](stretch_floor_pair.json) records the occupied-route refusal,
+  the timed-out clear run, and the passive pose samples supporting its forward progress.

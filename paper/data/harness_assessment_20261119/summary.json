@@ -7,11 +7,12 @@
       "failed": 3
     },
     "observed simulation": {
-      "passed": 3,
+      "passed": 4,
       "failed": 4,
       "blocked": 9,
       "infrastructure_error": 1,
-      "pending": 10
+      "pending": 8,
+      "timeout": 1
     },
     "supervised simulation": {
       "blocked": 1

@@ -73,3 +73,24 @@ system-loader probe reproduced that abort. The host boot ID stayed stable and
 the agent trial remained unscored. The renderer failures are recorded
 separately from the unexplained reboot. A compatible software Habitat build
 or an isolated simulator host is the next path for the remaining case.
+
+## Stretch floor follow-up
+
+The frozen Stretch source passed 424 CPU motion, floor, and camera contracts.
+Mesa llvmpipe rendered the exact fixture with CUDA hidden. The first two-core
+clear-floor attempt added 362 observed cells and dispatched navigation before
+its 240-second wall limit. The matched repeat ran the occupied and clear cases
+serially on four physical CPU cores, with a 360-second wall limit per case.
+
+| Case | Measured result |
+| --- | --- |
+| Occupied floor, `cap-dev-06` | Passed. Floor capture added 238 cells. The planner returned `rejected_swept_footprint:occupied_footprint` for the drive. The audit recorded zero navigation dispatches and the base stayed within 0.001 m of its start. |
+| Clear floor, `cap-dev-05` | Timed out. Floor capture added 364 cells and the bridge accepted one navigation command. A passive state subscriber measured 0.702 m of forward progress at its last sample, with the navigation receipt still running. Final arrival remained unverified. |
+
+The tool bounded the requested 1.6 m drive to 1.5 m. During the passive sampling
+window, the clear-floor simulator advanced at 0.038 simulated seconds per wall
+second. This records useful motion with a wall-budget failure. Both matched
+attempts recorded zero forbidden commands. Job `20261119_213124_7e9921` and the
+[tool and pose audit](../../paper/data/harness_assessment_20261119/stretch_floor_pair.json)
+preserve the evidence. The raw bundle is under
+`logs/harness-assessment-resume-20261119/stretch-floor-pair`.
