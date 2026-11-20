@@ -37,9 +37,9 @@ def fixture():
         env.close()
 
 
-def propose(workspace):
+def propose(workspace, *, seed=SEED):
     case, anchor, offset, joints, hand, profile = fixture()
-    rng = np.random.default_rng(SEED)
+    rng = np.random.default_rng(seed)
     speed = 0.40 * np.r_[profile.base_speed, profile.base_yaw_speed, profile.speed]
     acceleration = 0.50 * np.r_[profile.base_acceleration, profile.base_yaw_acceleration, profile.acceleration]
     episodes, accepted, rejected = [], [], {}
@@ -96,7 +96,7 @@ def propose(workspace):
         **measure({**workspace, "episodes": episodes, "source_scope": "seeded differential-drive spline proposals"}),
         "scope": "geometric proposals, without physics or teacher admission",
         "attempted": PROPOSALS,
-        "seed": SEED,
+        "seed": seed,
         "radius_m": RADIUS_M,
         "max_duration_s": MAX_DURATION_S,
         "fixture_case": case,

@@ -42,6 +42,46 @@ def load(path, device):
     return {k: torch.as_tensor(v, device=device) for k, v in result.items()}
 
 
+def load_workspace_bank(report_path, device):
+    """Load admitted training data and expand episode weights to uniform within-episode draws."""
+    report = json.loads(report_path.read_text())
+    bank = {}
+    receipt = {}
+    for family in ("base", "arm", "coupled"):
+        summary = report["families"][family]["train"]
+        if "dataset" not in summary:
+            continue
+        name = summary["dataset"]
+        if name != f"{family}-train.npz":
+            raise ValueError(f"Unexpected workspace dataset name for {family}: {name}")
+        path = report_path.parent / name
+        digest = signature(path)
+        if digest != summary["dataset_sha256"]:
+            raise ValueError(f"Workspace dataset digest mismatch for {family}")
+        data = load(path, device)
+        probabilities = np.zeros(len(data["action"]))
+        cursor = 0
+        for episode in summary["training_episodes"]:
+            start, stop, weight = (episode[key] for key in ("start", "stop", "weight"))
+            if (
+                type(start) is not int
+                or type(stop) is not int
+                or not 0 <= start == cursor < stop <= len(probabilities)
+                or not np.isfinite(weight)
+                or weight < 0
+            ):
+                raise ValueError(f"Invalid workspace episode span or weight for {family}")
+            probabilities[start:stop] = weight / (stop - start)
+            cursor = stop
+        if cursor != len(probabilities) or not np.isclose(probabilities.sum(), 1.0):
+            raise ValueError(f"Incomplete workspace sampling distribution for {family}")
+        bank[family] = (data, probabilities / probabilities.sum())
+        receipt[family] = {"rows": len(probabilities), "sha256": digest}
+    if not bank:
+        raise ValueError("Workspace report has no admitted training data")
+    return bank, receipt
+
+
 def atomic_state(path, state):
     temp = path.with_suffix(".partial")
     torch.save(state, temp)
@@ -57,6 +97,9 @@ def main():
     parser.add_argument("--hours", type=float, default=4.0)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--threads", type=int, default=2)
+    parser.add_argument(
+        "--workspace-bank", type=Path, help="Use the given workspace report for half of offline tracking draws"
+    )
     args = parser.parse_args()
     if not 0 < args.bootstrap < args.updates or not np.isfinite(args.hours) or args.hours <= 0 or args.threads <= 0:
         parser.error("require 0 < bootstrap < updates, a positive time budget and positive thread count")
@@ -101,6 +144,10 @@ def main():
         name: {"rows": len(data["action"]), "sha256": signature(load_inputs / (name + ".npz"))}
         for name, data in teacher.items()
     }
+    workspace = {}
+    if args.workspace_bank:
+        workspace, receipt = load_workspace_bank(args.workspace_bank, device)
+        report["datasets"]["workspace_bank"] = {"report_sha256": signature(args.workspace_bank), "families": receipt}
     initial = WholeBodyBundle(weights, robot="innate_mars")
     report["initializer_sha256"] = initial.manifest["weights_sha256"]
     model = initial.actor.to(device).train()
@@ -143,8 +190,16 @@ def main():
         names = rng.choice(FAMILIES, size=4, replace=False)
         group, targets, channel_masks = [], [], []
         for family in names:
-            data = online[family] if family in online and rng.random() < 0.35 else teacher[family]
-            indices = torch.as_tensor(rng.integers(0, len(data["action"]), size=32), device=device)
+            if family in online and rng.random() < 0.35:
+                data = online[family]
+                rows = rng.integers(0, len(data["action"]), size=32)
+            elif family in workspace and rng.random() < 0.5:
+                data, probabilities = workspace[family]
+                rows = rng.choice(len(probabilities), size=32, p=probabilities)
+            else:
+                data = teacher[family]
+                rows = rng.integers(0, len(data["action"]), size=32)
+            indices = torch.as_tensor(rows, device=device)
             group.append({k: data[k][indices] for k in ACTOR_KEYS})
             targets.append(data["action"][indices])
             channel_masks.append(masks[family])

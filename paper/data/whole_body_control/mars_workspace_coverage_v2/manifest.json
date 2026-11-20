@@ -1,0 +1,5605 @@
+{
+  "sources": {
+    "assets/robot/docking_station.xml": "3e00fc48583e27dd18c5c6e2471979b1e47b2b973b85c4ed4dc0a67411562ccf",
+    "assets/robot/innate_mars/NOTICE.md": "1e1d8e600976d8fc3b7f4f2eb6559eb91e5d8598610df138acc1731dbc346fa5",
+    "assets/robot/innate_mars/innate_mars.xml": "8535ccdaddbe696ba2ee5e7b556205a020a9d866860a05df16d558940eb58985",
+    "assets/robot/innate_mars/innate_mars_visual_extras.xml": "4a52fbf5d07b6242115d5f185f83bd81070aa27ee26a4d90473a8781294ddfa4",
+    "assets/robot/innate_mars/meshes/base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+    "assets/robot/innate_mars/meshes/head.STL": "3852748e253644f9e9d710e92d11a15fee06cc9eeb4ed0d595eeedfebc03bd55",
+    "assets/robot/innate_mars/meshes/link1.STL": "9eb892e67efe447e802009cbbeaf46c30c86d46c08563858c9d26f1cee286587",
+    "assets/robot/innate_mars/meshes/link2.STL": "d8fe401af1ee98323ff128eeaab64945533ccf6e5a836ae1252fb571b6d70182",
+    "assets/robot/innate_mars/meshes/link3.STL": "71956e0cd0b868c46200af5e1b0a5191207fc056e0878fbba9dffbdd023add40",
+    "assets/robot/innate_mars/meshes/link4.STL": "2f1c87f188ddd71479f30d2e20c488b3d7eb30b4d19d4aec572e70d4c0529fae",
+    "assets/robot/innate_mars/meshes/link5.STL": "e668681a8f62060382c73f11630a1a752b11332012791886b1e21bfceeff54d0",
+    "assets/robot/innate_mars/meshes/link61.STL": "b57b1b055e3d0bb8eda43ae23604219a1155c01f4fcecfea6d3560494280e40e",
+    "assets/robot/innate_mars/meshes/link62.STL": "44df6c24e9af8cc1bc5a0feb179d23c7039c590e45dff7e5a388363f79b5f0ba",
+    "assets/robot/innate_mars/molmospaces_spawn.json": "fffc446085228f4f1a1783fedabbf7d5050f2c8f496e70c5adbe223a5659ed9d",
+    "assets/robot/innate_mars/reference/arm.srdf": "72f67c20b8e090b09be9ac3688a88b06d09360d1ae43f9fecb9b9780d0cb8aa3",
+    "assets/robot/innate_mars/reference/chassis_support.json": "05b58956b294505f045b4a916f6a3b40e1199c64384ef61c7f63cd42fe64a7b4",
+    "assets/robot/innate_mars/reference/maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
+    "assets/robot/innate_mars/reference/provenance.json": "fa9763d7d18b5d06b33287d11b6527cbf153950f5e6d62a14c9769855ddac75a",
+    "assets/robot/innate_mars/t_2ki2q578.xml": "74fc54315db8bd0e0a1080c09262e4fab59eacb0c2877ad3c50ae3bd7a5f10b7",
+    "assets/robot/scene_environment.xml": "a4391e7ad761aa79c5ccde265bf20b6ea6d90336a63383d634bc91f3f5c5d68c",
+    "assets/robot/stretch.xml": "f84efccb18a5aaf4378f76654341140a45a6640e2457c49f0aa100a2d721a63c",
+    "controller/manipulation/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "controller/manipulation/capture_clock.py": "34aa80818c427d3215ac6967a112d5f1206b1218d252c9492ad6532d8cf25dc2",
+    "controller/manipulation/closer_look.py": "069bd1f6c09a01b0a1daff6287045466044138210489ef93d6f4ed2d967d6f46",
+    "controller/manipulation/dynamem_manipulation/dynamem_manipulation.py": "0983079cf9cbf0f76a18856f070614a77197849b01e9b0bfa30685d9bc4540b3",
+    "controller/manipulation/dynamem_manipulation/grasper_utils.py": "6062ad09da372f767620d383121654bb70c1c57bec837dd4411a87c2cfd97089",
+    "controller/manipulation/dynamem_manipulation/image_publisher.py": "ddd19d4e32e20df45e122b4dbc32667ed6541414b4f82f4a87dfc9be99d434b1",
+    "controller/manipulation/dynamem_manipulation/place.py": "e86e33a3b3cd4477f15e09934962997bd1844f7f0a4e547e86701226fcf06df2",
+    "controller/manipulation/encoder_capture.py": "100a38ff998a8faff49e59410581992c1b04bef08ef3e77f554a3c73bfb1f9cf",
+    "controller/manipulation/geometry_models.py": "d6b105010e5ec630c07be24ebbb434669bb26cda6b71262744dd5a673230035b",
+    "controller/manipulation/geometry_motion.py": "81617cf9dd1e9f449560f120925bf94e2d2f224f59dc468259b47fe54eae295f",
+    "controller/manipulation/geometry_tracking.py": "fc15223bbe1c1e3f850631f5bc39d955635b7a3dd0195130807d33196f2d6818",
+    "controller/manipulation/gripper_geometry.py": "36114da9f31ab72f1a548d62c566002da301be682b2a005a5e6b837159c3d440",
+    "controller/manipulation/interval_geometry.py": "7dc264fb9dfff35733d387a093255f4a6410e3d47241e025fa0827df79311fda",
+    "controller/manipulation/kinematic_pick_place.py": "d1e31f505047f1c87b3f790d993d763ffc5c16b1ed8092d917b87049935aff36",
+    "controller/manipulation/moving_rgbd_tracking.py": "4bcc4a2e77b71c907c9c324d8cc755ce174a2c7a2d47b1556fdf81698aca21fa",
+    "controller/manipulation/multiview_rgbd_tracking.py": "95cc6f60a86983a84cd994a89375770f60d4d9994f781b56e427d1b163d2c8d0",
+    "controller/manipulation/native_inputs.py": "e304662f3635ac8776005864fca64fa2c23c744c3d704fd9ad5020cafc62a56f",
+    "controller/manipulation/native_scene.py": "0616615da0213dbfc20e8ce4d7d568cdb7275fe8ed779916dd0619570183db63",
+    "controller/manipulation/observed_collision.py": "23f8b02cbb4fea8c7bf0a6aa2cccf99fa9835ac94b6bd95455246c985540b960",
+    "controller/manipulation/observed_effects.py": "12f3d529c439ad4fc85abfb52df2904f2cd73eb4a583f0d944d75a0842108df3",
+    "controller/manipulation/physical_pick_place.py": "0a48e71b5e7b88e341a1b8c4a376d4e3bcf7483e3e5d12bb993b556327aa35e1",
+    "controller/manipulation/rigid_rgbd_tracking.py": "739dbd4375ec5c1c7a6f8a8690917b6783f7da537dfca8aac34ef6338bdac0b9",
+    "controller/manipulation/shape_pose.py": "60e39f262726938ad47aa57217231eaf6bb8a27c6b8983c8f9d0fddab97d225f",
+    "controller/manipulation/sim_robot_capture.py": "c0b6dedf02cf78e841412db6b5ac61f6dc06b3c4856d11f79eb247b00d8c2a0c",
+    "controller/manipulation/stretch_encoder_kinematics.py": "7f03ba8d6c290d02c01d5ab7ea022a8dd428266926ce9059ef59e89e2e08eaa3",
+    "eval/physical_tamp.py": "deff19474bb165a33ca09ec63e7aa0708a5ecd0c79ed20faf64333c43b41fa4f",
+    "motion/__init__.py": "627228d1da4ec1fcf495127dd8a17cdfc154a10d3d9170eddcaace6e6b0088f0",
+    "motion/aabb_arm_collision.py": "d3d3190387717f7ecb78d3abced63a566763f56a1098450bce9db935ccdafecb",
+    "motion/agent_mcts.py": "7f7a7eef6e4e38e2e9e7eb5c090e300c4706178133360a376b293e1b3f4995fb",
+    "motion/algo/__init__.py": "239164c88ebd81c494b1bd0e67254edea795c9364a57792051bcca2ec63d00d6",
+    "motion/algo/a_star.py": "3c39ae9d57c44c1b05e1dadc6e6c46adf08e22d0590559806349b4936a4c9e63",
+    "motion/algo/node.py": "f0f0b02a487e08c8578c310ade0aabde16e235d719cf32dc6d0f13c0fa30e593",
+    "motion/algo/rrt.py": "23287d5010ea9eb87dd6a08859bc05b1dd6c06b8febf0ef15b5b4de77e202eb1",
+    "motion/algo/rrt_connect.py": "84390b19d04b6f17086c318a929f7abe730195f063c1789e2b1c2d138805b0ed",
+    "motion/algo/shortcut.py": "009b98197f26fe6467c632d6b816b01c24aff465a8e68f353fc399f8a78484f0",
+    "motion/algo/simplify.py": "1e10dd32d285f3d6ff3f0bb88910faed93aff623b66b48a5e84d5b8d1694df07",
+    "motion/arm_manip_profile.py": "2fb08fef144c87f991c906b33a1196ca3f16eb9dd358c56e1d63bdcc1fb12684",
+    "motion/arm_rrt.py": "bee9d28b4754f39d7aa977621bd80600e12657ac5caf3c532f57a0fb7d626131",
+    "motion/base/__init__.py": "5f16e1eb851328923b2994601c9672dbdcb622dd32fcd72e3effd225f5621d94",
+    "motion/base/base.py": "e0cc759cd4328b6859d7d6c70412fdbd4f747b8d8cca8c9a7419e94e095a42b0",
+    "motion/base/ik_solver_base.py": "28bc9d5dc51097587ef7d9cdd39e8161601120b5c66d75c5ca4380ed67b6f6dd",
+    "motion/base/space.py": "23f499f52c93df19400f486bc94b8a2d3e8e4422f2176b923e68e85c28230bfa",
+    "motion/base_goal_rank.py": "5084824c95765725e2025391bdfa0280b559cb61e0957e53731caa31b24fba75",
+    "motion/constants.py": "e79e7bab1e91ec5e33f42bb5450594eaa9820511aa34aef24f77c2b3a13a5bd4",
+    "motion/control/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/velocity_controllers.py": "f9711b8f12ec5b7ca1c41e1332fdbb948e003001885af5d406833d9d3d0c75c2",
+    "motion/control/goto_controller.py": "e95b871b4cb6bdbe3eafa1be40ba3e03734507d7304966f5e3d6a93774eb7f40",
+    "motion/control/traj_following_controller.py": "6ba470d045457e16da6377052e1ad6854f2bb92d2d6a22181eecfabf42c0dacc",
+    "motion/conversions.py": "b6307baa7cc391fe978d0547cb2dd0255a0652a38d4369908770cb935af9d901",
+    "motion/frontier_goals.py": "ea2fc1dd96a66ea9bbd02052feaf172c0c561a9a19a59b21fa5949b7330aa4a5",
+    "motion/grasp_alignment.py": "82802a23b66fe28407bdfe16a171b2ed5744ff9bbb67e01598aab2cdd0dd0f7d",
+    "motion/grid_coordinates.py": "c2ae78a5555a2135edc57b655db423b3959f28447b05676d8d21c20bb876065f",
+    "motion/kinematics.py": "9f679bbbe8d98ef61975a6e6888956cc83eac7a88cb5242c853a57b5ca8aadd3",
+    "motion/mujoco_arm_ik.py": "313e0e09d7a8281fca608ab4bcff507f8fb633c01590b04ac738550b2df76b0f",
+    "motion/mujoco_collision.py": "517d8e0fd9ea71ce8db79ce68b9a50bd6d1dfbd2b6ce920b7f3d3f538d1e60b9",
+    "motion/navigation_sweep.py": "f6cc672d804b94ce74d08269efc92cae3f3d1f8ef0d5993e555f541714704009",
+    "motion/observed_background.py": "2f477775f418efd5a78ce14cb6e50d154fa25920e3a1483e1c3d1ce63abd15df",
+    "motion/observed_object_bound.py": "bc785a2d6498192bb27510e1d5faf52b190cad86d5eb8102e5bdb97eddd15794",
+    "motion/observed_support.py": "7b04d0950a2c5b1a4e323a8abc312f935eee475dfb72553aa499c819129dc743",
+    "motion/observed_workspace.py": "6038f39dc56198bf805cad29e66c648ffd99acbeabb0bb5cd08113e3c94a9316",
+    "motion/pinocchio_ik_solver.py": "f776d1f74b674215e74ae4076f87dfee914a8ef97e901c6129c7d3f675bbf29a",
+    "motion/placement.py": "9184873daa769c92c84d3b14009f4e4d600ada5847c807e182d7982e5816477e",
+    "motion/placement_geometry.py": "45bce53bb0b048dec34d7e9c0d023d428952d0f0c5575a7961e717645820543f",
+    "motion/placement_replay.py": "06ff34147484b567509e7ab0541f3d2897a51adbb3367f87185ce93ec82e6aeb",
+    "motion/placement_surfaces.py": "98600279efd68451ec091fa34b64fc3d95a215b5ffd399a1da15906f999bf75f",
+    "motion/release.py": "f4b1fec9291f4f79b5e0168176633a2f876decc66208f386ef186ce3675779e9",
+    "motion/robot.py": "4e1926d18a5483b078a46ed9179476a84fe62a3d80f89ea2ad454d85f8398346",
+    "motion/simple_ik.py": "af9c4c9a2feb2c66c2a89d8d4331a8f3d6d40bb1bb70ded81dc9cd8d1d7c3b3e",
+    "motion/simple_ik_equations_numba.py": "f79e3130d18a1e899f90bcbcdec13b2e2f93c27e20feef389f6a478c1ba484cb",
+    "motion/utils/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "motion/utils/geometry.py": "cf20d151542f162c645e3ac8469563a4e6b2d51e534fec574b2ba592fcf1c952",
+    "motion/utils/simple_env.py": "3592c7229e3f220e619d3ff23612677855062201f54884fa1ae94988b0eb406d",
+    "motion/viewpoint_selection.py": "ec55a3eafa1cb1715354ee1537eed993d51e26d91c0f181abcacf03bb63caae0",
+    "motion/voxel_arm_collision.py": "4cb99647badbe66785581f33f6d5b9c76704c06bd2cddc5c1a143403d6867ad0",
+    "rl/__init__.py": "fd8747eb2e1726ca596569f9154471d9cb7282c555236fe2d38ed2af4021b735",
+    "rl/__main__.py": "1fa6f2731c91b3691e168ee8c090b9dc9719b09299af133763fc50aca5383d4e",
+    "rl/arm.py": "5931a057a5c1d86ad811ca8fa59dc00dd812a4796ce7232f9a64bb9462dad38f",
+    "rl/artifacts.py": "b0843988f9ce40fc65b55ca2c905aeb80ba327fbc6588e4c1ce23a5d518ae7a5",
+    "rl/audit.py": "f3f9c4de94b10621f20f6a2f67f0369cd1839753ac1891684ee3857e932f2e21",
+    "rl/base.py": "fc14e81f6881737e4eee8970317feea7fa9f8280f86fafe5a1210ddb9838ad51",
+    "rl/bootstrap.py": "9cf0b903247b94b724f753288c3ae7a3ae115de40b88de4fe0cce5c31716209c",
+    "rl/contact.py": "7258b978a81f9f7a941efcaf5f8b05609abeb2ba516662bf0c33cb2a5d497039",
+    "rl/control.py": "f2a0bfcaac71b03762e6060dfb1818d3a13086ee18dbd97082ae3284d572166e",
+    "rl/coverage.py": "258e5f9735beb3d2768f0658c7d59f1671901a8132ba6574a29c478566ddc189",
+    "rl/critic.py": "6a82b9d405fef8dfb903b6225e22c30629bc99e330a9d4b81636ae8e2f13d191",
+    "rl/env.py": "bcd6231ef2f59be80f09155069cf78237a46f9add2a807ed44c6e6d8bdea281d",
+    "rl/manipulation/__init__.py": "b1d021af151c366fb3569bf9dff91bd26a911b81a9d61fab8da49721a9242cea",
+    "rl/manipulation/__main__.py": "50699fc9ee63830903b26363acc1df6b26c5d1d9058594b79c2d2fd838415efe",
+    "rl/manipulation/action_audit.py": "b189e2b8bc285552d619a9a43b67f5f0edd7f81b8b500289955cae2eb3e63913",
+    "rl/manipulation/arm_adaptation.py": "321ce6d059ddc3e612c92710d2abb856e9be27cbdb47859f1a50e9bac55578a3",
+    "rl/manipulation/arm_component.py": "41b2f39483457b40cd8887e4a44b1f622b103b5d3702aec47675207ad551df2d",
+    "rl/manipulation/arm_spline_benchmark.py": "05d7dfd05f229bc64d36ad2db4145550693b862d384351998217cd88a737eaed",
+    "rl/manipulation/arm_spline_training.py": "0d5551a043183bc7d65f74146f4611d90a5d530bad7fadfcc355435cf449b9af",
+    "rl/manipulation/arm_splines.py": "924fc85b2f3582cb62e1a46de7c44a879ccfd0093f0dc8e8067fcc4d883b7c2d",
+    "rl/manipulation/base_benchmark.py": "470333af478bedb851c9f8e9eaaf8d4376a2c51d6b8344588074da3efa59feed",
+    "rl/manipulation/base_braking.py": "1744054c0226df565fa24c3aa9e0ecd179459eb40a14bc0f4ac5b03f0c1dcf01",
+    "rl/manipulation/base_component.py": "923f5b5b1d8c6e8e1bce5e03e0a4f94fbff5ca8faa3b8075a529d03fef1e366e",
+    "rl/manipulation/base_goal_reference.py": "f670d830783d2e06a7e6ba7ff44cd6cd6751cdf2bfe9a948692ed01dbf9a04ea",
+    "rl/manipulation/base_navigation_feedback.py": "65955d9812be9088cb278fdc3418520ebd4c4443ec1b51f8bff23c7b6e7ca740",
+    "rl/manipulation/basic_learning.py": "fcecf860b3a276ef056fef68883bae4438565d4a851123f912b19b7640c17cad",
+    "rl/manipulation/calibration.py": "0d6d134063c362dff0d13ed67dc5445509df8fd4381403ec2821850ff1cb663b",
+    "rl/manipulation/carry_benchmark.py": "e33e3858667d61260f5aa2da3712c371bec1839c276a3f626c96f36b3897e09d",
+    "rl/manipulation/carry_training.py": "21b9180134176d8a85c9095ad72c7ac917d69030a44ec5a65c4c635b35347633",
+    "rl/manipulation/command_policy.py": "a1420b7fa6aad30307453c07beebe6e4b847950d6b83ce0dcc44888e2c81a2a1",
+    "rl/manipulation/command_runtime.py": "df8ab97729c535bfcba0d91e16c73dd9c465c119eefb551b097899600ad09009",
+    "rl/manipulation/component_transfer.py": "c237e5888a52087f8331f4523a64ae9ebe59618c7246f0b6af411c7408ec83c5",
+    "rl/manipulation/control.py": "a8367d4c0520ac41ba7b7ab9d46e63b5089844cd8a02d3bc6fa681c8966347f4",
+    "rl/manipulation/coupled_evaluation.py": "1d33339d7d296dd939431da090857d63583c8be2ca572b53d22606319745cc09",
+    "rl/manipulation/coupled_tracking.py": "f30f9e0517ad05acd6643855bd423331db470244c3250af99882807108a2fcae",
+    "rl/manipulation/directional_curriculum.py": "1781441cb7e8e4bc3ac6dac2b776fdadefc100eecd04eb2e86d13d57e8b38aa7",
+    "rl/manipulation/dynamic_trajectory.py": "e41e1f1ee80849f4d049db02427d63a1181ce8e2382b96b364b02078a326b4fc",
+    "rl/manipulation/env.py": "cbdf269820c68ce0661b9aa86b23eccfe20f3602261b091df37c0ed9022ca24b",
+    "rl/manipulation/evaluation.py": "faf7e938d9f49cef12bfbe90c1ec67ccda386515e9e9400b1fbcbc222916cb3b",
+    "rl/manipulation/expert_routing.py": "4b3f1c4cbc0c42c685efa789b1f4a2d3cd8e57863c8d08ad049cdd7673812f66",
+    "rl/manipulation/failure_replay.py": "e4eba3c5f114c303905e488c9f81e4fa83df1604d4215d164cb44ba965e65ea1",
+    "rl/manipulation/feedback_geometry.py": "0392918bb18ba0acb25f1ffffa907cbe3eac3806841bdd0080a388fa285bd3b0",
+    "rl/manipulation/feedback_policy.py": "e62ef38500c67234f2d45834d93f7e69c06e718b396d509f9b3c576f94994566",
+    "rl/manipulation/fixtures.py": "baaae9df99435b2713c46299c3610bae319a581496b7dda6da7d801028659503",
+    "rl/manipulation/goal_change_tracking.py": "f7e9c7dcefebafc724e12449aa2ec89667a5dbdee58efb20a748b1e1d715b039",
+    "rl/manipulation/grasp_lift.py": "75ce50a29c4f44813cad9d7de7e9b5e1e199b32631a164f2c8949d1aaf472d27",
+    "rl/manipulation/grasp_setup.py": "81364a4886e2fe2ca83a8f82cdae862c0b6a0145673baa4ed16fef86ee8c3de8",
+    "rl/manipulation/hand_audit.py": "d022475b8c6b077ffd62fa5686a60be5a6ee681a5194c493e519fd5d52572f6b",
+    "rl/manipulation/head_comparison.py": "c4e80c507a9aa619e6010590ad4858d3e9d9713e92792db2e54f44b5a8a541eb",
+    "rl/manipulation/held_object.py": "9875fef7a8de43859945b0466b86327429611a9b36dc5d3a55a5a2a3d3967aef",
+    "rl/manipulation/herman_gestures.py": "f56678d2c9490731f4c6bf1d43fc3886c2c3e3b649f224e17848818abfb0125e",
+    "rl/manipulation/herman_rehearsal.py": "09f860319eecf384090db379985d3fb5ca1bec27ec39d97bb28786c18f110861",
+    "rl/manipulation/herman_rehearsal_env.py": "a718a11ab259d49d8e8a86d4187a527706441f51a405f487fdaa68c4acb0db7f",
+    "rl/manipulation/hold_audit.py": "9711458c42eb5883cbf522dc6b9abb0d7e08f3f6d626db240dff732b8f832cab",
+    "rl/manipulation/hold_experiment.py": "ff286289eac3cf996f0fc2e4a2276372dbce535af666c7469eacb6f78cd79bd2",
+    "rl/manipulation/imitation.py": "eb301820f1a3692f8c8865ae6ec66dd98a17ca18d14be97461a93ddf1e8a59bf",
+    "rl/manipulation/initialization.py": "235fa9d0f039f92128d48c6e5d5c3be9c17ee29e5462df4cf199cf6596958933",
+    "rl/manipulation/integrated.py": "aaebe66d53b1b0e94c48c50bec7f75d557ca9b478016bfde2728188dfae13ad3",
+    "rl/manipulation/jerk_measurements.py": "5f926cbc097d4f3eb09f4e2ba0912c87b9c7121c0d891a49ba9ebfe98eb55d95",
+    "rl/manipulation/jerk_pose_reference.py": "88a5ebebed2de6f19db6acbef2f2165e8d85e44459413c8f686da104dd393098",
+    "rl/manipulation/jerk_reference.py": "51f734b7af70e38d5bfc6eb702736afb1b869cb0c5838b7fe92616bc9655f1a1",
+    "rl/manipulation/mastery.py": "4ff16f0cf6d0dd100a781576c962e126a5efdf83f1f28519f31b1c9ff7170b66",
+    "rl/manipulation/mastery_objective.py": "6fd77cd15de3fb6a6c5c6833fb54dc7ebaf0de29d70ff3d77c9f80736b754d9e",
+    "rl/manipulation/mesh_storage.py": "8f16ea0b7180ad213c74f6d2d15f797065e4795c4231fa619ec4d47f1970e917",
+    "rl/manipulation/models.py": "603f96944dd51fd38675fcb4ee511f63ed103782a76090be83d733a398d53220",
+    "rl/manipulation/motion_distribution.py": "fdb69dd281ea5aba06fc433abf6c200dcda91b75102b634d0ebf90ad74dc9bc8",
+    "rl/manipulation/multi_critic_ppo.py": "4495cd2a15b01484a477f0d9df75b688bc2c518bba60587367fd0ccfb2bcf06c",
+    "rl/manipulation/normalization.py": "a980968d40a8d7ed5d503297d26434bea0df4368a70f051d4ff94f1e92c941de",
+    "rl/manipulation/normalization_schedule.py": "0c84a9a04c1dd386f58379bf9edb779a72571bd177d6bffb205a7e77af6ca716",
+    "rl/manipulation/observation_layout.py": "d336adc6a938b02b3a327fd0312f7ac5a4801ce6a524247f204b4186c172697c",
+    "rl/manipulation/oracle.py": "09fb2d61194e6b143531c79e46cf49c033d7d6e365ccfa15ae81931fee0c5603",
+    "rl/manipulation/oracle_runner.py": "58ca9bcfabcb85a07c594e8ed0a8b4c9579e7debadbc2c590a1ab5656f6e0765",
+    "rl/manipulation/pair_recovery.py": "ee27538b6b512ea8d5d49bbeb27b99b11c33cd881a102a3c1df8172b91ab5ee2",
+    "rl/manipulation/payload_assets.py": "5b1f0eb2efbd9af135894443c6d39bf1ab5419097531d70f5e6e8e31c8bb10cd",
+    "rl/manipulation/policy.py": "fdec069406c4aa9d80e441f377d804189fd51de2deab734c037e233316b4fd24",
+    "rl/manipulation/pose_value.py": "beda169d04e729262d7f6a4e6c36d64dd5fc5c450e78dfa813702793bbee87cb",
+    "rl/manipulation/post_training.py": "e38524b858e80d93aa894999154319c51dc80170c8239486cdf17d0410a117ed",
+    "rl/manipulation/primitive_admission.py": "c7285413e10132ac08edba67cd63ba257c33364e2e6726c78b7f9b96cfe67851",
+    "rl/manipulation/profiles.py": "911acb00c84f16634e3413b992d3ae1900ec991507c94f8b8e91f7760e148b86",
+    "rl/manipulation/reference_timing.py": "120bac42dfecf0a2536155e699f37950569001e67b11117f5a3289fd27810dd2",
+    "rl/manipulation/retention_training.py": "d60b8955315a3493e629524130e3615e1f48b2909a1b710248038481af74a690",
+    "rl/manipulation/reward_audit.py": "a2be3c3852dc71c8618aa6c62c9310ad2dabed9c9fb7ad440310fd217b5e47de",
+    "rl/manipulation/reward_config.py": "c7a0da902e8594dc3877b7fe044cead9be665da575774317e9a94a5e7811dfdb",
+    "rl/manipulation/risk.py": "3c09fa301cedf185ebba9d8f80d746ea8e1e99954c07ff724e9d5d821179cf18",
+    "rl/manipulation/s_curve.py": "158a774df10764cb06b32f55375a748d1e47f1b6e2e8f3e5fa8957a1b93eee74",
+    "rl/manipulation/safety.py": "a1933653d66bb3daae2835e965398df427358ab5469d104f4c5a08a60aa7d4b8",
+    "rl/manipulation/support_audit.py": "6fd349215bb683c6d4818355a892d2db2ce7a968c4b24490a7a9bd6b878c7d04",
+    "rl/manipulation/tamp_benchmark.py": "869b7ce09ce9ce638c73cf8c0d0d4e28da59ed9f1ecfb6b8492df1304489329c",
+    "rl/manipulation/tamp_cases.py": "609c55b878bf0d8e2ed4f0b2727c5207c1a8c73664ce807c23f3e0ce294f6f79",
+    "rl/manipulation/tamp_policy.py": "b3c81aba7b38759ebc45e2282fc8e6c51152a4e3cfc569355445e015f421a0ed",
+    "rl/manipulation/tamp_primitive_env.py": "952e51220ee6f5a8d03a23a5534f89bb2f81bf4bfd5bf3531ba654347339131b",
+    "rl/manipulation/tracking.py": "c9bcd24c706a83a252aa021e70a207934604b57ecb58686bbdb0c643214877fb",
+    "rl/manipulation/tracking_audit.py": "6d78cb1258e444e244d555016a3bec3e76a53871221b480d536be546674c6d0a",
+    "rl/manipulation/tracking_curriculum.py": "01af7763ec4a00d31306bc16a0c91c63951ab2e6f14e4867949eaa559749c006",
+    "rl/manipulation/trajectory_metrics.py": "4d07b5c8d38740eb1bf06d31bca53dd61bdaab6b537e8297bdac9d4e7b38c4a8",
+    "rl/manipulation/translation_curriculum.py": "200ef7be25ff731b141f3c304f2b914b170c32b0f0ffe36b6adb118fa0f59376",
+    "rl/manipulation/turn_guard.py": "3e1545fe6f5fa7e90e94c221882cf9bc84e2987805d55d739db4d66709b1502a",
+    "rl/manipulation/velocity_filter.py": "cde01f4034d6d0d26e908f2e721ff23ca31a48e0581c0c48db29b6673ed35f8c",
+    "rl/manipulation/wheel_feedback.py": "b279d5b4a0ceec70bce0ab864b1d59046907d951dcedef78cd08aae7ac64e3b1",
+    "rl/manipulation/whole_body.py": "232e130f7bd01303ed1008ba10f9839717fb2f2bef5e7d95545e7df571564689",
+    "rl/manipulation/whole_body_actor.py": "bdf99d6b82fa58302d0535a8ccdc0aeff62d739a948af9c972cbaa46d57fb1a3",
+    "rl/manipulation/whole_body_bundle.py": "96f885999e3f4ee8422fec36c9e8fb1b55a49fb3fc26411cb53323279b472ce3",
+    "rl/manipulation/whole_body_env.py": "86af70665225cc1ec9bef00ea1de08bd6df08f5d921f68fdec680a52c4556a8b",
+    "rl/manipulation/whole_body_observation.py": "cb9cec638c514c88c0c803b664133f647ed825d7b41454d585e5b51fa7c7d155",
+    "rl/manipulation/whole_body_reward.py": "ad0fc36df9a0d470a6a31c4ff93421ada5669ed6a7b38bebf084ca301ff9d735",
+    "rl/manipulation/whole_body_splines.py": "3854e694b0a86534351879697c03c745b3fe91b7e4aba8944f43c36cc39d5c83",
+    "rl/manipulation/whole_body_training.py": "bb37b054bfbb069e990dbc4e1993d8fae892b5d7e0d70ec2873fbe85b9946932",
+    "rl/manipulation/workspace_coverage.py": "f7a229b181c43fa98a9c75abf14d29e417810ccbc4fdd795813cff16f61be18e",
+    "rl/manipulation/yaw_audit.py": "2a30a56447549b80357741df0b4dd1cbab2eee7e42e1cd010749a2386b2b53ba",
+    "rl/model.py": "a4a1354b3867f03b092d9158ff1bc7fa7ec83586ca7abd37a8ff053e53891453",
+    "rl/networks.py": "c58e59cf89945af1341eff23383c14293dfe4ed79029afde5037fbe454e4ec99",
+    "rl/policy.py": "ddd1e6ba0fdffc8dd5821618f36f7d9aff8cd4c5c47dc3625d2cecb6bf2d0406",
+    "rl/pose_targets.py": "85e2b4f9f31a1d11d31219b3030125221a11334dd77fb371bf58cdcde3465d7a",
+    "rl/profile.py": "9e02df85eb4f122e4ac1cf033c4caa36b9d5be2c854d0f99ca33d46510f09577",
+    "rl/reference.py": "213f1c3b882e339bc0361fe7c621347e77b443a30d66a2a415e8edc751b2fde6",
+    "rl/refit.py": "f2f4d58abed823727dc49e0829b2c17f5154ef07293dd7c1dae7da04325dc8e2",
+    "rl/regression_gate.py": "8f877e2b67b14083ede5dc6b76407c986f6a9c00e67bfa2ac5c7dd9dc1a9e72e",
+    "rl/residual.py": "5a04900c56b419e4fefa6bd4380ea315e0ecd6281f40291892d87de65afc78ff",
+    "rl/robustness.py": "f864a9f3298dc2df038ca3515a445db7860b286d48de49c9cb04cc8554fdab51",
+    "rl/server.py": "681e695c500ec3671a3444cc89233aeaf626719d5cb3173eb6741b95a26315f1",
+    "rl/test_drive.py": "4837ac843f32438ef6412ec55797f76c2140407b4357f159c882aa164fb3c8eb",
+    "rl/training.py": "4af1015abc0a488fc379a9087e0e2c12d42585a3c43cd0a4df408b1df7e0e338",
+    "rl/trajectories.py": "31545e53a2bd2bb9773fde0cab715ace31922e18f3316d52fcc3c09352e9588c",
+    "rl/transformer.py": "b7aa84a64c3f0dd76b6a647af23617c3a38c4e2bec76500d62e0c861fd610dbc",
+    "rl/waypoints.py": "bf7be5ebc76301d46da3e642177e1cfb600844decee98ae22620bb9bb29b77bf",
+    "robots/__init__.py": "bcd3da62da771c642ac3c3ee353fae6a14c956f37e6a88e7bae5b624c1e4e5cb",
+    "robots/base.py": "92b6b2fd557e52a5f0638d01012b80319cc731648274287876548f40589176be",
+    "robots/footprint.py": "5ac9ad8061c670798441bcadb76d13b5d4ee5418cd0bdad10867df0f0dfa452c",
+    "robots/franka_fr3/__init__.py": "c74675d245bba7653609cf95ddc0fa8993a7657f6b588dc78d6966967940a2ba",
+    "robots/galaxea_r1/__init__.py": "28524c18609a5890b530e05c9fd3f756a89fd5ccb31d684c2b77046a67457bc3",
+    "robots/galaxea_r1/sim_stationary.py": "4345966232c33e2851724e905143ba5e0299d0a54818fa5c02e5e3d3e0fef8e5",
+    "robots/head_capability.py": "76ab8f959b7a4ff3c23cc9cb5ce5555d86166d471b50320fd85daffb6d877b11",
+    "robots/innate_mars/__init__.py": "a47d9596586bd6b4dd4519f8a512dcb9f9cfee0b131ed830d011ea4cbf8f580e",
+    "robots/innate_mars/chassis.py": "ee9373ef44fc5de88e27d4985311f7f92a27fd3e21363058cefd438f91aa80bf",
+    "robots/innate_mars/control_session.py": "718ff3c525e681d850f710d856f91b7419ea4ef8ffe784e588b64aa584d518d1",
+    "robots/innate_mars/dummy_client.py": "332d4710a82ce3b3cff91974582e99793e64fd136d58f3a965a4f1ebcd45c246",
+    "robots/innate_mars/emote_backend.py": "a830f20675cf59943417340c44eee49c7c2d99f0e3605a1d203af5079d598104",
+    "robots/innate_mars/head_kinematics.py": "6eaefab297668d799854931568ccccfb70c5037af5374a10886b91fab2c852ef",
+    "robots/innate_mars/motion_boundary.py": "aefe8821a761c0463ba6bc5a64d8a8733aa8d4c4ded2d329fb4ebe72a1979fb9",
+    "robots/innate_mars/passive_relay.py": "d32682ef26b7f3c0ee807f4905d8cc47bbfd4a234834b4de6ee698f2d0ae0354",
+    "robots/innate_mars/passive_ssh.py": "d7c5ba83049466684c67bc990fa50181e00db012bf25ebec9af0f2abb225022b",
+    "robots/innate_mars/rehearsal_capture_ros.py": "44061c834f4fcc5a3868ab2a9fa07a9bcda8e423b694f2496eab7dc524c1f3c7",
+    "robots/innate_mars/ros_client.py": "95699538778c00f61ff09c6555493fa2d6c319c0d3976256c82be5f32e9043ee",
+    "robots/mobile_aloha/__init__.py": "788d13d6917cad4bdd3ae251da03e23e27bca578836a993f03a30ed769d950f0",
+    "robots/nori/__init__.py": "13e0964f820493d8313a96b31e25d0c953d379bf8c915cef26b8ccfb8192dce8",
+    "robots/rby1/__init__.py": "85b02034b848ac9aa7a8e4a3d5fa881ba53587eb1c37802af9262b6f1a1078db",
+    "robots/sourccey/__init__.py": "7fae96deca59c5fcbc13f4beaf9cac2f143082c6672515aad5656ec44d4262e5",
+    "robots/sourccey/emote_backend.py": "aed8810f56a3a782f49bb03be70f432ba655058ad0537552d3bd4cc7e5d79859",
+    "robots/spec_robot_model.py": "f88f76a8c80e82bfa84ea60197cd1c1d039a1ed3df79e8c94128d590aec934be",
+    "robots/stretch/__init__.py": "ffa2e2b7085bfd9aef6fc02b1837fd6790eca1bcd05f96db1cd3fda0b1230e3c",
+    "robots/stretch/sim_stationary.py": "a8f1ef1cc1ade25a4d7403da23d30ad86f740d11363fb66e785eb4a2ac3f9451",
+    "robots/xlerobot/__init__.py": "85f5d0539067a11faa3814bb9fc46357e098056c7baa0291f63daa0d864bf789",
+    "robots/yor/__init__.py": "3720dfb788c7bfb4d7786107aa9590e788c4ca763db69fb3dc6bf1a6339473a6",
+    "simulation/sim_object_placements.py": "fe8c0b11c31e9731021a9a943a2fd150c08369bd69cf3f21ce6e945f94e17586",
+    "utils/assets.py": "384085ced638f51a5208565d723577b31eced4188f641132825124605bfb65df",
+    "utils/logger.py": "f4a7e195cfd54d0146a1900c59b8790a2a7204b2cc043cd1de924cae32397877",
+    "@runtime": "549fb212e22c858dfb74c184b72642f056b184c6472eae95fcf74fa39e09276e",
+    "@canonical_suite": "5c7c8fd285f9c1fbad294b5887ed74c5d09ae400afb4fe1ae7427307462c5da2",
+    "@canonical_regressions": "f3143e2ab37cec866d1d8defbd6ce65dda90dfe8c9e66a5ec9362e741b9fb457"
+  },
+  "cases": [
+    {
+      "id": "workspace:train:base:6",
+      "seed": 671000006,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.04377865805807361,
+          -0.04377865805807361
+        ],
+        [
+          0.05071252333796374,
+          -0.036844792778183484
+        ],
+        [
+          0.02080982971001473,
+          -0.006942099150234476
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:7",
+      "seed": 671000007,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0015617619588006437,
+          -0.0015617619588006437
+        ],
+        [
+          0.07892348430638667,
+          0.07579996038878538
+        ],
+        [
+          0.03942648873971109,
+          0.11529695595546097
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:8",
+      "seed": 671000008,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.022311964519287728,
+          0.022311964519287728
+        ],
+        [
+          0.0593964335475447,
+          0.10402036258612016
+        ],
+        [
+          0.02224439509072907,
+          0.1411724010429358
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:9",
+      "seed": 671000009,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.059329493971175803,
+          0.059329493971175803
+        ],
+        [
+          -0.017264227509515714,
+          0.10139476043283589
+        ],
+        [
+          -0.05691639085714276,
+          0.14104692378046293
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:22",
+      "seed": 671000022,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.04633887800548065,
+          -0.04633887800548065
+        ],
+        [
+          0.1569724136469942,
+          0.0642946576360329
+        ],
+        [
+          0.17982494851603445,
+          0.04144212276699266
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:23",
+      "seed": 671000023,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0026503622325924885,
+          -0.0026503622325924885
+        ],
+        [
+          0.10904498065284349,
+          0.1037442561876585
+        ],
+        [
+          0.12724067518895998,
+          0.08554856165154201
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:24",
+      "seed": 671000024,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.027903610520661468,
+          0.027903610520661468
+        ],
+        [
+          0.06995482456585789,
+          0.12576204560718082
+        ],
+        [
+          0.024466370936404136,
+          0.17125049923663457
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:25",
+      "seed": 671000025,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04947243864238821,
+          0.04947243864238821
+        ],
+        [
+          0.057428901830747385,
+          0.1563737791155238
+        ],
+        [
+          0.05569212723821584,
+          0.15811055370805535
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:38",
+      "seed": 671000038,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06725410121306667,
+          -0.06725410121306667
+        ],
+        [
+          0.21061514255251135,
+          0.07610694012637802
+        ],
+        [
+          0.19786879853505002,
+          0.08885328414383935
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:39",
+      "seed": 671000039,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.021294047305722145,
+          -0.021294047305722145
+        ],
+        [
+          0.16207558022429816,
+          0.11948748561285386
+        ],
+        [
+          0.11077116343843864,
+          0.1707919023987134
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:40",
+      "seed": 671000040,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.019840444752599575,
+          0.019840444752599575
+        ],
+        [
+          0.12687236120024378,
+          0.16655325070544294
+        ],
+        [
+          0.1435513336126863,
+          0.14987427829300043
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:41",
+      "seed": 671000041,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04551481102104081,
+          0.04551481102104081
+        ],
+        [
+          0.11376067154206891,
+          0.20479029358415052
+        ],
+        [
+          0.06800123814150555,
+          0.2505497269847139
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:56",
+      "seed": 671000056,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.009085145160331098,
+          0.009085145160331098
+        ],
+        [
+          0.16296959409714212,
+          0.18113988441780432
+        ],
+        [
+          0.17564276678626384,
+          0.1684667117286826
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:64",
+      "seed": 671000064,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.017820174506582666,
+          0.017820174506582666
+        ],
+        [
+          -0.09401589542731276,
+          -0.05837554641414742
+        ],
+        [
+          -0.11573996137402551,
+          -0.03665148046743466
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:65",
+      "seed": 671000065,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04171034529410687,
+          0.04171034529410687
+        ],
+        [
+          -0.12486850502369984,
+          -0.0414478144354861
+        ],
+        [
+          -0.16436229984526812,
+          -0.0019540196139178068
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:78",
+      "seed": 671000078,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.03989254214938838,
+          -0.03989254214938838
+        ],
+        [
+          -0.05310262340152025,
+          -0.132887707700297
+        ],
+        [
+          -0.0027189995003061157,
+          -0.18327133160151116
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:79",
+      "seed": 671000079,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.028719928185264452,
+          -0.028719928185264452
+        ],
+        [
+          -0.059338840099884854,
+          -0.11677869647041375
+        ],
+        [
+          -0.06482057804708304,
+          -0.11129695852321557
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:80",
+      "seed": 671000080,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.010463122352411966,
+          0.010463122352411966
+        ],
+        [
+          -0.11092648436636256,
+          -0.09000023966153863
+        ],
+        [
+          -0.10355065620812214,
+          -0.09737606781977905
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:81",
+      "seed": 671000081,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.06511509748915446,
+          0.06511509748915446
+        ],
+        [
+          -0.17663077398007826,
+          -0.046400579001769346
+        ],
+        [
+          -0.16654898777921912,
+          -0.05648236520262851
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:94",
+      "seed": 671000094,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0477524007107499,
+          -0.0477524007107499
+        ],
+        [
+          -0.07817864421424536,
+          -0.17368344563574517
+        ],
+        [
+          -0.04107601019906355,
+          -0.210786079650927
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:95",
+      "seed": 671000095,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0021427194040314727,
+          -0.0021427194040314727
+        ],
+        [
+          -0.09466944673979456,
+          -0.09895488554785752
+        ],
+        [
+          -0.08084478664504284,
+          -0.11277954564260924
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:96",
+      "seed": 671000096,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.0160388646328403,
+          0.0160388646328403
+        ],
+        [
+          -0.17719819835713413,
+          -0.14512046909145354
+        ],
+        [
+          -0.1808733128413494,
+          -0.14144535460723828
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:97",
+      "seed": 671000097,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.059478014059274255,
+          0.059478014059274255
+        ],
+        [
+          -0.19609354791462838,
+          -0.07713751979607988
+        ],
+        [
+          -0.21899598361418338,
+          -0.0542350840965249
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:109",
+      "seed": 671000109,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06833449037409323,
+          -0.06833449037409323
+        ],
+        [
+          -0.08208544328447567,
+          -0.21875442403266213
+        ],
+        [
+          -0.09183973451871374,
+          -0.20900013279842405
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:110",
+      "seed": 671000110,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.03778181206013251,
+          -0.03778181206013251
+        ],
+        [
+          -0.10864637221991388,
+          -0.1842099963401789
+        ],
+        [
+          -0.08534666044770445,
+          -0.20750970811238834
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:111",
+      "seed": 671000111,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.003989338021357021,
+          -0.003989338021357021
+        ],
+        [
+          -0.14115452284366675,
+          -0.14913319888638077
+        ],
+        [
+          -0.1650908728439417,
+          -0.12519684888610583
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:112",
+      "seed": 671000112,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.004560421314336442,
+          0.004560421314336442
+        ],
+        [
+          -0.17896524804822514,
+          -0.16984440541955223
+        ],
+        [
+          -0.2305124152272372,
+          -0.11829723824054018
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:113",
+      "seed": 671000113,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04359326214199216,
+          0.04359326214199216
+        ],
+        [
+          -0.21566916351444998,
+          -0.12848263923046566
+        ],
+        [
+          -0.2188228886897146,
+          -0.12532891405520102
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:134",
+      "seed": 671000134,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.05336940528887616,
+          -0.05336940528887616
+        ],
+        [
+          0.10145045466009311,
+          -0.0052883559176592
+        ],
+        [
+          0.062020598040731,
+          0.03414150070170292
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:135",
+      "seed": 671000135,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.01977539881082814,
+          -0.01977539881082814
+        ],
+        [
+          0.0608297420644382,
+          0.021278944442781916
+        ],
+        [
+          0.05194762227265466,
+          0.030161064234565448
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:136",
+      "seed": 671000136,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.02065725729078265,
+          0.02065725729078265
+        ],
+        [
+          0.06539070726672835,
+          0.10670522184829365
+        ],
+        [
+          0.019196300091119292,
+          0.1528996290239027
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:137",
+      "seed": 671000137,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.046412450403855623,
+          0.046412450403855623
+        ],
+        [
+          0.029864620662841665,
+          0.12268952147055291
+        ],
+        [
+          0.014847130632564313,
+          0.13770701150083026
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:150",
+      "seed": 671000150,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.044545621446350034,
+          -0.044545621446350034
+        ],
+        [
+          0.1435325629925066,
+          0.05444132009980655
+        ],
+        [
+          0.1462503282865903,
+          0.05172355480572287
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:151",
+      "seed": 671000151,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.004702869149048125,
+          -0.004702869149048125
+        ],
+        [
+          0.1360911477210815,
+          0.12668540942298523
+        ],
+        [
+          0.11692400797273761,
+          0.14585254917132912
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:152",
+      "seed": 671000152,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -8.29933475663912e-05,
+          8.29933475663912e-05
+        ],
+        [
+          0.12625684022556452,
+          0.1264228269206973
+        ],
+        [
+          0.1599738852952827,
+          0.09270578185097914
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:153",
+      "seed": 671000153,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04113509130077141,
+          0.04113509130077141
+        ],
+        [
+          0.08422614851135668,
+          0.16649633111289952
+        ],
+        [
+          0.06883900132106568,
+          0.18188347830319052
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:166",
+      "seed": 671000166,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06743683534120322,
+          -0.06743683534120322
+        ],
+        [
+          0.23008354376103685,
+          0.09520987307863042
+        ],
+        [
+          0.27056342208639694,
+          0.05472999475327034
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:167",
+      "seed": 671000167,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.028093158632929417,
+          -0.028093158632929417
+        ],
+        [
+          0.17444356863636157,
+          0.11825725137050275
+        ],
+        [
+          0.14105654258181277,
+          0.15164427742505154
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:168",
+      "seed": 671000168,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.024441565452461633,
+          0.024441565452461633
+        ],
+        [
+          0.1381794798882732,
+          0.18706261079319644
+        ],
+        [
+          0.09130645204774068,
+          0.23393563863372896
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:169",
+      "seed": 671000169,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.03553883312107355,
+          0.03553883312107355
+        ],
+        [
+          0.10916812802766895,
+          0.18024579426981607
+        ],
+        [
+          0.12290425514885948,
+          0.16650966714862553
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:base:181",
+      "seed": 671000181,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06795401538912423,
+          -0.06795401538912423
+        ],
+        [
+          0.23540298414665933,
+          0.09949495336841087
+        ],
+        [
+          0.1950268368874416,
+          0.1398711006276286
+        ]
+      ]
+    },
+    {
+      "id": "workspace:train:arm:0",
+      "family": "arm",
+      "seed": 671001000,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.04032735087670697,
+        -0.1196093903644663
+      ]
+    },
+    {
+      "id": "workspace:train:arm:1",
+      "family": "arm",
+      "seed": 671001001,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.08864648762631495,
+        -0.22222880499401182
+      ]
+    },
+    {
+      "id": "workspace:train:arm:2",
+      "family": "arm",
+      "seed": 671001002,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.08552756100133233,
+        0.20175061585543147
+      ]
+    },
+    {
+      "id": "workspace:train:arm:3",
+      "family": "arm",
+      "seed": 671001003,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.04330602875575184,
+        0.18396463136603353
+      ]
+    },
+    {
+      "id": "workspace:train:arm:4",
+      "family": "arm",
+      "seed": 671001004,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.09265025052902245,
+        -0.07310376776045989
+      ]
+    },
+    {
+      "id": "workspace:train:arm:5",
+      "family": "arm",
+      "seed": 671001005,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.08024922813958457,
+        -0.17702946964726504
+      ]
+    },
+    {
+      "id": "workspace:train:arm:6",
+      "family": "arm",
+      "seed": 671001006,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.055598768616983416,
+        0.17522026804913504
+      ]
+    },
+    {
+      "id": "workspace:train:arm:7",
+      "family": "arm",
+      "seed": 671001007,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.04087772514380372,
+        0.16489752906335758
+      ]
+    },
+    {
+      "id": "workspace:train:arm:8",
+      "family": "arm",
+      "seed": 671001008,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.06377934003838145,
+        -0.15090578166604426
+      ]
+    },
+    {
+      "id": "workspace:train:arm:9",
+      "family": "arm",
+      "seed": 671001009,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.09164010252328028,
+        0.12030120242659248
+      ]
+    },
+    {
+      "id": "workspace:train:arm:10",
+      "family": "arm",
+      "seed": 671001010,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.06385222659747744,
+        0.17198372999490824
+      ]
+    },
+    {
+      "id": "workspace:train:arm:11",
+      "family": "arm",
+      "seed": 671001011,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.07369859898290786,
+        -0.21162890543164237
+      ]
+    },
+    {
+      "id": "workspace:train:arm:12",
+      "family": "arm",
+      "seed": 671001012,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.0369554815080011,
+        -0.10620438431375383
+      ]
+    },
+    {
+      "id": "workspace:train:arm:13",
+      "family": "arm",
+      "seed": 671001013,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.04495337712624969,
+        0.2255088411051898
+      ]
+    },
+    {
+      "id": "workspace:train:arm:14",
+      "family": "arm",
+      "seed": 671001014,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.07790908577904936,
+        0.22630481845862171
+      ]
+    },
+    {
+      "id": "workspace:train:arm:15",
+      "family": "arm",
+      "seed": 671001015,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.043908805472983,
+        -0.1990102883310948
+      ]
+    },
+    {
+      "id": "workspace:train:arm:16",
+      "family": "arm",
+      "seed": 671001016,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.03777641055555142,
+        0.155118901777329
+      ]
+    },
+    {
+      "id": "workspace:train:arm:17",
+      "family": "arm",
+      "seed": 671001017,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.03871162931434992,
+        0.2079988178363397
+      ]
+    },
+    {
+      "id": "workspace:train:arm:18",
+      "family": "arm",
+      "seed": 671001018,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.039400055089872016,
+        -0.07094394200825568
+      ]
+    },
+    {
+      "id": "workspace:train:arm:19",
+      "family": "arm",
+      "seed": 671001019,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.0670255455594797,
+        -0.1939343150135806
+      ]
+    },
+    {
+      "id": "workspace:train:arm:20",
+      "family": "arm",
+      "seed": 671001020,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.06356540164891394,
+        0.1335228027449245
+      ]
+    },
+    {
+      "id": "workspace:train:arm:21",
+      "family": "arm",
+      "seed": 671001021,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.05707154954951552,
+        0.14267943163756636
+      ]
+    },
+    {
+      "id": "workspace:train:arm:22",
+      "family": "arm",
+      "seed": 671001022,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.06254619390797894,
+        -0.18170385528859423
+      ]
+    },
+    {
+      "id": "workspace:train:arm:23",
+      "family": "arm",
+      "seed": 671001023,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.03728735423199512,
+        -0.12650237308039824
+      ]
+    },
+    {
+      "id": "workspace:train:arm:24",
+      "family": "arm",
+      "seed": 671001024,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.0861952596194995,
+        0.13365449101512902
+      ]
+    },
+    {
+      "id": "workspace:train:arm:25",
+      "family": "arm",
+      "seed": 671001025,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.09396894838126707,
+        -0.13631200695976056
+      ]
+    },
+    {
+      "id": "workspace:train:arm:26",
+      "family": "arm",
+      "seed": 671001026,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.03698445979765751,
+        -0.1541714166420203
+      ]
+    },
+    {
+      "id": "workspace:train:arm:27",
+      "family": "arm",
+      "seed": 671001027,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.07838657225059448,
+        0.17195379222779467
+      ]
+    },
+    {
+      "id": "workspace:train:arm:28",
+      "family": "arm",
+      "seed": 671001028,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.0943175223709517,
+        0.15924753437133476
+      ]
+    },
+    {
+      "id": "workspace:train:arm:29",
+      "family": "arm",
+      "seed": 671001029,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.06259447862779788,
+        -0.10618881208119671
+      ]
+    },
+    {
+      "id": "workspace:train:arm:30",
+      "family": "arm",
+      "seed": 671001030,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.05353666389264754,
+        -0.18727394505675216
+      ]
+    },
+    {
+      "id": "workspace:train:arm:31",
+      "family": "arm",
+      "seed": 671001031,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.04118105735553977,
+        0.07087928097139552
+      ]
+    },
+    {
+      "id": "workspace:train:arm:32",
+      "family": "arm",
+      "seed": 671001032,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.06659188079838291,
+        -0.1279479415573876
+      ]
+    },
+    {
+      "id": "workspace:train:arm:33",
+      "family": "arm",
+      "seed": 671001033,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.08925108346386904,
+        -0.2200861054658738
+      ]
+    },
+    {
+      "id": "workspace:train:arm:34",
+      "family": "arm",
+      "seed": 671001034,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.09180927984342588,
+        0.22997998473002593
+      ]
+    },
+    {
+      "id": "workspace:train:arm:35",
+      "family": "arm",
+      "seed": 671001035,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.04125543439385202,
+        0.13560753647788482
+      ]
+    },
+    {
+      "id": "workspace:train:arm:36",
+      "family": "arm",
+      "seed": 671001036,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.08983729903117893,
+        -0.17226344220806994
+      ]
+    },
+    {
+      "id": "workspace:train:arm:37",
+      "family": "arm",
+      "seed": 671001037,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.040820843251124485,
+        -0.1977180159491014
+      ]
+    },
+    {
+      "id": "workspace:train:arm:38",
+      "family": "arm",
+      "seed": 671001038,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.05568536757830956,
+        0.1900045279011774
+      ]
+    },
+    {
+      "id": "workspace:train:arm:39",
+      "family": "arm",
+      "seed": 671001039,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.09258660029061977,
+        0.22498651961612906
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:0",
+      "family": "coupled",
+      "seed": 671002000,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.08246518273223466,
+        -0.17975171006484092
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:1",
+      "family": "coupled",
+      "seed": 671002001,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.0661629303551844,
+        -0.15058546261451897
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:2",
+      "family": "coupled",
+      "seed": 671002002,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.04961477128527923,
+        0.10216099669272491
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:3",
+      "family": "coupled",
+      "seed": 671002003,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.03763966499631924,
+        0.09450928891385056
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:4",
+      "family": "coupled",
+      "seed": 671002004,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.06733992429656749,
+        -0.1194890021763869
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:5",
+      "family": "coupled",
+      "seed": 671002005,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.08209031197875181,
+        -0.21892767585308331
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:6",
+      "family": "coupled",
+      "seed": 671002006,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.04863597144236122,
+        0.09736421590703795
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:7",
+      "family": "coupled",
+      "seed": 671002007,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.09066099168964756,
+        0.09033414375562894
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:8",
+      "family": "coupled",
+      "seed": 671002008,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.055066455078230214,
+        -0.16324721562245909
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:9",
+      "family": "coupled",
+      "seed": 671002009,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.06270172089148203,
+        0.16059041233851196
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:10",
+      "family": "coupled",
+      "seed": 671002010,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.08294739309952515,
+        0.09757409800014244
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:11",
+      "family": "coupled",
+      "seed": 671002011,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.05197014202902932,
+        -0.225515596475113
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:12",
+      "family": "coupled",
+      "seed": 671002012,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.06587290730330235,
+        -0.15566266781073243
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:13",
+      "family": "coupled",
+      "seed": 671002013,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.06735754831362985,
+        0.1539529288437942
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:14",
+      "family": "coupled",
+      "seed": 671002014,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.0936085808666218,
+        0.10540103165315956
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:15",
+      "family": "coupled",
+      "seed": 671002015,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.07035597177124091,
+        -0.22625087155027687
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:16",
+      "family": "coupled",
+      "seed": 671002016,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.04859181332635805,
+        0.21329609368040567
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:17",
+      "family": "coupled",
+      "seed": 671002017,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.0944174097600009,
+        0.17422308150369287
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:18",
+      "family": "coupled",
+      "seed": 671002018,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.05814340680631879,
+        -0.09184854013981121
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:19",
+      "family": "coupled",
+      "seed": 671002019,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.038236400025312034,
+        -0.16217426228925738
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:20",
+      "family": "coupled",
+      "seed": 671002020,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.05107130651622299,
+        0.19187070356009905
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:21",
+      "family": "coupled",
+      "seed": 671002021,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.04952492212996929,
+        0.21774338476690147
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:22",
+      "family": "coupled",
+      "seed": 671002022,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.05088917614471671,
+        -0.1741912479366895
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:23",
+      "family": "coupled",
+      "seed": 671002023,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.07255719238917481,
+        -0.08478451699293876
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:24",
+      "family": "coupled",
+      "seed": 671002024,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.0722446163396594,
+        0.2216089091810456
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:25",
+      "family": "coupled",
+      "seed": 671002025,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.0685334542568184,
+        -0.12658380142433276
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:26",
+      "family": "coupled",
+      "seed": 671002026,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.0559548695058152,
+        -0.1228610010738187
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:27",
+      "family": "coupled",
+      "seed": 671002027,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.05338567473292569,
+        0.16712770256261716
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:28",
+      "family": "coupled",
+      "seed": 671002028,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.049902936060771654,
+        0.11312030972471691
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:29",
+      "family": "coupled",
+      "seed": 671002029,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.05039768295465727,
+        -0.12078182264494033
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:30",
+      "family": "coupled",
+      "seed": 671002030,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.08041176882809209,
+        -0.22917184642452518
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:31",
+      "family": "coupled",
+      "seed": 671002031,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.06977695638944054,
+        0.13789637616946449
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:32",
+      "family": "coupled",
+      "seed": 671002032,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.08557428923289898,
+        -0.22790265798945036
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:33",
+      "family": "coupled",
+      "seed": 671002033,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.0861444944949053,
+        -0.20233159539573997
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:34",
+      "family": "coupled",
+      "seed": 671002034,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.09266528229878429,
+        0.11883139946399127
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:35",
+      "family": "coupled",
+      "seed": 671002035,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.07648215153656907,
+        0.18623372960814674
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:36",
+      "family": "coupled",
+      "seed": 671002036,
+      "split": "train",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.07624754130307868,
+        -0.1958821250730559
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:37",
+      "family": "coupled",
+      "seed": 671002037,
+      "split": "train",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.07335070120531434,
+        -0.2253827185233532
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:38",
+      "family": "coupled",
+      "seed": 671002038,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.08497593965765529,
+        0.20699114556560141
+      ]
+    },
+    {
+      "id": "workspace:train:coupled:39",
+      "family": "coupled",
+      "seed": 671002039,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.051337237797981994,
+        0.14210398057955753
+      ]
+    },
+    {
+      "id": "workspace:audit:base:6",
+      "seed": 671010006,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.035489319811110635,
+          -0.035489319811110635
+        ],
+        [
+          0.04509810216308934,
+          -0.02588053745913193
+        ],
+        [
+          0.057401752788264405,
+          -0.03818418808430699
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:7",
+      "seed": 671010007,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0034127639609298796,
+          -0.0034127639609298796
+        ],
+        [
+          0.07575213195803013,
+          0.06892660403617037
+        ],
+        [
+          0.058417222988841,
+          0.0862615130053595
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:8",
+      "seed": 671010008,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.012584955896167682,
+          0.012584955896167682
+        ],
+        [
+          0.02339036730167269,
+          0.048560279094008056
+        ],
+        [
+          0.00700403819870464,
+          0.0649466081969761
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:9",
+      "seed": 671010009,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04096647145013478,
+          0.04096647145013478
+        ],
+        [
+          0.04693973145412833,
+          0.1288726743543979
+        ],
+        [
+          0.011579886261780067,
+          0.16423251954674617
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:10",
+      "seed": 671010010,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.07063074611668789,
+          0.07063074611668789
+        ],
+        [
+          0.01695397540440552,
+          0.1582154676377813
+        ],
+        [
+          0.03094312621711106,
+          0.14422631682507575
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:22",
+      "seed": 671010022,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.05174405726901822,
+          -0.05174405726901822
+        ],
+        [
+          0.15142823246045028,
+          0.04794011792241383
+        ],
+        [
+          0.14351668177205434,
+          0.055851668610809764
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:23",
+      "seed": 671010023,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.008019561546982636,
+          -0.008019561546982636
+        ],
+        [
+          0.12115926635818515,
+          0.10512014326421988
+        ],
+        [
+          0.1546471766790219,
+          0.07163223294338315
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:24",
+      "seed": 671010024,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.017555682132504895,
+          0.017555682132504895
+        ],
+        [
+          0.0921428849533066,
+          0.12725424921831638
+        ],
+        [
+          0.12763785185233031,
+          0.09175928231929267
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:25",
+      "seed": 671010025,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.05616886670931945,
+          0.05616886670931945
+        ],
+        [
+          0.06107282538487602,
+          0.1734105588035149
+        ],
+        [
+          0.02981339665425496,
+          0.20466998753413596
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:26",
+      "seed": 671010026,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.06829301593403517,
+          0.06829301593403517
+        ],
+        [
+          0.03695747306207639,
+          0.17354350493014672
+        ],
+        [
+          0.013448515080048587,
+          0.19705246291217454
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:38",
+      "seed": 671010038,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06482095423431275,
+          -0.06482095423431275
+        ],
+        [
+          0.2225134880003353,
+          0.0928715795317098
+        ],
+        [
+          0.26434821019925936,
+          0.05103685733278572
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:39",
+      "seed": 671010039,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.004561738938930978,
+          -0.004561738938930978
+        ],
+        [
+          0.1537692460104157,
+          0.14464576813255375
+        ],
+        [
+          0.15439388488711275,
+          0.1440211292558567
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:40",
+      "seed": 671010040,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.023719438005907135,
+          0.023719438005907135
+        ],
+        [
+          0.12980815912336824,
+          0.17724703513518253
+        ],
+        [
+          0.12609171029207278,
+          0.180963483966478
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:41",
+      "seed": 671010041,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.0376415007330026,
+          0.0376415007330026
+        ],
+        [
+          0.11075681570714543,
+          0.18603981717315063
+        ],
+        [
+          0.09180746778094326,
+          0.2049891650993528
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:54",
+      "seed": 671010054,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.05130901320383076,
+          -0.05130901320383076
+        ],
+        [
+          0.21630525651404076,
+          0.11368723010637925
+        ],
+        [
+          0.16982225777392781,
+          0.1601702288464922
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:55",
+      "seed": 671010055,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.006118031228284781,
+          -0.006118031228284781
+        ],
+        [
+          0.17386717236847515,
+          0.1616311099119056
+        ],
+        [
+          0.13555894297743618,
+          0.19993933930294458
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:56",
+      "seed": 671010056,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.01836905044363608,
+          0.01836905044363608
+        ],
+        [
+          0.15503623450067522,
+          0.19177433538794736
+        ],
+        [
+          0.20010671706824307,
+          0.1467038528203795
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:64",
+      "seed": 671010064,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.03065806095076984,
+          0.03065806095076984
+        ],
+        [
+          -0.12543028297890968,
+          -0.06411416107736999
+        ],
+        [
+          -0.12533834459536292,
+          -0.06420609946091674
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:65",
+      "seed": 671010065,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.04191697906704233,
+          0.04191697906704233
+        ],
+        [
+          -0.12335368302018121,
+          -0.03951972488609654
+        ],
+        [
+          -0.17172160689106059,
+          0.008848198984782826
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:78",
+      "seed": 671010078,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0494610697723386,
+          -0.0494610697723386
+        ],
+        [
+          -0.012769678478898205,
+          -0.1116918180235754
+        ],
+        [
+          0.03824490763817127,
+          -0.16270640414064488
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:79",
+      "seed": 671010079,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.021236688847239584,
+          -0.021236688847239584
+        ],
+        [
+          -0.04870037127154993,
+          -0.0911737489660291
+        ],
+        [
+          -0.08383353495168609,
+          -0.05604058528589294
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:80",
+      "seed": 671010080,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.005361691281855092,
+          0.005361691281855092
+        ],
+        [
+          -0.13432513322814646,
+          -0.12360175066443627
+        ],
+        [
+          -0.100570605412464,
+          -0.15735627848011874
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:81",
+      "seed": 671010081,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.03738385533310143,
+          0.03738385533310143
+        ],
+        [
+          -0.15348951865330634,
+          -0.07872180798710349
+        ],
+        [
+          -0.17395924354613201,
+          -0.05825208309427781
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:93",
+      "seed": 671010093,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06819157869483602,
+          -0.06819157869483602
+        ],
+        [
+          -0.05271288945260842,
+          -0.18909604684228049
+        ],
+        [
+          -0.07159253741519969,
+          -0.1702163988796892
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:94",
+      "seed": 671010094,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06132274364138477,
+          -0.06132274364138477
+        ],
+        [
+          -0.06108436443395009,
+          -0.18372985171671963
+        ],
+        [
+          -0.01868464070523264,
+          -0.2261295754454371
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:95",
+      "seed": 671010095,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.006461458773828886,
+          -0.006461458773828886
+        ],
+        [
+          -0.11524942511327743,
+          -0.12817234266093522
+        ],
+        [
+          -0.1408012785663106,
+          -0.10262048920790205
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:96",
+      "seed": 671010096,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.01275680475845987,
+          0.01275680475845987
+        ],
+        [
+          -0.14732134197550936,
+          -0.12180773245858963
+        ],
+        [
+          -0.17861821371118786,
+          -0.09051086072291116
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:97",
+      "seed": 671010097,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.056028170301708716,
+          0.056028170301708716
+        ],
+        [
+          -0.2198529522825569,
+          -0.10779661167913947
+        ],
+        [
+          -0.25606583005950995,
+          -0.0715837339021864
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:110",
+      "seed": 671010110,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.06528149956825259,
+          -0.06528149956825259
+        ],
+        [
+          -0.0712344730787013,
+          -0.2017974722152065
+        ],
+        [
+          -0.04452407566278614,
+          -0.22850786963112163
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:111",
+      "seed": 671010111,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.013862599133704925,
+          -0.013862599133704925
+        ],
+        [
+          -0.14819263023081236,
+          -0.17591782849822218
+        ],
+        [
+          -0.1589214368153911,
+          -0.16518902191364346
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:127",
+      "seed": 671010127,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.030194730244803333,
+          -0.030194730244803333
+        ],
+        [
+          -0.1373660164538023,
+          -0.197755476943409
+        ],
+        [
+          -0.11565781418096574,
+          -0.21946367921624557
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:134",
+      "seed": 671010134,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.060458741863117615,
+          -0.060458741863117615
+        ],
+        [
+          0.12107342427217932,
+          0.00015594054594408185
+        ],
+        [
+          0.14440555101235736,
+          -0.023176186194233957
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:135",
+      "seed": 671010135,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.007196277676473103,
+          -0.007196277676473103
+        ],
+        [
+          0.06445062812911809,
+          0.050058072776171886
+        ],
+        [
+          0.11224394299200181,
+          0.0022647579132881596
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:136",
+      "seed": 671010136,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.01105657850021576,
+          0.01105657850021576
+        ],
+        [
+          0.08038387763516397,
+          0.10249703463559548
+        ],
+        [
+          0.0636385046507328,
+          0.11924240762002665
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:137",
+      "seed": 671010137,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.040640677016699295,
+          0.040640677016699295
+        ],
+        [
+          0.04420491242059063,
+          0.12548626645398922
+        ],
+        [
+          0.02006520198939976,
+          0.1496259768851801
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:150",
+      "seed": 671010150,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.04464848549396737,
+          -0.04464848549396737
+        ],
+        [
+          0.14786651497244357,
+          0.05856954398450882
+        ],
+        [
+          0.1436750230235142,
+          0.06276103593343818
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:151",
+      "seed": 671010151,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.006697471739200125,
+          -0.006697471739200125
+        ],
+        [
+          0.13707503488969716,
+          0.1236800914112969
+        ],
+        [
+          0.182604405597102,
+          0.07815072070389205
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:152",
+      "seed": 671010152,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.01829505158523544,
+          0.01829505158523544
+        ],
+        [
+          0.10341176174152744,
+          0.1400018649119983
+        ],
+        [
+          0.06719662376441415,
+          0.1762170028891116
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:153",
+      "seed": 671010153,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.06452709785408277,
+          0.06452709785408277
+        ],
+        [
+          0.04205951362469669,
+          0.17111370933286224
+        ],
+        [
+          0.05028082418420016,
+          0.16289239877335876
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:154",
+      "seed": 671010154,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.07360076157015638,
+          0.07360076157015638
+        ],
+        [
+          0.05349448149434749,
+          0.20069600463466025
+        ],
+        [
+          0.10131754515873789,
+          0.15287294097026985
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:166",
+      "seed": 671010166,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.050359780084186,
+          -0.050359780084186
+        ],
+        [
+          0.19531744918243615,
+          0.09459788901406417
+        ],
+        [
+          0.18176852706958063,
+          0.1081468111269197
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:167",
+      "seed": 671010167,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.004080381128878793,
+          -0.004080381128878793
+        ],
+        [
+          0.14523306002524894,
+          0.13707229776749136
+        ],
+        [
+          0.0961649551565357,
+          0.1861404026362046
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:168",
+      "seed": 671010168,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.00788703780004166,
+          0.00788703780004166
+        ],
+        [
+          0.1333970136486095,
+          0.14917108924869282
+        ],
+        [
+          0.13609393525457159,
+          0.14647416764273075
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:169",
+      "seed": 671010169,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.03829755987938099,
+          0.03829755987938099
+        ],
+        [
+          0.12427027662647369,
+          0.20086539638523568
+        ],
+        [
+          0.13418080793162784,
+          0.19095486508008153
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:base:184",
+      "seed": 671010184,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.1,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "fixture_seed": 35900020,
+      "family": "base",
+      "wheel_travel_waypoints_m": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          -0.0014855280183880956,
+          0.0014855280183880956
+        ],
+        [
+          0.17065344343870126,
+          0.17362449947547742
+        ],
+        [
+          0.21416431681949957,
+          0.1301136260946791
+        ]
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:0",
+      "family": "arm",
+      "seed": 671011000,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.04769608864040256,
+        -0.07895829693284581
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:1",
+      "family": "arm",
+      "seed": 671011001,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.07075832119113154,
+        -0.148813073317956
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:2",
+      "family": "arm",
+      "seed": 671011002,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.09203147002116455,
+        0.20384317620857276
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:3",
+      "family": "arm",
+      "seed": 671011003,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.047547584948113536,
+        0.08271278103917884
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:4",
+      "family": "arm",
+      "seed": 671011004,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.0693864284111631,
+        -0.13178680042801127
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:5",
+      "family": "arm",
+      "seed": 671011005,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.03574917076055077,
+        -0.17176242361199
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:6",
+      "family": "arm",
+      "seed": 671011006,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.07888820936882246,
+        0.12979536207260445
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:7",
+      "family": "arm",
+      "seed": 671011007,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.038358418714095184,
+        0.15606511079650132
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:8",
+      "family": "arm",
+      "seed": 671011008,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.058471094779630826,
+        -0.11839023095994211
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:9",
+      "family": "arm",
+      "seed": 671011009,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.07217086704450149,
+        0.09593905867966586
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:10",
+      "family": "arm",
+      "seed": 671011010,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.0612429953366781,
+        0.11809107851206259
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:11",
+      "family": "arm",
+      "seed": 671011011,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.09026476149793122,
+        -0.16138666907024807
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:12",
+      "family": "arm",
+      "seed": 671011012,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.048009441794874444,
+        -0.12936868665475962
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:13",
+      "family": "arm",
+      "seed": 671011013,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.06805366631642978,
+        0.09621271849457103
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:14",
+      "family": "arm",
+      "seed": 671011014,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.09343207397352983,
+        0.08600212636017393
+      ]
+    },
+    {
+      "id": "workspace:audit:arm:15",
+      "family": "arm",
+      "seed": 671011015,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.06969475761954119,
+        -0.09891417580926519
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:0",
+      "family": "coupled",
+      "seed": 671012000,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.06541942782899222,
+        -0.10964701174832614
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:1",
+      "family": "coupled",
+      "seed": 671012001,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.057314499656322945,
+        -0.18566736714071735
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:2",
+      "family": "coupled",
+      "seed": 671012002,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.07084156331945543,
+        0.11320186351375691
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:3",
+      "family": "coupled",
+      "seed": 671012003,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.0741006697000017,
+        0.0925024824735742
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:4",
+      "family": "coupled",
+      "seed": 671012004,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.06255944189280002,
+        -0.21494622272412453
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:5",
+      "family": "coupled",
+      "seed": 671012005,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.04752797506374297,
+        -0.12765914734384814
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:6",
+      "family": "coupled",
+      "seed": 671012006,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.07813581300864222,
+        0.22069425556780325
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:7",
+      "family": "coupled",
+      "seed": 671012007,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.03824616250983692,
+        0.21536623913274625
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:8",
+      "family": "coupled",
+      "seed": 671012008,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        -1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.07648312804215528,
+        -0.18695372052196343
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:9",
+      "family": "coupled",
+      "seed": 671012009,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        -1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        -0.08217191505449759,
+        0.2119517602385143
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:10",
+      "family": "coupled",
+      "seed": 671012010,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        -1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        -0.07912980812818196,
+        0.08479548042847472
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:11",
+      "family": "coupled",
+      "seed": 671012011,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        -1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        -0.07218398354353008,
+        -0.08915883330643368
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:12",
+      "family": "coupled",
+      "seed": 671012012,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready",
+      "goal_signs": [
+        1,
+        1,
+        -1
+      ],
+      "base_endpoint": [
+        0.09025535080780833,
+        -0.19705745597216762
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:13",
+      "family": "coupled",
+      "seed": 671012013,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised",
+      "goal_signs": [
+        1,
+        -1,
+        1
+      ],
+      "base_endpoint": [
+        0.08388312556201427,
+        0.11530688180465344
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:14",
+      "family": "coupled",
+      "seed": 671012014,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach",
+      "goal_signs": [
+        1,
+        1,
+        1
+      ],
+      "base_endpoint": [
+        0.04523337882157989,
+        0.1872412049735263
+      ]
+    },
+    {
+      "id": "workspace:audit:coupled:15",
+      "family": "coupled",
+      "seed": 671012015,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right",
+      "goal_signs": [
+        1,
+        -1,
+        -1
+      ],
+      "base_endpoint": [
+        0.050466398458083137,
+        -0.16841077707532118
+      ]
+    }
+  ]
+}

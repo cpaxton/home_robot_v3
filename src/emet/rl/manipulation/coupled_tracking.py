@@ -476,6 +476,9 @@ class CoupledTrackingEnv(gym.Wrapper):
             "critic": privileged_state(e, e.steps * e.profile.dt, e.config.horizon)
         }
 
+    def make_reference(self, control, case):
+        return CoupledReference(control, case, timing=self.timing)
+
     def reset(self, *, seed=None, options=None):
         from emet.rl.manipulation.whole_body_reward import RewardMeter
 
@@ -494,7 +497,7 @@ class CoupledTrackingEnv(gym.Wrapper):
         raw, info = e.reset(seed=case["seed"])
         if info.get("initialization_failed"):
             raise ValueError("coupled_initialization_failed")
-        reference = CoupledReference(e.control, case, timing=self.timing)
+        reference = self.make_reference(e.control, case)
         self.admission = admit_reference(e, reference)
         if not self.admission["accepted"]:
             raise ValueError("coupled_reference_rejected:" + str(self.admission["reason"]))
@@ -564,7 +567,7 @@ class CoupledTrackingEnv(gym.Wrapper):
         if self.retarget_at is not None and not self.retargeted and e.control.trajectory_elapsed() >= self.retarget_at:
             updated = {**self.case, "travel_m": self.case["retarget"]["travel_m"]}
             updated.pop("retarget")
-            reference = CoupledReference(e.control, updated, timing=self.timing)
+            reference = self.make_reference(e.control, updated)
             admission = admit_reference(e, reference)
             if not admission["accepted"]:
                 e.control.stop()
