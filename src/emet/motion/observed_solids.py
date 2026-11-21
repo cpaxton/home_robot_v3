@@ -9,7 +9,7 @@ inferred merely because MuJoCo exposes an enclosing collision AABB.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import cached_property, lru_cache
 
 import mujoco
 import numpy as np
@@ -20,9 +20,11 @@ from emet.motion.placement_geometry import box_corners
 
 
 @lru_cache(maxsize=512)
-def _convex_planes(shape, vertex_bytes):
+def _validated_convex_geometry(shape, vertex_bytes):
     vertices = np.frombuffer(vertex_bytes, dtype=float).reshape(shape)
-    return immutable(ConvexHull(vertices).equations)
+    if not np.isfinite(vertices).all() or np.linalg.matrix_rank(vertices - vertices.mean(0)) < 3:
+        raise ValueError('convex_material_calibration_required')
+    return vertices, immutable(ConvexHull(vertices).equations)
 
 
 @dataclass(frozen=True)
@@ -47,11 +49,11 @@ class WorldSolid:
         if self.kind == 'convex':
             vertices = np.asarray(self.vertices, float)
             if (not self.material_calibration_id or dimensions or vertices.ndim != 2
-                    or vertices.shape[1:] != (3,) or len(vertices) < 4 or not np.isfinite(vertices).all()
-                    or np.linalg.matrix_rank(vertices - vertices.mean(0)) < 3):
+                    or vertices.shape[1:] != (3,) or len(vertices) < 4):
                 raise ValueError('convex_material_calibration_required')
-            object.__setattr__(self, 'vertices', immutable(vertices))
-            object.__setattr__(self, '_planes', _convex_planes(vertices.shape, vertices.tobytes()))
+            vertices, planes = _validated_convex_geometry(vertices.shape, vertices.tobytes())
+            object.__setattr__(self, 'vertices', vertices)
+            object.__setattr__(self, '_planes', planes)
         elif self.kind == 'capsule':
             if len(dimensions) != 2 or not np.isfinite(dimensions).all() or min(dimensions) <= 0:
                 raise ValueError('invalid_observed_solid')
@@ -98,7 +100,7 @@ class WorldSolid:
             distance = PrimitiveModel(self.kind, self.dimensions).distance(local)
         return distance - self.offset_m
 
-    @property
+    @cached_property
     def bounds(self):
         if self.kind == 'convex':
             vertices = self.vertices @ self.world_from_local[:3, :3].T + self.world_from_local[:3, 3]
@@ -111,7 +113,7 @@ class WorldSolid:
             bounds = PrimitiveModel(self.kind, self.dimensions).world_bounds(
                 self.world_from_local[:3, :3], self.world_from_local[:3, 3])
         # Negative offsets need no tight bound; keeping the original is safe.
-        return bounds + np.array([[-1.], [1.]])*max(0., self.offset_m)
+        return immutable(bounds + np.array([[-1.], [1.]])*max(0., self.offset_m))
 
     def disjoint_box(self, bounds):
         lo, hi = bounds

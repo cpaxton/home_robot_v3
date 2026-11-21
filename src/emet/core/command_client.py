@@ -131,12 +131,17 @@ def cancel_navigation(client, action=None):
     )
 
 
-def wait_navigation(client, action, timeout):
+def wait_navigation(client, action, timeout, *, cancel_requested=None):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         receipt = command_receipt(client, action)
         if receipt and receipt["status"] in TERMINAL:
             return receipt["status"] == "succeeded"
+        if cancel_requested is not None and cancel_requested():
+            if not cancel_navigation(client, action):
+                raise RuntimeError("Operator requested a stop but navigation stop was not confirmed")
+            receipt = command_receipt(client, action)
+            return bool(receipt and receipt["status"] == "succeeded")
         time.sleep(0.05)
     cancel_navigation(client, action)
     receipt = command_receipt(client, action)

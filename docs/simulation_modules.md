@@ -162,8 +162,8 @@ channel changes. The Stretch full observation and `Observations` carry it withou
 retiming. Reprojection is validated before diagnostic use; ownership is not inferred.
 
 `stretch_mujoco/mujoco_server_camera_manager.py` and
-`stretch_mujoco/datamodels/status_stretch_camera.py` preserve each renderer's
-acquisition interval while holding the shared physics/render lock. RGB metadata
+`stretch_mujoco/datamodels/status_stretch_camera.py` preserve per-camera acquisition
+intervals in asynchronous mode, with capture under the shared physics/render lock. RGB metadata
 also identifies its separate depth interval; publication does not renew either.
 The local clock identity permits explicit same-host simulation mapping through
 `controller/manipulation/capture_clock.py`, not a hardware synchronization claim.
@@ -171,8 +171,10 @@ The local clock identity permits explicit same-host simulation mapping through
 self-occlusion controls documented in [environment variables](environment_variables.md).
 See [live source assembly evidence](experiments/observed_source_assembly_20261027.md).
 
-With `EMET_SIM_SYNCHRONIZED_RGBD=1`, `synchronized_capture.py` copies the physics
-state under that lock and renders a private sample while physics continues.
+Headless Stretch defaults to `EMET_SIM_SYNCHRONIZED_RGBD=1`.
+`synchronized_capture.py` copies the physics state under that lock and renders a
+private sample while physics continues. The same flag can opt the interactive
+viewer in. Set `EMET_SIM_SYNCHRONIZED_RGBD=0` to use asynchronous rendering.
 Camera poses and eight Stretch motor readings describe the same original sample.
 A separate full-robot configuration channel is explicitly privileged kinematic
 debug truth, including unmeasured passive joints; observed effects reject it.

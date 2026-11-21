@@ -86,6 +86,16 @@ def sweep_clear(model, measured, start, goal, *, deadline=None, envelope=True, e
     count = max(1, int(np.ceil(np.linalg.norm(goal[:2] - start[:2]) / LINEAR_STEP_M)))
     turn = np.arctan2(np.sin(goal[2]-start[2]), np.cos(goal[2]-start[2]))
     count = max(count, int(np.ceil(abs(turn) / ANGULAR_STEP_RAD)))
+    if envelope and turn == 0 and np.any(start[:2] != goal[:2]):
+        # A guard may prove a subset of its map checks over this whole straight
+        # segment. Native contacts and sample order still run at every pose.
+        checks = []
+        for check in checker.additional_scene_checks:
+            batch = getattr(getattr(check, '__self__', None), 'for_straight_base_sweep', None)
+            checks.append(check if batch is None else batch(
+                model, scratch, start, goal, xy_error=XY_ENVELOPE_M, yaw_error=YAW_ENVELOPE_RAD
+            ))
+        checker.additional_scene_checks = tuple(checks)
     for t in np.linspace(0, 1, count+1):
         pose = start + t * (goal-start)
         pose[2] = start[2] + t * turn

@@ -42,6 +42,8 @@ class StatusStretchCameras:
     capture_intervals_ns: dict[str, tuple[int, int]] | None = None
     synchronized_robot_sample: dict | None = None
     synchronized_motor_sample: dict | None = None
+    synchronized_wheel_sample: dict | None = None
+    fixed_rgbd_sample: dict | None = None
     synchronized_camera_poses: dict | None = None
     head_depth_registration: dict | None = None
 
@@ -74,6 +76,11 @@ class StatusStretchCameras:
                 and list(interval) == motor['interval_ns'] == list(depth_interval)):
             result['source'] = 'renderer_synchronized_snapshot'
             result['motor_sample'] = copy.deepcopy(motor)
+        wheels = self.synchronized_wheel_sample
+        if (wheels is not None and interval is not None and depth_interval is not None
+                and list(interval) == wheels['interval_ns'] == list(depth_interval)):
+            result['source'] = 'renderer_synchronized_snapshot'
+            result['wheel_sample'] = copy.deepcopy(wheels)
         return result
 
     def captured_camera_pose(self, camera: StretchCameras):

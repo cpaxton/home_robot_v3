@@ -4,7 +4,7 @@
 
 import pytest
 
-from emet.core.navigation_result import ArrivalMonitor
+from emet.core.navigation_result import ArrivalMonitor, NavigationPoseUncertainty
 
 
 def monitor():
@@ -37,6 +37,24 @@ def test_moving_inside_tolerance_is_not_success():
     assert update(m, 0) is None
     assert update(m, 0.3, (0.01, 0, 0)) is None
     assert update(m, 0.6, (0.019, 0, 0)) is None
+
+
+@pytest.mark.parametrize("pose", [(0.065, 0., 0.), (.01, 0., .14)])
+def test_arrival_cannot_claim_the_tolerance_reserved_for_pose_uncertainty(pose):
+    context = {"resolved_goal": [0, 0, 0], "arrival_pose_uncertainty": {"xy_m": .04, "yaw_rad": .025}}
+    m = ArrivalMonitor(context, "exploration", now=0)
+    assert update(m, 0, pose) is None
+    assert update(m, .3, pose) is None
+    status, result = update(m, .6, pose)
+    assert status == "correct"
+    assert result["xy_error_upper_bound"] == pytest.approx(result["xy_error"] + .04)
+    assert result["yaw_error_upper_bound"] == pytest.approx(result["yaw_error"] + .025)
+
+    for stamp in [.7, 1.0]:
+        assert update(m, stamp, (.025, 0., .01)) is None
+    assert update(m, 1.3, (.025, 0., .01))[0] == "succeeded"
+    with pytest.raises(ValueError, match="exceeds arrival budget"):
+        NavigationPoseUncertainty(.04, .025).usable_tolerances(.02, .03)
 
 
 @pytest.mark.parametrize("pose", [(float("nan"), 0, 0), (0,), None])

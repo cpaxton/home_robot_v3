@@ -17,10 +17,32 @@ import mujoco
 import numpy as np
 
 from emet.controller.manipulation.capture_clock import local_monotonic_clock_id
-from emet.controller.manipulation.encoder_capture import STRETCH_CAPTURE_MOTORS
+from emet.controller.manipulation.encoder_capture import STRETCH_CAPTURE_MOTORS, STRETCH_WHEEL_JOINTS
 from emet.motion.mujoco_collision import body_subtree
 
 JOINT_WIDTH = {0: 7, 1: 4, 2: 1, 3: 1}
+
+
+def capture_stretch_wheels(model, probe, sample):
+    """Publish two hinge encoder equivalents from the same renderer snapshot."""
+    joints = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in STRETCH_WHEEL_JOINTS]
+    if any(jid < 0 for jid in joints):
+        return None
+    robot_ids = body_subtree(model, "base_link")
+    if any(model.jnt_type[jid] != mujoco.mjtJoint.mjJNT_HINGE
+           or int(model.jnt_bodyid[jid]) not in robot_ids for jid in joints):
+        return None
+    return {
+        "schema_version": 1,
+        "source": "simulator_stretch_wheel_encoders",
+        "clock_id": sample["clock_id"],
+        "interval_ns": list(sample["interval_ns"]),
+        "units": "radian",
+        "positions": {
+            name: float(probe.qpos[model.jnt_qposadr[jid]])
+            for name, jid in zip(STRETCH_WHEEL_JOINTS, joints, strict=True)
+        },
+    }
 
 
 def capture_stretch_motors(model, probe, sample):

@@ -1,11 +1,15 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 import torch
 
+from emet.mapping.voxel import voxel_dynamem
 from emet.mapping.voxel.floor_evidence import floor_evidence
+from emet.mapping.voxel.launch_floor_survey import register_launch_floor_survey
 from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
 
 
@@ -70,6 +74,58 @@ def test_calibrated_reference_can_be_above_world_zero():
 def test_hazard_wins_over_an_old_floor_return():
     layers = evidence([[0, 0, 0], [0, 0, -0.2]])
     assert layers.drops[4, 4] and not layers.observed[4, 4]
+
+
+def test_measured_floor_keeps_valid_depth_before_voxel_pooling(tmp_path):
+    vm = SparseVoxelMap(
+        grid_size=[40, 40], grid_resolution=.1, smooth_kernel_size=0, point_update_threshold=.999,
+        log=str(tmp_path), device="cpu", image_shape=None, add_local_radius_points=False,
+        parameters={"floor_evidence": {"enabled": True, "reference_z_m": 0.}},
+    )
+    pose = np.diag([1., -1., -1., 1.])
+    pose[2, 3] = 1.
+    intrinsics = np.array([[10., 0., 4.], [0., 10., 4.], [0., 0., 1.]])
+    vm.process_rgbd_images(
+        np.zeros((8, 8, 3), dtype=np.uint8), np.ones((8, 8), dtype=np.float32),
+        intrinsics, pose, full_perception=False,
+    )
+    assert vm.get_navigation_map()[1].sum() == 64
+
+
+def test_launch_survey_requires_alignment_and_expires_from_the_cached_map(tmp_path, monkeypatch):
+    vm = SparseVoxelMap(
+        grid_size=[40, 40], grid_resolution=.1, smooth_kernel_size=0,
+        log=str(tmp_path), device="cpu", image_shape=None, use_instance_memory=False,
+        parameters={"floor_evidence": {"enabled": True, "reference_z_m": 0.}},
+    )
+    now = 30.
+    monkeypatch.setattr(voxel_dynamem, "time", SimpleNamespace(monotonic=lambda: now))
+    anchors = np.array([[0., 0., 0.], [.3, 0., 0.], [0., .25, 0.], [.3, .25, 0.]])
+    rotation = np.array([[0., 1.], [-1., 0.]])
+    offset = np.array([.1, -.1])
+    target = np.column_stack((anchors[:, :2] @ rotation + offset, anchors[:, 2]))
+    points = np.array([[0., 0., 0.], [.1, 0., 0.], [.1, 0., -.2], [2., 2., 0.]])
+    options = {
+        "observation_scope_id": vm.observation_scope_id, "survey_captured_at": 25.,
+        "anchors_captured_at": 29., "now": now, "start_xy": [0., 0.],
+        "radius_m": .5, "max_age_s": 10., "max_anchor_error_m": .015,
+    }
+    assert not vm.get_navigation_map()[1].any()
+    misaligned = target.copy()
+    misaligned[0, 2] += .1
+    with pytest.raises(ValueError, match="anchor_misaligned"):
+        register_launch_floor_survey(points, anchors, misaligned, **options)
+    assert not vm.get_navigation_map()[1].any()
+    survey = register_launch_floor_survey(points, anchors, target, **options)
+    np.testing.assert_allclose(survey.points[:, :2], points[:3, :2] @ rotation + offset, atol=1e-12)
+    vm.install_launch_floor_survey(survey)
+    blocked, observed = vm.get_navigation_map()
+    assert observed.sum() == 1
+    assert blocked.sum() == 1
+    now = 35.
+    assert not vm.get_navigation_map()[1].any()
+    with pytest.raises(ValueError, match="stale_or_wrong_scope"):
+        vm.install_launch_floor_survey(survey)
 
 
 @pytest.mark.parametrize("options", [{"reference_z_m": float("nan")}, {"tolerance_m": 0.1, "hazard_height_m": 0.05}])

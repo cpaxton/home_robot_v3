@@ -286,6 +286,31 @@ def test_failed_placement_resumes_grasp_search(native, monkeypatch):
     assert len(resumed) == 2
 
 
+@pytest.mark.parametrize('place_error', [None, 'collision'])
+def test_transport_certification_waits_for_placement(native, monkeypatch, place_error):
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    certify = Mock(return_value='transport_collision')
+
+    def grasp(executor, before, point, frames, pinch_offset, obj, **kwargs):
+        executor.collision.set_payload(adapter.model, adapter.data, obj, executor.ee_body)
+        yield np.eye(3), [[], [], []]
+
+    monkeypatch.setattr(adapter, '_grasp_options', grasp)
+    monkeypatch.setattr(surfaces_module, 'free_surface_centers',
+                        lambda *a, **k: SimpleNamespace(centers=[np.array([.15, -.6, .54])]))
+    monkeypatch.setattr(adapter, '_certify_transport', certify)
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.placement_paths',
+                        lambda *_: (None, place_error) if place_error else ([[], [], []], None))
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table',
+                  placement_region=[[.06, -.73], [.22, -.57]])
+    assert result['status'] == 'error'
+    assert not adapter.plans
+    assert certify.call_count == (1 if place_error is None else 0)
+    robot.arm_to.assert_not_called()
+    robot.close_gripper.assert_not_called()
+
+
 def test_unknown_native_task_requests_rediscovery(native):
     robot, _, _, call = native
     result = call('plan_pick_place', task_ref='invented_task')

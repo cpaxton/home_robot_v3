@@ -24,14 +24,19 @@ from emet.simulation.depth_registration import rendered_camera_intrinsics
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.utils import FpsCounter, switch_to_glfw_renderer
-from emet.simulation.synchronized_capture import capture_scene_for_sensors, capture_stretch_motors
+from emet.simulation.synchronized_capture import (
+    capture_scene_for_sensors,
+    capture_stretch_motors,
+    capture_stretch_wheels,
+)
 
 if TYPE_CHECKING:
     from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
 
 
-def synchronized_rgbd_enabled():
-    return os.environ.get('EMET_SIM_SYNCHRONIZED_RGBD', '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+def synchronized_rgbd_enabled(*, default: bool = False) -> bool:
+    value = os.environ.get('EMET_SIM_SYNCHRONIZED_RGBD')
+    return default if value is None else value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def robot_body_geom_groups(model: mujoco.MjModel, base_body_name: str = "base_link") -> set[int]:
@@ -86,15 +91,33 @@ class MujocoServerCameraManagerSync:
     Call `pull_camera_data_at_camera_rate()` from the UI thread and the cameras will be rendered at the specified `camera_hz`.
     """
 
-    def __init__(self, camera_hz: float, cameras_to_use: list[StretchCameras], mujoco_server: "MujocoServer") -> None:
+    _synchronized_rgbd_default = False
+
+    def __init__(
+        self,
+        camera_hz: float,
+        cameras_to_use: list[StretchCameras],
+        mujoco_server: "MujocoServer",
+        *,
+        synchronized_rgbd_default: bool = False,
+    ) -> None:
 
         self.mujoco_server = mujoco_server
 
         self.camera_rate = 1 / camera_hz  # Hz to seconds
 
         self.camera_renderers: dict[StretchCameras, mujoco.Renderer] = {}
+        self._synchronized_rgbd_default = synchronized_rgbd_default
 
         self._set_camera_properties_and_create_renderers_in_mujoco(cameras_to_use)
+        self._fixed_camera = os.environ.get("EMET_SIM_FIXED_RGBD_CAMERA")
+        self._fixed_renderer = None
+        if self._fixed_camera and cameras_to_use:
+            model = self.mujoco_server.mjmodel
+            camera = model.camera(self._fixed_camera)
+            if int(model.cam_bodyid[camera.id]) != 0 or camera.mode[0] != mujoco.mjtCamLight.mjCAMLIGHT_FIXED:
+                raise ValueError("the independent RGB-D camera must be fixed to the world")
+            self._fixed_renderer = mujoco.Renderer(model, height=240, width=320)
 
         self.camera_fps_counter = FpsCounter()
 
@@ -102,12 +125,18 @@ class MujocoServerCameraManagerSync:
 
         self.camera_lock = threading.Lock()
 
+    @property
+    def synchronized_rgbd(self) -> bool:
+        return bool(self.camera_renderers) and synchronized_rgbd_enabled(default=self._synchronized_rgbd_default)
+
     def close(self):
         """
         Clean up renderer resources
         """
         for renderer in self.camera_renderers.values():
             renderer.close()
+        if self._fixed_renderer is not None:
+            self._fixed_renderer.close()
 
     def is_ready_to_pull_camera_data(self, is_sleep_until_ready: bool = False):
         """
@@ -141,7 +170,7 @@ class MujocoServerCameraManagerSync:
         """
         Render a scene at each camera using the simulator and populate the imagery dictionary with the raw image pixels and camera params.
         """
-        if synchronized_rgbd_enabled():
+        if self.synchronized_rgbd:
             self._pull_synchronized_camera_data()
             return
         new_imagery = StatusStretchCameras.default()
@@ -181,6 +210,17 @@ class MujocoServerCameraManagerSync:
         imagery.synchronized_robot_sample = packet
         imagery.synchronized_camera_poses = packet['camera_poses']
         imagery.synchronized_motor_sample = capture_stretch_motors(self.mujoco_server.mjmodel, probe, packet)
+        imagery.synchronized_wheel_sample = capture_stretch_wheels(self.mujoco_server.mjmodel, probe, packet)
+        if self._fixed_renderer is not None:
+            renderer = self._fixed_renderer
+            renderer.disable_depth_rendering()
+            renderer.update_scene(data=probe, camera=self._fixed_camera)
+            rgb = renderer.render()
+            renderer.enable_depth_rendering()
+            imagery.fixed_rgbd_sample = {
+                "rgb": rgb, "depth": renderer.render(),
+                "clock_id": packet["clock_id"], "interval_ns": list(packet["interval_ns"]),
+            }
         self.mujoco_server.data_proxies.set_cameras(imagery)
 
     def _register_head_depth(self, imagery):
@@ -374,6 +414,8 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         camera_hz: float,
         cameras_to_use: list[StretchCameras],
         mujoco_server: "MujocoServer",
+        *,
+        synchronized_rgbd_default: bool = False,
     ):
         """
         `use_threadpool_executor` will use a ThreadPoolExecutor to render all cameras. Setting to false will render each one synchronously.
@@ -381,7 +423,9 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         `use_camera_thread` can be set to false to use the ThreadPoolExecutor without the camera thread. `pull_camera_data_at_camera_rate()` must be called on the UI thread if this mode is used.
         """
 
-        super().__init__(camera_hz, cameras_to_use, mujoco_server)
+        super().__init__(
+            camera_hz, cameras_to_use, mujoco_server, synchronized_rgbd_default=synchronized_rgbd_default
+        )
 
         self.use_camera_thread = use_camera_thread
         self.use_threadpool_executor = use_threadpool_executor
@@ -444,7 +488,7 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         """
         Uses a ThreadPoolExecutor to render a scene at each camera using the simulator and populate the imagery dictionary with the raw image pixels and camera params.
         """
-        if synchronized_rgbd_enabled():
+        if self.synchronized_rgbd:
             self.cameras_rendering_thread_pool.submit(self._pull_synchronized_camera_data).result()
             return
         new_imagery = StatusStretchCameras.default()

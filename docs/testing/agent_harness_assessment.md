@@ -39,21 +39,109 @@ historical images labeled and scorer-only object state upstream of scoring only.
 
 ## Discord in simulation
 
-Use the Stretch Discord preset with an explicit loopback connection and
-dedicated nondefault ZMQ ports. Launch the default-table simulator with a
-fresh seed-0 reset, use the production `emet run agent` in interactive mode,
-and check the bridge's simulator identity before handing off to the operator.
-Use a dedicated test bot installed only in a private test server with the
-expected channel. Confirm guild membership and the exact `EMET_DISCORD_CHANNEL`
-before launch. The current bot can fall back to the first channel of a guild
-when the requested channel is missing. Keep tokens outside the artifacts.
+Use a dedicated test bot installed only in the private test server. Set
+`EMET_DISCORD_CHANNEL_ID` to the operator-confirmed text-channel ID and keep
+`DISCORD_TOKEN` outside the artifacts. Run `model-discord` with the surveyed
+Stretch runner, model endpoint and dedicated ports described below. It uses
+the production interactive CHAT loop and the read-only tool scope. Check
+the startup log for the simulator identity and matching channel ID before
+the operator takes a turn. Exact channel mode suppresses fallback and ignores
+mentions from other channels. Ctrl-C ends the session and releases the simulator.
 
-Start with a scene description, a photo/map, a visible-object query, and a
-follow-up. Then exercise bounded requests and cancellation within the
-simulator. Save the operator transcript, actual tool calls, image delivery,
+Start with a scene description, a photo, a visible-object query, and a
+follow-up. Qualify bounded requests and cancellation in a subsequent session.
+Save the operator transcript, actual tool calls, image delivery,
 measured motion, refusals, and turn latency. Mark any message sent while a
 tool is running as queued or handled according to the timestamped trace.
 Treat the session as a supervised usability check.
+
+For the bounded session, use `model-discord-drive` with the same private
+channel and model settings. `look around` requests measured left and right
+head views. `explore` or `drive 0.45 m` authorizes one guarded straight
+waypoint. An exact `stop` message bypasses the model queue and disables
+further drive for that session. Confirm `cancelled` and `stop_confirmed`
+on the original navigation receipt. Run `operator-stop` locally without
+Discord for the matched scripted stop control. It requests cancellation
+after the encoders measure more than 7 cm of travel. Use the independent
+chassis trace to check travel after stop.
+
+Use `model-discord-full` for the general operator session, with a Stretch
+scene that has collision geometry and movable objects. It uses the production
+CHAT registry with its normal capability checks, DynaMem, instance perception
+and visual servoing. The surveyed simulator supplies synchronized RGB-D and
+encoder measurements. `show me your map` exercises `send_map_snapshot` using
+the observed voxel map. Check the delivered PNG separately from the tool's
+queued-upload receipt.
+
+## Reproduce the surveyed Stretch navigation controls
+
+```sh
+CUDA_VISIBLE_DEVICES="" MUJOCO_GL=egl EGL_PLATFORM=surfaceless LIBGL_ALWAYS_SOFTWARE=1 \
+  PYTHONPATH=src python scripts/eval_stretch_navigation_chat.py \
+  --case clear --output /tmp/emet-stretch-clear --port-offset 2040
+```
+
+Run `clear`, `occupied`, `occupied-recovery`, `turn` and `stale`
+sequentially with a fresh directory for each case. The runner builds the
+authored fixture from hydrated Stretch assets, captures the launch survey,
+and drives production CHAT with local scripted HTTP replies. Its measured
+floor profile allows one targeted head view after an unknown-footprint
+refusal, followed by the same route check. The scorer saves
+`audit.json` beside the exact model requests, survey frames, command
+receipts and held-out measurements. A zero process exit requires scoring
+to pass. Review the source SHA and dirty-worktree flag before aggregating
+results.
+
+Run `witness-clear`, `slip` and `witness-loss` for the instrumented
+live waypoint gate. These cases add a fixed RGB-D camera that observes
+physical chassis markers in the simulator image. The runner checks paired
+wheel and camera measurements from the same snapshot. The slip case
+changes floor traction, and the witness-loss case withholds the independent
+pose after motion starts. Inspect `motion-witness.jsonl`, the terminal
+command receipt and the scorer's stop evidence.
+
+## Real-model terminal controls
+
+Run `model-full-chat` to exercise the full CHAT registry on the table scene
+with terminal input. With hydrated Stretch assets, a configured model endpoint,
+and the cached CLIP, YOLOE and MobileCLIP weights, run the same command used
+for the surveyed controls with `--case model-full-chat --model-endpoint URL`.
+This case runs the scene description, a spatial follow-up, an absent-object
+query and a map request in one conversation. The normal map tool writes its
+PNG to the local artifact directory through an image sink. Scoring checks
+the answers, an actual populated map, current camera input and zero
+actuation during the turns. The commands and images stay local when using
+the loopback model server.
+
+Run `model-object-recovery` on the same table fixture to verify memory and
+reacquisition. The initial measured table view populates semantic memory.
+The agent looks away, queries the earlier location while the object is out
+of view, and returns to the table view. Scoring checks the remembered XYZ
+against the fixture and uses RGB-D at the turn boundaries to verify that
+the block disappears and reappears. The base stays stationary.
+
+Run `model-table-transfer` for the first household task on the same full CHAT
+registry. The instruction requests moving the red cylinder to the green region
+while protecting the blue cube and keeping the base stationary. The scorer
+reads simulator poses separately from the agent packets and checks lift,
+footprint containment, stable support, protected-object motion and the
+terminal receipt. A typed refusal with no actuation counts as a safe stop
+and a failed transfer.
+
+Run `model-read-only` with the surveyed Stretch runner first, then use
+`model-drive` after the read-only audit passes. Supply `--model-endpoint`
+with the OpenAI-compatible base URL including `/v1`. `--model` defaults to
+`Qwen/Qwen3-VL-8B-Instruct`. Run serially with the same software-rendered
+simulator settings above. If hosting the model locally, use the exclusive
+GPU lease and record the checkpoint revision, precision and decoding.
+
+The read-only turn exposes `send_image` and checks the model's answer against
+the known visible object, along with zero actuation during the turn. The
+motion turn exposes one 0.45 m request through the normal guarded waypoint
+handler. Check the measured endpoint, typed command receipt and the final
+model response. The scorer records the exact model calls and verifies that
+the model received the motion result. Use a new output directory for each
+attempt and preserve both HTTP packets and scorer results.
 
 ## Stationary hardware
 
@@ -65,6 +153,25 @@ dropouts. Keep unavailable streams visible in the results.
 Run read-only model questions on captured packets and record these as hardware
 image replay. Review the stationary runs and independent stop path before
 scoping a motion session. See the [Mars operator guide](../robots/innate_mars_hardware.md).
+
+## External benchmarks to add
+
+1. Start with RoboCasa365 `PickPlaceCounterToSink` and `OpenDrawer`, then
+   add a held-out kitchen and `CategorizeCondiments`. Use the
+   benchmark's official success predicate and label any Stretch embodiment
+   adaptation in the result. The benchmark accepts agentic submissions.
+   [Atomic tasks](https://robocasa.ai/docs/build/html/tasks/atomic_tasks.html) · [Composite tasks](https://robocasa.ai/docs/build/html/tasks/composite_tasks.html) · [Leaderboard](https://robocasa.ai/leaderboard)
+2. Borrow the partial-progress approach from Robocurve for our household
+   cases. Record independently verified grasp, lift, delivery, stable release,
+   and whether the neighboring object was disturbed. Report full completion,
+   wall time, model calls and stop outcome per episode. The RoboDojo-RC
+   results use adapted tasks on YAM arms, so use those results for protocol
+   design and compare scores on a matched robot and fixture.
+   [Robocurve task rubrics](https://robocurve.org/opus-5-5-robodojo-rc-tier-1/)
+3. Consider RoboArena after hardware qualification. It runs pairwise trials
+   on DROID and takes a remotely served robot policy. A DROID-compatible
+   policy adapter would be separate from the Stretch operator session.
+   [RoboArena](https://robo-arena.github.io/) · [Policy interface](https://github.com/robo-arena/roboarena)
 
 ## Evidence and paper figures
 

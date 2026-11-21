@@ -301,6 +301,7 @@ See also [simulation_modules.md](simulation_modules.md) for maintainer-oriented 
 | `EMET_AGENT_CAMERA_DEBUG` | Agent tools | `1` — head-camera frame stats. CLI: `--debug-camera`. |
 | `EMET_BASE_ROTATE_ONLY` | ZMQ client + agent tools + Dynamem executor | `1` — **yaw-only / in-place scan** (no XY drive). Blocks `explore` / `move_forward` / `find` / absolute nav; keeps `rotate_base`, `scan_environment`, `describe_scene`. Use when Mars is plugged in / tethered. |
 | `EMET_AGENT_MOTION_STATUS` | Controllers | `1`/`0` — fine-grained terminal progress for head sweeps / rotate-in-place / explore steps (default **on**). Discord still only gets coarse milestones (`*Look around: sweeping head*`, mid/end scan). |
+| `EMET_DISCORD_CHANNEL_ID` | CHAT Discord bot | Exact positive text-channel ID. The bot handles messages and publishes replies only in that channel. A missing match prevents Discord readiness. |
 | `EMET_CONFIRM_NAV` | Agent / DynamemController | `1` — before executing a motion plan, show the path on the 2D map (Rerun `world/nav/plan_map` + Discord PNG) and wait for **y/n** (terminal or Discord). Same as `emet run agent --confirm-nav`. Recommended on the real robot. Scripted `-c` runs auto-accept. |
 
 See [AGENT_RUN.md](AGENT_RUN.md).
@@ -330,11 +331,16 @@ Add new cross-cutting `EMET_*` variables here or in a topic-specific doc and lin
   for Stretch head images, preserving robot self-occlusion. Default `0` retains
   the existing mapping-oriented robot-body suppression. Collision proxy groups
   remain hidden. Realistic rendering does not itself remove robot map points.
-- `EMET_SIM_SYNCHRONIZED_RGBD`: `1` copies one scene sample under the physics
-  lock, then renders the cameras from that private copy while physics continues.
-  Default `0` preserves asynchronous rendering. Images retain original sampling
-  times and camera FK; separate metadata carries eight Stretch motor readings
-  and explicitly labelled full-robot kinematic debug truth. Passive finger angles
+- `EMET_SIM_FIXED_RGBD_CAMERA`: optional name of a world-fixed Stretch model
+  camera. With synchronized RGB-D enabled, the simulator renders a 320×240
+  RGB-D frame from the same snapshot as the wheel feedback. It is an internal
+  stream for an independently calibrated motion check. Unset by default.
+- `EMET_SIM_SYNCHRONIZED_RGBD`: headless Stretch defaults to `1`. The renderer
+  copies one scene sample under the physics lock, then renders the cameras from
+  that private copy while physics continues. Set `0` for asynchronous rendering,
+  which is still the default in the interactive viewer. Images retain original
+  sampling times and camera FK. Separate metadata carries eight Stretch motor
+  readings and explicitly labelled full-robot kinematic debug truth. Passive finger angles
   and individual telescope lengths are not motor measurements. Debug samples
   cannot qualify observed visual effects. This is ideal simulator co-sampling,
   not hardware clock/noise calibration.

@@ -120,6 +120,22 @@ class ObservedEnvironmentAdmission:
     def _require_material(self, *, now):
         raise ObservationUnavailable('robot_material_geometry_unavailable')
 
+    def static_free_bounds(self, bounds, *, now):
+        """Prove a closed box free for the remaining lifetime of this static map."""
+        assumption = self.static_assumption
+        if (
+            assumption is None
+            or assumption.scene_epoch != self.background.scene_epoch
+            or not assumption.started_monotonic <= now <= assumption.expires_monotonic
+        ):
+            return False
+        grid = self.background.workspace
+        region = grid.query_region(bounds)
+        if region is None or not np.all(grid.cells[region] == 1):
+            return False
+        stamps = self.background.observed_monotonic[region]
+        return bool(np.all((assumption.started_monotonic <= stamps) & (stamps <= now)))
+
     def query(self, solid: WorldSolid, *, now, allow_captured_robot=False, free_witness=None):
         if free_witness is not None:
             from emet.motion.observed_support_contact import ObservedSupportContact

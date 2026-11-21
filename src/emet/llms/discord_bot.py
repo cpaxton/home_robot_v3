@@ -12,6 +12,7 @@ import os
 import queue
 import threading
 import time
+from collections.abc import Callable
 from typing import Any
 
 import discord
@@ -63,6 +64,7 @@ class EmetDiscordBot(DiscordBot):
         home_channel: str = "talk-to-stretch",
         executor: Any = None,
         agent_input_queue: queue.Queue[str] | None = None,
+        navigation_stop_request: Callable[[], None] | None = None,
     ) -> None:
         """
         Create a new Discord bot that can interact with the robot.
@@ -83,6 +85,7 @@ class EmetDiscordBot(DiscordBot):
             None
         """
         super().__init__(token)
+        self._plan_thread: threading.Thread | None = None
         robot = agent.robot
 
         # Create the prompt we will use to control the robot
@@ -102,9 +105,15 @@ class EmetDiscordBot(DiscordBot):
         self.prompt = prompt
 
         self.home_channel = os.environ.get("EMET_DISCORD_CHANNEL", home_channel)
+        channel_id = os.environ.get("EMET_DISCORD_CHANNEL_ID", "").strip()
+        if channel_id and (not channel_id.isascii() or not channel_id.isdecimal() or int(channel_id) == 0):
+            raise ValueError("EMET_DISCORD_CHANNEL_ID must be a positive Discord channel ID")
+        self.home_channel_id = int(channel_id) if channel_id else None
+        self.restrict_to_home_channels = self.home_channel_id is not None
         self.sent_prompt = False
         # When set with llm=None (emet run agent), inbound Discord text is enqueued for the agent loop.
         self.agent_input_queue = agent_input_queue
+        self.navigation_stop_request = navigation_stop_request
 
         if kwargs is None:
             # Default parameters
@@ -160,7 +169,6 @@ class EmetDiscordBot(DiscordBot):
 
         self._llm_lock = threading.Lock()
         self._plan_lock = threading.Lock()
-        self._plan_thread: threading.Thread | None = None
         self.next_plan = None
         self._ready_event = threading.Event()
 
@@ -204,36 +212,38 @@ class EmetDiscordBot(DiscordBot):
     def on_ready(self):
         """Event listener called when the bot has switched from offline to online."""
         logger.debug(f"{self.client.user} has connected to Discord!")
-        guild_count = 0
-
         logger.debug("Bot User name:", self.client.user.name)
         logger.debug("Bot Global name:", self.client.user.global_name)
         logger.debug("Bot User ID:", self.client.user.id)
         self._user_name = self.client.user.name
         self._user_id = self.client.user.id
 
-        for guild in self.client.guilds:
-            logger.debug(f"Joining Server {guild.id} (name: {guild.name})")
-            guild_count = guild_count + 1
-
-            found_home = False
-            first_text_channel = None
-            for channel in guild.text_channels:
-                if first_text_channel is None:
-                    first_text_channel = channel
-                if channel.name == self.home_channel:
+        if self.restrict_to_home_channels:
+            self.allowed_channels.home_channels.clear()
+            channel = self.client.get_channel(self.home_channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                self._ready_event.clear()
+                logger.error(f"Discord text channel ID {self.home_channel_id} is unavailable.")
+                return
+            logger.info(f"Found home channel: #{channel.name} ({channel.id})")
+            self.allowed_channels.add_home(channel)
+            guild_count = 1
+        else:
+            guild_count = len(self.client.guilds)
+            for guild in self.client.guilds:
+                logger.debug(f"Joining Server {guild.id} (name: {guild.name})")
+                channel = next((channel for channel in guild.text_channels if channel.name == self.home_channel), None)
+                if channel is not None:
                     logger.info(f"Found home channel: #{channel.name}")
                     self.allowed_channels.add_home(channel)
-                    found_home = True
-                    break
-
-            if not found_home and first_text_channel is not None:
-                logger.warning(
-                    f"Home channel '{self.home_channel}' not found in {guild.name}. "
-                    f"Using #{first_text_channel.name} instead. "
-                    f"Set EMET_DISCORD_CHANNEL or create a #{self.home_channel} channel."
-                )
-                self.allowed_channels.add_home(first_text_channel)
+                elif guild.text_channels:
+                    first_text_channel = guild.text_channels[0]
+                    logger.warning(
+                        f"Home channel '{self.home_channel}' not found in {guild.name}. "
+                        f"Using #{first_text_channel.name} instead. "
+                        f"Set EMET_DISCORD_CHANNEL or create a #{self.home_channel} channel."
+                    )
+                    self.allowed_channels.add_home(first_text_channel)
 
         with self._plan_lock:
             self.next_plan = None
@@ -308,6 +318,12 @@ class EmetDiscordBot(DiscordBot):
             return None
 
         self._print_discord_inbound(message)
+        if self.navigation_stop_request is not None and message.content.strip().casefold() == "stop":
+            if not message.author.bot:
+                self.navigation_stop_request()
+                self.push_task(message.channel, message="Stop requested. Further driving is disabled for this session.",
+                               explicit=True)
+            return None
 
         # Construct the text to prompt the AI
         # text = f"{sender_name} on #{channel_name}: " + message.content
@@ -320,6 +336,8 @@ class EmetDiscordBot(DiscordBot):
 
     async def handle_task(self, task: Task):
         """Handle a task by sending the message to the channel. This will make the necessary calls in its thread to the different child functions that send messages, for example."""
+        if self.restrict_to_home_channels and task.channel not in self.allowed_channels.home_channels:
+            return
         text = task.message
         try:
             if task.explicit:

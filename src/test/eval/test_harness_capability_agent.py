@@ -13,6 +13,28 @@ from emet.eval.harness_capability_fixtures import load_development_cases
 CASES = load_development_cases(Path(__file__).resolve().parents[3] / "configs/eval/harness_capability_dev.json")
 
 
+def test_live_agent_config_survives_chat_merge_in_observed_mode(monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "scripts"))
+    from emet.agent import loop
+    from run_harness_capability_agent import run_agent_session
+
+    effective = {}
+
+    def capture_config(**kwargs):
+        loop._merge_chat_agent_manip_parameters(
+            kwargs["parameters"],
+            agent_config="dynav_config.yaml",
+            robot=kwargs["robot"],
+            agent_section=kwargs.get("agent_section"),
+        )
+        effective.update(kwargs["parameters"]["agent"])
+
+    monkeypatch.setattr(loop, "run_agent_with_robot", capture_config)
+    run_agent_session(object(), lambda _: None, "http://127.0.0.1:1/v1", "test-model")
+    assert effective["manip_mode"] == "physical"
+    assert effective["tamp_inputs"] == "observed"
+
+
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c["id"])
 def test_full_stretch_fixture_compiles_with_declared_interventions(tmp_path, case):
     scene, model = build_stretch_case(case, tmp_path / case["id"])

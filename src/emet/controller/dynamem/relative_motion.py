@@ -9,6 +9,7 @@ from copy import deepcopy
 import numpy as np
 
 from emet.controller.task.tamp.api import response
+from emet.core.navigation_result import UNOBSERVED_FOOTPRINT_STATUS
 
 
 def relative_motion_progress(before, after, tool, commanded, position_tolerance, yaw_tolerance):
@@ -73,6 +74,28 @@ def execute_relative_motion(agent, tool, value):
         goal[2] = np.arctan2(np.sin(goal[2]), np.cos(goal[2]))
         agent.planner.reset()
         _, rejection, _ = agent._filter_unsafe_nav_traj([goal], start_xyt=start, explore_goal=False)
+        recovery = {}
+        parameters = getattr(agent, "parameters", None)
+        if (
+            rejection == UNOBSERVED_FOOTPRINT_STATUS
+            and parameters is not None
+            and parameters.get("relative_motion_floor_recovery", False) is True
+        ):
+            from .look import inspect_floor
+
+            footprint = deepcopy(getattr(agent, "_last_nav_sweep_failure", {}) or {})
+            agent._last_nav_plan.update(outcome=rejection, footprint=footprint)
+            inspection = inspect_floor(agent, target_blocker=True, max_observations=1)
+            recovery["floor_recovery"] = {"status": inspection.get("status"), "rechecked": False}
+            if inspection.get("ok"):
+                measured_start = np.asarray(agent._current_planning_xyt(), dtype=float)
+                _, stationary = relative_motion_progress(start, measured_start, "move_forward", 0.0, 0.02, 0.03)
+                if stationary:
+                    agent.planner.reset()
+                    _, rejection, _ = agent._filter_unsafe_nav_traj(
+                        [goal], start_xyt=measured_start, explore_goal=False
+                    )
+                    recovery["floor_recovery"]["rechecked"] = True
         if rejection:
             footprint = deepcopy(getattr(agent, "_last_nav_sweep_failure", {}) or {})
             agent._last_nav_plan.update(outcome=rejection, footprint=footprint)
@@ -84,6 +107,7 @@ def execute_relative_motion(agent, tool, value):
                     "execution_started": False,
                     "reason": rejection,
                     "footprint": deepcopy(footprint),
+                    **recovery,
                 },
             )
         execution_started = True
@@ -107,6 +131,7 @@ def execute_relative_motion(agent, tool, value):
                 "execution_started": True,
                 "measured_body_delta_xyt": measured,
                 "goal_world_xyt": goal.tolist(),
+                **recovery,
             },
         )
     except Exception as exc:

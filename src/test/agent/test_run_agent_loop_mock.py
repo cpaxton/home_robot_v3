@@ -75,6 +75,37 @@ def test_run_agent_with_robot_quit_no_llm_no_discord():
     assert last_robot["r"].stop.call_count == 1
 
 
+@pytest.mark.parametrize(
+    ("second_reply", "expected_message"),
+    [
+        ('{"tool_calls": [], "message": "I see a red cylinder."}', "I see a red cylinder."),
+        ('{"tool_calls": [{"name": "move_forward", "arguments": {"meters": 0.5}}], "message": ""}',
+         "I couldn't produce a usable reply."),
+    ],
+)
+def test_unreadable_model_reply_retries_in_reply_only_mode(second_reply, expected_message, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    robot = MagicMock()
+    robot.get_observation.return_value = None
+    broken_reply = '{"tool_calls": [{"name": "describe_scene", "arguments": {}}, "message": "A table."}'
+    with (
+        patch("emet.agent.loop.DynamemTaskExecutor", side_effect=_make_executor),
+        patch("emet.agent.loop.get_memory_backend", return_value=_DummyMemBackend()),
+        patch("emet.agent.loop.get_llm_client", return_value=object()),
+        patch("emet.agent.loop._call_llm", side_effect=[(broken_reply, .1), (second_reply, .1)]) as call_llm,
+        patch("emet.agent.loop._dispatch_tool_calls") as dispatch,
+        patch("emet.agent.loop.print_memory_view_help_on_quit"),
+    ):
+        run_agent_with_robot(robot_client=robot, discord=False, use_llm=True,
+                             commands=["What can you see?"], device="cpu")
+
+    assert call_llm.call_count == 2
+    assert "This round cannot call tools" in call_llm.call_args.args[1]
+    assert call_llm.call_args.args[2] is None
+    dispatch.assert_not_called()
+    assert expected_message in capsys.readouterr().out
+
+
 def test_merge_chat_agent_manip_parameters():
     """Chat ``agent:`` manip settings must reach the executor's parameters block."""
     from emet.agent.loop import _merge_chat_agent_manip_parameters

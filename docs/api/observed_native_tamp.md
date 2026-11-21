@@ -561,13 +561,13 @@ for both attempts and their distinct discovery/registration outcomes.
 
 ### Synchronized simulator inputs and motor-only FK
 
-The opt-in `EMET_SIM_SYNCHRONIZED_RGBD=1` renderer copies a scene under the physics
-lock and renders all images from that private snapshot. Sampling bounds describe
-the copy, not later rendering/publication. Physics continues while rendering;
-this avoids freezing the live scene for a complete camera batch. Published camera
+Headless Stretch defaults to the `EMET_SIM_SYNCHRONIZED_RGBD=1` renderer. It copies
+a scene under the physics lock and renders all images from that private snapshot.
+Sampling bounds describe the copy. Physics continues while rendering, which
+avoids freezing the live scene for a complete camera batch. Published camera
 poses describe those pixels rather than a later robot posture.
 
-Two channels are deliberately separate:
+The synchronized snapshot carries separate encoder and debug channels:
 
 - `motor_sample` contains eight actual motor-position readouts: lift, total arm
   extension, wrist yaw/pitch/roll, gripper slider, head pan and head tilt. The
@@ -575,12 +575,22 @@ Two channels are deliberately separate:
   model. It does not expose passive fingertip angles or individually measured
   telescope lengths. `read_local_sim_motor_capture` rejects hardware/other-clock,
   asynchronous, stale, missing and extra-channel packets.
+- `wheel_sample` contains the two unwrapped Stretch wheel angles in radians.
+  `read_local_sim_wheel_capture` requires the same local clock and acquisition
+  interval as the RGB-D pair. It supplies differential-drive dead reckoning
+  with robot-specific radius and track width. The estimate starts in the first
+  sample's local base frame and assumes flat ground and rolling contact.
 - `robot_sample` is **`simulator_robot_kinematics_debug`**. It contains robot-only
   configuration, including passive joints, for independent diagnostics. It never
   contains environment joint state. `RobotPoseSample` retains its source, and
   `VisualEffectFrame.require` rejects this debug source with
   `robot_feedback_unqualified`. A producer cannot use it to qualify observed
   execution by simply supplying zero alignment bounds.
+
+`stretch_base_from_head_camera(motors, model)` produces the upright head-camera
+transform relative to the calibrated robot base. It uses the motor readouts
+and a robot-only model. To place moving captures in a map, compose this
+transform with a separately qualified base pose for the same capture.
 
 `estimate_stretch_ee_from_encoders` consumes only `motor_sample` and the localized
 camera pose. It reconstructs the rigid grasp-frame FK without passive fingertip

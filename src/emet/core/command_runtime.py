@@ -188,7 +188,7 @@ class CommandRuntime(ReactiveRuntime):
                 else:
                     sample = self.navigation_policy_measurement()
                     if sample.get("failure"):
-                        self._finish_cancel("failed", sample["failure"])
+                        self._finish_cancel("failed", sample["failure"], result=sample.get("failure_details"))
                         return
                     outcome = self._arrival_monitor.update(
                         sample["pose"],
@@ -230,7 +230,9 @@ class CommandRuntime(ReactiveRuntime):
                     self.command_tracker.transition(session, sequence, status, result=result)
                     self._navigation_command = None
                 else:
-                    self._finish_cancel("failed", "navigation controller did not reach the goal", result=result)
+                    self._finish_cancel(
+                        "failed", result.get("reason", "navigation controller did not reach the goal"), result=result
+                    )
 
     def _finish_cancel(self, status, reason, *, result=None):
         session, sequence, context = self._navigation_command

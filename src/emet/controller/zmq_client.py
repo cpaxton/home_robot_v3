@@ -809,6 +809,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             verbose: Whether to print out debug information
             reliable: Whether to resend the action if it is not received
         """
+        cancel_requested = getattr(self, "navigation_stop_requested", None)
+        if cancel_requested is not None and cancel_requested():
+            return False
         if isinstance(xyt, ContinuousNavigationAction):
             rel_xyt = np.asarray(xyt.xyt, dtype=np.float64).reshape(3)
         else:
@@ -870,7 +873,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if blocking:
             from emet.core.command_client import wait_navigation
 
-            return wait_navigation(self, action, wait_timeout)
+            return wait_navigation(self, action, wait_timeout, cancel_requested=cancel_requested)
         return True
 
     def set_velocity(self, v: float, w: float):

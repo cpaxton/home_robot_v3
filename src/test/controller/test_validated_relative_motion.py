@@ -65,6 +65,31 @@ def test_unknown_floor_rejection_never_executes():
     agent._execute_validated_waypoints.assert_not_called()
 
 
+@pytest.mark.parametrize("recheck", [None, "unobserved_footprint", "occupied_footprint"])
+def test_relative_motion_takes_one_floor_view_and_requires_a_clear_recheck(monkeypatch, recheck):
+    from emet.controller.dynamem import look
+    from emet.core.navigation_result import sweep_rejection_status
+
+    initial = sweep_rejection_status("unobserved_footprint")
+    second = sweep_rejection_status(recheck) if recheck is not None else None
+    agent = agent_fixture()
+    agent.parameters = {"relative_motion_floor_recovery": True}
+    agent._last_nav_sweep_failure = {"checked_pose": [1.0, 2.1, 0.0]}
+    agent._filter_unsafe_nav_traj.side_effect = [([], initial, None), ([], second, None)]
+    inspect = MagicMock(return_value={"ok": True, "status": "floor_observed"})
+    monkeypatch.setattr(look, "inspect_floor", inspect)
+
+    result = execute_relative_motion(agent, "move_forward", 0.2)
+
+    inspect.assert_called_once_with(agent, target_blocker=True, max_observations=1)
+    assert result["data"]["floor_recovery"] == {"status": "floor_observed", "rechecked": True}
+    assert result["data"]["execution_started"] is (recheck is None)
+    assert agent._execute_validated_waypoints.call_count == int(recheck is None)
+    np.testing.assert_array_equal(
+        agent._filter_unsafe_nav_traj.call_args_list[0].args[0], agent._filter_unsafe_nav_traj.call_args.args[0]
+    )
+
+
 @pytest.mark.parametrize("value", [True, None, "0.5", float("nan"), float("inf"), -0.1, 1.6])
 def test_bad_arguments_never_execute(value):
     agent = agent_fixture()

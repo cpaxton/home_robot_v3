@@ -445,18 +445,17 @@ class MujocoZmqServer(BaseZmqServer):
         self._contract_navigation_context = None
         self._precision_xy_tolerances = None
         self._precision_xy_acquired = False
+        policy_name = action.get("nav_policy")
+        policy = self._navigation_control_policy(policy_name) if policy_name else None
         # The wire protocol requires standalone navigation. Perform the mode
         # transition inside the accepted command, atomically with goal dispatch.
         # The next manipulation transition then records the fresh arrival pose.
         self.handle_action({**action, "control_mode": "navigation"})
-        if action.get("nav_policy"):
-            from emet.core.navigation_result import NAVIGATION_POLICIES
-
-            policy = NAVIGATION_POLICIES[action["nav_policy"]]
+        if policy is not None:
             # Leave tracking margin for the final turn. Stopping translation on
             # the arrival boundary makes small wheel/caster drift alternate
             # translation and yaw correction indefinitely on physical floors.
-            fine_arrival = action["nav_policy"] in ("precision", "manipulation")
+            fine_arrival = policy_name in ("precision", "manipulation")
             fraction = 0.5 if fine_arrival else 1.0
             linear_tolerance = fraction * policy.xy_tolerance
             if fine_arrival:
@@ -477,6 +476,11 @@ class MujocoZmqServer(BaseZmqServer):
         if self._contract_navigation_context is None:
             raise RuntimeError("simulator did not install navigation goal")
         return self._contract_navigation_context
+
+    def _navigation_control_policy(self, name):
+        from emet.core.navigation_result import NAVIGATION_POLICIES
+
+        return NAVIGATION_POLICIES[name]
 
     def navigation_policy_names(self):
         return ("exploration", "precision", "manipulation")
@@ -724,7 +728,7 @@ class MujocoZmqServer(BaseZmqServer):
         self._control_thread = threading.Thread(target=self._control_loop_thread)
         self._control_thread.start()
 
-        self._initial_xyt = self.robot_sim.get_base_pose()
+        self._initial_xyt = self._navigation_frame_origin()
         if self._emet_session is not None:
             apply_navigation_origin_to_session(self._emet_session, self._initial_xyt)
 
@@ -735,6 +739,9 @@ class MujocoZmqServer(BaseZmqServer):
             except ConnectionError:
                 break
             time.sleep(1 / self.simulation_rate)
+
+    def _navigation_frame_origin(self):
+        return self.robot_sim.get_base_pose()
 
     def _build_emet_session_stretch(self, *, robocasa: bool) -> dict[str, Any]:
         spec = self.get_robot_spec()
@@ -1198,18 +1205,10 @@ class MujocoZmqServer(BaseZmqServer):
 
         if self._initial_xyt is None or not self._stretch_sim_publish_ok():
             return None
-        xyt = self.get_base_pose()
-        if xyt is None:
+        poses = self._full_observation_poses(cam_data)
+        if poses is None:
             return None
-        try:
-            # ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
-            # Frame contract: src/test/simulation/test_zmq_observation_frame_contract.py
-            head_cam_world = cam_data.captured_camera_pose(StretchCameras.cam_d435i_rgb)
-            if head_cam_world is None:
-                head_cam_world = self._head_camera_opencv_world()
-            ee_world = self.robot_sim.get_ee_pose()
-        except (ConnectionError, ConnectionResetError, OSError):
-            return None
+        xyt, head_cam_world, ee_world = poses
 
         # Get the other fields from an observation
         message = {
@@ -1238,16 +1237,29 @@ class MujocoZmqServer(BaseZmqServer):
         }
         return self._attach_emet_session(message)
 
+    def _full_observation_poses(self, cam_data):
+        xyt = self.get_base_pose()
+        if xyt is None:
+            return None
+        try:
+            # Default ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
+            head_world = cam_data.captured_camera_pose(StretchCameras.cam_d435i_rgb)
+            if head_world is None:
+                head_world = self._head_camera_opencv_world()
+            return xyt, head_world, self.robot_sim.get_ee_pose()
+        except (ConnectionError, ConnectionResetError, OSError):
+            return None
+
     @override
     def get_state_message(self) -> dict[str, Any]:
         """Get the state message for the robot. This is a smalll message that includes floating point information and booleans like if the robot is homed."""
         if not self._stretch_sim_publish_ok():
             return None
         q, dq, eff = self.get_joint_state()
-        base_pose = self.get_base_pose()
-        ee_pose = self.get_ee_pose()
-        if base_pose is None or ee_pose is None:
+        poses = self._state_poses()
+        if poses is None:
             return None
+        base_pose, ee_pose = poses
         message = {
             "base_pose": base_pose,
             "base_xyz": getattr(self._status, "base_xyz", None),
@@ -1267,6 +1279,10 @@ class MujocoZmqServer(BaseZmqServer):
             EMET_ZMQ_ROBOT_ID_KEY: self.get_robot_spec().name,
         }
         return self._attach_emet_session(message)
+
+    def _state_poses(self):
+        base_pose, ee_pose = self.get_base_pose(), self.get_ee_pose()
+        return (base_pose, ee_pose) if base_pose is not None and ee_pose is not None else None
 
     @override
     def get_servo_message(self) -> dict[str, Any]:

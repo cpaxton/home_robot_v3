@@ -34,6 +34,23 @@ You help people by navigating, picking up objects, answering questions, and more
 If a request is ambiguous, ask the user to clarify before acting.
 Keep replies brief and friendly. Do NOT output your internal reasoning."""
 
+_CAMERA_FORMAT = """\
+Answer questions about the scene directly from the attached head-camera image. Say when the
+image does not show enough to answer. Earlier images are historical.
+The photo tool is send_image, which captures a photo for the reply. Use it when the user asks
+for a photo. After the tool result, give a short answer and report any capture failure.
+
+Return one valid JSON object. Use these forms:
+For a final answer: {"tool_calls": [], "message": "<answer>"}
+To capture a photo: {"tool_calls": [{"name": "send_image", "arguments": {}}], "message": ""}"""
+
+_HEAD_SCAN_FORMAT = """\
+Use describe_scene with a pan_rad argument to actually turn the head and get a new picture.
+For "look around", request pan_rad 0.60 (left) first, then -0.60 (right) on the next tool round.
+For a requested direction, take just that view. Pan 0 faces forward. On each tool round use
+an empty message. Describe only what the pictures show and identify which side it was on.
+Example: {"tool_calls": [{"name": "describe_scene", "arguments": {"pan_rad": 0.60}}], "message": ""}"""
+
 # Response format: kept short so local VL tool-routing stays fast (~token budget).
 # NOTE: This is a plain string, NOT an f-string. Use single braces for JSON.
 _FORMAT_BLOCK = """\
@@ -61,11 +78,15 @@ head with explicit describe_scene pan/tilt or the validated base tools for a new
 
 Routing hints:
 - "what can you see" / "tell me what you see" / "describe the scene" (no motion asked)
-  → describe_scene only: caption the image in front of you; ground with scene graph/map if useful.
+  → Describe the attached current camera image directly with tool_calls []. If an image is
+  unavailable, use describe_scene without arguments to request a view.
   Do NOT scan, explore, or turn unless the user asked to look around / move.
 - To aim the head for an authorized task, use describe_scene with explicit absolute pan_rad/tilt_rad.
   Inspect measured feedback and the next camera image. No arguments retains caption-only behavior.
-- "look at X" / "face X" / "turn toward X" / "go toward X" / "go look at X"
+- For an earlier camera view, reuse the last confirmed head pan and tilt for that view with
+  describe_scene. A head-only request keeps the base stationary. Use a new camera image to
+  confirm visibility after the tool reports measured head arrival.
+- "look at X" / "face X" / "turn toward X" / "go toward X" / "go look at X" without a head-only request
   → Prefer face_toward with object_label=X, THEN describe_scene (do not blind-rotate ±45°).
     If drive is available and they clearly want distance ("go to", "drive closer"): move_forward
     (map-clipped) and/or find_objects — but face_toward first when only yaw is needed.
@@ -104,6 +125,7 @@ Routing hints:
   Optionally follow with describe_scene after the scan.
 - "explore" / "go explore" / "map the room" → explore (navigate to build the map)
 - where/what/is-there → query_scene_graph (or query_memory if graph EQA is on)
+- "show me your map" / "send a map" → send_map_snapshot without moving.
 - map stuck / explore failed → navigation_diagnostics + send_map_snapshot
 - find/explore tool result says cancelled / aborted_waypoint_timeout / rejected_low_clearance /
   rejected_unexplored → do NOT immediately re-call the same find_objects. Ask the user, or call
@@ -116,7 +138,7 @@ Routing hints:
 User: "Where is the red cup?"
 {"tool_calls": [{"name": "query_scene_graph", "arguments": {"question": "Where is the red cup?"}}], "message": ""}
 User: "What can you see?"
-{"tool_calls": [{"name": "describe_scene", "arguments": {}}], "message": ""}
+With a current image attached: {"tool_calls": [], "message": "<describe the visible objects>"}
 User: "Turn around"
 {"tool_calls": [{"name": "rotate_base", "arguments": {"degrees": 180}}], "message": ""}
 User: "Rotate back"   (previous turn was +45°)
@@ -129,6 +151,8 @@ User: "Can you move forward?"
 {"tool_calls": [], "message": "Sure — how far? (e.g. 0.1 m, 0.5 m, or 1 m)"}
 User: "Look at the aquarium"
 {"tool_calls": [{"name": "face_toward", "arguments": {"object_label": "aquarium"}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
+User: "Look back at the earlier view with your head" (previous measured view: pan 0.4, tilt -0.3)
+{"tool_calls": [{"name": "describe_scene", "arguments": {"pan_rad": 0.4, "tilt_rad": -0.3}}], "message": ""}
 User: "Are you sure that's a TV?"
 {"tool_calls": [{"name": "face_toward", "arguments": {"object_label": "TV"}}, {"name": "describe_scene", "arguments": {}}], "message": ""}
 User: "Take a closer look at the cables"
@@ -156,6 +180,24 @@ def build_agent_system_prompt(
         from emet.agent.tools import get_tools
 
         tools = get_tools(context or {})
+    tool_names = {tool.name for tool in tools}
+    if tool_names == {"send_image"}:
+        return f"You are {name}, a stationary robot camera assistant. The only tool is send_image.\n\n{_CAMERA_FORMAT}"
+    scan_tools = {"send_image", "describe_scene"}
+    if tool_names == scan_tools:
+        return f"You are {name}, a robot that can aim its camera.\n\n{_CAMERA_FORMAT}\n\n{_HEAD_SCAN_FORMAT}"
+    bounded_forward_m = (context or {}).get("bounded_forward_distance_m")
+    if bounded_forward_m is not None and tool_names == scan_tools | {"move_forward"}:
+        drive_example = json.dumps({
+            "tool_calls": [{"name": "move_forward", "arguments": {"meters": bounded_forward_m}}], "message": "",
+        })
+        return (
+            f"You are {name}, a supervised simulator assistant.\n\n{_CAMERA_FORMAT}\n\n{_HEAD_SCAN_FORMAT}\n\n"
+            f"The base can make one guarded forward drive of {bounded_forward_m} meters. "
+            "Call it when the operator sends 'explore' or 'drive 0.45 m'. For 'explore', take that step first "
+            "and then use the new image to describe what changed. Read the measured result before reporting "
+            f"movement, refusal, or a stop. To request the drive: {drive_example}"
+        )
     identity = _IDENTITY_TEMPLATE.format(name=name)
     tools_block = get_tool_descriptions_for_prompt(tools)
     prompt = f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"

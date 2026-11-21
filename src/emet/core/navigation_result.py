@@ -59,6 +59,24 @@ NAVIGATION_POLICIES = {
 }
 
 
+@dataclass(frozen=True)
+class NavigationPoseUncertainty:
+    """Calibrated error bounds for planar pose and heading, in metres and radians."""
+
+    xy_m: float
+    yaw_rad: float
+
+    def __post_init__(self):
+        if any(isinstance(value, bool) or not math.isfinite(value) or value < 0 for value in (self.xy_m, self.yaw_rad)):
+            raise ValueError("navigation pose uncertainty requires finite nonnegative bounds")
+
+    def usable_tolerances(self, xy_tolerance, yaw_tolerance):
+        xy, yaw = xy_tolerance - self.xy_m, yaw_tolerance - self.yaw_rad
+        if min(xy, yaw) <= 0:
+            raise ValueError("navigation pose uncertainty exceeds arrival budget")
+        return xy, yaw
+
+
 class ArrivalMonitor:
     """Per-command measured settling; adapters own motion and stop confirmation.
 
@@ -171,4 +189,10 @@ def measured_arrival(context, pose, *, xy_tolerance, yaw_tolerance):
         "xy_tolerance": xy_tolerance,
         "yaw_tolerance": yaw_tolerance,
     }
+    bound = context.get("arrival_pose_uncertainty")
+    if bound is not None:
+        uncertainty = NavigationPoseUncertainty(**bound)
+        xy_error += uncertainty.xy_m
+        yaw_error += uncertainty.yaw_rad
+        result.update(xy_error_upper_bound=xy_error, yaw_error_upper_bound=yaw_error)
     return ("succeeded" if xy_error <= xy_tolerance and yaw_error <= yaw_tolerance else "failed"), result

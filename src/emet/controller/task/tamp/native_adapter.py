@@ -365,6 +365,10 @@ class NativeTableAdapter:
     def _prepare_transport(self, executor, obj, goal):
         return None, None
 
+    def _certify_transport(self, executor, transport, start_qpos, start_payload):
+        """Finish any deferred carry checks before allocating a plan handle."""
+        return None
+
     def _transport(self, plan):
         return PhysicalMotionResult(True, 'stationary', 'transport')
 
@@ -555,7 +559,7 @@ class NativeTableAdapter:
                                     self.data.qpos[:] = lifted
                                     mujoco.mj_kinematics(self.model, self.data)
                                     base_start = self.data.qpos.copy()
-                                    base_payload = payload_copy(executor.collision) if self.reacquire_scene else None
+                                    base_payload = payload_copy(executor.collision)
                                     transport, transport_error = self._prepare_transport(executor, obj, goal)
                                     if transport_error:
                                         self._record_rejection('transport', transport_error, executor)
@@ -563,6 +567,11 @@ class NativeTableAdapter:
                                     executor.place_targets = self._place_targets(executor, obj, goal, rotation)
                                     # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
                                     candidates, error = placement_paths(self, executor, executor.place_targets)
+                                    if candidates is not None:
+                                        error = self._certify_transport(executor, transport, base_start, base_payload)
+                                        if error:
+                                            self._record_rejection('transport', error, executor)
+                                            candidates = None
                                     if candidates is not None:
                                         executor.place_paths = candidates
                                         ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
@@ -595,10 +604,9 @@ class NativeTableAdapter:
                                             planning_ik_calls=self.planning_ik_calls, max_ik_calls=self.max_planning_ik_calls,
                                             placement_region=None if region is None else region.tolist(),
                                             placement_goal={'frame': 'world', 'object_center': goal.tolist()}))
-                                    executor.collision.set_payload(self.model, self.data, None)
                                     self.data.qpos[:] = lifted
+                                    executor.collision.restore_payload(base_payload)
                                     mujoco.mj_kinematics(self.model, self.data)
-                                    executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
                             except ValueError as error:
                                 if str(error) != 'grasp_strategy_budget_exhausted':
                                     raise

@@ -143,15 +143,17 @@ def provided_scan(fixture, robot, target, out, *, resolution=0.005, include_targ
 class MappedGuard:
     """Additional strict map gate; native geometry remains an explicit control."""
 
-    def __init__(self, native, model, grid, admission, support, ticket):
+    def __init__(self, native, model, grid, admission, support, ticket, *, geoms=None):
         self.native, self.model, self.grid = native, model, grid
         self.admission, self.support, self.ticket = admission, support, ticket
-        moving = body_subtree(model, "link_lift")
-        self.geoms = [
-            g
-            for g in range(model.ngeom)
-            if int(model.geom_bodyid[g]) in moving and (model.geom_contype[g] or model.geom_conaffinity[g])
-        ]
+        if geoms is None:
+            moving = body_subtree(model, "link_lift")
+            geoms = [
+                g
+                for g in range(model.ngeom)
+                if int(model.geom_bodyid[g]) in moving and (model.geom_contype[g] or model.geom_conaffinity[g])
+            ]
+        self.geoms = geoms
         self.map_queries = self.native_only_queries = self.rejections = 0
         self.last_map_reason = None
         self.rejection_witnesses = []
@@ -190,10 +192,13 @@ class MappedGuard:
                 print(json.dumps({"map_rejection": witness}), flush=True)
         return not result.allowed
 
-    def configuration_collides(self, checker, model, data):
+    def configuration_collides(self, checker, model, data, *, native_only_geoms=()):
         # The current native/release clone already checked contacts and
         # transformed its payload. Never consult the original checker's pose.
         for gid in self.geoms:
+            if gid in native_only_geoms:
+                self.native_only_queries += 1
+                continue
             solid = WorldSolid.from_geom(
                 model, data, gid, convex_material_calibration_id="native-debug-convex-collision-model"
             )

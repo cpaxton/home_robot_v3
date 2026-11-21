@@ -7,7 +7,11 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
-from emet.controller.manipulation.encoder_capture import read_local_sim_motor_capture
+from emet.controller.manipulation.encoder_capture import (
+    STRETCH_CAPTURE_MOTORS,
+    MotorCapture,
+    read_local_sim_motor_capture,
+)
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import rigid_copy
 from emet.motion.mujoco_collision import body_subtree
@@ -30,16 +34,9 @@ class EncoderKinematicEstimate:
         object.__setattr__(self, "world_from_base", rigid_copy(self.world_from_base))
 
 
-def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
-    """Estimate the rigid wrist/grasp frame, not unmeasured fingertip geometry.
-
-    Only eight motor channels and the same capture's localized camera pose are
-    consumed. Total extension is divided among the collinear telescope links;
-    this preserves EE FK but does NOT qualify individual-link collision geometry.
-    Passive fingertip state cannot affect this rigid EE frame. Pose/localization
-    calibration errors and possible gripper volume still need independent bounds.
-    """
-    motors = read_local_sim_motor_capture(observation, now=now)
+def _motor_frame_kinematics(motors: MotorCapture, model, *, include_ee: bool):
+    if motors.names != STRETCH_CAPTURE_MOTORS or motors.units != "actuator_length":
+        raise ObservationUnavailable("invalid_joint_feedback")
     if motors.kinematic_signature != robot_kinematic_signature(model):
         raise ObservationUnavailable("robot_capture_model_mismatch")
     ids = body_subtree(model, "base_link")
@@ -86,15 +83,35 @@ def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
     if cid < 0:
         raise ObservationUnavailable("robot_capture_model_mismatch")
     permitted = assigned | {f"joint_arm_l{i}" for i in range(4)}
-    ee_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, STRETCH_ARM_CHAIN.ee_body)
-    if ee_id < 0:
-        raise ObservationUnavailable("robot_capture_model_mismatch")
-    for bid in (ee_id, int(model.cam_bodyid[cid])):
+    frames = [int(model.cam_bodyid[cid])]
+    if include_ee:
+        ee_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, STRETCH_ARM_CHAIN.ee_body)
+        if ee_id < 0:
+            raise ObservationUnavailable("robot_capture_model_mismatch")
+        frames.append(ee_id)
+    for bid in frames:
         while bid > 0:
             for jid in range(int(model.body_jntadr[bid]), int(model.body_jntadr[bid] + model.body_jntnum[bid])):
                 if jid != root_joint and mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid) not in permitted:
                     raise ObservationUnavailable("robot_frame_has_unmeasured_joints")
             bid = int(model.body_parentid[bid])
+    return data, base_addr, cid, assigned
+
+
+def stretch_base_from_head_camera(motors: MotorCapture, model) -> np.ndarray:
+    """Return the upright head camera pose from calibrated, qualified motor readouts."""
+    data, _, camera, _ = _motor_frame_kinematics(motors, model, include_ee=False)
+    return rigid_copy(camera_opencv_pose(model, data, camera, upright=True))
+
+
+def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
+    """Estimate the rigid grasp frame from motors and a localized camera pose.
+
+    Dividing total extension across the collinear telescope preserves rigid FK.
+    Individual-link collision geometry and localization errors need their own bounds.
+    """
+    motors = read_local_sim_motor_capture(observation, now=now)
+    data, base_addr, cid, assigned = _motor_frame_kinematics(motors, model, include_ee=True)
     root_from_camera = camera_opencv_pose(model, data, cid, upright=True)
     world_from_root = rigid_copy(observation.camera_pose) @ np.linalg.inv(root_from_camera)
     quat = np.empty(4)

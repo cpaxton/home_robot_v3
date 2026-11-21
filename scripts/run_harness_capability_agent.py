@@ -24,39 +24,52 @@ from emet.eval.harness_capability_agent import agent_turns, build_stretch_case, 
 from emet.eval.harness_capability_fixtures import load_development_cases
 
 
-def run_agent_session(robot, input_reader, endpoint, model):
+def run_agent_session(
+    robot, input_reader, endpoint, model, *, measured_floor=False, max_tool_rounds=8, max_tokens=512, discord=False,
+    navigation_stop_request=None, full_chat=False,
+):
     from emet.agent.loop import run_agent_with_robot
+    from emet.config.loader import AgentSectionConfig
     from emet.core import get_parameters
 
     parameters = get_parameters("dynav_config.yaml", robot="stretch")
-    parameters["use_instance_memory"] = False
-    parameters["force_eqa_siglip_encoder"] = False
+    if full_chat:
+        parameters["cpu_clip_model"] = "ViT-B/32"
+    else:
+        parameters["use_instance_memory"] = False
+        parameters["force_eqa_siglip_encoder"] = False
     parameters["enable_tts"] = False
-    parameters["agent"] = {**(parameters.get("agent") or {}), "tamp_inputs": "observed", "manip_mode": "physical"}
     parameters["motion_planner"] = {**(parameters.get("motion_planner") or {}), "obstacle_map_mode": "physical"}
+    if measured_floor:
+        parameters["floor_evidence"] = {"enabled": True, "reference_z_m": 0.}
+        parameters["add_local_radius_points"] = False
+        parameters["relative_motion_floor_recovery"] = True
     # No alternative policy/answer arbiter: actual production CHAT, same tools.
-    # The lean diagnostic excludes learned object proposals/segmentation.
+    session_options = {"agent_name": "Stretch simulator"} if discord else {}
     run_agent_with_robot(
         robot="stretch",
         robot_client=robot,
         input_reader=input_reader,
-        discord=False,
+        discord=discord,
         use_llm=True,
         llm=f"openai@{endpoint}#{model}",
         device="cpu",
         parameters=parameters,
+        agent_section=AgentSectionConfig(manip_mode="physical", tamp_inputs="observed"),
         memory_backend="dynamem",
         eqa=False,
         vl_include_camera=True,
-        visual_servo=False,
+        visual_servo=full_chat,
         cpu_only=True,
-        manipulation_only=True,
-        max_tool_rounds=8,
-        max_tokens=512,
+        manipulation_only=not full_chat,
+        max_tool_rounds=max_tool_rounds,
+        max_tokens=max_tokens,
         debug_llm=True,
         tool_debug=True,
         confirm_nav=False,
         thinking_status=False,
+        discord_navigation_stop_request=navigation_stop_request,
+        **session_options,
     )
 
 

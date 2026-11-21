@@ -16,7 +16,10 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.sim_robot_capture import read_synchronized_robot_capture
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
-from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import MujocoServerCameraManagerSync
+from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import (
+    MujocoServerCameraManagerSync,
+    synchronized_rgbd_enabled,
+)
 from emet.simulation.synchronized_capture import capture_scene_for_sensors, robot_kinematic_signature
 
 ROBOT = """<body name="base_link"><freejoint/><geom type="box" size=".1 .1 .1"/>
@@ -139,15 +142,26 @@ def test_metadata_roundtrip_copies_packet_and_untimed_pixels_lose_alignment():
     assert restored.image_timing_for(StretchCameras.cam_d435i_rgb) is None
 
 
-def test_manager_renders_all_pixels_from_private_copy_while_physics_can_advance():
+def test_synchronized_rgbd_flag_overrides_launch_default(monkeypatch):
+    monkeypatch.delenv("EMET_SIM_SYNCHRONIZED_RGBD", raising=False)
+    assert synchronized_rgbd_enabled(default=True)
+    assert not synchronized_rgbd_enabled()
+    monkeypatch.setenv("EMET_SIM_SYNCHRONIZED_RGBD", "0")
+    assert not synchronized_rgbd_enabled(default=True)
+    monkeypatch.setenv("EMET_SIM_SYNCHRONIZED_RGBD", "1")
+    assert synchronized_rgbd_enabled()
+
+
+def test_manager_renders_all_pixels_from_private_copy_while_physics_can_advance(monkeypatch):
+    monkeypatch.delenv("EMET_SIM_SYNCHRONIZED_RGBD", raising=False)
     scene, robot, data, probe, packet, imagery, obs = sampled()
-    manager = MujocoServerCameraManagerSync.__new__(MujocoServerCameraManagerSync)
-    manager.mujoco_server = SimpleNamespace(mjmodel=scene, mjdata=data, data_proxies=MagicMock())
-    manager.camera_lock = threading.Lock()
-    manager.camera_fps_counter = SimpleNamespace(fps=20)
+    cameras = (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth)
+    server = SimpleNamespace(mjmodel=scene, mjdata=data, data_proxies=MagicMock())
+    monkeypatch.setattr(MujocoServerCameraManagerSync, "_set_camera_properties_and_create_renderers_in_mujoco",
+                        lambda *_: None)
+    manager = MujocoServerCameraManagerSync(20, list(cameras), server, synchronized_rgbd_default=True)
     samples = []
-    manager.camera_renderers = {}
-    for camera in (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth):
+    for camera in cameras:
         renderer = MagicMock()
 
         def scene_update(*, data, camera):
@@ -158,7 +172,7 @@ def test_manager_renders_all_pixels_from_private_copy_while_physics_can_advance(
         renderer.render.return_value = np.ones((2, 2))
         manager.camera_renderers[camera] = renderer
     manager.get_camera_params = lambda camera: np.eye(3)
-    manager._pull_synchronized_camera_data()
+    manager._pull_camera_data()
     assert samples == [0.15, 0.15]
     assert data.joint("arm").qpos[0] == pytest.approx(0.35)
     captured = manager.mujoco_server.data_proxies.set_cameras.call_args.args[0]

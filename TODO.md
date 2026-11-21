@@ -1,23 +1,96 @@
 # Living TODOs (small / near-term)
 
-## Next gate — current-main TAMP agent trial
+## Next gates for the shared agent harness
+
+Use one production CHAT tool loop for CLI, Discord and robot adapters. Each
+adapter declares its sensors and actions. A physical tool uses current
+observed evidence, checks the action, reports measured completion or a typed
+refusal, and supports a confirmed stop. Save a replayable trace and score
+the outcome independently. Follow the
+[assessment protocol](docs/testing/agent_harness_assessment.md) and keep
+scripted controls, model trials, assisted trials and hardware results labeled.
+
+- [ ] Package the recent Stretch sensing and command changes in reviewable
+      PRs and freeze a clean assessment revision. The tracked live runner and
+      scorer are under
+      [the assessment protocol](docs/testing/agent_harness_assessment.md#reproduce-the-surveyed-stretch-navigation-controls).
+      Keep the raw evidence
+      linked from the [assessment report](docs/experiments/harness_assessment_20261119.md).
+- [x] Verify live observed Stretch navigation on the surveyed simulator start.
+      Check one targeted extra floor view with the same clearance sweep, a
+      clear drive, an occupied refusal and a stale-odometry stop. The independent
+      RGB-D check passed clear arrival, wheel slip and reference-pose loss
+      through the normal CHAT waypoint path.
+      [Live controls](docs/experiments/harness_assessment_20261119.md#live-independent-motion-guard).
+- [x] Run a real-model read-only turn and a bounded CLI drive on the surveyed
+      Stretch simulation. Qwen3-VL selected both public tools and received the
+      measured drive result.
+      [Terminal trials](docs/experiments/harness_assessment_20261119.md#real-model-stretch-terminal-controls).
+- [x] Verify Discord delivery in the private test channel. The scene replay
+      returned a measured-camera description, and a live operator message
+      produced a 240 × 424 PNG that the operator confirmed. The reopened
+      session answered a visual relation follow-up and reported an absent mug.
+      [Startup and delivery](docs/experiments/harness_assessment_20261119.md#discord-operator-trial-startup).
+- [x] Add an automated full Stretch CHAT session covering a current visual
+      answer, a spatial follow-up, an absent object and a measured-depth map.
+      The full registry runs with an image sink and no Discord connection.
+      [Terminal controls](docs/testing/agent_harness_assessment.md#real-model-terminal-controls).
+- [ ] Qualify bounded exploration in Discord. The head-view control passed
+      with two measured angles and distinct camera images. The cancellation
+      control matched the active waypoint and confirmed wheel rest in a
+      separate simulator run. Repeat the head views, one guarded forward
+      step and explicit `stop` through Discord.
+      [Discord protocol](docs/testing/agent_harness_assessment.md#discord-in-simulation).
+- [ ] Close the live stationary observed-input gate in
+      [#245](https://github.com/cpaxton/home_robot_v3/issues/245). Supply fresh
+      object and support geometry, synchronized robot feedback, and the motion
+      refiner. Require one public-tool pick and place with independent lift,
+      release and settling checks, plus stale-source and post-grasp evidence-loss
+      stops. Then test a stopped base handoff with fresh destination evidence.
+      [Transfer protocol](docs/plans/2026-11-18_tamp_agent_closeout.md#remaining-execution-qualification).
+- [ ] Verify stationary Stretch and Innate Mars sensing after simulator review.
+      Record timestamped RGB-D, intrinsics, robot feedback and TF/pose, and
+      characterize dropouts. Review each robot's independent stop path before
+      any hardware motion session.
+      [Stationary hardware protocol](docs/testing/agent_harness_assessment.md#stationary-hardware).
+- [ ] Test portability on a small frozen set before expanding the full
+      assessment. Cover a held-out Stretch layout, a second embodiment through
+      the same public interface, and a read-only evidence task with a changed
+      view or an absent target. Repeat the bounded floor recovery and verify
+      independent pose coverage on the held-out Stretch layout. Preserve
+      exact action and model packets, source and fixture IDs, independent
+      verdicts, frame age, and wall, simulator, model and planning time.
+      Export the coverage matrix, a measured route and a success/refusal
+      pair for figures.
+      [Figure inputs](docs/testing/agent_harness_assessment.md#evidence-and-paper-figures).
+- [ ] Qualify Sourccey as a second simulated embodiment. The default-table
+      bridge publishes front RGB-D and joint feedback, and the absolute
+      table-facing velocity turn passes. Reuse the shared agent interface
+      with measured sensing and explicit pose-source capabilities before
+      scoring observed navigation or physical pick and place.
+      [Sourccey simulator smoke](docs/robots/sourccey.md#motion-and-mapping-smoke-test).
+- [ ] Establish a model baseline before training the tool-using agent. Save
+      the observations and receipts available at every decision, including
+      what caused a refusal and which follow-up view helped. Compare the
+      baseline and a trained model on the same held-out tasks, public tools
+      and action checks. Evaluate the Mars teacher-action policies on the
+      controller track.
+
+## Parallel TAMP controls and performance
 
 - [x] Land [#250](https://github.com/cpaxton/home_robot_v3/pull/250) and
       [#251](https://github.com/cpaxton/home_robot_v3/pull/251). The original
       assisted clutter cohort completed 2/7. The collision-check shortcut saved
       0.37 s in the matched admission replay, and both full searches still expired
       after about 275 s.
-- [ ] Freeze current main and run one remote-CHAT startup check, one
-      reference-certified stationary transfer through `emet run agent`, and a
-      stop-only control with a separately authorized recovery trial. Use the
-      [first agent test protocol](docs/plans/2026-11-18_tamp_agent_closeout.md#first-agent-test).
+- [ ] On the frozen revision, run the reference-certified native stationary
+      transfer through `emet run agent`, plus stop-only and separately authorized
+      recovery controls. Preserve the assisted input label.
+      [First agent test protocol](docs/plans/2026-11-18_tamp_agent_closeout.md#first-agent-test).
 - [ ] Profile time to a certified plan and replay cube-back release plus the
-      unknown starting volumes against passing controls. Keep source age,
-      clearance, and contact checks fixed.
-- [ ] Close the live stationary observed-input gate in
-      [#245](https://github.com/cpaxton/home_robot_v3/issues/245) with stale-source
-      and post-grasp evidence-loss controls. Then repeat the bounded agent trial
-      with observed input and qualify the stopped base handoff.
+      unknown starting volumes against passing controls. Track capture age,
+      plan time, recertification and release separately. Keep source age,
+      clearance and contact checks fixed.
 - [x] Reconcile [#228](https://github.com/cpaxton/home_robot_v3/pull/228) with
       [#231](https://github.com/cpaxton/home_robot_v3/pull/231) and
       [#229](https://github.com/cpaxton/home_robot_v3/pull/229) with

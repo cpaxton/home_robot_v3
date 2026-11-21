@@ -139,6 +139,29 @@ def test_mesh_does_not_become_owned_convex_material_without_a_declaration():
     assert declared.contains_box([[-.01]*3, [.01]*3])
 
 
+def test_convex_bounds_track_pose_and_material_when_reused():
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+    original = WorldSolid('convex', (), np.eye(4), vertices=vertices, material_calibration_id='test')
+    expected = np.array([[0, 0, 0], [1, 1, 1]])
+    np.testing.assert_array_equal(original.bounds, expected)
+    with pytest.raises(ValueError, match='read-only'):
+        original.bounds[0, 0] = 1
+
+    pose = np.eye(4)
+    pose[:3, 3] = [2, 3, 4]
+    moved = replace(original, world_from_local=pose)
+    np.testing.assert_array_equal(moved.bounds, expected + pose[:3, 3])
+    np.testing.assert_array_equal(original.bounds, expected)
+
+    vertices[1, 0] = 2
+    changed = replace(original, vertices=vertices)
+    np.testing.assert_array_equal(changed.bounds[1], [2, 1, 1])
+    np.testing.assert_array_equal(original.bounds, expected)
+    vertices[3] = 0
+    with pytest.raises(ValueError, match='convex_material_calibration_required'):
+        replace(original, vertices=vertices)
+
+
 @pytest.mark.parametrize('change', ['location', 'size', 'geom', 'calibration', 'profile'])
 def test_callback_cannot_hide_or_shrink_a_real_robot_geom(change):
     model, data, _, _, original = raycast_scene()

@@ -406,6 +406,7 @@ class MujocoServer:
         *,
         use_camera_thread: bool,
         use_threadpool_executor: bool,
+        synchronized_rgbd_default: bool = False,
     ):
         """
         This should be called before trying to render offscreen cameras.
@@ -424,10 +425,14 @@ class MujocoServer:
                 camera_hz=camera_hz,
                 cameras_to_use=cameras_to_use,
                 mujoco_server=self,
+                synchronized_rgbd_default=synchronized_rgbd_default,
             )
         else:
             self.camera_manager = MujocoServerCameraManagerSync(
-                camera_hz=camera_hz, cameras_to_use=cameras_to_use, mujoco_server=self
+                camera_hz=camera_hz,
+                cameras_to_use=cameras_to_use,
+                mujoco_server=self,
+                synchronized_rgbd_default=synchronized_rgbd_default,
             )
 
     def run(
@@ -537,6 +542,7 @@ class MujocoServer:
             use_threadpool_executor=False,
             camera_hz=camera_hz,
             cameras_to_use=cameras_to_use,
+            synchronized_rgbd_default=True,
         )
 
         physics_thread = threading.Thread(

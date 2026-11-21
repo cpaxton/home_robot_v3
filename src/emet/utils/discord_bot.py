@@ -144,6 +144,7 @@ class DiscordBot:
         self.task_queue: queue.Queue = queue.Queue()
         self.queue_lock = threading.Lock()
         self.allowed_channels = ChannelList()
+        self.restrict_to_home_channels = False
 
     def push_task(
         self,
@@ -237,9 +238,11 @@ class DiscordBot:
 
             # Merge consecutive same-channel text-only tasks
             while (
-                self.task_queue.qsize() > 0
+                task.content is None
+                and self.task_queue.qsize() > 0
                 and self.task_queue.queue[0].channel == task.channel
                 and self.task_queue.queue[0].content is None
+                and self.task_queue.queue[0].explicit == task.explicit
             ):
                 extra_task = self.task_queue.get_nowait()
                 if task.message is not None and extra_task.message is not None:
@@ -275,6 +278,8 @@ class DiscordBot:
 
         @client.event
         async def on_message(message: discord.Message):
+            if self.restrict_to_home_channels and message.channel not in self.allowed_channels.home_channels:
+                return
             await self.client.process_commands(message)
 
             # Check if the bot was mentioned

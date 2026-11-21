@@ -64,6 +64,20 @@ uv run emet run agent --robot sourccey --robot-ip 127.0.0.1 \
 ## Motion and mapping smoke test
 
 ```bash
+MUJOCO_GL=egl uv run python scripts/smoke_sourccey_bridge.py --output /tmp/sourccey-bridge --table-view
+```
+
+This starts the normal simulator on dedicated loopback ports and verifies
+advancing front-left RGB-D, front-right RGB, and all 16 joint positions
+through the generic robot client. Omit `--table-view` for a passive run.
+The default spawn faces away from the table. The optional absolute goal
+turns the planar base with its velocity actuators and saves the resulting
+front view and command receipt. All five MJCF cameras also render through
+`scripts/robot_assets/render_cameras.py`. The checks use simulator
+localization and the planar model. The source meshes require hydrated Git
+LFS files.
+
+```bash
 MUJOCO_GL=egl uv run python scripts/smoke_sourccey_mapping.py --out /tmp/sourccey-mapping
 ```
 

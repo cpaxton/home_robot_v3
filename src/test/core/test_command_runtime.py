@@ -192,6 +192,20 @@ def test_busy_rejection_keeps_original_cancellation_target():
     assert command_receipt(client, original)["status"] == "cancelled"
 
 
+def test_operator_stop_in_navigation_wait_gets_a_terminal_stop_receipt():
+    robot = Robot()
+    client = connection(robot)
+    action = send_command(client, {"xyt": [0, 0, 1]})
+    stop = threading.Event()
+    stop.set()
+
+    assert wait_navigation(client, action, 1, cancel_requested=stop.is_set) is False
+    receipt = command_receipt(client, action)
+    assert receipt["status"] == "cancelled"
+    assert receipt["result"]["stop_confirmed"] is True
+    assert robot.starts == 1
+
+
 def test_confirmed_navigation_stop_survives_receipt_eviction_at_shutdown(caplog):
     robot = Robot()
     robot.command_tracker = CommandTracker(capacity=8)

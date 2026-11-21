@@ -16,7 +16,9 @@ import os
 import resource
 import time
 from contextlib import contextmanager
+from copy import copy
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -143,8 +145,72 @@ class LeaseGuard(MappedGuard):
         self.map_queries = self.native_only_queries = self.rejections = 0
         self.last_map_reason, self.rejection_witnesses = None, []
         self.free_witness_enabled, self.target_in_map = True, target_in_map
+        self.batched_sweeps = 0
+        self.certified_swept_geoms = 0
+        self.native_only_swept_geoms = 0
 
-    def configuration_collides(self, checker, model, data):
+    def for_straight_base_sweep(self, model, measured, start, goal, *, xy_error, yaw_error):
+        """Reuse robot-link bounds over a straight sweep with the full tracking envelope."""
+        base = model.body("base_link").id
+        moving = body_subtree(model, "base_link")
+        if (
+            self.target_in_map
+            or model is not self.model
+            or model.body_parentid[base] != 0
+            or any(int(model.geom_bodyid[gid]) not in moving for gid in self.geoms)
+        ):
+            return self.configuration_collides
+        probe = mujoco.MjData(model)
+        mujoco.mj_copyData(probe, model, measured)
+        if (
+            not np.isfinite(probe.qpos).all()
+            or not write_offline_base_pose(model, probe, base_body_name="base_link", x=start[0], y=start[1], theta=start[2])
+            or np.linalg.norm(probe.xmat[base].reshape(3, 3)[:2, 0]) < .5
+        ):
+            return self.configuration_collides
+        translation_min = np.r_[np.minimum(start[:2], goal[:2]) - start[:2] - xy_error, 0.]
+        translation_max = np.r_[np.maximum(start[:2], goal[:2]) - start[:2] + xy_error, 0.]
+        certified, native_only = set(), set()
+        with self.lease.borrow() as scene:
+            grid = scene.admission.background.workspace
+            upper = grid.origin + np.array(grid.cells.shape) * grid.resolution
+            now = time.monotonic()
+            for gid in self.geoms:
+                try:
+                    bounds = WorldSolid.from_geom(
+                        model, probe, gid, convex_material_calibration_id="native-debug-convex-collision-model"
+                    ).bounds.copy()
+                except ValueError:
+                    continue
+                # Every tracked yaw is a world-Z rotation about the base. A
+                # point at radius r moves at most 2r*sin(yaw_error/2).
+                radius = np.linalg.norm(np.max(np.abs(bounds[:, :2] - start[:2]), axis=0))
+                yaw_pad = 2 * radius * np.sin(yaw_error / 2)
+                roundoff = 1e-9 * max(1., float(np.max(np.abs(bounds))), float(np.max(np.abs(goal[:2]))))
+                pad = np.array([yaw_pad, yaw_pad, 0.]) + roundoff
+                swept = np.stack((bounds[0] + translation_min - pad, bounds[1] + translation_max + pad))
+                if not np.isfinite(swept).all():
+                    continue
+                # Every pose uses the assisted native-only path if even the
+                # largest possible lower bound or smallest upper bound crosses
+                # a map face. Boundary or mixed cases use the ordinary checks.
+                if np.any(bounds[0] + translation_max + pad < grid.origin) or np.any(
+                    bounds[1] + translation_min - pad > upper
+                ):
+                    native_only.add(gid)
+                elif scene.admission.static_free_bounds(swept, now=now):
+                    certified.add(gid)
+        if not certified and not native_only:
+            return self.configuration_collides
+        self.batched_sweeps += 1
+        self.certified_swept_geoms += len(certified)
+        self.native_only_swept_geoms += len(native_only)
+        # The replacement is scoped to this sweep. Its ordinary borrow keeps
+        # validating the same generation and the support/capture lifetime.
+        remaining = tuple(gid for gid in self.geoms if gid not in certified)
+        return partial(self.configuration_collides, robot_geoms=remaining, native_only_geoms=frozenset(native_only))
+
+    def configuration_collides(self, checker, model, data, *, robot_geoms=None, native_only_geoms=()):
         with self.lease.borrow() as scene:
             # Transient query object only; no closure or plan keeps scene alive.
             query = MappedGuard(
@@ -154,9 +220,9 @@ class LeaseGuard(MappedGuard):
                 scene.admission,
                 scene.support,
                 scene.support.capture,
+                geoms=self.geoms if robot_geoms is None else robot_geoms,
             )
             if self.target_in_map:
-                query.geoms = self.geoms
                 result = False
                 for gid in query.geoms:
                     solid = WorldSolid.from_geom(
@@ -167,7 +233,7 @@ class LeaseGuard(MappedGuard):
                         result = True
                         break
             else:
-                result = query.configuration_collides(checker, model, data)
+                result = query.configuration_collides(checker, model, data, native_only_geoms=native_only_geoms)
             self.map_queries += query.map_queries
             self.native_only_queries += query.native_only_queries
             self.rejections += query.rejections
@@ -358,14 +424,29 @@ def run(args):
         if not mobile:
             return end.tolist(), None
         end[0] += float(goal[0] - adapter.data.body(obj).xpos[0])
-        if not native_approach.sweep_clear(model, adapter.data, start, end, loaded_checker=ex.collision, event=event):
+        if not write_offline_base_pose(model, adapter.data, base_body_name="base_link", x=end[0], y=end[1], theta=end[2]):
             return None, "transport_collision"
-        write_offline_base_pose(model, adapter.data, base_body_name="base_link", x=end[0], y=end[1], theta=end[2])
         if ex.collision.configuration_collides(model, adapter.data):
             return None, "transport_collision"
         return end.tolist(), None
 
     adapter._prepare_transport = prepare_transport
+
+    def certify_transport(ex, end, start_qpos, start_payload):
+        if not mobile:
+            return None
+        start_data = mujoco.MjData(model)
+        start_data.qpos[:] = start_qpos
+        start = base_pose(model, start_data)
+        checker = copy(ex.collision)
+        checker.restore_payload(start_payload)
+        if not native_approach.sweep_clear(
+            model, start_data, start, end, deadline=adapter._planning_deadline, loaded_checker=checker, event=event
+        ):
+            return "transport_collision"
+        return None
+
+    adapter._certify_transport = certify_transport
 
     def transport(plan):
         nonlocal current_guard
@@ -525,6 +606,9 @@ def run(args):
             commands=robot.commands,
             map_queries=sum(g.map_queries for g in guards),
             native_only_queries=sum(g.native_only_queries for g in guards),
+            batched_sweeps=sum(g.batched_sweeps for g in guards),
+            certified_swept_geoms=sum(g.certified_swept_geoms for g in guards),
+            native_only_swept_geoms=sum(g.native_only_swept_geoms for g in guards),
             cumulative_peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
         )
         (out / "trace.json").write_text(json.dumps(robot.trace) + "\n")

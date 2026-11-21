@@ -36,7 +36,9 @@ def create_obstacle_map(self, parameters):
         self.encoder = None
     elif self.cpu_only:
         # Assume we only have CPU, we will use CLIP ViT-B/16 for fast inference
-        self.encoder = MaskClipEncoder(version="ViT-B/16", feature_matching_threshold=0.35, device=self.device)
+        self.encoder = MaskClipEncoder(
+            version=parameters.get("cpu_clip_model", "ViT-B/16"), feature_matching_threshold=0.35, device=self.device
+        )
     else:
         # Use SIGLip-so400m for accurate inference. Shared/load-once across episodes so
         # batch runs (Habitat) do not reload the weights every controller construction.

@@ -563,6 +563,7 @@ def run_agent_with_robot(
     native_task_config: dict | None = None,
     robot_client: Any | None = None,
     input_reader: Callable[[str], str | None] | None = None,
+    discord_navigation_stop_request: Callable[[], None] | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -920,6 +921,7 @@ def run_agent_with_robot(
             output_path=getattr(executor.agent, "log", "."),
             kwargs=kwargs.get("discord_kwargs", {"match_method": "feature", "mllm_for_visual_grounding": False}),
             agent_input_queue=unified_input_queue,
+            navigation_stop_request=discord_navigation_stop_request,
         )
         context["discord_bot"] = discord_bot
         executor.discord_bot = discord_bot
@@ -1174,6 +1176,8 @@ def run_agent_with_robot(
         print(colored("Waiting for Discord connection...", "yellow"), end=" ", flush=True)
         if discord_bot.wait_until_ready(timeout=30.0):
             print(colored("connected.", "green"))
+        elif discord_bot.restrict_to_home_channels:
+            raise RuntimeError("Discord did not connect to the configured channel ID")
         else:
             print(colored("timeout (continuing without Discord).", "red"))
 
@@ -1255,6 +1259,7 @@ def run_agent_with_robot(
                 ok = False
                 break
 
+            context["operator_turn"] = user_text
             chat_log.log("user", user_text)
             print_terminal(f"user: {user_text}", color="green")
             if debug_llm:
@@ -1266,8 +1271,11 @@ def run_agent_with_robot(
             turn_request = tamp_dialogue.prompt(user_text)
             current_input = turn_request
             turn_results = []
+            last_tool_results = []
+            retrying_reply = False
             turn_t0 = timeit.default_timer()
             for _round in range(max_tool_rounds):
+                round_input = current_input
                 cam_image = None
                 followup_round = _round > 0
                 context.pop("decision_observation", None)
@@ -1351,7 +1359,7 @@ def run_agent_with_robot(
                 raw_response, elapsed = _call_llm(
                     llm_client,
                     current_input,
-                    openai_tools_param,
+                    None if retrying_reply else openai_tools_param,
                     debug_llm,
                     image=cam_image,
                     # New user turns belong to the same robot session.
@@ -1385,6 +1393,20 @@ def run_agent_with_robot(
                     raw=raw_response,
                     time_s=elapsed,
                 )
+
+                if retrying_reply and tool_calls:
+                    tool_calls, message = [], ""
+                if not tool_calls and not message.strip():
+                    if not retrying_reply and _round + 1 < max_tool_rounds:
+                        retrying_reply = True
+                        current_input = (
+                            f"{round_input}\n\nThe last reply could not be read. Give a short answer in valid JSON "
+                            'as {"tool_calls": [], "message": "<answer>"}. This round cannot call tools. '
+                            "Use the attached view or verified tool results. Report requested actions only if their "
+                            "results confirm what happened."
+                        )
+                        continue
+                    message = _format_fast_tool_reply(last_tool_results) or "I couldn't produce a usable reply."
 
                 # No tool calls — this is the final answer
                 if not tool_calls:
@@ -1432,6 +1454,7 @@ def run_agent_with_robot(
                         tamp_context=context,
                     )
                 ok, results, has_info = dispatched
+                last_tool_results = results
                 tools_elapsed = timeit.default_timer() - tools_t0
                 turn_results.extend(dispatched.outcomes)
                 print_terminal(

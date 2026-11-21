@@ -255,6 +255,18 @@ def test_prompt_has_no_double_braces():
     assert "{{" not in prompt, "Prompt contains literal {{ — model will copy double braces"
 
 
+def test_camera_only_prompt_answers_from_image_and_advertises_only_the_photo_tool():
+    from emet.agent.prompt import build_agent_system_prompt
+    from emet.agent.tools import get_tools
+
+    tools = [tool for tool in get_tools({}) if tool.name == "send_image"]
+    prompt = build_agent_system_prompt(tools, name="Stretch simulator")
+    assert "Answer questions about the scene directly from the attached head-camera image" in prompt
+    assert '{"tool_calls": [{"name": "send_image", "arguments": {}}], "message": ""}' in prompt
+    assert "describe_scene" not in prompt
+    assert "move_forward" not in prompt
+
+
 def test_prompt_builder_configurable_name():
     from emet.agent.prompt import AgentPromptBuilder
 

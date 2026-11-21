@@ -12,6 +12,7 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
 
 STRETCH_CAPTURE_MOTORS = ("lift", "arm", "wrist_yaw", "wrist_pitch", "wrist_roll", "gripper", "head_pan", "head_tilt")
+STRETCH_WHEEL_JOINTS = ("joint_left_wheel", "joint_right_wheel")
 
 
 @dataclass(frozen=True)
@@ -32,13 +33,7 @@ class MotorCapture:
         return dict(zip(self.names, self.positions.tolist(), strict=True))
 
 
-def read_local_sim_motor_capture(observation, *, now=None):
-    """Same-sample ideal simulator encoders; hardware needs its own clock mapper.
-
-    Arm is one measured total extension. Finger angles, rubber deformation and
-    individual telescope lengths are not claimed as measured. No EE/gripper
-    geometry or zero physical pose uncertainty is inferred from these readouts.
-    """
+def _read_local_sim_encoder_packet(observation, key, source, units, packet_fields, now):
     now = time.monotonic() if now is None else now
     if observation.is_simulation is not True:
         raise ObservationUnavailable("simulation_capture_required")
@@ -52,20 +47,32 @@ def read_local_sim_motor_capture(observation, *, now=None):
         timing, received_monotonic=observation.received_monotonic, observation_id=f"capture:{stamp}"
     )
     capture.require(now=now)
-    packet = timing.get("motor_sample")
-    keys = {"schema_version", "source", "clock_id", "interval_ns", "positions", "units", "kinematic_signature"}
+    packet = timing.get(key)
+    keys = {"schema_version", "source", "clock_id", "interval_ns", "positions", "units"} | packet_fields
     if (
         not isinstance(packet, dict)
         or set(packet) != keys
         or packet["schema_version"] != 1
-        or packet["source"] != "simulator_stretch_motor_encoders"
-        or packet["units"] != "actuator_length"
-        or not isinstance(packet["kinematic_signature"], str)
-        or not packet["kinematic_signature"]
+        or packet["source"] != source
+        or packet["units"] != units
         or packet["clock_id"] != local_monotonic_clock_id()
         or packet["interval_ns"] != timing.get("capture_interval_ns")
         or packet["interval_ns"] != timing.get("depth_capture_interval_ns")
         or stamp != timing["capture_interval_ns"][0]
+    ):
+        raise ObservationUnavailable("capture_motion_alignment_unknown")
+    return capture, packet
+
+
+def read_local_sim_motor_capture(observation, *, now=None):
+    """Read synchronized motor channels in actuator lengths for Stretch FK."""
+    capture, packet = _read_local_sim_encoder_packet(
+        observation, "motor_sample", "simulator_stretch_motor_encoders", "actuator_length",
+        {"kinematic_signature"}, now,
+    )
+    if (
+        not isinstance(packet["kinematic_signature"], str)
+        or not packet["kinematic_signature"]
         or not isinstance(packet["positions"], dict)
         or set(packet["positions"]) != set(STRETCH_CAPTURE_MOTORS)
     ):
@@ -75,3 +82,27 @@ def read_local_sim_motor_capture(observation, *, now=None):
     except (TypeError, ValueError) as error:
         raise ObservationUnavailable("invalid_joint_feedback") from error
     return MotorCapture(capture, values, packet["kinematic_signature"])
+
+
+@dataclass(frozen=True)
+class WheelCapture:
+    capture: CaptureInterval
+    left_rad: float
+    right_rad: float
+
+    def __post_init__(self):
+        if not np.isfinite([self.left_rad, self.right_rad]).all():
+            raise ObservationUnavailable("invalid_wheel_feedback")
+
+
+def read_local_sim_wheel_capture(observation, *, now=None):
+    """Read unwrapped left and right wheel angles from the RGB-D capture."""
+    capture, packet = _read_local_sim_encoder_packet(
+        observation, "wheel_sample", "simulator_stretch_wheel_encoders", "radian", set(), now,
+    )
+    positions = packet["positions"]
+    if not isinstance(positions, dict) or set(positions) != set(STRETCH_WHEEL_JOINTS):
+        raise ObservationUnavailable("invalid_wheel_feedback")
+    if any(type(value) not in (int, float) for value in positions.values()):
+        raise ObservationUnavailable("invalid_wheel_feedback")
+    return WheelCapture(capture, *(positions[name] for name in STRETCH_WHEEL_JOINTS))

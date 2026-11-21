@@ -39,6 +39,7 @@ from emet.utils.vram_debug import print_vram_snapshot
 from .dynamem_eqa import DynamemVoxelEQAMixin
 from .dynamem_localize import DynamemVoxelLocalizeMixin
 from .floor_evidence import floor_evidence
+from .launch_floor_survey import LaunchFloorSurvey
 from .voxel import VALID_FRAMES, Frame
 from .voxel import SparseVoxelMap as SparseVoxelMapBase
 
@@ -453,6 +454,16 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         cells = getattr(self, "_sensor_observed_cells", None)
         return cells.clone() if cells is not None else None
 
+    def install_launch_floor_survey(self, survey: LaunchFloorSurvey):
+        """Add registered depth to floor classification for the current map scope."""
+        config = (self.parameters.get("floor_evidence", {}) or {}) if self.parameters is not None else {}
+        if not config.get("enabled", False):
+            raise ValueError("launch_survey_requires_measured_floor_mode")
+        if survey.points_at(self.observation_scope_id, time.monotonic()) is None:
+            raise ValueError("launch_survey_stale_or_wrong_scope")
+        self._launch_floor_survey = survey
+        self._map2d = None
+
     def get_2d_map(self, debug: bool = False, return_history_id: bool = False, kernel: int = 7) -> tuple[Tensor, ...]:
         """
         Get 2d map with explored area and frontiers.
@@ -460,6 +471,13 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         """
 
         # Is this already cached? If so we don't need to go to all this work
+        survey_points = None
+        survey = getattr(self, "_launch_floor_survey", None)
+        if survey is not None:
+            survey_points = survey.points_at(self.observation_scope_id, time.monotonic())
+            if survey_points is None:
+                self._launch_floor_survey = None
+                self._map2d = None
         if self._map2d is not None and self._history_soft is not None and self._seq == self._2d_last_updated:
             return self._map2d if not return_history_id else (*self._map2d, self._history_soft)
 
@@ -482,8 +500,12 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             # Geometry-only navigation evidence, not semantic/visual coverage.
             # Never infer a floor reference from the absence of depth returns.
             reference_z = float(floor_config["reference_z_m"])
+            floor_points = xyz[xyz[:, 2] - reference_z < self.obs_max_height].detach().cpu().numpy()
+            if survey_points is not None:
+                survey_floor = survey_points[survey_points[:, 2] - reference_z < self.obs_max_height]
+                floor_points = np.concatenate((floor_points, survey_floor))
             floor_layers = floor_evidence(
-                xyz[xyz[:, 2] - reference_z < self.obs_max_height].detach().cpu().numpy(),
+                floor_points,
                 tuple(self.grid_size),
                 self.grid_resolution,
                 self.grid_origin.detach().cpu().numpy(),
@@ -1024,14 +1046,16 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
 
         # TODO: weights could also be confidence, inv distance from camera, etc
         if world_xyz.nelement() > 0:
-            n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
-            selected_indices = torch.randperm(len(world_xyz))[:n_keep]
-            if world_xyz is not None:
+            floor_config = (self.parameters.get("floor_evidence", {}) or {}) if self.parameters is not None else {}
+            # Every valid depth return is eligible to establish measured floor.
+            # Voxel pooling still bounds stored geometry at map resolution.
+            if not floor_config.get("enabled", False):
+                n_keep = max(1, int((1 - self.point_update_threshold) * len(world_xyz)))
+                selected_indices = torch.randperm(len(world_xyz))[:n_keep]
                 world_xyz = world_xyz[selected_indices]
-            if feats is not None:
-                feats = feats[selected_indices]
-            if rgb is not None:
                 rgb = rgb[selected_indices]
+                if feats is not None:
+                    feats = feats[selected_indices]
             self.voxel_pcd.add(world_xyz, features=feats, rgb=rgb, weights=None)
 
         # Stamp the start disk once (YAML ``add_local_every_step``). Stamping every
