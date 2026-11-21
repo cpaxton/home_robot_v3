@@ -170,6 +170,8 @@ def score_model_case(directory):
         "held_out_travel_m": math.hypot(x - x0, y - y0), "model_wall_s": sum(map(float, elapsed)) if elapsed else None,
         "turn_wall_s": result["turn_wall_s"],
     }
+    if before.get("simulation_time") is not None and after.get("simulation_time") is not None:
+        record["simulation_s"] = after["simulation_time"] - before["simulation_time"]
     passed = (result["complete"] and bool(statuses) and all(status == 200 for status in statuses)
               and image_present and not private_fields and bool(final)
               and all(row["accepted"] and not row["forbidden"] for row in moves))

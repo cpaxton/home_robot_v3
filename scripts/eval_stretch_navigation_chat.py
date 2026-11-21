@@ -296,6 +296,7 @@ def serve(scene, offset, case, output):
                     row = {
                         "timestamp_ns": stamp,
                         "wall_time": time.time(),
+                        "simulation_time": status.scene_time,
                         "truth_xyt": [status.base.x, status.base.y, status.base.theta],
                         "estimated_xyt": [*message["gps"], *message["compass"]],
                     }
@@ -470,7 +471,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
 
     interactive_discord = case in DISCORD_CASES
     full_chat = case in FULL_CHAT_CASES
-    operator_stop = threading.Event() if case in ("operator-stop", DISCORD_DRIVE_CASE, DISCORD_FULL_CASE) else None
+    operator_stop = threading.Event() if model_endpoint or case == "operator-stop" else None
     monitor_done = threading.Event()
     monitor = None
     table_robot_model = None
@@ -806,9 +807,18 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
             )
 
     except KeyboardInterrupt:
-        if not interactive_discord:
+        outcome.update(ended_by="operator_interrupt", complete=False)
+        if robot is not None and operator_stop is not None:
+            request_operator_stop()
+            try:
+                if getattr(robot, "_last_navigation_command", None) is not None:
+                    outcome["navigation_stop_confirmed"] = robot.cancel_navigation()
+            except (RuntimeError, TimeoutError) as error:
+                outcome["navigation_stop_error"] = str(error)
+        if interactive_discord:
+            outcome["scoring_status"] = "operator_review_required"
+        else:
             raise
-        outcome.update(scoring_status="operator_review_required", ended_by="operator_interrupt")
     except Exception as error:
         outcome.update(error=f"{type(error).__name__}: {error}", complete=False)
         raise
