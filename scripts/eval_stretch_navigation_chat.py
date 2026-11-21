@@ -444,7 +444,8 @@ def build_table_fixture(output, *, transfer_target=False):
     return path
 
 
-def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NAME, initial_gaze=(0.0, -0.2)):
+def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NAME, initial_gaze=(0.0, -0.2),
+        table_preflight_only=False):
     from emet.agent import loop
     from emet.app.robot_cli import create_robot_client_from_cli
     from emet.core.command_client import command_receipt
@@ -464,7 +465,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
         case_id = "cap-dev-06" if case.startswith("occupied") else "cap-dev-05"
         cases = load_development_cases(REPO / "configs/eval/harness_capability_dev.json")
         scene, _ = build_stretch_case(next(item for item in cases if item["id"] == case_id), output / "fixture")
-    scene, survey_path, _ = scene_variants(scene.resolve(), output)
+    scene, survey_path, robot_model_path = scene_variants(scene.resolve(), output)
     survey_rgb, survey_depth, survey_k, survey_pose, surveyed_at = survey_capture(survey_path)
     survey_points, survey_anchors = measured_points(survey_rgb, survey_depth, survey_k, survey_pose)
     np.savez_compressed(
@@ -495,7 +496,9 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
         "case": case,
         "fixture": str(scene),
         "fixture_sha256": hashlib.sha256(scene.read_bytes()).hexdigest(),
-        "decisions": "real model via OpenAI-compatible endpoint" if model_endpoint else "scripted local CHAT replies",
+        "decisions": ("sensor admission control" if table_preflight_only
+                      else "real model via OpenAI-compatible endpoint" if model_endpoint
+                      else "scripted local CHAT replies"),
         "model": model_name,
         "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
         "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip(),
@@ -510,6 +513,21 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
             requested_at = time.monotonic()
             operator_stop.set()
             (output / "operator-stop.json").write_text(json.dumps({"requested_monotonic": requested_at}) + "\n")
+
+    def record_table_capture(view):
+        import mujoco
+
+        from emet.eval.stretch_table_observation import assess_live_table_capture
+
+        np.savez_compressed(output / "table-capture.npz", rgb=view.rgb, depth=view.depth,
+                            camera_K=view.camera_K, camera_pose=view.camera_pose)
+        (output / "table-capture-timing.json").write_text(json.dumps({
+            "received_monotonic": view.received_monotonic, "image_timing": view.image_timing,
+        }, indent=2) + "\n")
+        robot_model = mujoco.MjModel.from_xml_path(str(robot_model_path))
+        outcome["table_capture"] = assess_live_table_capture(view, robot_model)
+        save()
+        return robot_model
 
     try:
         with (output / "server.log").open("w") as log:
@@ -596,6 +614,27 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
             outcome["base_before_xyt"] = before.tolist()
             outcome["ready_wall_s"] = time.monotonic() - started
             save()
+            if table_preflight_only:
+                from emet.eval.stretch_table_observation import assess_live_table_capture
+
+                assert robot.head_to(*initial_gaze, blocking=True) is True, "table head posture unconfirmed"
+                not_before = time.monotonic()
+                limit = not_before + 5.0
+                while time.monotonic() < limit:
+                    view = robot.get_observation()
+                    timing = (view.image_timing or {}).get("head_cam_left", {}) if view is not None else {}
+                    if timing.get("timestamp_ns", 0) / 1e9 > not_before:
+                        break
+                    time.sleep(.02)
+                else:
+                    raise RuntimeError("no synchronized table view after head motion")
+                robot_model = record_table_capture(view)
+                # Reuse this exact packet once its original interval has expired.
+                expires = view.received_monotonic + 2.02
+                time.sleep(max(0.0, expires - time.monotonic()))
+                outcome["stale_table_capture"] = assess_live_table_capture(view, robot_model)
+                outcome["complete"] = True
+                return
             prompts = prompts_for(case)
             if not model_endpoint:
                 model, model_worker, replies = start_model(output, case, prompts)
@@ -662,6 +701,8 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                     save()
                     if not receipt["ok"]:
                         raise RuntimeError(f"initial operator view not verified: {receipt['status']}")
+                    if case == TABLE_TRANSFER_CASE:
+                        record_table_capture(first_view)
                     executor.agent.update(full_perception=case in (OBJECT_RECOVERY_CONTROL, TABLE_TRANSFER_CASE),
                                           observation=first_view)
                     np.savez_compressed(
@@ -779,8 +820,12 @@ def main():
                         help="Starting head angles in radians, applied after survey registration captures.")
     parser.add_argument("--model-endpoint", help="OpenAI-compatible base URL, including /v1, for model trials.")
     parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
+    parser.add_argument("--table-preflight-only", action="store_true",
+                        help="Measure tabletop admission and reject a stale frame without calling the model.")
     args = parser.parse_args()
-    if bool(args.model_endpoint) != (args.case in MODEL_CASES):
+    if args.table_preflight_only and (args.case != TABLE_TRANSFER_CASE or args.model_endpoint):
+        parser.error("--table-preflight-only requires model-table-transfer without a model endpoint")
+    if not args.table_preflight_only and bool(args.model_endpoint) != (args.case in MODEL_CASES):
         parser.error("--model-endpoint is required for model cases and unavailable for scripted controls")
     if args.case in DISCORD_CASES:
         channel_id = os.getenv("EMET_DISCORD_CHANNEL_ID", "").strip()
@@ -792,8 +837,9 @@ def main():
     if initial_gaze is None:
         initial_gaze = (-1.48, -0.76) if args.case in FULL_CHAT_CASES else (0.0, -0.2)
     run(args.case, args.output, args.port_offset, args.scene, model_endpoint=args.model_endpoint,
-        model_name=args.model if args.model_endpoint else MODEL_NAME, initial_gaze=initial_gaze)
-    if args.case in DISCORD_CASES:
+        model_name=args.model if args.model_endpoint else MODEL_NAME, initial_gaze=initial_gaze,
+        table_preflight_only=args.table_preflight_only)
+    if args.case in DISCORD_CASES or args.table_preflight_only:
         return
     from score_stretch_navigation_chat import score_case, score_model_case
 
