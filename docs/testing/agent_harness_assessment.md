@@ -143,6 +143,26 @@ model response. The scorer records the exact model calls and verifies that
 the model received the motion result. Use a new output directory for each
 attempt and preserve both HTTP packets and scorer results.
 
+For tabletop admission, run `model-table-transfer --table-preflight-only
+--table-sweep` without a model endpoint. It measures the green support patch
+and red surface from calibrated depth, estimates the arm frame from the
+synchronized motor sample, and rejects a deliberately expired capture.
+The optional head sweep records a static multiview enclosure diagnostic.
+Whole-payload bounds, pose tracking, self-collision geometry, and the
+post-grasp stop remain separate execution requirements.
+
+For changed-object recovery, `model-object-recovery-changed` moves the fixture
+object while the camera faces away. The physics worker owns the intervention.
+The robot client receives measured observations and the scorer checks the
+hidden move from its independent trace. `model-object-recovery-revisit`
+supplies the return head angles to isolate visual reacquisition from view
+selection and metric grounding.
+
+Run `scripts/smoke_sourccey_bridge.py --table-view --model-endpoint URL` to
+exercise the Sourccey camera and turn control followed by read-only CHAT.
+Score camera input, explored cells in a delivered map, and actuation during
+the two CHAT turns. Retain the bridge's simulator-localization label.
+
 ## Stationary hardware
 
 Schedule Stretch and Innate Mars only after the simulator review. Use explicit
@@ -150,6 +170,10 @@ robot profiles, local receive-only `emet preview-cameras --source zmq
 --no-discord` and passive bridge observations. Audit progression, valid RGB,
 available metric depth and corresponding calibration, pose/TF and sensor
 dropouts. Keep unavailable streams visible in the results.
+Use `scripts/probe_stationary_bridge.py --robot stretch` or
+`--robot innate_mars` with the authorized observation host and port. The
+probe opens a subscriber socket, retains the latest sensor packet, and reports
+receive gaps and available acquisition-timestamp progression.
 Run read-only model questions on captured packets and record these as hardware
 image replay. Review the stationary runs and independent stop path before
 scoping a motion session. See the [Mars operator guide](../robots/innate_mars_hardware.md).
@@ -173,6 +197,16 @@ scoping a motion session. See the [Mars operator guide](../robots/innate_mars_ha
    policy adapter would be separate from the Stretch operator session.
    [RoboArena](https://robo-arena.github.io/) · [Policy interface](https://github.com/robo-arena/roboarena)
 
+The [Stretch pilot manifest](../../configs/eval/robocasa_stretch_pilot.json)
+freezes the three tasks, the source revision, one development layout, one
+held-out layout, and seeds. Run `scripts/eval_robocasa_stretch_preflight.py`
+with the pinned RoboCasa source checkout and an isolated dependency overlay
+using MuJoCo 3.3.1 and NumPy 2.2.5. Provision the corresponding RoboCasa assets.
+The script renders each fixture, preserves the model and joint initialization,
+and checks the upstream predicate against an initial state and a constructed
+success state in scorer scratch data. Start execution trials after measured
+reachability and the task's observed action requirements are verified.
+
 ## Evidence and paper figures
 
 Run the analysis-only exporter from the frozen checkout:
@@ -194,8 +228,11 @@ Supply one JSONL row per evaluated assignment, using
 JSONL file or absolute. Include the independently checked result for
 `passed` and `failed` rows as `independent_check`. Put the blocker in `reason`
 for blocked rows. Leave timing unavailable when the run has no corresponding
-clock. Optional timing keys are `wall_s`, `simulation_s`, `model_s`, and
-`planning_s`. Export retries separately so one case cannot overwrite another.
+clock. Optional timing keys are `wall_s`, `simulation_s`, `model_s`,
+`planning_s`, `collision_s`, and `execution_s`. A `milestones` field maps
+an independently scored milestone to true, false, or null for unmeasured.
+The exporter writes milestone counts, failure reasons, and per-phase latency
+figures. Retain attempt artifacts and export retries in distinct cohorts.
 
 Retain the actual request packets with ordered images, scorer references,
 source and fixture hashes, receipts, and short synchronized base/head traces
