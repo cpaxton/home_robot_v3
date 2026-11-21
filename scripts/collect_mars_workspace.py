@@ -187,10 +187,10 @@ def run_case(case, output):
     save(output / f"{case['id']}.json", row)
 
 
-def launch(case, output):
+def launch(case, output, *, worker=__file__):
     for _ in range(2):
         result = subprocess.run(
-            [sys.executable, __file__, "--output", str(output), "--worker-case", json.dumps(case)],
+            [sys.executable, str(worker), "--output", str(output), "--worker-case", json.dumps(case)],
             capture_output=True,
             text=True,
         )

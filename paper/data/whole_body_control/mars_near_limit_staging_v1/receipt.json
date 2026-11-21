@@ -1,0 +1,115 @@
+{
+  "simulation_only": true,
+  "training_frames": 2886,
+  "trainer_smoke_updates": 40,
+  "dataset_sha256": "f34a71af3b2ef2f0bd0bdbfed5ac5be9496393ef6382e995b28b0b85114667bc",
+  "manifest_sha256": "cad917a99622c56b932f1a25f1b803063737084823da796e32aa09cbe4174656",
+  "full_report_sha256": "d268c8137e00a41aa9a6063ea446086839f4519ffe34ea930f59036355396ba2",
+  "published_limit_source": "Live Innate OS 0.8.0 robot description",
+  "published_arm_limits_rad": [
+    [
+      -1.5708,
+      1.5708
+    ],
+    [
+      -1.22,
+      1.5708
+    ],
+    [
+      -1.7453,
+      1.5708
+    ],
+    [
+      -1.7453,
+      1.9199
+    ],
+    [
+      -1.5708,
+      1.5708
+    ]
+  ],
+  "training_coverage": [
+    {
+      "joint": 1,
+      "side": "lower",
+      "admitted": 3
+    },
+    {
+      "joint": 1,
+      "side": "upper",
+      "admitted": 3
+    },
+    {
+      "joint": 2,
+      "side": "lower",
+      "admitted": 2
+    },
+    {
+      "joint": 3,
+      "side": "lower",
+      "admitted": 2
+    },
+    {
+      "joint": 4,
+      "side": "lower",
+      "admitted": 3
+    },
+    {
+      "joint": 4,
+      "side": "upper",
+      "admitted": 3
+    },
+    {
+      "joint": 5,
+      "side": "lower",
+      "admitted": 3
+    },
+    {
+      "joint": 5,
+      "side": "upper",
+      "admitted": 3
+    }
+  ],
+  "train": {
+    "attempted": 30,
+    "admitted": 22
+  },
+  "audit": {
+    "attempted": 20,
+    "teacher_passed": 14,
+    "specialist_passed": 7,
+    "specialist_attempted": 14
+  },
+  "teacher_failures": {
+    "unsafe_contact": 2,
+    "wheel_lift": 9,
+    "arm_spline_sampling_exhausted": 1,
+    "spline_path_tracking_failed": 1,
+    "tracking_timeout": 1
+  },
+  "fresh_hardware_pose_audit": {
+    "capture_sha256": "1c4c0ffc7f3a147cfb60294bd74a3f1666b3483dab1f7316e65bf99d65782eb2",
+    "depth_pair_skew_s": 0.046948756,
+    "hardware_motion_commands_sent": 0,
+    "blockers": [
+      "published_joint_limit:joint3",
+      "captured_link3_chassis_proxy_penetration"
+    ],
+    "limit_violations": [
+      {
+        "joint": "joint3",
+        "reported_rad": 1.5723303075827821,
+        "limits_rad": [
+          -1.7453,
+          1.5708
+        ],
+        "outside_rad": 0.0015303075827821644,
+        "outside_degrees": 0.08768016585028486
+      }
+    ],
+    "geometry_diagnostic": {
+      "proxy_signed_distance_m": -0.017804081609088022,
+      "cad_hull_signed_distance_m": 0.0011169840260835133
+    }
+  }
+}

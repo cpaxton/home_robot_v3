@@ -252,3 +252,30 @@ def test_calibrated_head_mount_matches_captured_optical_tf():
     rectification = np.asarray(capture["samples"]["head_left_info"]["R"]).reshape(3, 3)
     expected = tf[:3, :3] @ rectification.T @ np.diag([1, -1, -1])
     np.testing.assert_allclose(data.cam_xmat[cid].reshape(3, 3), expected, atol=1e-8)
+
+
+def test_passive_capture_pairs_arm_with_delayed_depth():
+    from emet.robots.innate_mars.rehearsal_capture_ros import choose_arm_sample
+
+    arms = [{"stamp_ns": stamp} for stamp in (500_000_000, 600_000_000, 800_000_000, 950_000_000)]
+    assert choose_arm_sample(arms, [590_000_000, 950_000_000], 1_000_000_000) == arms[1]
+    assert choose_arm_sample(arms, [], 1_000_000_000) == arms[2]
+
+
+def test_innate_080_unsigned_depth_requires_matching_publisher():
+    from emet.rl.manipulation.herman_rehearsal import DEPTH_RULE_INNATE_080
+
+    buf = np.array([[0, 750]], dtype="<u2")
+    sample = {
+        "encoding": "16UC1",
+        "publisher_sha256": DEPTH_RULE_INNATE_080["publisher_sha256"],
+        "width": 2,
+        "height": 1,
+        "step": 4,
+        "bigendian": False,
+        "data_zlib_base64": base64.b64encode(zlib.compress(buf.tobytes())).decode(),
+    }
+    assert np.isnan(decode_depth(sample, DEPTH_RULE_INNATE_080)[0, 0])
+    assert decode_depth(sample, DEPTH_RULE_INNATE_080)[0, 1] == 0.75
+    with pytest.raises(ValueError, match="pinned publisher"):
+        decode_depth({**sample, "publisher_sha256": "0" * 64}, DEPTH_RULE_INNATE_080)

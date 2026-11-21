@@ -3,9 +3,23 @@
 import argparse
 import base64
 import collections
+import hashlib
 import json
 import time
 import zlib
+from pathlib import Path
+
+
+def choose_arm_sample(arms, depth_stamps, now):
+    """Prefer the newest depth frame with a matching arm sample and settled TF buffer."""
+    valid = [arm for arm in arms if 0 < arm["stamp_ns"] <= now - 150_000_000]
+    if not valid:
+        return None
+    for stamp in sorted((stamp for stamp in depth_stamps if stamp > 0), reverse=True):
+        candidate = min(valid, key=lambda arm: abs(arm["stamp_ns"] - stamp))
+        if abs(candidate["stamp_ns"] - stamp) <= 50_000_000:
+            return candidate
+    return valid[-1]
 
 
 def main():
@@ -86,6 +100,7 @@ def main():
         if not 0 < msg.height <= 4096 or not 0 < msg.width <= 4096:
             return
         if name == "depth":
+            publisher = Path.home() / "innate-os/ros2_ws/src/mars_bot/mars_cam/mars_cam/depth_estimator/publishing.cpp"
             # Preserve signed/unknown depth without guessing units. The offline
             # decoder requires explicit source provenance before using it.
             latest[name] = {
@@ -96,6 +111,11 @@ def main():
                 "encoding": msg.encoding,
                 "bigendian": bool(msg.is_bigendian),
                 "data_zlib_base64": base64.b64encode(zlib.compress(bytes(msg.data), 1)).decode(),
+                **(
+                    {"publisher_sha256": hashlib.sha256(publisher.read_bytes()).hexdigest()}
+                    if publisher.is_file()
+                    else {}
+                ),
             }
         else:
             channels = {"rgb8": 3, "bgr8": 3, "mono8": 1}.get(msg.encoding)
@@ -167,8 +187,8 @@ def main():
         now = node.get_clock().now().nanoseconds
         # Pair arm with interpolated TF ~150 ms in the past, not an unrelated
         # latest transform. Keep the time choice and any unavailable transform.
-        valid = [a for a in arms if 0 < a["stamp_ns"] <= now - 150_000_000]
-        chosen = valid[-1] if valid else latest.get("arm")
+        depth_stamps = [header(message)["stamp_ns"] for message in images.get("depth", ())]
+        chosen = choose_arm_sample(arms, depth_stamps, now) or latest.get("arm")
         if chosen:
             latest["arm"] = chosen
         query_ns = chosen["stamp_ns"] if chosen else 0

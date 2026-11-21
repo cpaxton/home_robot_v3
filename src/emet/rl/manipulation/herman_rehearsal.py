@@ -27,6 +27,14 @@ DEPTH_RULE = {
 }
 
 
+DEPTH_RULE_INNATE_080 = {
+    **DEPTH_RULE,
+    "encoding": "16UC1",
+    "publisher_sha256": "01194d8261ee60021ed7db5dcaca1bd8e1ceebc415c9f1f8a2a9ca36eccc6fbc",
+    "source": "mars_cam/depth_estimator/publishing.cpp:127-166",
+}
+
+
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -145,17 +153,21 @@ def decode_array(encoded, dtype, shape):
 
 
 def decode_depth(sample, rule):
-    if (
-        sample.get("encoding") != rule.get("encoding")
-        or rule.get("publisher_sha256") != DEPTH_PUBLISHER_SHA256
-        or rule.get("metres_per_unit") != 0.001
-        or sample.get("encoding") != "16SC1"
+    encoding = sample.get("encoding")
+    if rule == DEPTH_RULE and encoding == "16SC1":
+        integer_type = "i2"
+    elif (
+        rule == DEPTH_RULE_INNATE_080
+        and encoding == "16UC1"
+        and sample.get("publisher_sha256") == rule["publisher_sha256"]
     ):
-        raise ValueError("signed depth requires the pinned publisher millimetre rule")
+        integer_type = "u2"
+    else:
+        raise ValueError("depth requires the pinned publisher millimetre rule")
     width, height, step = sample["width"], sample["height"], sample["step"]
     if type(step) is not int or step < width * 2 or step % 2:
         raise ValueError("depth row stride mismatch")
-    dtype = ">i2" if sample["bigendian"] else "<i2"
+    dtype = (">" if sample["bigendian"] else "<") + integer_type
     raw = decode_array(sample["data_zlib_base64"], dtype, (height, step // 2))[:, :width]
     depth = raw.astype(float) * rule["metres_per_unit"]
     depth[raw <= 0] = np.nan
@@ -191,8 +203,10 @@ def rectified_intrinsics(info, width, height):
     return p[:, :3], r
 
 
-def project_depth(capture, rule=DEPTH_RULE, *, stride=4):
+def project_depth(capture, rule=None, *, stride=4):
     sample = capture["samples"]["depth"]
+    if rule is None:
+        rule = DEPTH_RULE_INNATE_080 if sample.get("encoding") == "16UC1" else DEPTH_RULE
     if sample["stamp_ns"] <= 0 or abs(sample["stamp_ns"] - capture["samples"]["arm"]["stamp_ns"]) > 50_000_000:
         raise ValueError("depth/arm pairing exceeds 50 ms")
     info = capture["samples"]["head_left_info"]
