@@ -19,6 +19,7 @@ import numpy as np
 from emet.controller.manipulation.capture_clock import local_monotonic_clock_id
 from emet.controller.manipulation.encoder_capture import STRETCH_CAPTURE_MOTORS, STRETCH_WHEEL_JOINTS
 from emet.motion.mujoco_collision import body_subtree
+from emet.simulation.depth_registration import camera_opencv_pose
 
 JOINT_WIDTH = {0: 7, 1: 4, 2: 1, 3: 1}
 
@@ -181,15 +182,6 @@ def robot_kinematic_signature(model, root_body="base_link"):
                 terms.append((wrap, object_name, float(model.wrap_prm[index])))
         motors.append((name, kind, target_name, model.actuator_gear[aid].tolist(), terms))
     return hashlib.sha256(json.dumps((body_rows, joints, cameras, motors), sort_keys=True).encode()).hexdigest()
-
-
-def camera_opencv_pose(model, data, camera_id, *, upright=False):
-    pose = np.eye(4)
-    pose[:3, :3] = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1.0, -1.0, -1.0])
-    if upright:
-        pose[:3, :3] = pose[:3, :3] @ np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
-    pose[:3, 3] = data.cam_xpos[camera_id]
-    return pose
 
 
 def capture_scene_for_sensors(model, data, physics_lock, *, cameras, root_body="base_link"):

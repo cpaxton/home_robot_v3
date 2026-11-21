@@ -10,6 +10,16 @@ def rendered_camera_intrinsics(fovy, width, height):
     return np.array([[f, 0.0, (width - 1) / 2.0], [0.0, f, (height - 1) / 2.0], [0.0, 0.0, 1.0]])
 
 
+def camera_opencv_pose(model, data, camera_id, *, upright=False):
+    """Return the rendered camera's world pose in the RGB-D optical frame."""
+    pose = np.eye(4)
+    pose[:3, :3] = data.cam_xmat[camera_id].reshape(3, 3) @ np.diag([1.0, -1.0, -1.0])
+    if upright:
+        pose[:3, :3] = pose[:3, :3] @ np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    pose[:3, 3] = data.cam_xpos[camera_id]
+    return pose
+
+
 def register_depth(depth, depth_k, rgb_k, rgb_from_depth, output_shape, *, return_provenance=False):
     """Project measured CV-camera depth with a nearest-sample z buffer.
 

@@ -2,6 +2,7 @@
   "schema_version": 1,
   "base_source": "6826582673e3163d2677150ae3c63db73b56b19a",
   "development_cases": "configs/eval/harness_capability_dev.json",
+  "robocasa_pilot": "configs/eval/robocasa_stretch_pilot.json",
   "model": "Qwen/Qwen3-VL-8B-Instruct",
   "seed": 0,
   "groups": [
@@ -106,6 +107,13 @@
     {"id": "observed-post-grasp-loss", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "#245 live post-grasp evidence-loss control pending"},
     {"id": "observed-base-handoff", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "Stationary observed controls and agent transfer first"},
     {"id": "observed-multigoal-swap-clutter", "stage": "observed-tamp", "adapter": "Stretch", "tier": "observed simulation", "status": "blocked", "reason": "Observed single transfer and base handoff first"},
+    {"id": "table-transfer-baseline", "stage": "expanded-chat", "adapter": "Stretch", "tier": "observed simulation", "status": "pending"},
+    {"id": "table-transfer-repeat", "stage": "expanded-chat", "adapter": "Stretch", "tier": "observed simulation", "status": "pending"},
+    {"id": "table-capture", "stage": "expanded-sensing", "adapter": "Stretch", "tier": "observed simulation control", "status": "pending"},
+    {"id": "table-stale-capture", "stage": "expanded-sensing", "adapter": "Stretch", "tier": "observed simulation control", "status": "pending"},
+    {"id": "object-recovery-changed", "stage": "expanded-chat", "adapter": "Stretch", "tier": "observed simulation", "status": "pending"},
+    {"id": "sourccey-bridge", "stage": "expanded-sensing", "adapter": "Sourccey", "tier": "simulation with simulator localization", "status": "pending"},
+    {"id": "sourccey-chat", "stage": "expanded-chat", "adapter": "Sourccey", "tier": "simulation with simulator localization", "status": "pending"},
     {"id": "discord-stretch", "stage": "operator", "adapter": "Stretch", "tier": "supervised simulation", "status": "blocked", "reason": "Dedicated private test channel and production CHAT camera smoke required"},
     {"id": "hardware-stretch", "stage": "operator", "adapter": "Stretch", "tier": "stationary hardware", "status": "blocked", "reason": "Simulator review and operator hardware session required"},
     {"id": "hardware-mars", "stage": "operator", "adapter": "Innate Mars", "tier": "stationary hardware", "status": "blocked", "reason": "Simulator review and operator hardware session required"}

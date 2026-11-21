@@ -366,11 +366,12 @@ def _strip_geom_shellinertia(xml_str: str) -> str:
     return re.sub(r"<geom\s+[^>]*?>", repl, xml_str)
 
 
-def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
+def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None, *, output_path=None) -> str:
     """
     Generates Robot XML with absolute path to mesh files
     Args:
         robot_pose_attrib: Robot pose attributes in form {"pos": "x y z", "quat": "x y z w"}
+        output_path: Optional destination for a persistent fixture's robot include.
     Returns:
         str: Path to the generated XML file
     """
@@ -400,11 +401,11 @@ def get_absolute_path_stretch_xml(robot_pose_attrib: dict | None = None) -> str:
             default_robot_xml,
         )
 
-    # Absosolute path converted streth xml
-    with open(models_path + "/stretch_temp_abs.xml", "w") as f:
+    output_path = str(output_path) if output_path is not None else models_path + "/stretch_temp_abs.xml"
+    with open(output_path, "w") as f:
         f.write(default_robot_xml)
-    print("Saving temp abs path xml: {}".format(models_path + "/stretch_temp_abs.xml"))
-    return models_path + "/stretch_temp_abs.xml"
+    print(f"Saving Stretch robot XML: {output_path}")
+    return output_path
 
 
 def map_between_ranges(value: float, from_min_max: tuple[float, float], to_min_max: tuple[float, float]) -> float:

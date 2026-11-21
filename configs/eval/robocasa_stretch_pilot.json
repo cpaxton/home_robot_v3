@@ -1,0 +1,16 @@
+{
+  "robocasa_version": "1.0.1",
+  "robocasa_revision": "7bfc60c9d26c02506d4265cbe0e86b35e6e25d42",
+  "embodiment": "Stretch adaptation",
+  "model_checkpoint": "Qwen/Qwen3-VL-8B-Instruct",
+  "model_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "decoding": "greedy",
+  "model_dtype": "bfloat16",
+  "development": {"layout": 11, "style": 11, "seeds": [0]},
+  "held_out": {"layout": 1, "style": 1, "seeds": [0, 1, 2]},
+  "tasks": [
+    {"id": "PickPlaceCounterToSink", "wall_limit_s": 360, "requires": ["observed-transfer"]},
+    {"id": "OpenDrawer", "wall_limit_s": 360, "requires": ["observed-articulation"]},
+    {"id": "CategorizeCondiments", "wall_limit_s": 720, "requires": ["observed-transfer", "stopped-base-handoff"]}
+  ]
+}

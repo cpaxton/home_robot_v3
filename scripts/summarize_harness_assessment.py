@@ -7,13 +7,15 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 from collections import Counter
 from pathlib import Path
 
 from emet.agent.skills.specs import CHAT_SKILL_SPECS, EQA_SKILL_SPECS
 
 STATUSES = ("passed", "failed", "infrastructure_error", "timeout", "blocked", "pending")
-TIMINGS = ("wall_s", "simulation_s", "model_s", "planning_s")
+TIMINGS = ("wall_s", "simulation_s", "model_s", "planning_s", "collision_s", "execution_s")
+RESOURCES = ("cpu_peak_percent", "gpu_peak_memory_mib", "max_resident_kib")
 
 
 def load_manifest(path, root):
@@ -29,6 +31,17 @@ def load_manifest(path, root):
         )
     dev_cases = json.loads((root / protocol["development_cases"]).read_text())["episodes"]
     cases = list(protocol["cases"])
+    if "robocasa_pilot" in protocol:
+        pilot = json.loads((root / protocol["robocasa_pilot"]).read_text())
+        for task in pilot["tasks"]:
+            for split in ("development", "held_out"):
+                for seed in pilot[split]["seeds"]:
+                    case_id = f"{task['id']}-{split}-{seed}"
+                    cases.append({"id": case_id, "stage": "robocasa-preflight", "adapter": "Stretch",
+                                  "tier": "adapted simulation fixture control", "status": "pending"})
+                    cases.append({"id": case_id, "stage": "robocasa-control" if split == "development"
+                                  else "robocasa-model", "adapter": "Stretch", "tier": "adapted observed simulation",
+                                  "status": "blocked", "reason": "Requires " + ", ".join(task["requires"])})
     for case in dev_cases:
         for stage, adapter, tier in (
             ("geometry", "MuJoCo probe", "geometry control"),
@@ -78,6 +91,15 @@ def audited_results(path, cases):
                 row["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
             if row["status"] in ("passed", "failed") and not row.get("independent_check"):
                 raise ValueError(f"Missing independent check for {key}")
+            for metric in (*TIMINGS, *RESOURCES):
+                value = row.get(metric)
+                if value is not None and (type(value) not in (float, int) or not math.isfinite(value) or value < 0):
+                    raise ValueError(f"Invalid {metric} for {key}")
+            milestones = row.get("milestones", {})
+            if not isinstance(milestones, dict) or any(
+                not name or value is not None and type(value) is not bool for name, value in milestones.items()
+            ):
+                raise ValueError(f"Invalid milestones for {key}")
             rows.append(row)
     return rows
 
@@ -114,6 +136,7 @@ def export(manifest_path, report_paths, out, root):
         "status",
         "independent_check",
         *TIMINGS,
+        *RESOURCES,
         "reason",
         "source_sha",
         "artifact",
@@ -123,6 +146,13 @@ def export(manifest_path, report_paths, out, root):
         writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+    with (out / "milestones.csv").open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(("stage", "id", "tier", "milestone", "achieved"))
+        for row in rows:
+            for name, achieved in sorted(row.get("milestones", {}).items()):
+                writer.writerow((row["stage"], row["id"], row["tier"], name, achieved))
 
     table = [
         "# Agent capability matrix",
@@ -152,13 +182,27 @@ def export(manifest_path, report_paths, out, root):
     (out / "capability_matrix.md").write_text("\n".join(table) + "\n")
 
     counts = {}
+    milestones_by_tier = {}
     for tier in dict.fromkeys(row["tier"] for row in rows):
         counts[tier] = dict(Counter(row["status"] for row in rows if row["tier"] == tier))
+        milestones = {}
+        for row in rows:
+            if row["tier"] == tier:
+                for name, achieved in row.get("milestones", {}).items():
+                    state = "unmeasured" if achieved is None else "achieved" if achieved else "missed"
+                    milestones.setdefault(name, Counter())[state] += 1
+        if milestones:
+            milestones_by_tier[tier] = milestones
     summary = {
         "base_source": protocol["base_source"],
         "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         "assigned": len(rows),
         "counts_by_evidence_tier": counts,
+        "milestones_by_evidence_tier": milestones_by_tier,
+        "failures_by_reason": dict(Counter(
+            row["reason"] or row.get("independent_check") or row["status"] for row in rows
+            if row["status"] in ("failed", "timeout", "infrastructure_error", "blocked")
+        )),
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return rows
@@ -192,6 +236,25 @@ def plot_outcomes(rows, out):
     for suffix in ("pdf", "png"):
         fig.savefig(out / f"outcomes_and_cost.{suffix}", dpi=160)
     plt.close(fig)
+
+    phases = ("model_s", "planning_s", "collision_s", "execution_s")
+    timed = [row for row in rows if any(row.get(phase) is not None for phase in phases)]
+    if timed:
+        fig, axes = plt.subplots(1, len(phases), sharey=True, figsize=(11, max(2.8, .35 * len(timed) + 1)),
+                                 layout="constrained")
+        positions = range(len(timed))
+        for axis, phase in zip(axes, phases, strict=True):
+            axis.set_yticks(positions, [f"{row['stage']} / {row['id']}" for row in timed])
+            axis.set_title(phase.removesuffix("_s").capitalize())
+            axis.set_xlabel("Seconds")
+            axis.grid(axis="x", alpha=.25)
+            for index, row in enumerate(timed):
+                if row.get(phase) is not None:
+                    axis.scatter(row[phase], index, color="#264867", s=20)
+        axes[0].invert_yaxis()
+        for suffix in ("pdf", "png"):
+            fig.savefig(out / f"latency_breakdown.{suffix}", dpi=160)
+        plt.close(fig)
 
 
 def plot_recorded_examples(geometry, replay, out):

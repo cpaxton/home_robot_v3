@@ -195,6 +195,7 @@ def model_generation_wizard(
     robot_spawn_pose: dict = None,
     robot: str = "stretch",
     seed: int | None = None,
+    inspect_environment=None,
 ) -> tuple[mujoco.MjModel, str, dict]:
     """
     Wizard/API to generate a kitchen model for a given task, layout, and style.
@@ -209,6 +210,7 @@ def model_generation_wizard(
             use a PandaMobile placeholder in Robocasa, then strip-and-replace with the real MJCF.
             Robosuite-native names (e.g. ``"PandaOmron"``, ``"Tiago"``, ``"GR1"``) keep that robot in the scene.
         seed: Robosuite env seed for ``env.reset()`` object placement (``None`` = unseeded / random).
+        inspect_environment: Optional evaluator callback receiving the seeded task and compiled robot model.
     Returns:
         Tuple of (MjModel, xml_string, object_placements_info).
     """
@@ -312,7 +314,11 @@ def model_generation_wizard(
 
         click.secho("\nMaking Robot Placement...\n", fg="yellow")
         if use_stretch_robot:
-            xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose)
+            robot_xml_path = None
+            if write_to_file is not None:
+                scene_path = Path(write_to_file).resolve()
+                robot_xml_path = scene_path.with_name(f"{scene_path.stem}-robot.xml")
+            xml = add_stretch_to_kitchen(xml, robot_base_fixture_pose, robot_xml_path=robot_xml_path)
         elif use_galaxea_robot:
             xml = add_galaxea_r1_to_kitchen(xml, robot_base_fixture_pose, robot_key=robot_key)
         elif robot_key == "sourccey":
@@ -347,6 +353,11 @@ def model_generation_wizard(
             f.write(xml)
         print(colored(f"Model saved to {write_to_file}", "green"))
 
+    if inspect_environment is not None:
+        try:
+            inspect_environment(env, model)
+        finally:
+            env.close()
     return model, xml, object_placements_info
 
 
@@ -388,12 +399,12 @@ def custom_cleanups(xml: str) -> tuple[str, dict]:
     return xml, remove_robot_attrib
 
 
-def add_stretch_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
+def add_stretch_to_kitchen(xml: str, robot_pose_attrib: dict, *, robot_xml_path=None) -> str:
     """
     Add stretch robot to kitchen xml
     """
     print(f"Adding stretch to kitchen at pos: {robot_pose_attrib['pos']} quat: {robot_pose_attrib['quat']}")
-    stretch_xml_absolute = get_absolute_path_stretch_xml(robot_pose_attrib)
+    stretch_xml_absolute = get_absolute_path_stretch_xml(robot_pose_attrib, output_path=robot_xml_path)
     # add Stretch xml
     xml = insert_line_after_mujoco_tag(
         xml,
