@@ -173,7 +173,7 @@ def score_model_case(directory):
     passed = (result["complete"] and bool(statuses) and all(status == 200 for status in statuses)
               and image_present and not private_fields and bool(final)
               and all(row["accepted"] and not row["forbidden"] for row in moves))
-    if case in ("model-full-chat", "model-object-recovery", "model-table-transfer"):
+    if case in ("model-full-chat", "model-object-recovery", "model-object-recovery-changed", "model-table-transfer"):
         turns = []
         for start_turn, end_turn in zip(boundaries[:-1], boundaries[1:], strict=True):
             first = start_turn["completed_model_requests"]
@@ -214,28 +214,34 @@ def score_model_case(directory):
         record.update(task_completed=task_completed, safe_stop=safe_stop, first_refusal=refusal,
                       transfer_receipts=receipts, red_start_xyz=initial_red, red_final_xyz=final_red,
                       max_red_lift_m=red_lift_m, max_blue_motion_m=blue_motion_m,
-                      final_in_target=within_target, final_on_table=on_table, settled=settled)
+                      final_in_target=within_target, final_on_table=on_table, settled=settled,
+                      milestones={"lift": red_lift_m > .025, "delivery": within_target and on_table,
+                                  "stable_placement": within_target and on_table and settled,
+                                  "protected_object": blue_motion_m < .007, "stationary_base": stationary})
         passed = passed and stationary and task_completed
-    elif case == "model-object-recovery":
+    elif case in ("model-object-recovery", "model-object-recovery-changed"):
         import numpy as np
 
         from emet.utils.image import pinhole_camera_from_intrinsics_and_depth
 
-        target = np.array([-.17, -.55, .52])
+        changed = case == "model-object-recovery-changed"
+        target = np.array(before["objects"]["object1"]["xyz"] if changed else [-.17, -.55, .52])
+        final_target = np.array(after["objects"]["object1"]["xyz"]) if changed else target
         visible_pixels = []
-        for boundary in boundaries:
+        for index, boundary in enumerate(boundaries):
             with np.load(directory / boundary["observed_view"]) as view:
                 rgb, depth, k, camera_pose = (view[name] for name in ("rgb", "depth", "camera_K", "camera_pose"))
             points = pinhole_camera_from_intrinsics_and_depth(k, depth).depth_to_xyz(depth)
             xyz = points @ camera_pose[:3, :3].T + camera_pose[:3, 3]
             red, green, blue = np.moveaxis(rgb.astype(np.int16), -1, 0)
             selected = (blue > red + 25) & (blue > green + 25) & np.isfinite(depth) & (depth > 0)
-            selected &= np.all(np.abs(xyz - target) < [.10, .12, .085], axis=-1)
+            expected = final_target if index >= 2 else target
+            selected &= np.all(np.abs(xyz - expected) < [.10, .12, .085], axis=-1)
             visible_pixels.append(int(np.count_nonzero(selected)))
         match = re.search(r"\[query_memory\] \[query_memory\] Yes, found at approximately \(([^)]+)\)", agent)
         memory_xyz = np.array([float(value) for value in match[1].split(",")]) if match else None
         memory_error = float(np.linalg.norm(memory_xyz - target)) if memory_xyz is not None else None
-        seed, away, remembered, returned = [turn["answer"].lower() for turn in turns]
+        seed, away, remembered, returned = [turn["answer"].lower() for turn in turns[:4]]
         looked_away = visible_pixels[2] == visible_pixels[3] == 0 and bool(re.search(
             r"not visible|do not see|don't see|cannot see|can't see|not in the", away
         ))
@@ -249,9 +255,29 @@ def score_model_case(directory):
                   and visible_pixels[1] > 30 and "blue" in seed and looked_away
                   and "query_memory" in turns[2]["tools"] and remembered_answer
                   and memory_error is not None and memory_error < .15 and recovered
-                  and "describe_scene" in turns[-1]["tools"]
+                  and "describe_scene" in turns[3]["tools"]
                   and not nav and receipt is None and record["held_out_travel_m"] < .001
                   and angular_error(yaw - yaw0) < .002)
+        if changed:
+            grounded = None
+            for line in agent.splitlines():
+                match = re.match(r"\[ground_object\] \[ground_object\] (\{.*\})$", line)
+                if match:
+                    geometry = json.loads(match[1]).get("geometry") or {}
+                    if geometry.get("status") == "admitted":
+                        grounded = np.array(geometry["xyz"])
+            shift = float(np.linalg.norm(final_target - target))
+            error = float(np.linalg.norm(grounded - final_target)) if grounded is not None else None
+            answer = turns[-1]["answer"].lower()
+            inferred_change = bool(re.search(r"\b(?:moved|shifted|different|changed)\b", answer))
+            has_intervention = json.loads((directory / "scoring-intervention.json").read_text())["ok"]
+            record.update(object_shift_m=shift, current_grounding_error_m=error,
+                          current_geometry_xyz=grounded.tolist() if grounded is not None else None,
+                          acknowledged_change=inferred_change)
+            passed = (passed and has_intervention and shift > .15
+                      and error is not None and error < .10
+                      and np.linalg.norm(grounded - target) > .10
+                      and "ground_object" in turns[-1]["tools"] and inferred_change)
     elif case == "model-full-chat":
         from PIL import Image
 
@@ -337,6 +363,6 @@ if __name__ == "__main__":
     case = json.loads((output / "result.json").read_text())["case"]
     if case in ("model-discord", "model-discord-drive", "model-discord-full"):
         parser.error("Review the interactive Discord trial against the operator protocol")
-    model_trial = case in ("model-read-only", "model-look-around", "model-drive", "model-full-chat", "model-object-recovery",
-                           "model-table-transfer")
+    model_trial = case in ("model-read-only", "model-look-around", "model-drive", "model-full-chat",
+                           "model-object-recovery", "model-object-recovery-changed", "model-table-transfer")
     print(json.dumps((score_model_case if model_trial else score_case)(output), indent=2))

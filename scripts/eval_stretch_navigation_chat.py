@@ -57,9 +57,11 @@ DISCORD_DRIVE_CASE = "model-discord-drive"
 DISCORD_FULL_CASE = "model-discord-full"
 FULL_CHAT_CONTROL = "model-full-chat"
 OBJECT_RECOVERY_CONTROL = "model-object-recovery"
+CHANGED_OBJECT_RECOVERY = "model-object-recovery-changed"
+OBJECT_RECOVERY_CASES = (OBJECT_RECOVERY_CONTROL, CHANGED_OBJECT_RECOVERY)
 TABLE_TRANSFER_CASE = "model-table-transfer"
 DISCORD_CASES = (DISCORD_CASE, DISCORD_DRIVE_CASE, DISCORD_FULL_CASE)
-TERMINAL_FULL_CASES = (FULL_CHAT_CONTROL, OBJECT_RECOVERY_CONTROL, TABLE_TRANSFER_CASE)
+TERMINAL_FULL_CASES = (FULL_CHAT_CONTROL, *OBJECT_RECOVERY_CASES, TABLE_TRANSFER_CASE)
 FULL_CHAT_CASES = (DISCORD_FULL_CASE, *TERMINAL_FULL_CASES)
 MODEL_CASES = ("model-read-only", "model-look-around", "model-drive", *TERMINAL_FULL_CASES, *DISCORD_CASES)
 WITNESS_CASES = ("witness-clear", "slip", "witness-loss", "model-drive", "operator-stop", DISCORD_DRIVE_CASE,
@@ -80,8 +82,8 @@ def prompts_for(case):
     if case == FULL_CHAT_CONTROL:
         return ("What can you see?", "Which object is to the right of the red cylinder?",
                 "Is a red mug visible in the current view?", "Show me your map.")
-    if case == OBJECT_RECOVERY_CONTROL:
-        return (
+    if case in OBJECT_RECOVERY_CASES:
+        turns = (
             "Look at the table using describe_scene with pan_rad -1.48 and tilt_rad -0.76. "
             "Describe the blue block and remember where you are looking.",
             "Look straight ahead using describe_scene with pan_rad 0 and tilt_rad -0.2. "
@@ -91,6 +93,10 @@ def prompts_for(case):
             "Look back at the blue block from your earlier table view. Use measured head motion "
             "and tell me whether the block is visible again and what it is resting on.",
         )
+        if case == CHANGED_OBJECT_RECOVERY:
+            turns += ("Use ground_object to locate the blue block in the current view. Tell me whether "
+                      "that agrees with its earlier remembered location. Keep the base stationary.",)
+        return turns
     if case == TABLE_TRANSFER_CASE:
         return ("Pick up the red cylinder and place it on the green target area on the table. "
                 "Keep the base stationary and leave the blue cube undisturbed. "
@@ -189,13 +195,34 @@ def serve(scene, offset, case, output):
     from emet.eval.stretch_encoder_server import StretchEncoderNavigationServer
 
     score_joints = {}
-    if case == TABLE_TRANSFER_CASE:
+    if case in (TABLE_TRANSFER_CASE, CHANGED_OBJECT_RECOVERY):
         model = mujoco.MjModel.from_xml_path(str(scene))
-        for name in ("object1", "object2"):
+        names = ("object1", "object2") if case == TABLE_TRANSFER_CASE else ("object1",)
+        for name in names:
             joint = int(model.body(name).jntadr[0])
             if model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_FREE:
                 raise ValueError(f"scorer requires a free joint for {name}")
             score_joints[name] = (int(model.jnt_qposadr[joint]), int(model.jnt_dofadr[joint]))
+
+    if case == CHANGED_OBJECT_RECOVERY:
+        from emet.simulation.sim_manipulation import set_free_body_pose
+        from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
+
+        callback = MujocoServer._ctrl_callback
+        intervention = output / "scoring-intervention.request"
+        acknowledgement = output / "scoring-intervention.json"
+        shifted = False
+
+        def shift_fixture_after_step(server, model, data):
+            nonlocal shifted
+            callback(server, model, data)
+            if not shifted and intervention.is_file():
+                shifted = True
+                # Only the physics process sees this fixture intervention.
+                ok = set_free_body_pose(model, data, "object1", [-.13, -.75, .55])
+                acknowledgement.write_text(json.dumps({"ok": ok, "monotonic": time.monotonic()}))
+
+        MujocoServer._ctrl_callback = shift_fixture_after_step
 
     class ScoredEncoderServer(StretchEncoderNavigationServer):
         def __init__(self, *args, **kwargs):
@@ -457,6 +484,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
     operator_stop = threading.Event() if case in ("operator-stop", DISCORD_DRIVE_CASE, DISCORD_FULL_CASE) else None
     monitor_done = threading.Event()
     monitor = None
+    table_robot_model = None
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     if scene is None and full_chat:
@@ -515,19 +543,15 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
             (output / "operator-stop.json").write_text(json.dumps({"requested_monotonic": requested_at}) + "\n")
 
     def record_table_capture(view):
-        import mujoco
-
         from emet.eval.stretch_table_observation import assess_live_table_capture
 
+        outcome["table_capture"] = assess_live_table_capture(view, table_robot_model)
         np.savez_compressed(output / "table-capture.npz", rgb=view.rgb, depth=view.depth,
                             camera_K=view.camera_K, camera_pose=view.camera_pose)
         (output / "table-capture-timing.json").write_text(json.dumps({
             "received_monotonic": view.received_monotonic, "image_timing": view.image_timing,
         }, indent=2) + "\n")
-        robot_model = mujoco.MjModel.from_xml_path(str(robot_model_path))
-        outcome["table_capture"] = assess_live_table_capture(view, robot_model)
         save()
-        return robot_model
 
     try:
         with (output / "server.log").open("w") as log:
@@ -614,6 +638,10 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
             outcome["base_before_xyt"] = before.tolist()
             outcome["ready_wall_s"] = time.monotonic() - started
             save()
+            if case == TABLE_TRANSFER_CASE:
+                import mujoco
+
+                table_robot_model = mujoco.MjModel.from_xml_path(str(robot_model_path))
             if table_preflight_only:
                 from emet.eval.stretch_table_observation import assess_live_table_capture
 
@@ -628,11 +656,11 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                     time.sleep(.02)
                 else:
                     raise RuntimeError("no synchronized table view after head motion")
-                robot_model = record_table_capture(view)
+                record_table_capture(view)
                 # Reuse this exact packet once its original interval has expired.
                 expires = view.received_monotonic + 2.02
                 time.sleep(max(0.0, expires - time.monotonic()))
-                outcome["stale_table_capture"] = assess_live_table_capture(view, robot_model)
+                outcome["stale_table_capture"] = assess_live_table_capture(view, table_robot_model)
                 outcome["complete"] = True
                 return
             prompts = prompts_for(case)
@@ -648,6 +676,18 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                 prompt = next(next_prompt, None)
                 if case == TABLE_TRANSFER_CASE and prompt is None:
                     time.sleep(.5)
+                if case == CHANGED_OBJECT_RECOVERY and len(turns) == 2:
+                    (output / "scoring-intervention.request").touch()
+                    acknowledgement = output / "scoring-intervention.json"
+                    deadline = time.monotonic() + 5.0
+                    while time.monotonic() < deadline:
+                        if acknowledgement.is_file() and acknowledgement.stat().st_size:
+                            if not json.loads(acknowledgement.read_text())["ok"]:
+                                raise RuntimeError("fixture intervention failed")
+                            break
+                        time.sleep(.03)
+                    else:
+                        raise RuntimeError("fixture intervention was not acknowledged")
                 pose = robot.get_base_pose()
                 limit = time.monotonic() + 7.0
                 while pose is None and time.monotonic() < limit:
@@ -658,7 +698,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                 boundary = {"prompt": prompt, "wall_time": time.time(), "base_xyt": pose.tolist()}
                 if case in TERMINAL_FULL_CASES:
                     boundary["completed_model_requests"] = len(list((output / "model-requests").glob("*/receipt.json")))
-                if case == OBJECT_RECOVERY_CONTROL:
+                if case in OBJECT_RECOVERY_CASES:
                     observation = robot.get_observation()
                     if observation is None or observation.depth is None or observation.rgb is None:
                         raise RuntimeError("missing RGB-D at recovery turn boundary")
@@ -703,7 +743,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                         raise RuntimeError(f"initial operator view not verified: {receipt['status']}")
                     if case == TABLE_TRANSFER_CASE:
                         record_table_capture(first_view)
-                    executor.agent.update(full_perception=case in (OBJECT_RECOVERY_CONTROL, TABLE_TRANSFER_CASE),
+                    executor.agent.update(full_perception=case in (*OBJECT_RECOVERY_CASES, TABLE_TRANSFER_CASE),
                                           observation=first_view)
                     np.savez_compressed(
                         output / "operator-start-view.npz", rgb=first_view.rgb, depth=first_view.depth,
