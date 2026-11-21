@@ -50,6 +50,10 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       The live control measures the destination and synchronized arm pose and
       rejects an expired capture. The cylinder's visible depth and the 17 mm
       head sweep still leave its full shape and rigid pose unqualified.
+      A wider scan supplied up to 24 reference landmarks on a textured
+      cylinder. Its tabletop contact still prevented a complete bound.
+      Qualify a measured or calibrated payload envelope and bind the live
+      source and refiner.
       [Transfer protocol](docs/plans/2026-11-18_tamp_agent_closeout.md#remaining-execution-qualification).
 - [x] Freeze the RoboCasa365 Stretch pilot and check the 12 adapted fixtures.
       All render with metric depth and pass upstream predicate controls on
@@ -58,6 +62,10 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       control and held-out episodes. Sink transfer requires the observed
       transfer gate. Drawer opening requires observed articulation. The
       composite also requires the stopped-base handoff.
+      The original kitchen starts require stance changes under the tested
+      arm poses. The development sink has clear off-center endpoint probes.
+      Confirm guarded paths, carry and release into a measured clear region.
+      [Follow-up experiments](docs/experiments/harness_assessment_20261119.md#tabletop-manipulation-and-robocasa-reachability-follow-up).
 - [x] Verify that Stretch can revisit and see a block whose position changed
       while out of view. The explicit head revisit recovers the moved block
       without base motion.

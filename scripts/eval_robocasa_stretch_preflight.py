@@ -78,6 +78,30 @@ def predicate_control(task_id, scorer, initial):
     return scorer.score(data)
 
 
+def fixture_reach_targets(task, env, model, data):
+    """Reference points for evaluator-only reachability screening."""
+    def object_position(name):
+        return data.body(env.objects[name].root_body).xpos.copy().tolist()
+
+    if task == "PickPlaceCounterToSink":
+        p0, px, py, pz = next(iter(env.sink.get_int_sites(relative=False).values()))
+        return {"counter_object": object_position("obj"),
+                "sink_interior": (p0 + ((px - p0) + (py - p0) + (pz - p0)) / 2).tolist()}
+    if task == "CategorizeCondiments":
+        return {
+            target: object_position(name)
+            for target, name in (("counter_bottle", "obj1"), ("counter_shaker", "obj2"),
+                                 ("cabinet_bottle_reference", "cab_obj1"), ("cabinet_shaker_reference", "cab_obj2"))
+        }
+    handle = f"{env.drawer.name}_door_handle_main"
+    before = data.body(handle).xpos.copy().tolist()
+    opened = mujoco.MjData(model)
+    opened.qpos[:] = data.qpos
+    opened.joint(f"{env.drawer.name}_slidejoint").qpos[:] = -.55 * env.drawer.size[1]
+    mujoco.mj_kinematics(model, opened)
+    return {"closed_handle": before, "opened_handle": opened.body(handle).xpos.copy().tolist()}
+
+
 def inspect_fixture(task, env, model, out):
     from emet.simulation.depth_registration import camera_opencv_pose, rendered_camera_intrinsics
 
@@ -113,6 +137,8 @@ def inspect_fixture(task, env, model, out):
     constructed_success = predicate_control(task, scorer, data)
     if initial_success or not constructed_success:
         raise ValueError(f"upstream predicate controls failed ({initial_success=}, {constructed_success=})")
+    targets = fixture_reach_targets(task, env, model, data)
+    (out / "scorer-only-reach-targets.json").write_text(json.dumps(targets, indent=2) + "\n")
     return {
         "valid_depth_pixels": int(np.count_nonzero(valid)),
         "predicate": f"{type(env).__module__}.{type(env).__name__}._check_success",
@@ -171,6 +197,9 @@ def run(source, protocol_path, output, task_filter):
                     row["fixture_sha256"] = hashlib.sha256((case / "stretch.xml").read_bytes()).hexdigest()
                     row["robot_include_sha256"] = hashlib.sha256((case / "stretch-robot.xml").read_bytes()).hexdigest()
                     row["fixture_joints_sha256"] = hashlib.sha256((case / "fixture-joints.json").read_bytes()).hexdigest()
+                    row["reach_targets_sha256"] = hashlib.sha256(
+                        (case / "scorer-only-reach-targets.json").read_bytes()
+                    ).hexdigest()
                 except (ValueError, RuntimeError, OSError, KeyError, AssertionError) as error:
                     row.update(status="blocked", reason=f"{type(error).__name__}: {error}")
                 row["wall_s"] = time.monotonic() - started

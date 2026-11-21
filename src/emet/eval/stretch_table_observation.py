@@ -16,7 +16,7 @@ from emet.motion.observed_support import fit_observed_support
 from emet.motion.observed_workspace import ObservedWorkspace
 
 
-def _measure_target(observation, observation_id):
+def _measure_target(observation, observation_id, *, reference_plane=None):
     rgb, depth, world = capture_arrays(observation)
     red, green, blue = rgb.astype(np.int16).transpose(2, 0, 1)
     valid = np.isfinite(depth) & (depth > .1) & (depth <= 2.5)
@@ -27,17 +27,23 @@ def _measure_target(observation, observation_id):
             observation, destination, observation_id=observation_id, measurement_margin_m=.004
         )
     except ObservationUnavailable as error:
-        return {"destination": {"status": "blocked", "reason": str(error)}}, None
-    report["destination"] = {
-        "status": "measured",
-        "visible_points": int(destination.sum()),
-        "bounds_m": patch.bounds.tolist(),
-        "plane_residual_m": patch.residual_m,
-    }
+        report["destination"] = {"status": "blocked", "reason": str(error)}
+        if reference_plane is None:
+            return report, None
+        plane, margin = reference_plane, .004
+    else:
+        report["destination"] = {
+            "status": "measured",
+            "visible_points": int(destination.sum()),
+            "bounds_m": patch.bounds.tolist(),
+            "plane_residual_m": patch.residual_m,
+            "plane": patch.plane.tolist(),
+        }
+        plane, margin = patch.plane, patch.measurement_margin_m
 
-    height = world[..., 2] - (world[..., :2] @ patch.plane[:2] + patch.plane[2])
+    height = world[..., 2] - (world[..., :2] @ plane[:2] + plane[2])
     target_candidates = valid & (red > 100) & (red > 3 * green) & (red > 3 * blue)
-    components, _ = label(target_candidates & (height > patch.measurement_margin_m))
+    components, _ = label(target_candidates & (height > margin))
     counts = np.bincount(components.ravel())[1:]
     candidates = np.flatnonzero(counts >= 25) + 1
     if len(candidates) != 1:
@@ -59,7 +65,7 @@ def _measure_target(observation, observation_id):
     return report, measured
 
 
-def _enclose_views(views):
+def _enclose_views(views, *, depth_margin_m=.02):
     # Bound the measured neighborhood, not the object. A possible component
     # reaching any grid edge is still unbounded under the free-space model.
     resolution = .015
@@ -69,7 +75,8 @@ def _enclose_views(views):
         return {"status": "blocked", "reason": "static_target_association_inconsistent"}
     bounds = (center - 12 * resolution, center + 12 * resolution)
     grids = [
-        ObservedWorkspace.from_depth(depth, obs.camera_K, obs.camera_pose, workspace=bounds, resolution=resolution)
+        ObservedWorkspace.from_depth(depth, obs.camera_K, obs.camera_pose, workspace=bounds,
+                                     resolution=resolution, depth_margin_m=depth_margin_m)
         for obs, _, depth, _, _ in views
     ]
     grid = ObservedWorkspace.fuse_static(grids) if len(grids) > 1 else grids[0]

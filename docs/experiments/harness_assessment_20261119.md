@@ -636,3 +636,50 @@ qualified. The stale-packet result covers capture admission. The public
 preflight and post-grasp stop still require a live observed executor.
 Private Discord motion and stationary Stretch and Innate Mars recordings
 remain pending.
+
+### Tabletop manipulation and RoboCasa reachability follow-up
+
+The observed CHAT transfer stops at the adapter gate because the session has
+no measured manipulation provider bound. The matched tabletop control used
+simulator state for geometry and ran the native contact controller on the
+same scene and green placement region. It grasped and placed the cylinder
+in 17.6 s of wall time, with a stable release at `[0.049, -0.709, 0.520]` m.
+The live observed plan and command path still need qualification.
+
+| Offline RGB-D control | Associated views | Rigid reference | Whole-object bound |
+| --- | ---: | --- | --- |
+| Plain cylinder resting on table | 5 | Insufficient landmarks | Unbounded |
+| High-contrast textured cylinder resting on table | 7 | 15 and 24 landmarks in two views | Unbounded |
+| Plain cylinder suspended 12 cm above the table | 5 | Insufficient distinct landmarks | Candidate envelope |
+
+The external camera array provided up to 84 cm of separation. Reusing the
+destination plane across a static scan let close views contribute when their
+images cropped out the green patch. A 5 mm depth-margin sensitivity check
+also left the supported object unbounded. The conservative enclosure algorithm
+admits the connected occupied and unknown component. Contact with the table
+leaves unresolved possible volume at the support surface. Texture supplies a
+tracking reference and a separate support-aware envelope is still required.
+The suspended control addresses enclosure. The high-contrast control reaches
+reference-feature admission. Both precede tracking through grasp.
+
+The reach screen loaded the original archived RoboCasa XML, Stretch includes
+and fixture-joint states. A fresh generation with the same manifest seeds
+changed objects and poses in the sink cases, so retain the exact archived
+scene files for paired comparisons. All 12 original fixtures were screened.
+The frozen start and the seven sampled in-place yaw angles yielded zero
+qualifying poses across 35 reference points under the tested orientations.
+Translated stances yielded 27 pose solutions. These probes use evaluator-only
+coordinates and measure endpoint contacts under the sampled geometry.
+
+The development sink center hit a distractor. Seven of eight off-center
+probe points had a pose solution with no detected scene contact, and the
+80 mm raised pickup pregrasp also cleared the endpoint check. The sink
+pilot needs a head scan, guarded translated stances, fresh evidence at a
+stopped handoff, and separate source-support and destination-containment
+checks. The drawer pilot needs handle and slide-axis perception, a
+guarded pull and measured opening. The condiment pilot still needs feasible
+cabinet access and multi-object carry and placement.
+
+The run used four CPU cores and passed 100 focused tests. The native control
+receipt, RGB-D captures, original-fixture reach screen and sink offset
+probe are in `logs/harness-robocasa-followup-20261121-Vd4Y/`.
