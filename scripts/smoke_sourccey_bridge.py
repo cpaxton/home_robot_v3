@@ -6,6 +6,7 @@
 import argparse
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -50,19 +51,28 @@ def chat_read_only(robot, output, endpoint, model):
         context["discord_bot"] = SimpleNamespace(push_task_to_all_channels=capture_image)
         return registry(context)
 
+    turn_stamps = []
+
+    def next_turn(_):
+        turn_stamps.append(time.time())
+        return next(prompts, None)
+
     audit = output / "actuation.jsonl"
-    before = len(audit.read_text().splitlines()) if audit.exists() else 0
     with (output / "chat.log").open("w") as log, redirect_stdout(log), redirect_stderr(log):
         with recorded_chat_gateway(endpoint, output / "model-requests") as gateway:
             with patch.object(loop, "get_tools", bind):
-                run_agent_session(robot, lambda _: next(prompts, None), gateway, model, full_chat=True,
+                run_agent_session(robot, next_turn, gateway, model, full_chat=True,
                                   robot_name="sourccey")
-    commands = audit.read_text().splitlines()[before:] if audit.exists() else []
-    actuation = [row for row in map(json.loads, commands) if
-                 set(row["action_keys"]) & {"xyt", "joint", "head_to", "gripper"}]
+    commands = audit.read_text().splitlines() if audit.exists() else []
+    actuation = [row for row in map(json.loads, commands)
+                 if turn_stamps and turn_stamps[0] <= row["wall_time"] <= turn_stamps[-1]]
     pose_change = np.asarray(robot.get_base_pose()) - site
     response_paths = sorted((output / "model-requests").glob("request-*/receipt.json"))
     statuses = [json.loads(path.read_text())["http_status"] for path in response_paths]
+    first_request = json.loads(response_paths[0].with_name("request.json").read_text()) if response_paths else {}
+    camera_input = any(item.get("type") == "image_url" for message in first_request.get("messages", [])
+                       if message["role"] == "user" and isinstance(message["content"], list)
+                       for item in message["content"])
     log_text = (output / "chat.log").read_text()
     rendered_map = None
     for path in images:
@@ -70,10 +80,13 @@ def chat_read_only(robot, output, endpoint, model):
             if any(lo < hi for lo, hi in image.convert("RGB").getextrema()):
                 rendered_map = path.name
                 break
-    passed = (bool(statuses) and all(status == 200 for status in statuses) and
-              "[send_map_snapshot] [send_map_snapshot]" in log_text and rendered_map is not None and
+    cells = re.findall(r"^\[send_map_snapshot\] \[send_map_snapshot\].*?Explored cells=(\d+)", log_text, re.M)
+    explored = max(map(int, cells), default=0)
+    passed = (len(turn_stamps) == 3 and camera_input and bool(statuses) and all(status == 200 for status in statuses)
+              and explored > 0 and rendered_map is not None and
               not actuation and np.linalg.norm(pose_change) < .002)
     return {"passed": passed, "http_statuses": statuses, "chat_map": rendered_map,
+            "camera_input": camera_input, "map_explored_cells": explored,
             "actuation_count": len(actuation), "base_pose_delta": pose_change.tolist()}
 
 

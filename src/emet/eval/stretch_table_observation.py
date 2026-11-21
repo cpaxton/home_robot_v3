@@ -16,8 +16,7 @@ from emet.motion.observed_support import fit_observed_support
 from emet.motion.observed_workspace import ObservedWorkspace
 
 
-def assess_table_geometry(observation, *, observation_id):
-    """Measure visible reference geometry with no scene mesh or object dimensions."""
+def _measure_target(observation, observation_id):
     rgb, depth, world = capture_arrays(observation)
     red, green, blue = rgb.astype(np.int16).transpose(2, 0, 1)
     valid = np.isfinite(depth) & (depth > .1) & (depth <= 2.5)
@@ -28,7 +27,7 @@ def assess_table_geometry(observation, *, observation_id):
             observation, destination, observation_id=observation_id, measurement_margin_m=.004
         )
     except ObservationUnavailable as error:
-        return {"destination": {"status": "blocked", "reason": str(error)}}
+        return {"destination": {"status": "blocked", "reason": str(error)}}, None
     report["destination"] = {
         "status": "measured",
         "visible_points": int(destination.sum()),
@@ -43,7 +42,7 @@ def assess_table_geometry(observation, *, observation_id):
     candidates = np.flatnonzero(counts >= 25) + 1
     if len(candidates) != 1:
         report["target"] = {"status": "blocked", "reason": "target_missing_or_ambiguous"}
-        return report
+        return report, None
     mask = components == candidates[0]
     points = world[mask]
     report["target"] = {
@@ -56,27 +55,60 @@ def assess_table_geometry(observation, *, observation_id):
         report["rigid_reference"] = {"status": "candidate", "landmarks": len(pixels)}
     except ObservationUnavailable as error:
         report["rigid_reference"] = {"status": "blocked", "reason": str(error)}
+    measured = (observation, observation_id, depth, world[valid], mask[valid])
+    return report, measured
 
+
+def _enclose_views(views):
     # Bound the measured neighborhood, not the object. A possible component
     # reaching any grid edge is still unbounded under the free-space model.
     resolution = .015
-    center = np.round(np.median(points, axis=0) / resolution) * resolution
-    grid = ObservedWorkspace.from_depth(
-        depth, observation.camera_K, observation.camera_pose,
-        workspace=(center - 12 * resolution, center + 12 * resolution),
-        resolution=resolution,
-    )
-    partition = grid.partition(world[valid], np.where(mask[valid], "target", "background"))
+    origins = np.stack([np.median(points[mask], axis=0) for _, _, _, points, mask in views])
+    center = np.round(np.median(origins, axis=0) / resolution) * resolution
+    if np.max(np.linalg.norm(origins - origins[0], axis=1)) > .06:
+        return {"status": "blocked", "reason": "static_target_association_inconsistent"}
+    bounds = (center - 12 * resolution, center + 12 * resolution)
+    grids = [
+        ObservedWorkspace.from_depth(depth, obs.camera_K, obs.camera_pose, workspace=bounds, resolution=resolution)
+        for obs, _, depth, _, _ in views
+    ]
+    grid = ObservedWorkspace.fuse_static(grids) if len(grids) > 1 else grids[0]
+    points = np.concatenate([points for _, _, _, points, _ in views])
+    mask = np.concatenate([mask for _, _, _, _, mask in views])
+    partition = grid.partition(points, np.where(mask, "target", "background"))
     try:
         bound = enclose_observed_object(
-            partition, "target", observation_ids=(observation_id,),
-            received_monotonic=observation.received_monotonic, scene_revision="table-single-capture",
-            topology="connected_rigid",
+            partition, "target", observation_ids=tuple(row[1] for row in views),
+            received_monotonic=min(row[0].received_monotonic for row in views),
+            scene_revision="static-table-admission-control", topology="connected_rigid",
         )
-        report["payload_enclosure"] = {"status": "candidate", "bounds_m": bound.bounds_world.tolist()}
+        return {"status": "candidate", "bounds_m": bound.bounds_world.tolist()}
     except ObservationUnavailable as error:
-        report["payload_enclosure"] = {"status": "blocked", "reason": str(error)}
+        return {"status": "blocked", "reason": str(error)}
+
+
+def assess_table_geometry(observation, *, observation_id):
+    """Measure visible reference geometry with no scene mesh or object dimensions."""
+    report, measured = _measure_target(observation, observation_id)
+    if measured is not None:
+        report["payload_enclosure"] = _enclose_views((measured,))
     return report
+
+
+def assess_static_table_views(views):
+    """Audit enclosure from an explicitly static fixture and distinct camera views."""
+    if len(views) < 2 or len({capture_id for _, capture_id in views}) != len(views):
+        raise ValueError("distinct_table_captures_required")
+    measured = [_measure_target(observation, capture_id) for observation, capture_id in views]
+    positions = [np.asarray(observation.camera_pose)[:3, 3] for observation, _ in views]
+    enclosure = (
+        _enclose_views(tuple(row for _, row in measured)) if all(row is not None for _, row in measured)
+        else {"status": "blocked", "reason": "target_association_missing_in_scan"}
+    )
+    return {"view_reports": [report for report, _ in measured],
+            "camera_positions_m": [position.tolist() for position in positions],
+            "baseline_m": max(float(np.linalg.norm(a - b)) for a in positions for b in positions),
+            "payload_enclosure": enclosure}
 
 
 def assess_live_table_capture(observation, robot_model, *, now=None):

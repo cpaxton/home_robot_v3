@@ -83,9 +83,9 @@ Routing hints:
   Do NOT scan, explore, or turn unless the user asked to look around / move.
 - To aim the head for an authorized task, use describe_scene with explicit absolute pan_rad/tilt_rad.
   Inspect measured feedback and the next camera image. No arguments retains caption-only behavior.
-- For an earlier camera view, reuse the last confirmed head pan and tilt for that view with
-  describe_scene. A head-only request keeps the base stationary. Use a new camera image to
-  confirm visibility after the tool reports measured head arrival.
+- For an earlier camera view or a request for measured head motion, reuse the confirmed
+  pan and tilt with describe_scene. Keep the base stationary. This applies even when the
+  request mentions a named object. Use the camera image after measured head arrival.
 - "look at X" / "face X" / "turn toward X" / "go toward X" / "go look at X" without a head-only request
   → Prefer face_toward with object_label=X, THEN describe_scene (do not blind-rotate ±45°).
     If drive is available and they clearly want distance ("go to", "drive closer"): move_forward

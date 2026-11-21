@@ -502,6 +502,17 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             img, stats, img_discord = snapshot_from_voxel_map(vm, robot_xy)
         else:
             _img2, stats, _ = snapshot_from_voxel_map(vm, robot_xy)
+        update = getattr(agent, "update", None)
+        if vm is not None and stats.get("map_nonempty") is False and callable(update):
+            observation = context.get("decision_observation")
+            if "decision_observation" not in context and hasattr(robot, "get_observation"):
+                observation = robot.get_observation()
+            if all(getattr(observation, name, None) is not None for name in ("depth", "camera_K", "camera_pose")):
+                try:
+                    update(full_perception=False, observation=observation)
+                    img, stats, img_discord = snapshot_from_voxel_map(vm, robot_xy)
+                except (ValueError, RuntimeError) as error:
+                    _logger.warning("Stationary map seed failed: %s", error)
         summary = format_navigation_report(stats, explore_ok=None)
         plan_line = format_last_nav_plan_summary(agent)
         if plan_line:

@@ -175,7 +175,8 @@ def score_model_case(directory):
     passed = (result["complete"] and bool(statuses) and all(status == 200 for status in statuses)
               and image_present and not private_fields and bool(final)
               and all(row["accepted"] and not row["forbidden"] for row in moves))
-    if case in ("model-full-chat", "model-object-recovery", "model-object-recovery-changed", "model-table-transfer"):
+    recovery_cases = ("model-object-recovery", "model-object-recovery-changed", "model-object-recovery-revisit")
+    if case in (*recovery_cases, "model-full-chat", "model-table-transfer"):
         turns = []
         for start_turn, end_turn in zip(boundaries[:-1], boundaries[1:], strict=True):
             first = start_turn["completed_model_requests"]
@@ -221,12 +222,12 @@ def score_model_case(directory):
                                   "stable_placement": within_target and on_table and settled,
                                   "protected_object": blue_motion_m < .007, "stationary_base": stationary})
         passed = passed and stationary and task_completed
-    elif case in ("model-object-recovery", "model-object-recovery-changed"):
+    elif case in recovery_cases:
         import numpy as np
 
         from emet.utils.image import pinhole_camera_from_intrinsics_and_depth
 
-        changed = case == "model-object-recovery-changed"
+        changed = case != "model-object-recovery"
         target = np.array(before["objects"]["object1"]["xyz"] if changed else [-.17, -.55, .52])
         final_target = np.array(after["objects"]["object1"]["xyz"]) if changed else target
         visible_pixels = []
@@ -261,6 +262,11 @@ def score_model_case(directory):
                   and not nav and receipt is None and record["held_out_travel_m"] < .001
                   and angular_error(yaw - yaw0) < .002)
         if changed:
+            shift = float(np.linalg.norm(final_target - target))
+            has_intervention = json.loads((directory / "scoring-intervention.json").read_text())["ok"]
+            record["object_shift_m"] = shift
+            passed = passed and has_intervention and shift > .15
+        if case == "model-object-recovery-changed":
             grounded = None
             for line in agent.splitlines():
                 match = re.match(r"\[ground_object\] \[ground_object\] (\{.*\})$", line)
@@ -268,16 +274,13 @@ def score_model_case(directory):
                     geometry = json.loads(match[1]).get("geometry") or {}
                     if geometry.get("status") == "admitted":
                         grounded = np.array(geometry["xyz"])
-            shift = float(np.linalg.norm(final_target - target))
             error = float(np.linalg.norm(grounded - final_target)) if grounded is not None else None
             answer = turns[-1]["answer"].lower()
             inferred_change = bool(re.search(r"\b(?:moved|shifted|different|changed)\b", answer))
-            has_intervention = json.loads((directory / "scoring-intervention.json").read_text())["ok"]
-            record.update(object_shift_m=shift, current_grounding_error_m=error,
+            record.update(current_grounding_error_m=error,
                           current_geometry_xyz=grounded.tolist() if grounded is not None else None,
                           acknowledged_change=inferred_change)
-            passed = (passed and has_intervention and shift > .15
-                      and error is not None and error < .10
+            passed = (passed and error is not None and error < .10
                       and np.linalg.norm(grounded - target) > .10
                       and "ground_object" in turns[-1]["tools"] and inferred_change)
     elif case == "model-full-chat":
@@ -366,5 +369,6 @@ if __name__ == "__main__":
     if case in ("model-discord", "model-discord-drive", "model-discord-full"):
         parser.error("Review the interactive Discord trial against the operator protocol")
     model_trial = case in ("model-read-only", "model-look-around", "model-drive", "model-full-chat",
-                           "model-object-recovery", "model-object-recovery-changed", "model-table-transfer")
+                           "model-object-recovery", "model-object-recovery-changed", "model-object-recovery-revisit",
+                           "model-table-transfer")
     print(json.dumps((score_model_case if model_trial else score_case)(output), indent=2))

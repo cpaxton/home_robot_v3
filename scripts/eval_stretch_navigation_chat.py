@@ -58,7 +58,9 @@ DISCORD_FULL_CASE = "model-discord-full"
 FULL_CHAT_CONTROL = "model-full-chat"
 OBJECT_RECOVERY_CONTROL = "model-object-recovery"
 CHANGED_OBJECT_RECOVERY = "model-object-recovery-changed"
-OBJECT_RECOVERY_CASES = (OBJECT_RECOVERY_CONTROL, CHANGED_OBJECT_RECOVERY)
+CHANGED_OBJECT_REVISIT = "model-object-recovery-revisit"
+CHANGED_OBJECT_CASES = (CHANGED_OBJECT_RECOVERY, CHANGED_OBJECT_REVISIT)
+OBJECT_RECOVERY_CASES = (OBJECT_RECOVERY_CONTROL, *CHANGED_OBJECT_CASES)
 TABLE_TRANSFER_CASE = "model-table-transfer"
 DISCORD_CASES = (DISCORD_CASE, DISCORD_DRIVE_CASE, DISCORD_FULL_CASE)
 TERMINAL_FULL_CASES = (FULL_CHAT_CONTROL, *OBJECT_RECOVERY_CASES, TABLE_TRANSFER_CASE)
@@ -96,6 +98,10 @@ def prompts_for(case):
         if case == CHANGED_OBJECT_RECOVERY:
             turns += ("Use ground_object to locate the blue block in the current view. Tell me whether "
                       "that agrees with its earlier remembered location. Keep the base stationary.",)
+        if case == CHANGED_OBJECT_REVISIT:
+            turns = (*turns[:3], "Use describe_scene with pan_rad -1.48 and tilt_rad -0.76 to return to the "
+                     "earlier table view. Keep the base stationary. Is the blue block visible now, and "
+                     "what is it resting on?")
         return turns
     if case == TABLE_TRANSFER_CASE:
         return ("Pick up the red cylinder and place it on the green target area on the table. "
@@ -195,7 +201,7 @@ def serve(scene, offset, case, output):
     from emet.eval.stretch_encoder_server import StretchEncoderNavigationServer
 
     score_joints = {}
-    if case in (TABLE_TRANSFER_CASE, CHANGED_OBJECT_RECOVERY):
+    if case == TABLE_TRANSFER_CASE or case in CHANGED_OBJECT_CASES:
         model = mujoco.MjModel.from_xml_path(str(scene))
         names = ("object1", "object2") if case == TABLE_TRANSFER_CASE else ("object1",)
         for name in names:
@@ -204,7 +210,7 @@ def serve(scene, offset, case, output):
                 raise ValueError(f"scorer requires a free joint for {name}")
             score_joints[name] = (int(model.jnt_qposadr[joint]), int(model.jnt_dofadr[joint]))
 
-    if case == CHANGED_OBJECT_RECOVERY:
+    if case in CHANGED_OBJECT_CASES:
         from emet.eval.stretch_encoder_server import StretchChangedObjectPhysics
         from emet.simulation.stretch_mujoco import stretch_mujoco_simulator
 
@@ -462,7 +468,7 @@ def build_table_fixture(output, *, transfer_target=False):
 
 
 def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NAME, initial_gaze=(0.0, -0.2),
-        table_preflight_only=False):
+        table_preflight_only=False, table_sweep=False):
     from emet.agent import loop
     from emet.app.robot_cli import create_robot_client_from_cli
     from emet.core.command_client import command_receipt
@@ -532,16 +538,28 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
             operator_stop.set()
             (output / "operator-stop.json").write_text(json.dumps({"requested_monotonic": requested_at}) + "\n")
 
-    def record_table_capture(view):
+    def record_table_capture(view, name="table-capture"):
         from emet.eval.stretch_table_observation import assess_live_table_capture
 
-        outcome["table_capture"] = assess_live_table_capture(view, table_robot_model)
-        np.savez_compressed(output / "table-capture.npz", rgb=view.rgb, depth=view.depth,
+        assessment = assess_live_table_capture(view, table_robot_model)
+        np.savez_compressed(output / f"{name}.npz", rgb=view.rgb, depth=view.depth,
                             camera_K=view.camera_K, camera_pose=view.camera_pose)
-        (output / "table-capture-timing.json").write_text(json.dumps({
+        (output / f"{name}-timing.json").write_text(json.dumps({
             "received_monotonic": view.received_monotonic, "image_timing": view.image_timing,
         }, indent=2) + "\n")
-        save()
+        return assessment
+
+    def capture_after_head_move(angles):
+        assert robot.head_to(*angles, blocking=True) is True, "table head posture unconfirmed"
+        not_before = time.monotonic()
+        limit = not_before + 5.0
+        while time.monotonic() < limit:
+            view = robot.get_observation()
+            timing = (view.image_timing or {}).get("head_cam_left", {}) if view is not None else {}
+            if timing.get("timestamp_ns", 0) / 1e9 > not_before:
+                return view
+            time.sleep(.02)
+        raise RuntimeError("no synchronized table view after head motion")
 
     try:
         with (output / "server.log").open("w") as log:
@@ -633,24 +651,28 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
 
                 table_robot_model = mujoco.MjModel.from_xml_path(str(robot_model_path))
             if table_preflight_only:
-                from emet.eval.stretch_table_observation import assess_live_table_capture
+                from emet.eval.stretch_table_observation import assess_live_table_capture, assess_static_table_views
 
-                assert robot.head_to(*initial_gaze, blocking=True) is True, "table head posture unconfirmed"
-                not_before = time.monotonic()
-                limit = not_before + 5.0
-                while time.monotonic() < limit:
-                    view = robot.get_observation()
-                    timing = (view.image_timing or {}).get("head_cam_left", {}) if view is not None else {}
-                    if timing.get("timestamp_ns", 0) / 1e9 > not_before:
-                        break
-                    time.sleep(.02)
-                else:
-                    raise RuntimeError("no synchronized table view after head motion")
-                record_table_capture(view)
+                view = capture_after_head_move(initial_gaze)
+                outcome["table_capture"] = record_table_capture(view)
                 # Reuse this exact packet once its original interval has expired.
                 expires = view.received_monotonic + 2.02
                 time.sleep(max(0.0, expires - time.monotonic()))
                 outcome["stale_table_capture"] = assess_live_table_capture(view, table_robot_model)
+                if table_sweep:
+                    captured = [(view, outcome["table_capture"]["encoder_capture"])]
+                    for index, delta in enumerate((-.2, .2), 1):
+                        new = capture_after_head_move((initial_gaze[0] + delta, initial_gaze[1]))
+                        assessment = record_table_capture(new, f"table-sweep-{index}")
+                        captured.append((new, assessment["encoder_capture"]))
+                    if all(encoder["status"] == "passed" for _, encoder in captured):
+                        outcome["table_sweep"] = assess_static_table_views(
+                            [(frame, encoder["observation_id"]) for frame, encoder in captured]
+                        )
+                    else:
+                        outcome["table_sweep"] = {"status": "blocked", "encoder_captures": [
+                            encoder for _, encoder in captured
+                        ]}
                 outcome["complete"] = True
                 return
             prompts = prompts_for(case)
@@ -666,7 +688,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                 prompt = next(next_prompt, None)
                 if case == TABLE_TRANSFER_CASE and prompt is None:
                     time.sleep(.5)
-                if case == CHANGED_OBJECT_RECOVERY and len(turns) == 2:
+                if case in CHANGED_OBJECT_CASES and len(turns) == 2:
                     (output / "scoring-intervention.request").touch()
                     acknowledgement = output / "scoring-intervention.json"
                     deadline = time.monotonic() + 5.0
@@ -732,7 +754,7 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                     if not receipt["ok"]:
                         raise RuntimeError(f"initial operator view not verified: {receipt['status']}")
                     if case == TABLE_TRANSFER_CASE:
-                        record_table_capture(first_view)
+                        outcome["table_capture"] = record_table_capture(first_view)
                     executor.agent.update(full_perception=case in (*OBJECT_RECOVERY_CASES, TABLE_TRANSFER_CASE),
                                           observation=first_view)
                     np.savez_compressed(
@@ -861,9 +883,13 @@ def main():
     parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     parser.add_argument("--table-preflight-only", action="store_true",
                         help="Measure tabletop admission and reject a stale frame without calling the model.")
+    parser.add_argument("--table-sweep", action="store_true",
+                        help="Add two head views for a static multiview enclosure diagnostic.")
     args = parser.parse_args()
     if args.table_preflight_only and (args.case != TABLE_TRANSFER_CASE or args.model_endpoint):
         parser.error("--table-preflight-only requires model-table-transfer without a model endpoint")
+    if args.table_sweep and not args.table_preflight_only:
+        parser.error("--table-sweep requires --table-preflight-only")
     if not args.table_preflight_only and bool(args.model_endpoint) != (args.case in MODEL_CASES):
         parser.error("--model-endpoint is required for model cases and unavailable for scripted controls")
     if args.case in DISCORD_CASES:
@@ -877,7 +903,7 @@ def main():
         initial_gaze = (-1.48, -0.76) if args.case in FULL_CHAT_CASES else (0.0, -0.2)
     run(args.case, args.output, args.port_offset, args.scene, model_endpoint=args.model_endpoint,
         model_name=args.model if args.model_endpoint else MODEL_NAME, initial_gaze=initial_gaze,
-        table_preflight_only=args.table_preflight_only)
+        table_preflight_only=args.table_preflight_only, table_sweep=args.table_sweep)
     if args.case in DISCORD_CASES or args.table_preflight_only:
         return
     from score_stretch_navigation_chat import score_case, score_model_case

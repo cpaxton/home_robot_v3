@@ -14,8 +14,31 @@
 
 
 import json
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import numpy as np
 
 from emet.agent.tools import get_tool_descriptions_for_prompt, get_tools
+
+
+def test_map_snapshot_seeds_empty_map_from_the_current_rgbd_capture(monkeypatch):
+    from emet.agent import tools
+
+    observation = SimpleNamespace(depth=np.ones((2, 2)), camera_K=np.eye(3), camera_pose=np.eye(4))
+    agent = SimpleNamespace(get_voxel_map=lambda: object(), update=Mock())
+    robot = SimpleNamespace(get_observation=Mock(), get_base_pose=lambda: np.zeros(3))
+    context = {"robot": robot, "executor": SimpleNamespace(agent=agent), "decision_observation": observation}
+    image = np.zeros((4, 4, 3), dtype=np.uint8)
+    render = Mock(side_effect=(
+        (image, {"map_nonempty": False}, image),
+        (image, {"map_nonempty": True, "summary_lines": ["Mapped from depth."]}, image),
+    ))
+    monkeypatch.setattr(tools, "snapshot_from_voxel_map", render)
+    tool = next(tool for tool in get_tools(context) if tool.name == "send_map_snapshot")
+    assert "Mapped from depth." in tool.func()
+    agent.update.assert_called_once_with(full_perception=False, observation=observation)
+    robot.get_observation.assert_not_called()
 
 
 def test_parse_strips_think_block():
