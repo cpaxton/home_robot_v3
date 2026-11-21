@@ -9,6 +9,7 @@ import os
 import re
 import socket
 import subprocess
+import subprocess
 import sys
 import time
 from contextlib import redirect_stderr, redirect_stdout
@@ -85,7 +86,7 @@ def chat_read_only(robot, output, endpoint, model):
     passed = (len(turn_stamps) == 3 and camera_input and bool(statuses) and all(status == 200 for status in statuses)
               and explored > 0 and rendered_map is not None and
               not actuation and np.linalg.norm(pose_change) < .002)
-    return {"passed": passed, "http_statuses": statuses, "chat_map": rendered_map,
+    return {"passed": bool(passed), "http_statuses": statuses, "chat_map": rendered_map,
             "camera_input": camera_input, "map_explored_cells": explored,
             "actuation_count": len(actuation), "base_pose_delta": pose_change.tolist()}
 
@@ -155,6 +156,9 @@ def run(output, offset, *, table_view=False, model_endpoint=None, model=None):
             )
             result = {
                 "scope": "live Sourccey simulation bridge with simulator localization",
+                "source_sha": subprocess.check_output(
+                    ["git", "-C", str(Path(__file__).resolve().parents[1]), "rev-parse", "HEAD"], text=True,
+                ).strip(),
                 "configured_model_cameras": SOURCCEY_CAMERA_NAMES,
                 "verified_streams": ["front_left RGB-D", "front_right RGB", "joint positions"],
                 "rgb_shape": list(obs.rgb.shape),
