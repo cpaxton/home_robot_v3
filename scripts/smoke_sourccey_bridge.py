@@ -10,7 +10,10 @@ import socket
 import subprocess
 import sys
 import time
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
@@ -24,7 +27,57 @@ from emet.simulation.sim_subprocess import wait_for_sim_tcp_port
 from emet.utils.process_tree import popen_session, terminate_process_tree
 
 
-def run(output, offset, *, table_view=False):
+def chat_read_only(robot, output, endpoint, model):
+    """Use production CHAT with a local image sink and the connected robot."""
+    from run_harness_capability_agent import run_agent_session
+
+    from emet.agent import loop
+    from emet.eval.chat_gateway import recorded_chat_gateway
+
+    site = robot.get_base_pose().copy()
+    registry = loop.get_tools
+    images = []
+    prompts = iter(("What can you see in the current view? Keep the robot stationary.",
+                    "Show me your occupancy map. Keep the robot stationary."))
+
+    def capture_image(message=None, content=None):
+        if content is not None:
+            target = output / f"chat-image-{len(images) + 1}.png"
+            Image.fromarray(content).save(target)
+            images.append(target)
+
+    def bind(context):
+        context["discord_bot"] = SimpleNamespace(push_task_to_all_channels=capture_image)
+        return registry(context)
+
+    audit = output / "actuation.jsonl"
+    before = len(audit.read_text().splitlines()) if audit.exists() else 0
+    with (output / "chat.log").open("w") as log, redirect_stdout(log), redirect_stderr(log):
+        with recorded_chat_gateway(endpoint, output / "model-requests") as gateway:
+            with patch.object(loop, "get_tools", bind):
+                run_agent_session(robot, lambda _: next(prompts, None), gateway, model, full_chat=True,
+                                  robot_name="sourccey")
+    commands = audit.read_text().splitlines()[before:] if audit.exists() else []
+    actuation = [row for row in map(json.loads, commands) if
+                 set(row["action_keys"]) & {"xyt", "joint", "head_to", "gripper"}]
+    pose_change = np.asarray(robot.get_base_pose()) - site
+    response_paths = sorted((output / "model-requests").glob("request-*/receipt.json"))
+    statuses = [json.loads(path.read_text())["http_status"] for path in response_paths]
+    log_text = (output / "chat.log").read_text()
+    rendered_map = None
+    for path in images:
+        with Image.open(path) as image:
+            if any(lo < hi for lo, hi in image.convert("RGB").getextrema()):
+                rendered_map = path.name
+                break
+    passed = (bool(statuses) and all(status == 200 for status in statuses) and
+              "[send_map_snapshot] [send_map_snapshot]" in log_text and rendered_map is not None and
+              not actuation and np.linalg.norm(pose_change) < .002)
+    return {"passed": passed, "http_statuses": statuses, "chat_map": rendered_map,
+            "actuation_count": len(actuation), "base_pose_delta": pose_change.tolist()}
+
+
+def run(output, offset, *, table_view=False, model_endpoint=None, model=None):
     output.mkdir(parents=True, exist_ok=False)
     # The simulator CLI can recycle occupied ports. Require dedicated free ports.
     for port in range(4401 + offset, 4405 + offset):
@@ -129,6 +182,10 @@ def run(output, offset, *, table_view=False):
                 (output / "report.json").write_text(json.dumps(result, indent=2) + "\n")
                 assert receipt["result"]["motion_mode"] == "velocity_drive" and abs(yaw + 90) < 9, receipt
                 assert contrast > 3, result
+            if model_endpoint:
+                result["chat_read_only"] = chat_read_only(robot, output, model_endpoint, model)
+                (output / "report.json").write_text(json.dumps(result, indent=2) + "\n")
+                assert result["chat_read_only"]["passed"], result["chat_read_only"]
             return result
     finally:
         try:
@@ -143,5 +200,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--port-offset", type=int, default=2020)
     parser.add_argument("--table-view", action="store_true", help="Turn the simulated base toward the table.")
+    parser.add_argument("--model-endpoint", help="Optional OpenAI-compatible endpoint for read-only CHAT.")
+    parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     args = parser.parse_args()
-    print(json.dumps(run(args.output, args.port_offset, table_view=args.table_view), indent=2))
+    print(json.dumps(run(args.output, args.port_offset, table_view=args.table_view,
+                         model_endpoint=args.model_endpoint, model=args.model), indent=2))

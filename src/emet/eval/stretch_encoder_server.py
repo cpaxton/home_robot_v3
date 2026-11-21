@@ -2,10 +2,13 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 """Stretch navigation trial with registered depth and capture-aligned encoders."""
 
+import json
+import os
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import mujoco
@@ -25,8 +28,10 @@ from emet.mapping.wheel_odometry import DifferentialDriveOdometry
 from emet.robots.head_capability import STRETCH_LEGACY_HEAD, HeadCapability, mujoco_head_capability
 from emet.simulation.env_flags import env_sim_nav_teleport
 from emet.simulation.mujoco_server_stretch import MujocoZmqServer
+from emet.simulation.sim_manipulation import set_free_body_pose
 from emet.simulation.stretch_mujoco.config import robot_settings
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
+from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
 from emet.utils.geometry import xyt2sophus
 
 
@@ -35,6 +40,25 @@ class EncoderNavigationFrame:
     timestamp_ns: int
     base_xyt: np.ndarray
     camera_pose: np.ndarray
+
+
+class StretchChangedObjectPhysics(MujocoServer):
+    """Physics-process fixture intervention with no robot-client command."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.intervention_dir = Path(os.environ["EMET_EVAL_CHANGED_OBJECT_DIR"])
+        self.intervened = False
+
+    def _ctrl_callback(self, model, data):
+        super()._ctrl_callback(model, data)
+        if self.intervened or not (self.intervention_dir / "scoring-intervention.request").is_file():
+            return
+        self.intervened = True
+        ok = set_free_body_pose(model, data, "object1", [-.13, -.75, .55])
+        pending = self.intervention_dir / "scoring-intervention.tmp"
+        pending.write_text(json.dumps({"ok": ok, "monotonic": time.monotonic()}))
+        pending.replace(self.intervention_dir / "scoring-intervention.json")
 
 
 class StretchEncoderNavigationServer(MujocoZmqServer):

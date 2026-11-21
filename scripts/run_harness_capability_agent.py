@@ -26,13 +26,13 @@ from emet.eval.harness_capability_fixtures import load_development_cases
 
 def run_agent_session(
     robot, input_reader, endpoint, model, *, measured_floor=False, max_tool_rounds=8, max_tokens=512, discord=False,
-    navigation_stop_request=None, full_chat=False,
+    navigation_stop_request=None, full_chat=False, robot_name="stretch",
 ):
     from emet.agent.loop import run_agent_with_robot
     from emet.config.loader import AgentSectionConfig
     from emet.core import get_parameters
 
-    parameters = get_parameters("dynav_config.yaml", robot="stretch")
+    parameters = get_parameters("dynav_config.yaml", robot=robot_name)
     if full_chat:
         parameters["cpu_clip_model"] = "ViT-B/32"
     else:
@@ -47,7 +47,7 @@ def run_agent_session(
     # No alternative policy/answer arbiter: actual production CHAT, same tools.
     session_options = {"agent_name": "Stretch simulator"} if discord else {}
     run_agent_with_robot(
-        robot="stretch",
+        robot=robot_name,
         robot_client=robot,
         input_reader=input_reader,
         discord=discord,

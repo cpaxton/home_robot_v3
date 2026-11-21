@@ -205,24 +205,13 @@ def serve(scene, offset, case, output):
             score_joints[name] = (int(model.jnt_qposadr[joint]), int(model.jnt_dofadr[joint]))
 
     if case == CHANGED_OBJECT_RECOVERY:
-        from emet.simulation.sim_manipulation import set_free_body_pose
-        from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
+        from emet.eval.stretch_encoder_server import StretchChangedObjectPhysics
+        from emet.simulation.stretch_mujoco import stretch_mujoco_simulator
 
-        callback = MujocoServer._ctrl_callback
-        intervention = output / "scoring-intervention.request"
-        acknowledgement = output / "scoring-intervention.json"
-        shifted = False
-
-        def shift_fixture_after_step(server, model, data):
-            nonlocal shifted
-            callback(server, model, data)
-            if not shifted and intervention.is_file():
-                shifted = True
-                # Only the physics process sees this fixture intervention.
-                ok = set_free_body_pose(model, data, "object1", [-.13, -.75, .55])
-                acknowledgement.write_text(json.dumps({"ok": ok, "monotonic": time.monotonic()}))
-
-        MujocoServer._ctrl_callback = shift_fixture_after_step
+        os.environ["EMET_EVAL_CHANGED_OBJECT_DIR"] = str(output)
+        # The simulator uses multiprocessing spawn. The physics class must
+        # be importable in that worker, rather than patching a parent method.
+        stretch_mujoco_simulator.MujocoServer = StretchChangedObjectPhysics
 
     class ScoredEncoderServer(StretchEncoderNavigationServer):
         def __init__(self, *args, **kwargs):
