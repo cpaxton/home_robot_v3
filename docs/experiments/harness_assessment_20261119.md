@@ -683,3 +683,41 @@ cabinet access and multi-object carry and placement.
 The run used four CPU cores and passed 100 focused tests. The native control
 receipt, RGB-D captures, original-fixture reach screen and sink offset
 probe are in `logs/harness-robocasa-followup-20261121-Vd4Y/`.
+
+### Development sink handoff controls
+
+The frozen RoboCasa development start had 216.3 mm of modeled base-center
+clearance against the 220 mm guard. It refused at route admission. A separate
+development reset shifted the base 50 mm into the aisle and produced a sampled
+eight-waypoint route to the pickup.
+
+The first unloaded physics control timed out on the opening turn and confirmed
+wheel rest. The second control applied the archived wheel actuators' gear scale
+and friction feed-forward. It reached the pickup pose in 28.45 simulated
+seconds and 56.36 s wall time. The guard checked 568 measured poses and the
+minimum modeled base-center clearance was 266.5 mm. Arrival was within
+14.2 mm and 0.0204 rad, with wheel and base rest confirmed.
+
+The calibrated camera sweeps exposed the tongs from the frozen start and at
+the pickup stance. The stopped pickup render contained 550 target depth
+pixels. The best stopped landing view contained 1,703 basin depth pixels
+within 80 mm of its candidate placement center. The scorer used simulator
+segmentation to count pixels. Saved camera packets contain RGB, metric depth,
+intrinsics and camera pose.
+
+Five landing stances cleared the unloaded route. The original arm trajectories
+collided with the counter or sink, and the higher target alone also failed.
+Raising the stowed lift to 1.04 m before the wrist and extension sequence
+cleared the sampled above-rim empty-arm paths at all five stances. The pickup
+hover cleared an empty-arm path with the gripper open.
+
+Three pickup controls at the declared pickup reset dispatched zero arm or
+gripper commands. The legacy world-frame pregrasp returned 189 IK failures.
+Aligning the withdrawal direction to the base yielded 147 IK failures and
+42 collision rejections involving the counter or coffee machine. Raising the
+pregrasp offset to 100 mm produced 189 IK failures. The tongs still require a
+grasp and approach that fit the local fixture geometry.
+
+The sink artifacts, measured route, geometry receipts and stopped camera
+comparison are in `logs/harness-robocasa-sink-20261121-Pv3S/`. The controls
+ran serially on four CPU cores.

@@ -64,7 +64,11 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       composite also requires the stopped-base handoff.
       The original kitchen starts require stance changes under the tested
       arm poses. The development sink has clear off-center endpoint probes.
-      Confirm guarded paths, carry and release into a measured clear region.
+      The development reset passed the guarded unloaded drive with confirmed
+      rest after wheel-command calibration. Raising
+      the stowed lift cleared above-rim empty-arm paths at five landing stances.
+      Qualify a grasp and approach for the tongs in countertop clutter,
+      then test loaded carry and release into a freshly measured clear region.
       [Follow-up experiments](docs/experiments/harness_assessment_20261119.md#tabletop-manipulation-and-robocasa-reachability-follow-up).
 - [x] Verify that Stretch can revisit and see a block whose position changed
       while out of view. The explicit head revisit recovers the moved block
