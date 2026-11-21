@@ -595,3 +595,44 @@ The bridge receipt and sensor captures are in
 `logs/harness-observed-20261120/sourccey-velocity-bridge/`. The individual
 model-camera renders are in
 `logs/harness-observed-20261120/sourccey-sensors/rendered-cameras/`.
+
+## Expanded simulator assessment
+
+The `eval/agent-harness-expanded-testing` branch freezes the previous
+assessment at `c4988b6d`. The expanded run artifacts are in
+`logs/harness-expanded-testing-20261121/` in the workspace. The simulator
+controls ran serially on four allowed CPU cores. The model trials used the
+local Qwen3-VL-8B-Instruct checkpoint `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`
+with BF16, greedy decoding, and the exclusive GPU lease. The final focused
+suite passed all 179 tests.
+The `figures/` subdirectory contains the capability matrix, case and
+milestone CSVs, latency panels, and the changed-object camera comparison.
+
+| Case | Result | Independent evidence |
+| --- | --- | --- |
+| Stretch tabletop capture and expired packet | Sensing control passed | Measured green patch, 2.3 mm peak plane residual, synchronized arm estimate, stale packet rejected |
+| Stretch tabletop sweep | Three captures measured | 16.8 mm maximum camera separation. Two side views lost target or destination association. The whole cylinder remained unqualified |
+| Stretch tabletop transfer repeat | Incomplete with safe refusal | The agent selected `pick_place`. No lift, release, or base dispatch occurred. The blue cube stayed in place |
+| Free-form changed-object recovery | Failed | The block moved 20.4 cm. The agent recalled the previous position within 3.8 cm, sent a base turn, and had no current-view grounding provider |
+| Explicit head revisit after the same fixture change | Passed | The visible blue mask went from 575 pixels to zero to 409 at the new location. The agent identified it on the table and dispatched zero base waypoints |
+| Sourccey read-only CHAT | Passed | The model received a camera frame, the occupancy tool delivered a map with 76 explored cells, and the turn audit recorded zero commands |
+| RoboCasa365 Stretch fixture validation | 12 of 12 passed | Metric RGB-D renders and untouched upstream predicate checks on initial and constructed positive states |
+
+The explicit head revisit took 75.5 s from CHAT setup through the final
+turn. Reported model calls consumed 24.0 s and the independent turn trace
+advanced 20.2 simulated seconds. The longer free-form run reached 23,812 MiB
+of GPU memory. No physical plan ran in either tabletop transfer trial.
+
+The kitchen preflights took 82.1 s in total on the pinned RoboCasa365
+v1.0.1 source and MuJoCo 3.3.1. Each output keeps the Stretch include and
+official fixture-joint initialization with the scene XML. The predicate
+controls are scorer-only. Kitchen execution remains gated on measured
+reachability and the corresponding observed action. The held-out placements
+are frozen for the model baseline and later training comparisons.
+
+The core manipulation blocker is a sensor view that can bound the full
+payload while tracking its pose and keeping collision and support evidence
+qualified. The stale-packet result covers capture admission. The public
+preflight and post-grasp stop still require a live observed executor.
+Private Discord motion and stationary Stretch and Innate Mars recordings
+remain pending.

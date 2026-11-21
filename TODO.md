@@ -47,7 +47,24 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       refiner. Require one public-tool pick and place with independent lift,
       release and settling checks, plus stale-source and post-grasp evidence-loss
       stops. Then test a stopped base handoff with fresh destination evidence.
+      The live control measures the destination and synchronized arm pose and
+      rejects an expired capture. The cylinder's visible depth and the 17 mm
+      head sweep still leave its full shape and rigid pose unqualified.
       [Transfer protocol](docs/plans/2026-11-18_tamp_agent_closeout.md#remaining-execution-qualification).
+- [x] Freeze the RoboCasa365 Stretch pilot and check the 12 adapted fixtures.
+      All render with metric depth and pass upstream predicate controls on
+      known initial and constructed success states.
+- [ ] Qualify measured reachability and action admission for the RoboCasa
+      control and held-out episodes. Sink transfer requires the observed
+      transfer gate. Drawer opening requires observed articulation. The
+      composite also requires the stopped-base handoff.
+- [x] Verify that Stretch can revisit and see a block whose position changed
+      while out of view. The explicit head revisit recovers the moved block
+      without base motion.
+- [ ] Qualify free-form changed-object recovery. Keep the base stationary
+      when the user asks for a head revisit and bind current-view metric
+      grounding in DynaMem.
+      [Expanded assessment](docs/experiments/harness_assessment_20261119.md#expanded-simulator-assessment).
 - [ ] Verify stationary Stretch and Innate Mars sensing after simulator review.
       Record timestamped RGB-D, intrinsics, robot feedback and TF/pose, and
       characterize dropouts. Review each robot's independent stop path before
@@ -65,9 +82,10 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       [Figure inputs](docs/testing/agent_harness_assessment.md#evidence-and-paper-figures).
 - [ ] Qualify Sourccey as a second simulated embodiment. The default-table
       bridge publishes front RGB-D and joint feedback, and the absolute
-      table-facing velocity turn passes. Reuse the shared agent interface
-      with measured sensing and explicit pose-source capabilities before
-      scoring observed navigation or physical pick and place.
+      table-facing velocity turn passes. Shared CHAT reads the camera and
+      returns a map with 76 explored cells without actuation during the
+      turns. Qualify measured localization and collision evidence before
+      observed waypoint or manipulation tests.
       [Sourccey simulator smoke](docs/robots/sourccey.md#motion-and-mapping-smoke-test).
 - [ ] Establish a model baseline before training the tool-using agent. Save
       the observations and receipts available at every decision, including
