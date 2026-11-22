@@ -209,22 +209,32 @@ def main():
     parser.add_argument("--arm-binary", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--driver-log", type=Path, required=True)
-    parser.add_argument("--native", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--native", action="store_true")
+    modes.add_argument("--native-overshoot", action="store_true", help="Replay the powered staging overshoot")
     args = parser.parse_args()
+    native = args.native or args.native_overshoot
     os.environ["ROS_LOCALHOST_ONLY"] = "1"
     os.environ["ROS_DOMAIN_ID"] = str(40 + os.getpid() % 60)
     bus = Bus()
-    if args.native:
+    if native:
         # Herman's captured Innate 0.8.0 fold in raw servo order.
         bus.start = [3072, 2842, 1023, 2244, 2045, 1875, 2048]
+        if args.native_overshoot:
+            bus.start[SELECTED - 1] = 1018
+            bus.start[4] = 2047
         bus.reset()
+        with bus.lock:
+            struct.pack_into("<I", bus.reg[SELECTED], 52, 1023)
+            if args.native_overshoot:
+                struct.pack_into("<I", bus.reg[SELECTED], GOAL, 1024)
     start = [
         (encoder - 2048) * 2 * math.pi / 4096 * (-1 if i in (1, 2, 3, 5) else 1)
         for i, encoder in enumerate(bus.start[:6])
     ]
-    target = 1.56 if args.native else 0.95
-    prefix = "adopt_recovery" if args.native else "isolated_recovery"
-    mode = ["-p", "adopt_existing_holds:=true", "-p", "auto_rest:=false"] if args.native else []
+    target = 1.56 if native else 0.95
+    prefix = "adopt_recovery" if native else "isolated_recovery"
+    mode = ["-p", "adopt_existing_holds:=true", "-p", "auto_rest:=false"] if native else []
     log = args.driver_log.open("w")
     proc = subprocess.Popen(
         [
@@ -250,6 +260,12 @@ def main():
     node.create_publisher(Float64MultiArray, "/mars/arm/commands", 1)
     driver = ActionClient(node, FollowJointTrajectory, "/mars/arm/recover_joint")
     try:
+        if args.native_overshoot:
+            assert proc.wait(timeout=8) != 0
+            assert "Adopted start or target exceeds the native encoder range" in args.driver_log.read_text()
+            assert not bus.writes and not bus.group_writes
+            print("native overshoot: captured start rejected before any servo writes", flush=True)
+            return
         if args.native:
             test_native_session(node, bus, start, target)
             return
