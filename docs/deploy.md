@@ -96,6 +96,13 @@ uv run emet mars status --connection mars
 uv run emet capture --connection mars
 ```
 
+For Mars, `emet deploy --connection mars --start-bridge` starts the bridge and
+waits for live observation, state, and servo packets. It then checks the measured
+arm position against the robot's published joint ranges and reports the current
+arm command publishers. `emet mars start` uses the same checks. Diagnostics
+identify blocked arm control while observation streams remain available. Each
+named arm goal also checks the live ranges and exclusive command ownership.
+
 `emet mars status` prints bridge/ZMQ health **and** a camera line (`head` / `wrist` / Arducam symlink). Bridge **ready** does not mean the wrist stream is live.
 
 Optional: `--onboard-da3` (implies deploy) runs Depth Anything 3 on the Jetson; prefer this for Discord house chat so the workstation GPU stays free for voxels.

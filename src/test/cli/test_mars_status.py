@@ -138,3 +138,36 @@ LISTEN 0      100          0.0.0.0:4405       0.0.0.0:*
     status = parse_bridge_status_output("herman", "jetson1", raw)
     assert 4405 in status.listening_ports
     assert status.ready_for_stream
+
+
+def test_mars_start_verifies_streams_and_reports_arm_readiness(monkeypatch):
+    import emet.mars as mars
+
+    calls = []
+
+    def run(host, user, password, command, *, check=True):
+        calls.append((command, check))
+        return 2 if "arm_motion" in command else 0
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    mars.start_bridge_on_robot("herman", "jetson1", None)
+    [(start, start_check), (streams, streams_check), (arm, arm_check)] = calls
+    assert "ros2 launch innate_mars_bridge" in start
+    assert "live observation, state, and servo streams" in streams
+    assert "innate_mars_bridge.remote.arm_motion import main" in arm
+    assert start_check
+    assert not streams_check
+    assert not arm_check
+
+
+def test_mars_start_fails_if_bridge_does_not_serve_streams(monkeypatch):
+    import pytest
+
+    import emet.mars as mars
+
+    def run(host, user, password, command, *, check=True):
+        return int("Mars bridge missing streams" in command)
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    with pytest.raises(SystemExit, match="did not serve telemetry"):
+        mars.start_bridge_on_robot("herman", "jetson1", None)
