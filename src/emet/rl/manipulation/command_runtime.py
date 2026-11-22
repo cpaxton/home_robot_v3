@@ -264,13 +264,24 @@ class TaskPoseCommandRuntime(CommandRuntime):
     def __init__(self, env, *, policy=None, timing=None, teacher_config=None):
         if env.config.action_mode != "direct_velocity" or not env.control.preview_enabled:
             raise ValueError("task-pose runtime requires direct velocity and preview")
-        if policy is not None and (
-            policy.robot != env.profile.robot
-            or policy.manifest["fingerprint"] != env.fingerprint
-            or policy.action_mode != "direct_velocity"
-            or "preview" not in policy.normalization
-        ):
-            raise ValueError("task-pose policy/model mismatch")
+        self._whole_body_actor = False
+        if policy is not None:
+            from emet.rl.manipulation.wheel_feedback import execution_record
+            from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+
+            self._whole_body_actor = isinstance(policy, WholeBodyBundle)
+            if (
+                policy.robot != env.profile.robot
+                or policy.manifest["fingerprint"] != env.fingerprint
+                or policy.action_mode != "direct_velocity"
+                or (not self._whole_body_actor and "preview" not in policy.normalization)
+            ):
+                raise ValueError("task-pose policy/model mismatch")
+            if self._whole_body_actor:
+                if not env.config.retention_context:
+                    raise ValueError("whole-body task-pose policy requires retention observations")
+                if policy.manifest.get("wheel_feedback") != execution_record(env.config):
+                    raise ValueError("whole-body task-pose policy wheel feedback mismatch")
         self.env, self.policy = env, policy
         timing = TaskPoseRuntimeTiming() if timing is None else timing
         if not isinstance(timing, TaskPoseRuntimeTiming):
@@ -332,7 +343,12 @@ class TaskPoseCommandRuntime(CommandRuntime):
                     try:
                         started = time.monotonic()
                         self.last_timing = {}
-                        obs = self.env.control.observe()
+                        if self._whole_body_actor:
+                            from emet.rl.manipulation.whole_body_observation import actor_observation
+
+                            obs = actor_observation(self.env.control)
+                        else:
+                            obs = self.env.control.observe()
                         action = (
                             task_pose_teacher_action(self.env.control, config=self.teacher_config)
                             if self.policy is None

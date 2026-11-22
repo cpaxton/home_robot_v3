@@ -1,6 +1,7 @@
 """Exercise task-space schedules through actual ownership and receipt logic."""
 
 import threading
+from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
@@ -15,6 +16,8 @@ from emet.rl.manipulation.command_runtime import (
 )
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
 from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
+from emet.rl.manipulation.whole_body_actor import WholeBodyActor
+from emet.rl.manipulation.whole_body_bundle import export_actor
 
 
 @pytest.fixture
@@ -74,6 +77,27 @@ def test_reachable_pose_schedule_completes_through_command_receipts(runtime):
     assert receipt["result"]["stop_confirmed"]
     assert receipt["result"]["measurements"]["ee_position_error"] < 0.005
     assert not runtime.env.control.release_authorized
+
+
+@pytest.mark.sim
+def test_whole_body_bundle_executes_waypoint_with_motion_observation(runtime, tmp_path):
+    config = replace(runtime.env.config, retention_context=True)
+    env = ManipulationEnv(config)
+    try:
+        env.reset(seed=1900000)
+        bundle = export_actor(WholeBodyActor(hidden=16), tmp_path / "actor", config, env.fingerprint, steps=0)
+        with pytest.raises(ValueError, match="retention observations"):
+            TaskPoseCommandRuntime(runtime.env, policy=bundle)
+
+        server = TaskPoseCommandRuntime(env, policy=bundle)
+        c = client(server)
+        action = send_task_pose_trajectory(c, path(server, 0.01))
+        server.advance()
+        c._state = server.command_message({})
+        assert command_receipt(c, action)["status"] == "running"
+        assert server.last_info is not None
+    finally:
+        env.close()
 
 
 @pytest.mark.sim

@@ -17,6 +17,7 @@ other embodiments, with their own actions, models and qualification.
 | Architecture, historical results and research comparison | [2026-11-14/15 snapshot](status_20261114.md) |
 | Ordered changes, decision criteria and bounded next experiments | [Mars WBC next steps](../plans/mars_wbc_next_steps.md) |
 | WBC design principles and lessons | [Whole-body control philosophy](whole_body_control.md) |
+| Infeasible goals, contact severity and recovery experts | [Blocked goals and contact](whole_body_control.md#handle-blocked-goals-and-contact-during-execution), [Herman waypoint baseline](../experiments/herman_wbc_blocked_waypoints_20261122.md) |
 | Simulator setup, CLI and runtime details | [Mars reactive RL runbook](../mars_reactive_rl.md) |
 | General goals, changing references and recovery | [General whole-body tracking](../plans/general_whole_body_tracking.md) |
 | Finite tracking problem and per-case acceptance | [Tracking mastery](../plans/mars_tracking_mastery.md) |

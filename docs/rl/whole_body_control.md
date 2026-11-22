@@ -6,6 +6,12 @@ tracking, a quiet base, retained objects and reliable stopping all matter.
 TAMP supplies useful paths and demanding acceptance cases; ordinary base-only,
 hand-only and combined goals also belong in the controller's task distribution.
 
+RL is meant to make execution adapt when the world, the robot or the reference
+changes. A controller should keep useful motion when it can, recover from small
+disturbances, and recognize when a commanded pose is blocked. Tracking error,
+contact severity, support, grip and the quality of the stop all matter to that
+decision. Evaluate these behaviors as well as nominal tracking.
+
 This page describes design intent and lessons from the current experiments.
 Individual implementations and simulator results have narrower scope; follow
 the linked reports for their exact contracts and limitations.
@@ -46,8 +52,8 @@ counting arm joints nor one solver's rejection settles that diagnosis. See the
 
 | Layer | Responsibility |
 | --- | --- |
-| Planner / reference producer | Supply reachable pose goals, masks, timestamps and gripper intent; use FK/IK witnesses for geometric admission where needed. |
-| Learned controller | Use measured history and announced pose preview to request bounded base/arm motion. |
+| Planner / reference producer | Send pose goals with frames, masks, timestamps and gripper intent. Use FK/IK witnesses when the planner can establish feasibility. |
+| Learned controller | Use measured history and announced pose preview to request bounded base/arm motion and adapt when progress is blocked. |
 | Executor and monitors | Enforce command ownership, masks, native limits, contact/support rules, release authority, deadlines and measured stopping. |
 | Physics / robot feedback | Establish the motion, contact and settling that actually occurred. |
 
@@ -74,6 +80,14 @@ closure, support-reserved lift and loaded retention require their own evidence.
 Stage-specific teacher admission must cover the requested motion. The
 [unloaded-prefix readout](../experiments/mars_unloaded_grasp_admission_20261116.md)
 shows why execution boundaries and planning admission both need explicit scope.
+
+The operator console should use the same waypoint lifecycle as a planner.
+It supplies timestamped pose schedules, can replace an active schedule, and
+shows command receipts including a blocked outcome and measured stop status.
+The robot owns motion and contact handling if the stream drops. Start with
+simulator submission and cancellation, then verify the robot-side actuator
+adapter and watchdog before enabling hardware submission. See
+[controller deployment](CONTROLLER_DEPLOYMENT.md).
 
 ## Use the teacher to expose gaps and establish comparisons
 
@@ -174,6 +188,48 @@ rollout alone. In the inspected pregrasp archives, the recorded stops are
 Cartesian tracking-envelope faults. The
 [fault evidence](../experiments/mars_reference_velocity_prototype.md#fault-stop-evidence)
 does not justify weakening stops or adding a premature-stop penalty.
+
+## Handle blocked goals and contact during execution
+
+The controller will receive goals that require self-collision, penetration of
+an obstacle, or motion past a joint limit. A feasible path can also become
+blocked after an obstacle moves or a user replaces the goal mid-motion.
+Use reachability and collision estimates to choose and shape an approach.
+Treat uncertain proxy overlap as a reason to slow or monitor more closely
+within the validated operating envelope. Preserve hard bounds, actuator
+ownership, feedback validity and protective stops.
+
+When a safe combination of base and arm motion can make progress, the
+controller should use it. Brief, low-energy contact can be compatible with
+the task. If further tracking would require pushing, reduce drive into the
+contact and report `blocked` to the planner or console. A bounded retreat is
+appropriate when clearance, support and grip allow it. Confirm unloading as
+well as settling. A stationary arm can still be pressing on an obstacle.
+Forceful contact, sustained drive without progress, wheel unloading and
+actuator faults need an independent protective response.
+
+Start with a recovery expert for coupled base-and-hand commands. Include
+reachable controls, benign contact, infeasible endpoints, moving obstacles
+and mid-motion waypoint replacements in the training and held-out evaluation
+distributions. Vary initial pose and speed, obstacle geometry and compliance,
+and sensing and actuation delay. Reward useful tracking progress and timely
+unloading so the expert has a reason to yield before a guard fires. The
+current actor sees measured joint motion, tracking error and previous commands.
+Use simulated contact truth for rewards, labels and critics. Evaluate whether
+adding source-timed motor effort improves detection once that signal is
+calibrated on hardware. Qualify the expert on normal tracking as well as
+recovery before applying the training to the other experts. Keep one actuator
+command owner throughout any recovery or retarget.
+
+Score benign-contact recovery and blocked-command handling separately. Report
+task progress, false stops, peak force or effort, impulse, time spent pushing,
+time to unload and confirmed hold. On Herman, increase speed within an envelope
+measured on hardware across poses and speeds. Measure feedback age, detection
+and actuator delays, stopping travel and load decay. Keep the fast contact
+response and command-loss watchdog beside the driver, independent of actor
+inference, video and the browser. The
+[Herman blocked-waypoint baseline](../experiments/herman_wbc_blocked_waypoints_20261122.md)
+records why stop confirmation alone is insufficient.
 
 ## Make experiments useful even when the candidate fails
 
