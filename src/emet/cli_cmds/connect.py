@@ -359,7 +359,7 @@ def mars_cmd() -> None:
     is_flag=True,
     help="Skinny 4401 (lidar/poses only); scaled JPEG on 4404 (EMET_ZMQ_OBS_INCLUDE_IMAGES=0)",
 )
-@click.option("--wait-s", default=20.0, show_default=True, help="Seconds to wait before status check")
+@click.option("--wait-s", default=35.0, show_default=True, help="Seconds allowed for live bridge streams")
 @click.option("--no-save", is_flag=True, help="Do not update saved connection profile")
 def mars_start_cmd(
     host: str | None,
@@ -421,13 +421,13 @@ def mars_stop_cmd(
     """Stop innate_mars_bridge on the robot."""
     from emet.mars import resolve_mars_target, stop_bridge_on_robot
 
-    host, user, password, _, _ = resolve_mars_target(
+    host, user, password, workspace, emet_dir = resolve_mars_target(
         host=host,
         user=user,
         password=password,
         connection_name=connection_name,
     )
-    stop_bridge_on_robot(host, user, password)
+    stop_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir)
 
 
 @mars_cmd.command("status", short_help="Show bridge process and ZMQ ports on robot")
@@ -444,7 +444,7 @@ def mars_status_cmd(
     """Print bridge process, ZMQ ports, and recent tmux log on the robot."""
     from emet.mars import bridge_status_on_robot, resolve_mars_target
 
-    host, user, password, workspace, _ = resolve_mars_target(
+    host, user, password, workspace, emet_dir = resolve_mars_target(
         host=host,
         user=user,
         password=password,
@@ -456,6 +456,7 @@ def mars_status_cmd(
         password,
         profile=connection_name or host,
         workspace=workspace,
+        emet_dir=emet_dir,
     )
 
 

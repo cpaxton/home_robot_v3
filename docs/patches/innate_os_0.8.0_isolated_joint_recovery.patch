@@ -1,0 +1,827 @@
+diff --git a/ros2_ws/src/mars_bot/mars_arm/CMakeLists.txt b/ros2_ws/src/mars_bot/mars_arm/CMakeLists.txt
+index 04c7edb..3afa6fa 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/CMakeLists.txt
++++ b/ros2_ws/src/mars_bot/mars_arm/CMakeLists.txt
+@@ -10,6 +10,8 @@ find_package(ament_cmake REQUIRED)
+ find_package(ament_cmake_python REQUIRED)
+ find_package(rclpy REQUIRED)
+ find_package(rclcpp REQUIRED)
++find_package(rclcpp_action REQUIRED)
++find_package(control_msgs REQUIRED)
+ find_package(sensor_msgs REQUIRED)
+ find_package(std_msgs REQUIRED)
+ find_package(std_srvs REQUIRED)
+@@ -34,6 +36,8 @@ add_executable(arm
+   mars_arm/arm_node.cpp
+   mars_arm/arm_config.cpp
+   mars_arm/arm_control.cpp
++  mars_arm/arm_recovery.cpp
++  mars_arm/arm_adopt.cpp
+   mars_arm/arm_services.cpp
+   mars_arm/arm_head.cpp
+   mars_arm/arm_trajectory.cpp
+@@ -41,6 +45,8 @@ add_executable(arm
+ 
+ ament_target_dependencies(arm
+   rclcpp
++  rclcpp_action
++  control_msgs
+   sensor_msgs
+   std_msgs
+   std_srvs
+diff --git a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp
+index d5ed561..97f0183 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp
++++ b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp
+@@ -3,6 +3,9 @@
+ #pragma once
+ 
+ #include <rclcpp/rclcpp.hpp>
++#include <rclcpp_action/rclcpp_action.hpp>
++#include <control_msgs/action/follow_joint_trajectory.hpp>
++#include "mars_arm/isolated_recovery.hpp"
+ #include <sensor_msgs/msg/joint_state.hpp>
+ #include <std_msgs/msg/float64_multi_array.hpp>
+ #include <std_msgs/msg/int32.hpp>
+@@ -109,6 +112,23 @@ class MarsArmNode : public rclcpp::Node {
+     void armGotoJSTrajectoryCallback(const std::shared_ptr<mars_msgs::srv::GotoJSTrajectory::Request> request,
+                                      std::shared_ptr<mars_msgs::srv::GotoJSTrajectory::Response> response);
+ 
++    // Opt-in mode that never emits a full-arm goal.
++    void setupIsolatedRecovery(const std::string& joint);
++    void tickIsolatedRecovery(const std::vector<int>& encoders, const std::vector<int>& velocity,
++                              const std::vector<int>& load, const std::vector<double>& positions);
++    void finishIsolatedRecovery(int code, const std::string& reason);
++    void isolatedRecoveryReadFailed();
++    using RecoveryAction = control_msgs::action::FollowJointTrajectory;
++    rclcpp_action::Server<RecoveryAction>::SharedPtr recovery_server_;
++    std::shared_ptr<rclcpp_action::ServerGoalHandle<RecoveryAction>> recovery_goal_;
++    std::optional<RecoveryPath> recovery_path_;
++    std::mutex recovery_mutex_;
++    bool recovery_reserved_{false}, recovery_active_{false}, recovery_holding_{false}, recovery_fault_{false};
++    int recovery_encoder_{0}, recovery_lower_{0}, recovery_upper_{0};
++    double recovery_command_{0};
++    std::chrono::steady_clock::time_point recovery_started_{}, recovery_last_tick_{}, recovery_hold_started_{},
++        recovery_settle_{};
++
+     // ── Member variables ────────────────────────────────────────────────
+ 
+     std::shared_ptr<Dynamixel> dynamixel_;
+@@ -128,6 +148,20 @@ class MarsArmNode : public rclcpp::Node {
+     rclcpp::Service<mars_msgs::srv::GotoJSTrajectory>::SharedPtr arm_goto_js_traj_service_;
+     sensor_msgs::msg::JointState arm_state_msg_;    // 6-joint message for /mars/arm/state
+     sensor_msgs::msg::JointState joint_state_msg_;  // 7-joint message for /joint_states
++    void setupAdoptedArm(const std::string& joint);
++    void tickAdoptedArm(const std::vector<int>& positions, const std::vector<int>& velocities,
++                        const std::vector<int>& loads);
++    bool holdAdoptedArm();
++    bool adopted_arm_ = false;
++    bool adopted_lease_ = false;
++    bool adopted_fault_ = false;
++    size_t adopted_joint_ = 0;
++    std::vector<int> adopted_goals_;
++    std::vector<double> adopted_start_;
++    double adopted_target_ = 0.0;
++    std::pair<int, int> adopted_limits_;
++    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr adopt_acquire_, adopt_hold_, adopt_release_;
++
+     std::mutex arm_command_mutex_;
+     std::atomic<bool> has_arm_command_{false};
+ 
+diff --git a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/dynamixel.hpp b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/dynamixel.hpp
+index 585920e..afc8081 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/dynamixel.hpp
++++ b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/dynamixel.hpp
+@@ -2,6 +2,8 @@
+ // Copyright (c) 2026 Innate Inc
+ #pragma once
+ 
++#include <utility>
++
+ #include <string>
+ #include <cstdint>
+ #include "dynamixel_sdk/dynamixel_sdk.h"
+@@ -74,6 +76,11 @@ class Dynamixel {
+     int readPosition(int motor_id);
+     int readVelocity(int motor_id);
+     void setGoalPosition(int motor_id, int goal_position);
++    bool readTorqueEnabled(int motor_id);
++    int readGoalPosition(int motor_id) { return readRecoveryWord(motor_id, ADDR_GOAL_POSITION); }
++    std::pair<int, int> readPositionLimits(int motor_id);
++    void setRecoveryProfile(int motor_id);
++    void writeRecoveryTarget(int motor_id, int goal_position);
+     void reboot(int motor_id);
+     uint8_t readHardwareErrorStatus(int motor_id);
+     int16_t readPresentLoad(int motor_id);
+@@ -89,6 +96,8 @@ class Dynamixel {
+ 
+    private:
+     void connect();
++    uint8_t readRecoveryByte(int motor_id, uint16_t address);
++    int readRecoveryWord(int motor_id, uint16_t address);
+     // Write `value` (truncated to `num_bytes`) to a control-table register, throwing on failure.
+     void writeRegister(int motor_id, uint16_t address, uint32_t value, int num_bytes, const char* op_name);
+     // Throw a uniform runtime_error if a TxRx result is not COMM_SUCCESS.
+diff --git a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/isolated_recovery.hpp b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/isolated_recovery.hpp
+new file mode 100644
+index 0000000..95ff641
+--- /dev/null
++++ b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/isolated_recovery.hpp
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: Apache-2.0
++#pragma once
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <stdexcept>
++#include <vector>
++
++namespace mars_arm {
++
++struct RecoveryPath {
++    static constexpr double pose_tolerance = 0.005;
++    static constexpr double rate = 0.11;
++    static constexpr double max_tracking_error = 0.020;
++    static constexpr double settle_seconds = 0.25;
++    static constexpr int stop_unconfirmed = -100;
++
++    size_t joint;
++    std::array<double, 6> start;
++    double target;
++
++    bool matches(const std::vector<double>& pose, bool ignore_selected = false) const {
++        if (pose.size() != start.size()) {
++            return false;
++        }
++        for (size_t i = 0; i < start.size(); ++i) {
++            if (!(ignore_selected && i == joint) && !(std::abs(pose[i] - start[i]) <= pose_tolerance)) {
++                return false;
++            }
++        }
++        return true;
++    }
++
++    bool matchesGoal(double requested_start, double requested_target, double duration) const {
++        const double travel = std::abs(target - requested_start);
++        return std::abs(requested_start - start[joint]) <= pose_tolerance
++            && std::abs(requested_target - target) <= 1e-6 && travel > pose_tolerance
++            && std::isfinite(duration) && duration > 0.0 && duration <= 10.0;
++    }
++
++    double step(double present_command, double elapsed, double duration) const {
++        const double limit = std::min(rate, std::abs(target - start[joint]) / duration);
++        const double delta = limit * std::clamp(elapsed, 0.0, 0.04);
++        return present_command + std::clamp(target - present_command, -delta, delta);
++    }
++
++    static bool canHoldEncoder(int measured, int lower, int upper) {
++        // Quantization at the boundary can report one tick beyond the hardware
++        // limit. Only that one tick may use the nearest legal encoder hold.
++        return measured >= lower - 1 && measured <= upper + 1;
++    }
++
++    bool stopRangeIncludes(int begin, int end, int lower, int upper) const {
++        return lower >= 0 && upper <= 4095 && upper >= lower && upper - lower >= 4
++            && canHoldEncoder(begin, lower, upper) && end >= lower + 2 && end <= upper - 2;
++    }
++};
++
++}  // namespace mars_arm
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp
+new file mode 100644
+index 0000000..15bf72b
+--- /dev/null
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp
+@@ -0,0 +1,191 @@
++// SPDX-License-Identifier: Apache-2.0
++#include "mars_arm/arm_node.hpp"
++
++namespace mars_arm {
++namespace {
++constexpr char kSession[] = "/emet/mars/arm";
++// jointEncoder truncates. Rounding a measured position preserves its original tick.
++int measuredEncoder(double angle, size_t joint) {
++    return static_cast<int>(std::lround(2048 + (flippedJoint(joint) ? -angle : angle) * 4096 / (2 * M_PI)));
++}
++}
++
++void MarsArmNode::setupAdoptedArm(const std::string& joint) {
++    const auto it = std::find(joint_names_.begin(), joint_names_.end(), joint);
++    adopted_start_ = this->get_parameter("adopt_recovery_start_rad").as_double_array();
++    adopted_target_ = this->get_parameter("adopt_recovery_target_rad").as_double();
++    if (it == joint_names_.end() || adopted_start_.size() != 6 || !std::isfinite(adopted_target_) ||
++        !std::all_of(adopted_start_.begin(), adopted_start_.end(), [](double q) { return std::isfinite(q); })) {
++        throw std::runtime_error("Adoption requires a reviewed arm start and target");
++    }
++    adopted_joint_ = static_cast<size_t>(it - joint_names_.begin());
++    if (adopted_joint_ >= kArmJoints || std::abs(adopted_target_ - adopted_start_[adopted_joint_]) > 0.025 ||
++        clampToJointRange(adopted_joint_, adopted_target_) != adopted_target_) {
++        throw std::runtime_error("Adopted arm target exceeds its bounded recovery stroke");
++    }
++    for (const auto& config : joint_configs_) {
++        const int id = config.servo_id;
++        if (!dynamixel_->readTorqueEnabled(id) || dynamixel_->readHardwareErrorStatus(id)) {
++            throw std::runtime_error("Adoption requires healthy, already-powered servos");
++        }
++        adopted_goals_.push_back(dynamixel_->readGoalPosition(id));
++    }
++    const auto [positions, velocities, loads] = robot_->readState();
++    for (size_t i = 0; i < adopted_start_.size(); ++i) {
++        if (positions[i] != measuredEncoder(adopted_start_[i], i) || std::abs(velocities[i]) > 1) {
++            throw std::runtime_error("Adopted arm differs from the reviewed stationary pose");
++        }
++    }
++    const int id = joint_configs_[adopted_joint_].servo_id;
++    adopted_limits_ = dynamixel_->readPositionLimits(id);
++    if (!RecoveryPath{adopted_joint_, {}, adopted_target_}.stopRangeIncludes(
++            measuredEncoder(adopted_start_[adopted_joint_], adopted_joint_), jointEncoder(adopted_target_, adopted_joint_),
++            adopted_limits_.first, adopted_limits_.second)) {
++        throw std::runtime_error("Adopted start or target exceeds the native encoder range");
++    }
++
++    const auto trigger = [this](const char* path, auto callback) {
++        return this->create_service<std_srvs::srv::Trigger>(
++            std::string(kSession) + path,
++            [callback](const std_srvs::srv::Trigger::Request::SharedPtr, std_srvs::srv::Trigger::Response::SharedPtr reply) {
++                try {
++                    reply->success = callback();
++                    reply->message = reply->success ? "confirmed" : "adopted arm request rejected";
++                } catch (const std::exception& error) {
++                    reply->message = error.what();
++                }
++            }, rmw_qos_profile_services_default, stop_callback_group_);
++    };
++    adopt_acquire_ = trigger("/acquire", [this] {
++        std::lock_guard<std::mutex> bus(dynamixel_mutex_);
++        if (adopted_lease_ || adopted_fault_ || servo_tripped_ || !arm_torque_enabled_) {
++            return false;
++        }
++        adopted_lease_ = true;
++        return true;
++    });
++    adopt_hold_ = trigger("/hold", [this] {
++        std::lock_guard<std::mutex> bus(dynamixel_mutex_);
++        return adopted_lease_ && holdAdoptedArm();
++    });
++    adopt_release_ = trigger("/release", [this] {
++        std::lock_guard<std::mutex> bus(dynamixel_mutex_);
++        if (!holdAdoptedArm()) {
++            return false;
++        }
++        adopted_lease_ = false;
++        return true;
++    });
++    arm_goto_js_v2_service_ = this->create_service<mars_msgs::srv::GotoJS>(
++        std::string(kSession) + "/goto_js_v2",
++        [this](const mars_msgs::srv::GotoJS::Request::SharedPtr req, mars_msgs::srv::GotoJS::Response::SharedPtr reply) {
++            std::optional<uint64_t> claim;
++            try {
++                std::lock_guard<std::mutex> bus(dynamixel_mutex_);
++                const auto& q = req->data.data;
++                if (!adopted_lease_ || adopted_fault_ || servo_tripped_ || !arm_torque_enabled_ ||
++                    q.size() != 6 || !std::isfinite(req->time) || req->time < 1.0 || req->time > 2.0) {
++                    return;
++                }
++                for (size_t i = 0; i < q.size(); ++i) {
++                    const double expected = i == adopted_joint_ ? adopted_target_ : adopted_start_[i];
++                    if (!std::isfinite(q[i]) || std::abs(q[i] - expected) > 1e-6) {
++                        return;
++                    }
++                }
++                auto [positions, velocities, loads] = robot_->readState();
++                for (size_t i = 0; i < q.size(); ++i) {
++                    if (positions[i] != measuredEncoder(adopted_start_[i], i) || std::abs(velocities[i]) > 1) {
++                        return;
++                    }
++                }
++                const auto &near = gs_near_[adopted_joint_];
++                const auto &far = gs_far_[adopted_joint_];
++                const double reach = std::abs(gripperTipX(adopted_start_[1], adopted_start_[2], adopted_start_[3]));
++                const double scale = std::pow(std::clamp((reach / 0.37291 - 0.1) / 0.9, 0.0, 1.0), 2);
++                const auto gain = [scale](int low, int high) {
++                    return low + static_cast<int>((high - low) * scale);
++                };
++                const int id = joint_configs_[adopted_joint_].servo_id;
++                dynamixel_->setRecoveryProfile(id);
++                dynamixel_->syncWritePID({{id, gain(near.ff2, far.ff2), gain(near.ff1, far.ff1),
++                                           gain(near.kd, far.kd), gain(near.ki, far.ki), gain(near.kp, far.kp)}});
++                claim = claimArm();
++            } catch (const std::exception& error) {
++                RCLCPP_ERROR(this->get_logger(), "Adopted arm admission failed: %s", error.what());
++                return;
++            }
++            reply->success = planAndExecuteTrajectory(req->data.data, req->time, GainMode::SCHEDULED, claim);
++        }, rmw_qos_profile_services_default, service_callback_group_);
++}
++
++bool MarsArmNode::holdAdoptedArm() {
++    // Caller holds the bus. Invalidate the native trajectory before a hold write.
++    bool active;
++    {
++        std::lock_guard<std::mutex> command(arm_command_mutex_);
++        active = has_target_;
++        has_target_ = false;
++        target_pending_ = false;
++        ++arm_claim_;
++    }
++    if (!active) {
++        return !adopted_fault_;
++    }
++    auto [positions, velocities, loads] = robot_->readState();
++    const int id = joint_configs_[adopted_joint_].servo_id;
++    const auto [low, high] = adopted_limits_;
++    const int encoder = positions[adopted_joint_];
++    if (!dynamixel_->readTorqueEnabled(id) || !RecoveryPath::canHoldEncoder(encoder, low, high)) {
++        adopted_fault_ = true;
++        return false;
++    }
++    adopted_goals_[adopted_joint_] = std::clamp(encoder, low, high);
++    dynamixel_->writeRecoveryTarget(id, adopted_goals_[adopted_joint_]);
++    return !adopted_fault_;
++}
++
++void MarsArmNode::tickAdoptedArm(const std::vector<int>& positions, const std::vector<int>& velocities,
++                                const std::vector<int>& loads) {
++    double goal;
++    {
++        std::lock_guard<std::mutex> command(arm_command_mutex_);
++        target_pending_ = false;
++        if (!adopted_lease_ || !has_target_ || adopted_fault_) {
++            return;
++        }
++        goal = latest_target_[adopted_joint_];
++    }
++    const auto joint = adopted_joint_;
++    const int id = joint_configs_[joint].servo_id;
++    for (size_t i = 0; i < 6; ++i) {
++        if (i != joint && std::abs(positions[i] - measuredEncoder(adopted_start_[i], i)) > 1) {
++            holdAdoptedArm();
++            adopted_fault_ = true;
++            return;
++        }
++    }
++    if (!arm_torque_enabled_ || servo_tripped_ || std::abs(loads[joint]) >= kLoadWarningThreshold) {
++        holdAdoptedArm();
++        adopted_fault_ = true;
++        return;
++    }
++    const auto [low, high] = adopted_limits_;
++    const int encoder = std::clamp(jointEncoder(goal, joint), low, high);
++    if (velocities.size() != positions.size()) {
++        throw std::runtime_error("Incomplete adopted arm feedback");
++    }
++    const int start = measuredEncoder(adopted_start_[joint], joint);
++    const int target = jointEncoder(adopted_target_, joint);
++    if ((target > start && (positions[joint] < start || positions[joint] > target + 2)) ||
++        (target < start && (positions[joint] > start || positions[joint] < target - 2))) {
++        holdAdoptedArm();
++        adopted_fault_ = true;
++        return;
++    }
++    if (encoder != adopted_goals_[joint]) {
++        dynamixel_->writeRecoveryTarget(id, encoder);
++        adopted_goals_[joint] = encoder;
++    }
++}
++}
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
+index 7f98ca3..8870cc3 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
+@@ -80,6 +80,14 @@ void MarsArmNode::controlTimerCallback() {
+             joint_state_pub_->publish(joint_state_msg_);
+         }
+         ts[5] = std::chrono::steady_clock::now();
++        if (adopted_arm_) {
++            tickAdoptedArm(positions, velocities, loads);
++            return;
++        }
++        if (recovery_path_) {
++            tickIsolatedRecovery(positions, velocities, loads, arm_state_msg_.position);
++            return;
++        }
+ 
+         // ========== PERIODIC GAIN DUMP (every 2s) ==========
+         RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+@@ -301,6 +309,18 @@ void MarsArmNode::controlTimerCallback() {
+         ts[7] = std::chrono::steady_clock::now();
+ 
+     } catch (const std::exception& e) {
++        if (recovery_path_) {
++            isolatedRecoveryReadFailed();
++        }
++        if (adopted_arm_) {
++            std::lock_guard<std::mutex> lock(dynamixel_mutex_);
++            adopted_fault_ = true;
++            try {
++                holdAdoptedArm();
++            } catch (const std::exception& error) {
++                RCLCPP_ERROR(this->get_logger(), "Adopted arm hold unconfirmed: %s", error.what());
++            }
++        }
+         RCLCPP_ERROR(this->get_logger(), "Control timer error: %s", e.what());
+     }
+ 
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp
+index 2b09567..e0eed4f 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp
+@@ -88,6 +88,18 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+     this->declare_parameter("max_jerk", 0.0);  // rad/s³, 0 = disabled
+     this->declare_parameter("joints", std::vector<std::string>{});
+     this->declare_parameter("auto_rest", true);
++    const auto recovery_joint = this->declare_parameter("isolated_recovery_joint", std::string{});
++    this->declare_parameter("isolated_recovery_start_rad", std::vector<double>{});
++    this->declare_parameter("isolated_recovery_target_rad", 0.0);
++    const auto recovery_device = this->declare_parameter("isolated_recovery_device", std::string{});
++
++    adopted_arm_ = this->declare_parameter("adopt_existing_holds", false);
++    const auto adopted_joint = this->declare_parameter("adopt_recovery_joint", std::string{});
++    this->declare_parameter("adopt_recovery_start_rad", std::vector<double>{});
++    this->declare_parameter("adopt_recovery_target_rad", 0.0);
++    if (adopted_arm_ && (!recovery_joint.empty() || this->get_parameter("auto_rest").as_bool())) {
++        throw std::invalid_argument("Adoption requires auto_rest=false and a single arm mode");
++    }
+ 
+     int baud_rate = this->get_parameter("baud_rate").as_int();
+     control_frequency_ = this->get_parameter("control_frequency").as_double();
+@@ -103,7 +115,8 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+     loadJointConfigs(joint_names_param);
+ 
+     // Auto-discover the arm's USB serial device (CH343 1a86:55d3)
+-    std::string device_name = discoverArmDevice(this->get_logger());
++    std::string device_name = (!adopted_arm_ && recovery_joint.empty()) || recovery_device.empty()
++                                  ? discoverArmDevice(this->get_logger()) : recovery_device;
+     RCLCPP_INFO(this->get_logger(), "Using device: %s", device_name.c_str());
+ 
+     // Create Dynamixel interface
+@@ -113,7 +126,9 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+     dynamixel_ = std::make_shared<Dynamixel>(config);
+ 
+     // Initialize all 7 servos
+-    initializeServos();
++    if (recovery_joint.empty() && !adopted_arm_) {
++        initializeServos();
++    }
+ 
+     // Create Robot for all 7 servos (IDs 1-7)
+     RCLCPP_DEBUG(this->get_logger(), "Creating Robot object with servo IDs 1-7");
+@@ -129,6 +144,32 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+                                                                                   rclcpp::QoS(1).transient_local());
+     arm_status_pub_ = this->create_publisher<mars_msgs::msg::ArmStatus>("/mars/arm/status", 10);
+ 
++    if (!recovery_joint.empty() || adopted_arm_) {
++        head_position_pub_ =
++            this->create_publisher<std_msgs::msg::String>("/mars/head/current_position", rclcpp::QoS(1).transient_local());
++        joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", 10);
++        arm_state_msg_.name = joint_names_;
++        joint_state_msg_.name = joint_names_;
++        joint_state_msg_.name.emplace_back("joint_head");
++        if (adopted_arm_) {
++            setupAdoptedArm(adopted_joint);
++        } else {
++            setupIsolatedRecovery(recovery_joint);
++        }
++        control_timer_ = this->create_wall_timer(
++            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / control_frequency_)),
++            std::bind(&MarsArmNode::controlTimerCallback, this), timer_callback_group_);
++        health_timer_ = this->create_wall_timer(
++            std::chrono::milliseconds(5000), std::bind(&MarsArmNode::healthMonitorCallback, this), health_callback_group_);
++        healthMonitorCallback();
++        RCLCPP_INFO(this->get_logger(), "%s",
++                    adopted_arm_ ? "Adopted arm ready" : "Isolated arm recovery ready");
++        if (!adopted_arm_) {
++            RCLCPP_INFO(this->get_logger(), "Isolated arm recovery ready for %s", recovery_joint.c_str());
++        }
++        return;
++    }
++
+     auto cmd_qos = rclcpp::QoS(1).best_effort();
+     arm_command_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
+         "/mars/arm/commands", cmd_qos, std::bind(&MarsArmNode::armCommandCallback, this, std::placeholders::_1));
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_recovery.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_recovery.cpp
+new file mode 100644
+index 0000000..bdf3684
+--- /dev/null
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_recovery.cpp
+@@ -0,0 +1,216 @@
++// SPDX-License-Identifier: Apache-2.0
++#include "mars_arm/arm_node.hpp"
++
++namespace mars_arm {
++namespace {
++
++using Recovery = control_msgs::action::FollowJointTrajectory;
++using GoalHandle = rclcpp_action::ServerGoalHandle<Recovery>;
++using Clock = std::chrono::steady_clock;
++
++double seconds(Clock::duration time) {
++    return std::chrono::duration<double>(time).count();
++}
++
++bool stationary(const std::vector<int>& velocity) {
++    return velocity.size() >= 6
++        && std::all_of(velocity.begin(), velocity.begin() + 6, [](int v) { return v >= -1 && v <= 1; });
++}
++
++}  // namespace
++
++void MarsArmNode::setupIsolatedRecovery(const std::string& joint) {
++    const auto it = std::find(joint_names_.begin(), joint_names_.end(), joint);
++    const auto start = this->get_parameter("isolated_recovery_start_rad").as_double_array();
++    const double target = this->get_parameter("isolated_recovery_target_rad").as_double();
++    if (it == joint_names_.end() || start.size() != 6 || !std::isfinite(target) ||
++        !std::all_of(start.begin(), start.end(), [](double x) { return std::isfinite(x); })) {
++        throw std::invalid_argument("Isolated recovery requires one named joint and a reviewed six-joint start and target");
++    }
++    const auto index = static_cast<size_t>(it - joint_names_.begin());
++    recovery_path_ = RecoveryPath{index, {}, target};
++    std::copy(start.begin(), start.end(), recovery_path_->start.begin());
++    for (size_t i = 0; i < start.size(); ++i) {
++        if (!dynamixel_->readTorqueEnabled(joint_configs_[i].servo_id)) {
++            throw std::runtime_error("Isolated recovery requires the existing arm servo holds");
++        }
++    }
++    recovery_server_ = rclcpp_action::create_server<Recovery>(
++        this, "/mars/arm/recover_joint",
++        [this](const rclcpp_action::GoalUUID&, std::shared_ptr<const Recovery::Goal> goal) {
++            std::lock_guard<std::mutex> lock(recovery_mutex_);
++            const auto& path = *recovery_path_;
++            const auto& names = goal->trajectory.joint_names;
++            const auto& points = goal->trajectory.points;
++            if (recovery_reserved_ || recovery_fault_ || names.size() != 1 ||
++                names[0] != joint_names_[path.joint] || points.size() != 2 ||
++                !goal->multi_dof_trajectory.points.empty() ||
++                !std::all_of(points.begin(), points.end(), [](const auto& point) {
++                    return point.positions.size() == 1 && point.velocities.empty() &&
++                           point.accelerations.empty() && point.effort.empty();
++                }) || rclcpp::Duration(points[0].time_from_start).nanoseconds() != 0 ||
++                !path.matchesGoal(points[0].positions[0], points[1].positions[0],
++                                  rclcpp::Duration(points[1].time_from_start).seconds())) {
++                return rclcpp_action::GoalResponse::REJECT;
++            }
++            recovery_reserved_ = true;
++            return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
++        },
++        [](const std::shared_ptr<GoalHandle>&) { return rclcpp_action::CancelResponse::ACCEPT; },
++        [this](std::shared_ptr<GoalHandle> goal) {
++            std::lock_guard<std::mutex> lock(recovery_mutex_);
++            recovery_goal_ = std::move(goal);
++        });
++}
++
++void MarsArmNode::finishIsolatedRecovery(int code, const std::string& reason) {
++    auto result = std::make_shared<Recovery::Result>();
++    result->error_code = code;
++    result->error_string = reason;
++    if (code == Recovery::Result::SUCCESSFUL) {
++        recovery_goal_->succeed(result);
++    } else if (recovery_goal_->is_canceling()) {
++        recovery_goal_->canceled(result);
++    } else {
++        recovery_goal_->abort(result);
++    }
++    recovery_goal_.reset();
++    recovery_reserved_ = false;
++    recovery_active_ = false;
++    recovery_holding_ = false;
++    recovery_settle_ = {};
++    if (code == RecoveryPath::stop_unconfirmed) {
++        recovery_fault_ = true;
++    }
++}
++
++void MarsArmNode::tickIsolatedRecovery(const std::vector<int>& encoders, const std::vector<int>& velocity,
++                                      const std::vector<int>& load, const std::vector<double>& positions) {
++    // Caller owns the vendor's bus mutex. No full-arm position write is enabled in this mode.
++    std::lock_guard<std::mutex> lock(recovery_mutex_);
++    if (!recovery_goal_) {
++        return;
++    }
++    const auto& path = *recovery_path_;
++    const auto index = path.joint;
++    const auto id = joint_configs_[index].servo_id;
++    const auto now = Clock::now();
++    const auto armTorqueEnabled = [this] {
++        return std::all_of(joint_configs_.begin(), joint_configs_.begin() + 6, [this](const auto& config) {
++            return dynamixel_->readTorqueEnabled(config.servo_id);
++        });
++    };
++    const auto& points = recovery_goal_->get_goal()->trajectory.points;
++    const double duration = rclcpp::Duration(points[1].time_from_start).seconds();
++    const int target = jointEncoder(path.target, index);
++    if (!recovery_active_) {
++        if (recovery_goal_->is_canceling()) {
++            finishIsolatedRecovery(Recovery::Result::INVALID_GOAL, "Cancelled before any motor command");
++            return;
++        }
++        if (servo_tripped_ || !arm_torque_enabled_ || !stationary(velocity) || !path.matches(positions) ||
++            std::abs(positions[index] - points[0].positions[0]) > RecoveryPath::pose_tolerance ||
++            clampToJointRange(index, path.target) != path.target ||
++            (index == 1 && path.target < shoulderMinLimit(positions[0]))) {
++            finishIsolatedRecovery(Recovery::Result::INVALID_GOAL, "Observed start or native target failed recovery admission");
++            return;
++        }
++        for (const auto& config : joint_configs_) {
++            if (config.servo_id <= 6 && (!dynamixel_->readTorqueEnabled(config.servo_id) ||
++                                         dynamixel_->readHardwareErrorStatus(config.servo_id) != 0)) {
++                finishIsolatedRecovery(Recovery::Result::INVALID_GOAL, "An arm servo cannot maintain its existing hold");
++                return;
++            }
++        }
++        const auto [lower, upper] = dynamixel_->readPositionLimits(id);
++        if (!path.stopRangeIncludes(encoders[index], target, lower, upper)) {
++            finishIsolatedRecovery(Recovery::Result::INVALID_GOAL, "Native servo range cannot hold throughout the stroke");
++            return;
++        }
++        recovery_lower_ = lower;
++        recovery_upper_ = upper;
++        // Conservative velocity-based profile for the selected servo only.
++        dynamixel_->setRecoveryProfile(id);
++        recovery_active_ = true;
++        recovery_encoder_ = std::clamp(encoders[index], lower, upper);
++        recovery_command_ = jointRad(recovery_encoder_, index);
++        if (recovery_encoder_ != encoders[index]) {
++            dynamixel_->writeRecoveryTarget(id, recovery_encoder_);
++        }
++        recovery_last_tick_ = now;
++        recovery_started_ = now;
++        return;
++    }
++
++    const auto selected = positions[index];
++    const auto q = encoders[index];
++    const auto allowed_time = std::max(duration, std::abs(path.target - path.start[index]) / RecoveryPath::rate) + 2.0;
++    const char* stop_reason = nullptr;
++    if (recovery_goal_->is_canceling()) {
++        stop_reason = "Recovery cancelled";
++    } else if (servo_tripped_ || !arm_torque_enabled_) {
++        stop_reason = "Arm health or torque changed";
++    } else if (std::abs(load[index]) >= kLoadWarningThreshold) {
++        stop_reason = "Selected servo load reached the recovery limit";
++    } else if (!path.matches(positions, true)) {
++        stop_reason = "An unselected arm joint moved";
++    } else if (!path.canHoldEncoder(q, recovery_lower_, recovery_upper_)) {
++        stop_reason = "Selected servo left the native recovery range";
++    } else if (std::abs(selected - recovery_command_) > RecoveryPath::max_tracking_error) {
++        stop_reason = "Selected servo fell outside the recovery tracking tolerance";
++    } else if (seconds(now - recovery_started_) > allowed_time) {
++        stop_reason = "Selected servo did not settle at the recovery target before timeout";
++    }
++    if (!recovery_holding_ && stop_reason) {
++        RCLCPP_WARN(this->get_logger(), "%s: measured encoder %d, applied encoder %d, target encoder %d, load %d",
++                    stop_reason, q, recovery_encoder_, target, load[index]);
++        if (!arm_torque_enabled_ || !dynamixel_->readTorqueEnabled(id) ||
++            !path.canHoldEncoder(q, recovery_lower_, recovery_upper_)) {
++            finishIsolatedRecovery(RecoveryPath::stop_unconfirmed, "Measured motor position cannot be held");
++            return;
++        }
++        recovery_encoder_ = std::clamp(q, recovery_lower_, recovery_upper_);
++        dynamixel_->writeRecoveryTarget(id, recovery_encoder_);
++        recovery_holding_ = true;
++        recovery_hold_started_ = now;
++        recovery_settle_ = {};
++    }
++
++    if (!recovery_holding_) {
++        recovery_command_ = path.step(recovery_command_, seconds(now - recovery_last_tick_), duration);
++        recovery_last_tick_ = now;
++        const int next = std::clamp(jointEncoder(recovery_command_, index), recovery_lower_, recovery_upper_);
++        if (next != recovery_encoder_) {
++            dynamixel_->writeRecoveryTarget(id, next);
++            recovery_encoder_ = next;
++        }
++    }
++
++    const bool at_result = recovery_holding_ || recovery_command_ == path.target;
++    const bool held = std::abs(q - recovery_encoder_) <= 2 && stationary(velocity);
++    if (!at_result || !held) {
++        recovery_settle_ = {};
++    } else if (recovery_settle_ == Clock::time_point{}) {
++        recovery_settle_ = now;
++    } else if (seconds(now - recovery_settle_) >= RecoveryPath::settle_seconds) {
++        if (!armTorqueEnabled()) {
++            finishIsolatedRecovery(RecoveryPath::stop_unconfirmed, "An arm servo lost its hold during recovery");
++        } else if (recovery_holding_) {
++            finishIsolatedRecovery(Recovery::Result::PATH_TOLERANCE_VIOLATED, "Recovery halted with a measured hold");
++        } else {
++            finishIsolatedRecovery(Recovery::Result::SUCCESSFUL, "Selected joint returned to the reviewed target and settled");
++        }
++    }
++    if (recovery_holding_ && seconds(now - recovery_hold_started_) > 0.65) {
++        finishIsolatedRecovery(RecoveryPath::stop_unconfirmed, "Recovery halt did not settle");
++    }
++}
++
++void MarsArmNode::isolatedRecoveryReadFailed() {
++    std::lock_guard<std::mutex> lock(recovery_mutex_);
++    if (recovery_goal_) {
++        finishIsolatedRecovery(RecoveryPath::stop_unconfirmed, "Recovery bus write or feedback failed");
++    }
++}
++
++}  // namespace mars_arm
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp
+index fd86569..829a4da 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp
+@@ -102,14 +102,16 @@ bool MarsArmNode::planAndExecuteTrajectory(const std::vector<double>& target_pos
+         RCLCPP_ERROR(this->get_logger(), "Current state has %zu joints, expected 6", current_positions.size());
+         return false;
+     }
+-    current_positions = insideLimitsKeepingPitch(current_positions);
++    if (!adopted_arm_) {
++        current_positions = insideLimitsKeepingPitch(current_positions);
++    }
+ 
+     // Gripper (j6) is current-based position control: the standing position
+     // error IS the grip force, so spline from the last COMMANDED goal — the
+     // measured stall position would zero the preload and drop the object.
+     {
+         std::lock_guard<std::mutex> arm_lock(arm_command_mutex_);
+-        if (has_target_) {
++        if (!adopted_arm_ && has_target_) {
+             current_positions[5] = latest_target_[5];
+         }
+     }
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/dynamixel.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/dynamixel.cpp
+index 3b26bd7..81dad79 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/dynamixel.cpp
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/dynamixel.cpp
+@@ -227,6 +227,62 @@ void Dynamixel::setGoalPosition(int motor_id, int goal_position) {
+     writeRegister(motor_id, ADDR_GOAL_POSITION, goal_position, 4, "set goal position");
+ }
+ 
++uint8_t Dynamixel::readRecoveryByte(int motor_id, uint16_t address) {
++    uint8_t value = 0, error = 0;
++    checkComm(packet_handler_->read1ByteTxRx(port_handler_, motor_id, address, &value, &error),
++              motor_id, "read recovery register");
++    if (error != 0) {
++        throw std::runtime_error("Recovery servo rejected register read");
++    }
++    return value;
++}
++
++int Dynamixel::readRecoveryWord(int motor_id, uint16_t address) {
++    uint32_t value = 0;
++    uint8_t error = 0;
++    checkComm(packet_handler_->read4ByteTxRx(port_handler_, motor_id, address, &value, &error),
++              motor_id, "read recovery register");
++    if (error != 0) {
++        throw std::runtime_error("Recovery servo rejected register read");
++    }
++    return toSigned32(value);
++}
++
++bool Dynamixel::readTorqueEnabled(int motor_id) {
++    return readRecoveryByte(motor_id, ADDR_TORQUE_ENABLE) == 1;
++}
++
++std::pair<int, int> Dynamixel::readPositionLimits(int motor_id) {
++    const auto mode = readRecoveryByte(motor_id, OPERATING_MODE_ADDR);
++    if (mode != static_cast<uint8_t>(OperatingMode::POSITION) &&
++        mode != static_cast<uint8_t>(OperatingMode::CURRENT_CONTROLLED_POSITION)) {
++        throw std::runtime_error("Recovery requires a bounded position-control mode");
++    }
++    return {readRecoveryWord(motor_id, ADDR_MIN_POSITION_LIMIT), readRecoveryWord(motor_id, ADDR_MAX_POSITION_LIMIT)};
++}
++
++void Dynamixel::setRecoveryProfile(int motor_id) {
++    // Drive Mode (10) bit 2 selects time-based profiles. Five velocity units
++    // in velocity-based mode correspond to roughly 0.12 rad/s on Mars servos.
++    if ((readRecoveryByte(motor_id, 10) & 4) != 0) {
++        throw std::runtime_error("Recovery requires a velocity-based servo profile");
++    }
++    constexpr int profile = 5;
++    setProfileVelocity(motor_id, profile);
++    if (readRecoveryWord(motor_id, ADDR_PROFILE_VELOCITY) != profile) {
++        throw std::runtime_error("Recovery servo did not apply the bounded velocity profile");
++    }
++}
++
++void Dynamixel::writeRecoveryTarget(int motor_id, int goal_position) {
++    uint8_t error = 0;
++    checkComm(packet_handler_->write4ByteTxRx(port_handler_, motor_id, ADDR_GOAL_POSITION, goal_position, &error),
++              motor_id, "write isolated recovery target");
++    if (error != 0 || readRecoveryWord(motor_id, ADDR_GOAL_POSITION) != goal_position) {
++        throw std::runtime_error("Isolated recovery servo did not apply its position target");
++    }
++}
++
+ void Dynamixel::reboot(int motor_id) {
+     uint8_t dxl_error = 0;
+     int dxl_comm_result = packet_handler_->reboot(port_handler_, motor_id, &dxl_error);
+diff --git a/ros2_ws/src/mars_bot/mars_arm/package.xml b/ros2_ws/src/mars_bot/mars_arm/package.xml
+index 526792f..30c2fad 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/package.xml
++++ b/ros2_ws/src/mars_bot/mars_arm/package.xml
+@@ -21,6 +21,8 @@
+   <exec_depend>mars_description</exec_depend>
+ 
+   <depend>rclcpp</depend>
++  <depend>rclcpp_action</depend>
++  <depend>control_msgs</depend>
+   
+   <!-- Message dependencies -->
+   <depend>trajectory_msgs</depend>

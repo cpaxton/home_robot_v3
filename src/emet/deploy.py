@@ -663,7 +663,7 @@ def deploy(
                 workspace=remote_ws,
                 emet_dir=remote_emet,
             )
-            print("Bridge started in tmux ros_nodes:emet-bridge. View: emet view-bridge")
+            print("Bridge running in tmux ros_nodes:emet-bridge. View: emet view-bridge")
         else:
             start_stretch_bridge_on_robot(
                 host,
