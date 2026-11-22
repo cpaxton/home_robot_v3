@@ -134,6 +134,19 @@ def test_native_recovery_requires_measured_settling_after_service_success(monkey
         motion.poll()
 
 
+def test_native_recovery_can_stage_from_a_reviewed_in_range_pose():
+    _, goal, current, ros, driver = setup_recovery()
+    current[1] = -1.56
+    ros.arm_motion_feedback.return_value = current, np.zeros(6)
+    goal["arm_recovery"]["start_arm_rad"]["joint2"] = -1.56
+    motion = arm["MarsJointRecovery"](ros, driver, native=True)
+    with pytest.raises(RuntimeError, match="already inside"):
+        motion.start(goal)
+    goal["arm_recovery"]["stage_only"] = True
+    motion.start(goal)
+    assert driver.start.call_args.args[:3] == ("joint2", -1.56, -1.53)
+
+
 def test_recovery_rejects_missing_driver_and_stale_start():
     controller, goal, _, ros, driver = setup_recovery()
     driver.ready.return_value = False

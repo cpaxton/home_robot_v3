@@ -190,7 +190,7 @@ index 0000000..95ff641
 +}  // namespace mars_arm
 diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp
 new file mode 100644
-index 0000000..15bf72b
+index 0000000..2c27fb4
 --- /dev/null
 +++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp
 @@ -0,0 +1,191 @@
@@ -295,17 +295,11 @@ index 0000000..15bf72b
 +                        return;
 +                    }
 +                }
-+                const auto &near = gs_near_[adopted_joint_];
-+                const auto &far = gs_far_[adopted_joint_];
-+                const double reach = std::abs(gripperTipX(adopted_start_[1], adopted_start_[2], adopted_start_[3]));
-+                const double scale = std::pow(std::clamp((reach / 0.37291 - 0.1) / 0.9, 0.0, 1.0), 2);
-+                const auto gain = [scale](int low, int high) {
-+                    return low + static_cast<int>((high - low) * scale);
-+                };
++                // A gain change can move a powered joint against its existing
++                // goal before the first trajectory waypoint reaches the bus.
++                // Preserve the gains that are maintaining the adopted hold.
 +                const int id = joint_configs_[adopted_joint_].servo_id;
 +                dynamixel_->setRecoveryProfile(id);
-+                dynamixel_->syncWritePID({{id, gain(near.ff2, far.ff2), gain(near.ff1, far.ff1),
-+                                           gain(near.kd, far.kd), gain(near.ki, far.ki), gain(near.kp, far.kp)}});
 +                claim = claimArm();
 +            } catch (const std::exception& error) {
 +                RCLCPP_ERROR(this->get_logger(), "Adopted arm admission failed: %s", error.what());
@@ -356,12 +350,16 @@ index 0000000..15bf72b
 +    const int id = joint_configs_[joint].servo_id;
 +    for (size_t i = 0; i < 6; ++i) {
 +        if (i != joint && std::abs(positions[i] - measuredEncoder(adopted_start_[i], i)) > 1) {
++            RCLCPP_WARN(this->get_logger(), "Staging stopped: joint %zu moved to encoder %d (start %d)",
++                        i + 1, positions[i], measuredEncoder(adopted_start_[i], i));
 +            holdAdoptedArm();
 +            adopted_fault_ = true;
 +            return;
 +        }
 +    }
 +    if (!arm_torque_enabled_ || servo_tripped_ || std::abs(loads[joint]) >= kLoadWarningThreshold) {
++        RCLCPP_WARN(this->get_logger(), "Staging stopped: torque %d, fault %d, selected load %d",
++                    static_cast<int>(arm_torque_enabled_.load()), static_cast<int>(servo_tripped_.load()), loads[joint]);
 +        holdAdoptedArm();
 +        adopted_fault_ = true;
 +        return;
@@ -375,6 +373,8 @@ index 0000000..15bf72b
 +    const int target = jointEncoder(adopted_target_, joint);
 +    if ((target > start && (positions[joint] < start || positions[joint] > target + 2)) ||
 +        (target < start && (positions[joint] > start || positions[joint] < target - 2))) {
++        RCLCPP_WARN(this->get_logger(), "Staging stopped: selected encoder %d left interval %d to %d",
++                    positions[joint], start, target);
 +        holdAdoptedArm();
 +        adopted_fault_ = true;
 +        return;

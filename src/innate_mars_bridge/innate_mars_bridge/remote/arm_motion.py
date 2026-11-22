@@ -206,7 +206,8 @@ class MarsJointRecovery:
         target = float(recovery["target_rad"])
         lower, upper = limits[joint]
         if recovery.get("stage_only", False):
-            if not outside or joint in outside:
+            # The native service is bound to one reviewed start and target.
+            if joint in outside or (not outside and not self.native):
                 raise RuntimeError("Recovery staging requires an in-range joint and another joint outside limits")
         elif joint not in outside:
             # A fresh sample can land one encoder count inward of the reviewed
