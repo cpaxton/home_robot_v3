@@ -196,7 +196,9 @@ def test_native_session(node, bus, start, target):
     assert call("goto_js_v2", request)
     assert call("release", Trigger.Request())
     assert bus.goals and all(servo == SELECTED for servo, _ in bus.goals)
-    assert bus.goals[-1][1] >= bus.start[SELECTED - 1] + 4
+    encoders = [value for _, value in bus.goals]
+    assert encoders == sorted(encoders)
+    assert bus.start[SELECTED - 1] <= encoders[0] < encoders[-1] == 1031
     assert set(bus.writes) == {(SELECTED, GOAL), (SELECTED, PROFILE)}
     print("native adoption: read-only startup, exclusive lease, inward elbow stroke and verified hold", flush=True)
 
@@ -212,7 +214,8 @@ def main():
     os.environ["ROS_DOMAIN_ID"] = str(40 + os.getpid() % 60)
     bus = Bus()
     if args.native:
-        bus.start[SELECTED - 1] = 1023
+        # Herman's captured Innate 0.8.0 fold in raw servo order.
+        bus.start = [3072, 2842, 1023, 2244, 2045, 1875, 2048]
         bus.reset()
     start = [
         (encoder - 2048) * 2 * math.pi / 4096 * (-1 if i in (1, 2, 3, 5) else 1)
