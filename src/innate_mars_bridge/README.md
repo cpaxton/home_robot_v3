@@ -137,7 +137,8 @@ be the only owner of the serial device.
 
 Emet uses Innate's scheduled trajectory through `/emet/mars/arm/goto_js_v2`
 for that reviewed stroke. The lease keeps ordinary arm receivers offline.
-The driver writes position and gain settings only to the selected servo.
+The driver writes position and motion-profile settings only to the selected
+servo. It preserves the gains that are maintaining the powered hold.
 An explicit Emet joint recovery goal is required. Check
 `emet mars status --connection herman` for session readiness. Repeat the
 serial-bus test with `--native` to exercise adoption and cancellation.

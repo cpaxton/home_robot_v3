@@ -200,6 +200,7 @@ def test_native_session(node, bus, start, target):
     assert encoders == sorted(encoders)
     assert bus.start[SELECTED - 1] <= encoders[0] < encoders[-1] == 1031
     assert set(bus.writes) == {(SELECTED, GOAL), (SELECTED, PROFILE)}
+    assert bus.group_writes == 0, "adopted staging must not rewrite gains or other servo settings"
     print("native adoption: read-only startup, exclusive lease, inward elbow stroke and verified hold", flush=True)
 
 
