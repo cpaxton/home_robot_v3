@@ -30,7 +30,7 @@ index 04c7edb..3afa6fa 100644
    std_msgs
    std_srvs
 diff --git a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp
-index d5ed561..97f0183 100644
+index d5ed561..4f1da10 100644
 --- a/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp
 +++ b/ros2_ws/src/mars_bot/mars_arm/include/mars_arm/arm_node.hpp
 @@ -3,6 +3,9 @@
@@ -67,7 +67,7 @@ index d5ed561..97f0183 100644
      // ── Member variables ────────────────────────────────────────────────
  
      std::shared_ptr<Dynamixel> dynamixel_;
-@@ -128,6 +148,20 @@ class MarsArmNode : public rclcpp::Node {
+@@ -128,6 +148,22 @@ class MarsArmNode : public rclcpp::Node {
      rclcpp::Service<mars_msgs::srv::GotoJSTrajectory>::SharedPtr arm_goto_js_traj_service_;
      sensor_msgs::msg::JointState arm_state_msg_;    // 6-joint message for /mars/arm/state
      sensor_msgs::msg::JointState joint_state_msg_;  // 7-joint message for /joint_states
@@ -75,6 +75,8 @@ index d5ed561..97f0183 100644
 +    void tickAdoptedArm(const std::vector<int>& positions, const std::vector<int>& velocities,
 +                        const std::vector<int>& loads);
 +    bool holdAdoptedArm();
++    void adoptAppHolds();
++    bool adopted_app_ = false;
 +    bool adopted_arm_ = false;
 +    bool adopted_lease_ = false;
 +    bool adopted_fault_ = false;
@@ -190,10 +192,10 @@ index 0000000..95ff641
 +}  // namespace mars_arm
 diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp
 new file mode 100644
-index 0000000..2c27fb4
+index 0000000..3c10e81
 --- /dev/null
 +++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_adopt.cpp
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,213 @@
 +// SPDX-License-Identifier: Apache-2.0
 +#include "mars_arm/arm_node.hpp"
 +
@@ -204,6 +206,28 @@ index 0000000..2c27fb4
 +int measuredEncoder(double angle, size_t joint) {
 +    return static_cast<int>(std::lround(2048 + (flippedJoint(joint) ? -angle : angle) * 4096 / (2 * M_PI)));
 +}
++}
++
++void MarsArmNode::adoptAppHolds() {
++    const auto [positions, velocities, loads] = robot_->readState();
++    for (size_t i = 0; i < joint_configs_.size(); ++i) {
++        const int id = joint_configs_[i].servo_id;
++        const auto [low, high] = dynamixel_->readPositionLimits(id);
++        const int goal = dynamixel_->readGoalPosition(id);
++        if (!dynamixel_->readTorqueEnabled(id) || dynamixel_->readHardwareErrorStatus(id) ||
++            std::abs(velocities[i]) > 1 || positions[i] < low || positions[i] > high || goal < low || goal > high) {
++            throw std::runtime_error("App handoff requires stationary, in-range, already-powered servos");
++        }
++        if (i < 6) {
++            const auto position = jointRad(positions[i], i);
++            if (clampToJointRange(i, position) != position || (i == 1 && position < shoulderMinLimit(jointRad(positions[0], 0)))) {
++                throw std::runtime_error("App handoff pose exceeds the Innate arm range");
++            }
++            latest_target_[i] = jointRad(goal, i);
++        } else {
++            latest_head_command_ = goal;
++        }
++    }
 +}
 +
 +void MarsArmNode::setupAdoptedArm(const std::string& joint) {
@@ -386,7 +410,7 @@ index 0000000..2c27fb4
 +}
 +}
 diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
-index 7f98ca3..8870cc3 100644
+index 7f98ca3..dfc912f 100644
 --- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
 +++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
 @@ -80,6 +80,14 @@ void MarsArmNode::controlTimerCallback() {
@@ -404,6 +428,15 @@ index 7f98ca3..8870cc3 100644
  
          // ========== PERIODIC GAIN DUMP (every 2s) ==========
          RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+@@ -100,7 +108,7 @@ void MarsArmNode::controlTimerCallback() {
+         // ========== GAIN SCHEDULING ==========
+         // TELEOP mode: use flat teleop gains (no extension-based interpolation)
+         // SCHEDULED mode: interpolate near/far by arm extension (gravity compensation)
+-        if (++gs_cycle_counter_ >= kGainScheduleInterval) {
++        if (!adopted_app_ && ++gs_cycle_counter_ >= kGainScheduleInterval) {
+             gs_cycle_counter_ = 0;
+ 
+             // Decay the post-trajectory stiff hold once the arm has been quiet
 @@ -301,6 +309,18 @@ void MarsArmNode::controlTimerCallback() {
          ts[7] = std::chrono::steady_clock::now();
  
@@ -424,10 +457,10 @@ index 7f98ca3..8870cc3 100644
      }
  
 diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp
-index 2b09567..e0eed4f 100644
+index 2b09567..c71972c 100644
 --- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp
 +++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_node.cpp
-@@ -88,6 +88,18 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+@@ -88,6 +88,20 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
      this->declare_parameter("max_jerk", 0.0);  // rad/s³, 0 = disabled
      this->declare_parameter("joints", std::vector<std::string>{});
      this->declare_parameter("auto_rest", true);
@@ -436,38 +469,40 @@ index 2b09567..e0eed4f 100644
 +    this->declare_parameter("isolated_recovery_target_rad", 0.0);
 +    const auto recovery_device = this->declare_parameter("isolated_recovery_device", std::string{});
 +
++    adopted_app_ = this->declare_parameter("adopt_app_holds", false);
 +    adopted_arm_ = this->declare_parameter("adopt_existing_holds", false);
 +    const auto adopted_joint = this->declare_parameter("adopt_recovery_joint", std::string{});
 +    this->declare_parameter("adopt_recovery_start_rad", std::vector<double>{});
 +    this->declare_parameter("adopt_recovery_target_rad", 0.0);
-+    if (adopted_arm_ && (!recovery_joint.empty() || this->get_parameter("auto_rest").as_bool())) {
++    if ((adopted_arm_ || adopted_app_) &&
++        (!recovery_joint.empty() || (adopted_arm_ && adopted_app_) || this->get_parameter("auto_rest").as_bool())) {
 +        throw std::invalid_argument("Adoption requires auto_rest=false and a single arm mode");
 +    }
  
      int baud_rate = this->get_parameter("baud_rate").as_int();
      control_frequency_ = this->get_parameter("control_frequency").as_double();
-@@ -103,7 +115,8 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+@@ -103,7 +117,8 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
      loadJointConfigs(joint_names_param);
  
      // Auto-discover the arm's USB serial device (CH343 1a86:55d3)
 -    std::string device_name = discoverArmDevice(this->get_logger());
-+    std::string device_name = (!adopted_arm_ && recovery_joint.empty()) || recovery_device.empty()
++    std::string device_name = (!adopted_arm_ && !adopted_app_ && recovery_joint.empty()) || recovery_device.empty()
 +                                  ? discoverArmDevice(this->get_logger()) : recovery_device;
      RCLCPP_INFO(this->get_logger(), "Using device: %s", device_name.c_str());
  
      // Create Dynamixel interface
-@@ -113,7 +126,9 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+@@ -113,7 +128,9 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
      dynamixel_ = std::make_shared<Dynamixel>(config);
  
      // Initialize all 7 servos
 -    initializeServos();
-+    if (recovery_joint.empty() && !adopted_arm_) {
++    if (recovery_joint.empty() && !adopted_arm_ && !adopted_app_) {
 +        initializeServos();
 +    }
  
      // Create Robot for all 7 servos (IDs 1-7)
      RCLCPP_DEBUG(this->get_logger(), "Creating Robot object with servo IDs 1-7");
-@@ -129,6 +144,32 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+@@ -129,6 +146,35 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
                                                                                    rclcpp::QoS(1).transient_local());
      arm_status_pub_ = this->create_publisher<mars_msgs::msg::ArmStatus>("/mars/arm/status", 10);
  
@@ -497,9 +532,44 @@ index 2b09567..e0eed4f 100644
 +        return;
 +    }
 +
++    if (adopted_app_) {
++        adoptAppHolds();
++    }
      auto cmd_qos = rclcpp::QoS(1).best_effort();
      arm_command_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
          "/mars/arm/commands", cmd_qos, std::bind(&MarsArmNode::armCommandCallback, this, std::placeholders::_1));
+@@ -192,10 +238,12 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+     arm_state_msg_.name = {"joint1", "joint2", "joint3", "joint4", "joint5", "joint6"};
+     joint_state_msg_.name = {"joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint_head"};
+ 
+-    try {
+-        syncTargetToMotorPositions();
+-    } catch (const std::exception& e) {
+-        RCLCPP_ERROR(this->get_logger(), "Could not read the servos at start-up: %s", e.what());
++    if (!adopted_app_) {
++        try {
++            syncTargetToMotorPositions();
++        } catch (const std::exception& e) {
++            RCLCPP_ERROR(this->get_logger(), "Could not read the servos at start-up: %s", e.what());
++        }
+     }
+ 
+     // ── Timers ──
+@@ -216,9 +264,11 @@ MarsArmNode::MarsArmNode() : Node("mars_arm") {
+         this->add_on_set_parameters_callback(std::bind(&MarsArmNode::onParameterChange, this, std::placeholders::_1));
+     RCLCPP_DEBUG(this->get_logger(), "PID hot-reload enabled (use ros2 param set or pid_hot_reload.py)");
+ 
+-    idle_rest_timer_ = this->create_wall_timer(std::chrono::seconds(1), std::bind(&MarsArmNode::idleRestCallback, this),
+-                                               rest_callback_group_);
+-    releaseArm();  // the boot grace counts from here: servo init above took seconds
++    if (!adopted_app_) {
++        idle_rest_timer_ = this->create_wall_timer(std::chrono::seconds(1), std::bind(&MarsArmNode::idleRestCallback, this),
++                                                   rest_callback_group_);
++        releaseArm();  // the boot grace counts from here: servo init above took seconds
++    }
+ 
+     RCLCPP_INFO(this->get_logger(), "Mars Arm Node ready!");
+ }
 diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_recovery.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_recovery.cpp
 new file mode 100644
 index 0000000..bdf3684
@@ -723,7 +793,7 @@ index 0000000..bdf3684
 +
 +}  // namespace mars_arm
 diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp
-index fd86569..829a4da 100644
+index fd86569..ebcae6c 100644
 --- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp
 +++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_trajectory.cpp
 @@ -102,14 +102,16 @@ bool MarsArmNode::planAndExecuteTrajectory(const std::vector<double>& target_pos
@@ -741,7 +811,7 @@ index fd86569..829a4da 100644
      {
          std::lock_guard<std::mutex> arm_lock(arm_command_mutex_);
 -        if (has_target_) {
-+        if (!adopted_arm_ && has_target_) {
++        if (!adopted_arm_ && (has_target_ || adopted_app_)) {
              current_positions[5] = latest_target_[5];
          }
      }
