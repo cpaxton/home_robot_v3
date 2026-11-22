@@ -142,3 +142,11 @@ servo. It preserves the gains that are maintaining the powered hold.
 An explicit Emet joint recovery goal is required. Check
 `emet mars status --connection herman` for session readiness. Repeat the
 serial-bus test with `--native` to exercise adoption and cancellation.
+
+`adopt_app_holds` is a separate, opt-in handoff to the normal Innate app
+interfaces. Start it with `auto_rest=false` and the serial device in
+`isolated_recovery_device`. It requires stationary, healthy, already-powered
+servos with measured positions and existing goals inside the native ranges.
+Startup reads the existing gripper and head goals and preserves torque and
+gains. The stock `/mars/arm/goto_js_v2` and app command topic are available
+after admission. Use `--app` in the serial-bus test to check this path.

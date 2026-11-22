@@ -54,6 +54,7 @@ class Bus:
         self.goals = []
         self.lock = threading.Lock()
         self.group_writes = 0
+        self.group_goals = {}
         self.reset()
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
@@ -129,6 +130,9 @@ class Bus:
             os.write(self.master, status(servo))
         elif instruction == 0x83:
             self.group_writes += 1
+            address, width = struct.unpack_from("<HH", args)
+            if address == GOAL and width == 4:
+                self.group_goals = dict(struct.iter_unpack("<BI", args[4:]))
 
     def shutdown(self):
         self.active = False
@@ -204,6 +208,26 @@ def test_native_session(node, bus, start, target):
     print("native adoption: read-only startup, exclusive lease, inward elbow stroke and verified hold", flush=True)
 
 
+def test_app_handoff(node, bus, start):
+    from mars_msgs.srv import GotoJS
+
+    client = node.create_client(GotoJS, "/mars/arm/goto_js_v2")
+    assert client.wait_for_service(timeout_sec=4)
+    time.sleep(0.25)
+    assert not bus.writes and not bus.group_writes, "app startup must preserve the powered holds"
+    request = GotoJS.Request()
+    request.data.data = start.copy()
+    request.data.data[2] -= 0.025
+    request.data.data[5] = (2048 - 1850) * math.tau / 4096
+    request.time = 1.0
+    future = client.call_async(request)
+    spin_until(node, future.done)
+    assert future.result().success
+    spin_until(node, lambda: bus.group_goals.get(SELECTED, 0) > bus.start[SELECTED - 1])
+    assert bus.group_goals[6] == 1850 and bus.group_goals[7] == 2050
+    print("app handoff: read-only startup, stock trajectory endpoint, gripper and head holds preserved", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm-binary", type=Path, required=True)
@@ -212,8 +236,11 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--native", action="store_true")
     modes.add_argument("--native-overshoot", action="store_true", help="Replay the powered staging overshoot")
+    modes.add_argument("--app", action="store_true", help="Exercise the stock app path after adopting powered holds")
+    modes.add_argument("--app-overshoot", action="store_true", help="Reject the overshot pose before enabling app motion")
     args = parser.parse_args()
     native = args.native or args.native_overshoot
+    app = args.app or args.app_overshoot
     os.environ["ROS_LOCALHOST_ONLY"] = "1"
     os.environ["ROS_DOMAIN_ID"] = str(40 + os.getpid() % 60)
     bus = Bus()
@@ -228,6 +255,17 @@ def main():
             struct.pack_into("<I", bus.reg[SELECTED], 52, 1023)
             if args.native_overshoot:
                 struct.pack_into("<I", bus.reg[SELECTED], GOAL, 1024)
+    elif app:
+        bus.start = [2500, 2300, 1500, 2100, 2050, 1875, 2048]
+        if args.app_overshoot:
+            bus.start = [3072, 2842, 1018, 2244, 2047, 1875, 2048]
+        bus.reset()
+        with bus.lock:
+            struct.pack_into("<I", bus.reg[6], GOAL, 1850)
+            struct.pack_into("<I", bus.reg[7], GOAL, 2050)
+            if args.app_overshoot:
+                struct.pack_into("<I", bus.reg[SELECTED], 52, 1023)
+                struct.pack_into("<I", bus.reg[SELECTED], GOAL, 1024)
     start = [
         (encoder - 2048) * 2 * math.pi / 4096 * (-1 if i in (1, 2, 3, 5) else 1)
         for i, encoder in enumerate(bus.start[:6])
@@ -235,6 +273,14 @@ def main():
     target = 1.56 if native else 0.95
     prefix = "adopt_recovery" if native else "isolated_recovery"
     mode = ["-p", "adopt_existing_holds:=true", "-p", "auto_rest:=false"] if native else []
+    pose = [
+        "-p", f"{prefix}_joint:=joint3",
+        "-p", f"{prefix}_start_rad:={start}",
+        "-p", f"{prefix}_target_rad:={target}",
+    ]
+    if app:
+        mode = ["-p", "adopt_app_holds:=true", "-p", "auto_rest:=false"]
+        pose = []
     log = args.driver_log.open("w")
     proc = subprocess.Popen(
         [
@@ -243,13 +289,8 @@ def main():
             "--params-file",
             str(args.config),
             "-p",
-            f"{prefix}_joint:=joint3",
-            "-p",
             f"isolated_recovery_device:={bus.name}",
-            "-p",
-            f"{prefix}_start_rad:={start}",
-            "-p",
-            f"{prefix}_target_rad:={target}",
+            *pose,
             *mode,
         ],
         stdout=log,
@@ -260,11 +301,18 @@ def main():
     node.create_publisher(Float64MultiArray, "/mars/arm/commands", 1)
     driver = ActionClient(node, FollowJointTrajectory, "/mars/arm/recover_joint")
     try:
-        if args.native_overshoot:
+        if args.native_overshoot or args.app_overshoot:
             assert proc.wait(timeout=8) != 0
-            assert "Adopted start or target exceeds the native encoder range" in args.driver_log.read_text()
+            expected = (
+                "App handoff requires stationary, in-range, already-powered servos"
+                if args.app_overshoot else "Adopted start or target exceeds the native encoder range"
+            )
+            assert expected in args.driver_log.read_text()
             assert not bus.writes and not bus.group_writes
-            print("native overshoot: captured start rejected before any servo writes", flush=True)
+            print("overshoot: captured start rejected before any servo writes", flush=True)
+            return
+        if args.app:
+            test_app_handoff(node, bus, start)
             return
         if args.native:
             test_native_session(node, bus, start, target)
