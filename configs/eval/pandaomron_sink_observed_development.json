@@ -2,30 +2,30 @@
   "payload_prior": "shaker-prior.json",
   "grounding": {
     "object": {
-      "camera": "wrist",
+      "camera": "scene_alt",
       "box": [
-        197,
-        35,
-        272,
-        154
+        245,
+        545,
+        340,
+        670
       ]
     },
     "source": {
-      "camera": "wrist",
+      "camera": "scene_alt",
       "box": [
-        141,
-        42,
-        336,
-        240
+        190,
+        500,
+        390,
+        800
       ]
     },
     "destination": {
       "camera": "wrist",
       "box": [
-        500,
-        430,
-        700,
-        640
+        575,
+        350,
+        870,
+        660
       ]
     }
   },
@@ -82,7 +82,7 @@
       "lift_m": 0.1,
       "retreat_m": 0.235,
       "world_aligned": true,
-      "transit_clearance_m": 0.035
+      "transit_clearance_m": 0.12
     }
   ],
   "calibration_id": "development-scan-only",
@@ -265,14 +265,14 @@
   "payload_prior_scale": 1.05,
   "pregrasp_staging_offsets_m": [
     [
-      0.25,
-      -0.3,
-      0.05
+      0.2,
+      -0.4,
+      0
     ],
     [
-      0.35,
-      -0.3,
-      0.05
+      0.3,
+      -0.35,
+      0
     ]
   ],
   "cartesian_transport": true,

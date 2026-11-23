@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import mujoco
 import numpy as np
+import pytest
 
 from emet.controller.manipulation.robot_surface_rays import measured_robot_surfaces
 
@@ -97,3 +98,7 @@ def test_visual_triangle_matching_recovers_occluded_self_without_absorbing_obsta
     expanded = measured_robot_surfaces(model, data, [obs], known_material=material,
                                       visual_surface_tolerance_m=.008)
     assert len(expanded) == 25
+    assert len(measured_robot_surfaces(model, data, [obs], known_material=material,
+        tolerance_m=.03, visual_surface_tolerance_m=.03)) == 25
+    with pytest.raises(ValueError, match='invalid_visual_surface_tolerance'):
+        measured_robot_surfaces(model, data, [obs], visual_surface_tolerance_m=.031)

@@ -51,3 +51,84 @@ def test_serial_benchmark_compilation_preserves_physics_and_assets():
     assert result.find('compiler').attrib == {'angle': 'radian', 'usethread': 'false'}
     assert result.find('option').get('timestep') == '.002'
     assert result.find('asset/mesh').get('file') == 'part.obj'
+
+
+@pytest.mark.parametrize('fail_reset', [False, True])
+def test_native_absolute_reset_holds_native_posture_without_reinterpreting_episode_commands(fail_reset):
+    from emet.simulation.pandaomron_environment import preserve_absolute_reset_posture
+
+    goals = []
+    q = np.array([0., -1., 0., -2.2, 0., 1.5, .7, .1])
+    robot = SimpleNamespace(_ref_joint_pos_indexes=np.arange(7), _ref_torso_joint_pos_indexes=np.array([7]),
+        create_action_vector=lambda parts: np.r_[parts['right'], parts['torso'], 0.])
+    env = SimpleNamespace(robots=[robot], sim=SimpleNamespace(data=SimpleNamespace(qpos=q)),
+                          _pre_action=lambda action, policy_step: goals.append(np.array(action)))
+
+    def reset():
+        env._pre_action(np.zeros(9), True)
+        env._pre_action(np.zeros(9), False)
+        if fail_reset:
+            raise RuntimeError('reset_failed')
+
+    env._reset_internal = reset
+    preserve_absolute_reset_posture(env)
+    if fail_reset:
+        with pytest.raises(RuntimeError, match='reset_failed'):
+            env._reset_internal()
+    else:
+        env._reset_internal()
+    for goal in goals:
+        np.testing.assert_array_equal(goal[:8], q)
+    env._pre_action(np.zeros(9), True)
+    np.testing.assert_array_equal(goals[-1], np.zeros(9))
+
+
+def test_robot_only_compilation_uses_the_same_serial_geometry_policy():
+    from emet.simulation.pandaomron_environment import compile_serial_robot_model
+
+    model = compile_serial_robot_model(SimpleNamespace(get_xml=lambda: '<mujoco><option timestep=".004"/><worldbody><geom size=".03"/></worldbody></mujoco>'))
+    assert model.ngeom == 1 and model.opt.timestep == pytest.approx(.004)
+    assert model.geom_size[0, 0] == pytest.approx(.03)
+
+
+def test_serial_robot_loader_restores_compiler_after_failed_model_load(monkeypatch):
+    import sys
+
+    from emet.simulation.pandaomron_environment import serial_robot_loader
+
+    class XML:
+        def get_model(self, mode='mujoco'):
+            return 'original'
+
+        def get_xml(self):
+            return '<mujoco><worldbody><geom size=".03"/></worldbody></mujoco>'
+
+    original = XML.get_model
+    monkeypatch.setitem(sys.modules, 'robosuite.models.base', SimpleNamespace(MujocoXML=XML))
+
+    def load():
+        assert XML().get_model().ngeom == 1
+        raise RuntimeError('load_failed')
+
+    env = serial_robot_loader(SimpleNamespace(_load_model=load))
+    with pytest.raises(RuntimeError, match='load_failed'):
+        env._load_model()
+    assert XML.get_model is original
+
+
+def test_native_bridge_owns_auxiliary_rendering_instead_of_generic_stereo(monkeypatch):
+    from emet.simulation.pandaomron_server import PandaOmronZmqServer
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    specs = []
+
+    def intercept(self, *, robot_spec, **kwargs):
+        specs.append(robot_spec)
+        raise RuntimeError('base_constructor_intercepted')
+
+    monkeypatch.setattr(RobosuiteZmqServer, '__init__', intercept)
+    with pytest.raises(RuntimeError, match='base_constructor_intercepted'):
+        PandaOmronZmqServer(env=None, environment={}, scene_camera='robot0_agentview_right')
+    # The generic second-camera path captures a different physics state and
+    # overwrites the timestamp used by the bridge's synchronized RGB-D views.
+    assert specs[0].camera_names == ['robot0_agentview_right']

@@ -88,7 +88,12 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       `docs/testing/observed_manipulation_stack.md`: three-camera sensing, native
       feedback, convex contact, bounded IK/Cartesian planning, and runtime path
       revalidation. Require verified lift, sink placement and independent contact
-      scoring before closing this item.
+      scoring before closing this item. Native reset now holds the intended absolute
+      controller posture; auxiliary RGB-D views share the primary snapshot.
+      Checked three-leg corridors admit pregrasp, grasp and lift planning.
+      A newer bypass control moved the tool 46 cm with zero scored unintended
+      contacts, then stopped on visual unobservability without a verified lift.
+      Resolve loaded transport and approach sensing; these are separate gates.
       Native reference motions
       also need self-collision repair; the scorer now measures self contacts.
       Simulator-only collision bypass controls moved the end effector 5.1 cm

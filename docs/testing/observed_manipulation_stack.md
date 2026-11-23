@@ -21,7 +21,7 @@ not evidence of general perception or physical-robot readiness.
 | Geometry tracking | `controller/manipulation/geometry_tracking.py`, `multiview_rgbd_tracking.py`, `continuous_rgbd.py` | Fit calibrated intrinsic geometry, respect shape symmetry, support opt-in qualified single-camera fallback and reject conflicting views. Rejected fits cannot renew old timestamps. |
 | Collision representation | `motion/local_manipulation_map.py`, `local_geometry_distance.py`, `observed_contact.py`, `surface_contact_patches.py`, `controller/manipulation/observed_collision.py` | Use measured surfaces and local native solid distances for manipulation rather than treating inflated voxel cells as physical contact. Keep raw measured samples separate from map cell centers. Convex/box contact uses a single-thread halfspace feasibility solve, retaining conservative subdivision on unresolved solves. |
 | Departure and handoff | `motion/contact_departure.py`, `motion/arm_rrt.py` | Sample exits from invalid starts with fixed initial contact patches, bounded overlap/travel and new-contact rejection. Retain the original clearance context through recovery, goal connection, later planning phases and runtime revalidation. Do not create expanding contact exceptions. |
-| Motion generation | `controller/manipulation/physical_pick_place.py` | Add bounded redundant IK starts, checked Cartesian staging and Cartesian loaded transport. Separate long snapshot planning from current execution clocks. Share the wall budget across IK proposals. Optional waypoint coalescing removes only collinear points with bounded angular/linear commands; recovery retains fine steps. A validated grasp path may be reused from a measured open, matching start, with live segment checks. |
+| Motion generation | `controller/manipulation/physical_pick_place.py` | Add bounded redundant IK starts, checked three-leg Cartesian staging and Cartesian loaded transport. Translate out before changing tool orientation; retain loaded orientation until the destination-front waypoint. Initialize the original measured clearance context for Cartesian paths as well as joint searches. Separate long snapshot planning from current execution clocks. Share the wall budget across IK proposals. Optional waypoint coalescing removes only collinear points with bounded angular/linear commands; recovery retains fine steps. A validated grasp path may be reused from a measured open, matching start, with live segment checks. |
 | Contact transitions | `controller/manipulation/physical_pick_place.py`, `motion/observed_support_contact.py`, `controller/task/tamp/placement_confirmation.py` | Predict first nominal gripper contact, distinguish relative fingertip geometry from world pose uncertainty, associate measured support across views and support guarded placement probing. |
 | Simulator/scorer | `simulation/pandaomron_server.py`, `pandaomron_probe.py`, `pandaomron_environment.py`, `eval/pandaomron_live_transfer.py`; `scripts/eval_pandaomron_sink_agent.py` | Run the pinned benchmark through the same robot client. Score full-footprint sink containment, two-pad lift, final settling, unintended external/self contacts and allowed actuation independently of tool claims. Save initial and final camera images. |
 
@@ -135,3 +135,34 @@ The profile's placement headings are proposals. The native reference normalizes
 the destination wrist heading; the observed recipe prioritizes that same heading
 without importing its simulator object pose or trusting its route. Grasp and
 place feasibility, actual native execution and independent physics remain gates.
+
+
+## Native reset and capture corrections
+
+RoboCasa settles the scene during reset with zero actions. Its neutral delta
+command is an absolute zero-joint target under our native absolute controller.
+`simulation/pandaomron_environment.py` now translates **reset-only** neutral
+actions into a hold of the native reset posture. Normal episode commands retain
+absolute semantics. Measured joint 4 is now approximately -2.25 rad, rather than
+the erroneous nearly straight -0.15 rad. This changed wrist visibility, so the
+development profile grounds the shaker and surrounding counter in `scene_alt`;
+the destination remains in the wrist view. Offline RGB-D replay established the
+source region needed to observe support around the occluded object footprint.
+No support predicate was relaxed for this region correction.
+
+The Panda bridge owns alternate and wrist RGB-D rendering from the primary
+snapshot. Its server-local generic camera list contains only the primary camera,
+preventing a second, generic stereo wrist capture from overwriting the shared
+acquisition interval. Session capabilities report all three cameras. The runner
+saves every auxiliary RGB-D array and calibration in `sensor.npz` for replay.
+
+Robot-only model loading and scene mesh compilation both request serial native
+compilation; the temporary robot compiler binding is restored even on failure.
+This is a scoped mitigation for observed native startup crashes, not a proven
+fix of their underlying cause. Current diagnostic runs use `PYTHONMALLOC=malloc`
+and retain startup failures separately from task results.
+
+An explicit simulator diagnostic may widen visual self-association to 30 mm,
+subject also to the calibrated overall surface band. The ordinary 3 mm visual
+fallback remains unchanged. A wider band can absorb nearby external returns;
+it is labeled assistance and has not qualified real-robot self-segmentation.

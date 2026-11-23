@@ -15,7 +15,7 @@ def measured_robot_surfaces(model, data, observations, *, tolerance_m=.015, know
                             collision_proxy_self_association=False, visual_surface_tolerance_m=.003):
     if not np.isfinite(tolerance_m) or not 0 <= tolerance_m <= .03:
         raise ValueError('invalid_robot_surface_tolerance')
-    if not np.isfinite(visual_surface_tolerance_m) or not 0 <= visual_surface_tolerance_m <= .015:
+    if not np.isfinite(visual_surface_tolerance_m) or not 0 <= visual_surface_tolerance_m <= .03:
         raise ValueError('invalid_visual_surface_tolerance')
     matched = []
     groups = None

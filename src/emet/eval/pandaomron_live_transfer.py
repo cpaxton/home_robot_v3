@@ -39,7 +39,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
     if not 0 <= departure_options.get("patch_slack_m", .005) <= .005:
         raise ValueError("invalid_contact_departure_options")
     visual_self = float(profile.get("simulation_visual_self_association_m", 0.))
-    if not math.isfinite(visual_self) or not 0 <= visual_self <= .015:
+    if not math.isfinite(visual_self) or not 0 <= visual_self <= .03:
         raise ValueError("invalid_simulation_visual_self_association")
     local_payload = profile.get("simulation_local_payload_contact", False)
     if type(local_payload) is not bool or (local_payload and not profile.get("local_resolution_m")):

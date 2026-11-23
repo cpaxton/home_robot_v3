@@ -1067,17 +1067,20 @@ def test_landing_budget_covers_distinct_orientations_before_translations(system)
     assert len({np.asarray(candidate.place[1][1]).round(6).tobytes() for candidate in candidates}) == 4
 
 
-def test_preplace_staging_is_a_checked_detour_around_an_observed_obstacle(system):
+@pytest.mark.parametrize("phase", ["pregrasp", "preplace"])
+def test_staging_is_a_checked_detour_around_an_observed_obstacle(system, phase):
     task = next(iter(system.adapter.tasks.values()))
     ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
     ex.collision.scene = PlacementScene([[[.08, -.03, .17], [.12, .03, .23]]],
         source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
-    ex.preplace_staging_offsets_m = (np.array([0., -.12, 0.]),)
+    ex.preplace_staging_offsets_m = ex.pregrasp_staging_offsets_m = (np.array([0., -.12, 0.]),)
     ex.cartesian_transport = True
-    with ex.collision.motion_phase('preplace'):
+    with ex.collision.motion_phase(phase):
         path, error = ex.plan_pose([.2, 0., .2], np.eye(3))
         assert error is None and path
         assert any(q[1] < -.1 for q in path)
+        assert any(q[0] < .03 and q[1] < -.1 for q in path)
+        assert any(q[0] > .17 and q[1] < -.1 for q in path)
         for q in path:
             ex.data.qpos[ex.qadr] = q
             mujoco.mj_forward(ex.model, ex.data)
@@ -1190,3 +1193,72 @@ def test_open_measured_arm_can_reuse_validated_grasp_with_live_edge_checks(syste
     assert result['status'] == 'ok'
     assert any(event.get('phase') == 'grasp_plan_reused' for event in events)
     assert system.calls
+
+
+@pytest.mark.parametrize('rotate_at_destination', [False, True])
+def test_cartesian_staging_translates_clear_before_rotating_tool(rotate_at_destination):
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="ee">
+        <joint name="x" type="slide" axis="1 0 0" range="-1 1"/>
+        <joint name="y" type="slide" axis="0 1 0" range="-1 1"/>
+        <joint name="z" type="slide" axis="0 0 1" range="-1 1"/>
+        <joint name="yaw" type="hinge" axis="0 0 1" range="-170 170"/>
+        <geom size=".01"/></body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    data.qpos[2] = .2
+    mujoco.mj_forward(model, data)
+    collision = SimpleNamespace(configuration_collides=lambda model, data: False, last_reason=None)
+    executor = PhysicalPickPlaceExecutor(None, model=model, data=data, ee_body='ee',
+        joint_names=('x', 'y', 'z', 'yaw'), collision=collision,
+        synchronize=lambda data: None, command_joints=lambda target: True,
+        input_mode='privileged', position_tolerance_m=.0001, orientation_tolerance_rad=.0001)
+    path, error = executor._plan_cartesian_route((np.array([0., -.12, .2]), np.array([.2, -.12, .2]), np.array([.2, 0., .2])),
+                                                Rotation.from_euler('z', .8).as_matrix(),
+                                                rotate_at_destination=rotate_at_destination)
+    assert error is None and path
+    staging = next(index for index, q in enumerate(path) if q[1] < -.119 and abs(q[0]) < .001)
+    assert path[staging][1] == pytest.approx(-.12, abs=.001)
+    assert all(abs(q[3]) < 1e-8 for q in path[:staging+1])
+    if rotate_at_destination:
+        front = next(index for index, q in enumerate(path) if q[0] > .199 and q[1] < -.119)
+        assert all(abs(q[3]) < 1e-8 for q in path[:front+1])
+    assert path[-1][3] == pytest.approx(.8, abs=.001)
+
+
+@pytest.mark.parametrize('reachable', [False, True])
+def test_cartesian_planning_initializes_clear_start_scope_and_restores_it_on_failure(system, monkeypatch, reachable):
+    from contextlib import contextmanager
+
+    from emet.motion.arm_rrt import ContactClearancePath
+
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    ex.collision.local_scene = object()
+    ex.collision.allow_contact_departure = True
+    active, initialized = [False], []
+
+    @contextmanager
+    def clearance_scope():
+        active[0] = True
+        try:
+            yield
+        finally:
+            active[0] = False
+
+    def departure(*args, **kwargs):
+        initialized.append(kwargs['clearance_only'])
+        return SimpleNamespace(clearance_scope=clearance_scope)
+
+    monkeypatch.setattr(ex.collision, 'make_departure', departure)
+    monkeypatch.setattr(ex.collision, 'configuration_collides', lambda *args: not active[0])
+    before = ex.data.qpos.copy()
+    path, error = ex._plan_cartesian_route((np.array([.02 if reachable else 2., 0., .2]),), np.eye(3))
+    assert initialized == [True] and not active[0]
+    if reachable:
+        assert error is None and isinstance(path, ContactClearancePath)
+        assert path.clearance_scope is ex._contact_clearance_scope
+    else:
+        assert path is None and error
+        assert ex._contact_clearance_scope is None
+        np.testing.assert_array_equal(ex.data.qpos, before)

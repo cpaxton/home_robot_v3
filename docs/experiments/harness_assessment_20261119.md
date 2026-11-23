@@ -1353,3 +1353,54 @@ and independently verified physics: a two-pad lift of at least 5 cm, full sink
 containment, settling, no scored unintended external/self contacts and permitted
 native actuation. Physics-only motion cannot qualify an observed-tool failure.
 Full sink-transfer success is still an open gate at this checkpoint.
+
+### Native reset, synchronized auxiliary cameras, and staged arm corridors
+
+The absolute native controller exposed a benchmark reset incompatibility:
+RoboCasa's object-settling loop sends zero actions intended as neutral delta
+commands. Those commands had driven the arm toward absolute zero. A reset-only
+hold now preserves the native starting posture through native control. Measured
+joint 4 changed from approximately -0.15 to -2.25 rad. Regression tests check both
+successful/failed reset cleanup and unchanged normal absolute command semantics.
+Robot-only compilations now request the same serial mesh compiler as scene resets;
+the temporary loader binding is restored on failure. Native startup crash causes
+remain unresolved; these trials use `PYTHONMALLOC=malloc` diagnostically.
+
+The server-local generic camera list now includes only the primary view. The
+Panda bridge explicitly renders the alternate scene and wrist RGB-D from its
+snapshot, avoiding a duplicate generic stereo wrist render that could overwrite
+the primary acquisition interval. Session metadata reports three cameras. All
+auxiliary calibration/depth arrays are saved for offline replay.
+
+The corrected reset required regrounding: shaker and surrounding counter in the
+alternate scene camera, destination in the wrist. Offline replay showed that the
+old source region cut off the measured plane around the occluded shaker footprint.
+Widening that image region passed the existing pickup-support predicate; no
+support predicate changed. The checked Cartesian proposal now exits in front of
+the initial arm, crosses in front of the target, then approaches it. It translates
+before rotating, initializes the same measured clearance scope as joint planning,
+and can retain carried orientation until the destination-front waypoint.
+
+`logs/pandaomron-finish-horizontal-corrected-FWVI` (actual directory recorded by
+`/tmp/emet-finish-horizontal-corrected`) admitted pregrasp, grasp and lift planning
+in 12.63, 1.69 and 1.28 seconds. Transport rejected payload/arm or cabinet
+intersections. The subsequent loaded-corridor trial also admitted the first three
+phases, then rejected transport. These are planning milestones, not physical lifts.
+A wider explicit simulator visual self-association band (up to 30 mm; default
+unchanged) did not resolve all transport blockers and is not qualified hardware
+self-segmentation. These runs keep environment checks enabled. The separate
+`logs/pandaomron-finish-native-reset-control-qboW` run enables environment bypass and must be scored
+and reported separately.
+
+The native-reset bypass control (`logs/pandaomron-finish-native-reset-control-qboW`)
+planned all six phases and sent 89 allowed native actions. Independent physics
+reported 0.458 m maximum end-effector displacement, no unintended external/self
+contact frames and **zero two-pad lift**. Execution stopped on
+`geometry_tracking_unobservable` before a verified grasp. No task success is
+claimed. An alternate calibrated top-down grasp heading is under evaluation to
+change wrist visibility without introducing simulator object state.
+
+Validation for the native reset/capture/corridor follow-up: 556 integrated tests
+passed with `PYTHONMALLOC=malloc` (29.43 s), plus lint and diff checks. A default
+allocator repetition crashed in a native MuJoCo raycast test after earlier
+555-test success; retain that failure as an unresolved native runtime issue.

@@ -232,13 +232,15 @@ class PhysicalPickPlaceExecutor:
         error = 'pose_ik_failed'
         phase = getattr(self.collision, 'phase', None)
         if self.cartesian_transport and phase in {'pregrasp', 'grasp', 'lift', 'preplace', 'place', 'retreat'}:
-            offsets = self.preplace_staging_offsets_m if phase == 'preplace' else ()
-            routes = [((np.asarray(position)+offset), np.asarray(position)) for offset in offsets]
+            offsets = (self.preplace_staging_offsets_m if phase == 'preplace' else
+                       self.pregrasp_staging_offsets_m if phase == 'pregrasp' else ())
+            origin = self.data.body(self.ee_body).xpos.copy()
+            routes = [(origin+offset, np.asarray(position)+offset, np.asarray(position)) for offset in offsets]
             routes.append((np.asarray(position),))
             for route in routes:
                 if time.monotonic() >= self._pose_planning_deadline:
                     return None, "no_plan_within_budget"
-                path, error = self._plan_cartesian_route(route, rotation)
+                path, error = self._plan_cartesian_route(route, rotation, rotate_at_destination=phase == 'preplace')
                 logger.info("Cartesian %s proposal: %s (%s waypoints; collision=%s geom=%s admission=%s)",
                             phase, error or "ok", len(path) if path is not None else 0,
                             self.collision.last_reason, getattr(self.collision, 'last_blocked_geom', None),
@@ -323,9 +325,11 @@ class PhysicalPickPlaceExecutor:
         mujoco.mj_kinematics(self.model, self.data)
         return None, error
 
-    def _plan_cartesian_route(self, positions, rotation):
+    def _plan_cartesian_route(self, positions, rotation, *, rotate_at_destination=False):
         """Continue native IK through a proposed tool route; check every joint edge."""
         start = self.data.qpos.copy()
+        previous_scope = self._contact_clearance_scope
+        self._initialize_contact_clearance()
         path = [start[self.qadr].copy()]
         complete = False
         low, high = joint_limits_from_model(self.model, self.joint_names)
@@ -334,10 +338,13 @@ class PhysicalPickPlaceExecutor:
         scope = self._contact_clearance_scope or nullcontext
         try:
             with scope():
-                for destination in positions:
+                for waypoint_index, destination in enumerate(positions):
                     ee = self.data.body(self.ee_body)
                     origin, initial_rotation = ee.xpos.copy(), ee.xmat.reshape(3, 3).copy()
-                    rotations = Rotation.from_matrix([initial_rotation, rotation])
+                    hold_orientation = len(positions) > 1 and (waypoint_index == 0 or
+                        rotate_at_destination and waypoint_index < len(positions)-1)
+                    waypoint_rotation = initial_rotation if hold_orientation else rotation
+                    rotations = Rotation.from_matrix([initial_rotation, waypoint_rotation])
                     sweep = Slerp([0., 1.], rotations)
                     angle = (rotations[0].inv()*rotations[1]).magnitude()
                     count = max(1, int(np.ceil(np.linalg.norm(destination-origin)/.02)), int(np.ceil(angle/.1)))
@@ -352,6 +359,8 @@ class PhysicalPickPlaceExecutor:
                             joint_limit_margins=self.joint_limit_margins, tol_m=self.position_tolerance_m,
                             tol_rad=self.orientation_tolerance_rad)
                         if not pose.success:
+                            logger.info('Cartesian IK rejected at %s: position_error=%.4f rotation_error=%.4f',
+                                (origin+(destination-origin)*fraction).tolist(), pose.pos_error_m, pose.orientation_error_rad)
                             return None, 'cartesian_ik_failed'
                         goal = self.data.qpos[self.qadr].copy()
                         if np.any(goal < low) or np.any(goal > high):
@@ -364,6 +373,11 @@ class PhysicalPickPlaceExecutor:
                             linear_steps=samples, goal_tolerance=0., departure=False, shortcut=False,
                             max_time_s=min(self.joint_planning_timeout_s, 10.))
                         if not segment.success:
+                            logger.info("Cartesian segment rejected at %s: link=%s surface=%s contacts=%s",
+                                (origin+(destination-origin)*fraction).tolist(),
+                                getattr(self.collision, 'last_blocked_geom', None),
+                                getattr(getattr(self.collision, 'local_scene', None), 'last_collision', None),
+                                getattr(getattr(self.collision, 'self_collision', None), 'last_contacts', ()))
                             return None, 'cartesian_path_failed:'+str(segment.reason)
                         path.extend(segment.waypoints[1:])
                         self.data.qpos[self.qadr] = goal
@@ -376,12 +390,23 @@ class PhysicalPickPlaceExecutor:
             # cannot seed the next attempt from an unexecuted intermediate pose.
             if not complete:
                 self.data.qpos[:] = start
+                self._contact_clearance_scope = previous_scope
                 mujoco.mj_kinematics(self.model, self.data)
 
     def plan_joint_target(self, goal, *, ordered_groups=False, via_configurations=()):
         """Keep original contact clearance across this transfer's phase plans."""
         previous = self._contact_clearance_scope
-        if (previous is None and isinstance(self.collision, ObservedNativeCollisionChecker)
+        self._initialize_contact_clearance()
+        scope = self._contact_clearance_scope or nullcontext
+        with scope():
+            result = self._plan_joint_target(goal, ordered_groups=ordered_groups, via_configurations=via_configurations)
+        if result[0] is None:
+            self._contact_clearance_scope = previous
+        return result
+
+    def _initialize_contact_clearance(self):
+        """Use the same measured clear-start policy for Cartesian and joint routes."""
+        if (self._contact_clearance_scope is None and isinstance(self.collision, ObservedNativeCollisionChecker)
                 and self.collision.allow_contact_departure and self.collision.local_scene is not None):
             with self.collision.motion_scope(self.model, self.data, self.joint_names, self.data.qpos[self.qadr]):
                 policy = self.collision.make_departure(self.model, self.data, self.joint_names,
@@ -390,12 +415,6 @@ class PhysicalPickPlaceExecutor:
                     with policy.clearance_scope():
                         if not self.collision.configuration_collides(self.model, self.data):
                             self._contact_clearance_scope = policy.clearance_scope
-        scope = self._contact_clearance_scope or nullcontext
-        with scope():
-            result = self._plan_joint_target(goal, ordered_groups=ordered_groups, via_configurations=via_configurations)
-        if result[0] is None:
-            self._contact_clearance_scope = previous
-        return result
 
     def _plan_joint_target(self, goal, *, ordered_groups=False, via_configurations=()):
         """Certify a profile posture transition using the same arm collision path."""

@@ -338,8 +338,12 @@ def observe(client, output):
     Image.fromarray(observation.ee_rgb).save(output / "wrist.png")
     for name, view in (observation.auxiliary_rgbd_views or {}).items():
         Image.fromarray(view["rgb"]).save(output / f"{name}.png")
+    auxiliary_arrays = {f"{name}_{key}": view[key]
+                        for name, view in (observation.auxiliary_rgbd_views or {}).items()
+                        for key in ("rgb", "depth", "camera_K", "camera_pose")}
     np.savez_compressed(
         output / "sensor.npz",
+        **auxiliary_arrays,
         rgb=rgb,
         depth=depth,
         K=observation.camera_K,
@@ -474,6 +478,13 @@ def run(args, *, observed_native_factory=None):
                             robot_name="pandaomron",
                             observed_native_factory=observed_native_factory,
                         )
+        except Exception as error:
+            if client is None:
+                (output / "run-status.json").write_text(json.dumps({
+                    "status": "infrastructure_error", "phase": "startup", "execution_started": False,
+                    "exception": type(error).__name__, "reason": str(error),
+                }, indent=2)+"\n")
+            raise
         finally:
             signal.signal(signal.SIGTERM, previous_termination_handler)
             if client is not None and not interrupted:

@@ -41,7 +41,10 @@ class PandaOmronZmqServer(RobosuiteZmqServer):
 
     def __init__(self, *, env, environment, scene_camera=FRONT_CAMERA, probe_calibration=None, **kwargs):
         spec = PandaOmronBackend().get_spec()
-        spec.camera_names[0] = scene_camera
+        # This bridge publishes the wrist and alternate RGB-D explicitly from
+        # the primary snapshot. Do not let the generic stereo path recapture
+        # the wrist and replace the primary acquisition interval.
+        spec.camera_names = [scene_camera]
         self._auxiliary_scene_camera = "robot0_agentview_left" if scene_camera != "robot0_agentview_left" else "robot0_agentview_right"
         self._scene_camera = scene_camera
         super().__init__(
@@ -55,7 +58,7 @@ class PandaOmronZmqServer(RobosuiteZmqServer):
         self._mjmodel = env.sim.model._model
         self._mjdata = env.sim.data._data
         if not self._no_cameras:
-            for camera in self._spec.camera_names:
+            for camera in (scene_camera, self._auxiliary_scene_camera, WRIST_CAMERA):
                 self._mjmodel.camera(camera)
         self._joint_ids = [self._mjmodel.joint(name).id for name in self._spec.joint_names]
         self._qpos_addresses = self._mjmodel.jnt_qposadr[self._joint_ids]
@@ -87,7 +90,7 @@ class PandaOmronZmqServer(RobosuiteZmqServer):
             "native_finger_goal_limits": dict(zip(FINGER_JOINTS, self._finger_limits.tolist(), strict=True)),
             "capabilities": {
                 "depth": not self._no_cameras,
-                "num_cameras": len(self._spec.camera_names) if not self._no_cameras else 0,
+                "num_cameras": 3 if not self._no_cameras else 0,
                 "native_joint_position": True,
                 "native_gripper": True,
                 "native_gripper_position": True,
