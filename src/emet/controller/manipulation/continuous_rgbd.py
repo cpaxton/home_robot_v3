@@ -53,6 +53,7 @@ class ContinuousRgbdSource:
         self._closed = False
         self.max_transient_fit_rejections = max_transient_fit_rejections
         self.consecutive_fit_rejections = self.rejected_fit_captures = 0
+        self._rejected_packet = None
 
     def _fail(self, reason):
         with self._condition:
@@ -140,12 +141,21 @@ class ContinuousRgbdSource:
                         self.duplicate_packets += 1
                         self.snapshot(producer=True)
                     return False
+                rejected = self._rejected_packet
+                if rejected is not None and cap.observation_id == rejected.views[0][1].capture.observation_id:
+                    if not self._same_packet(rejected, views):
+                        raise ObservationUnavailable("capture_replayed")
+                    with self._condition:
+                        self.duplicate_packets += 1
+                        self.snapshot(producer=True)
+                    return False
                 try:
                     fit = self.tracker.update(views, scene_epoch=self.tracker.scene_epoch)
                 except ObservationUnavailable as error:
                     # Diagnostic replay only: rejected measurements never
                     # replace the accepted track or renew its timestamp.
                     self.last_fit_rejection = (getattr(previous.fit, "fit", None), tuple(sorted(views.items())), str(error))
+                    self._rejected_packet = TrackedRgbdCapture(previous.fit, tuple(sorted(views.items())))
                     if (str(error) not in {
                         "geometry_tracking_no_match", "geometry_tracking_unobservable",
                         "geometry_tracking_budget_exhausted", "moving_geometry_ambiguous",
@@ -166,6 +176,7 @@ class ContinuousRgbdSource:
                         self.rejected_fit_captures += 1
                     return False
                 self.consecutive_fit_rejections = 0
+                self._rejected_packet = None
                 result = TrackedRgbdCapture(fit, tuple(sorted(views.items())))
                 with self._condition:
                     if self._failure or self._closed:

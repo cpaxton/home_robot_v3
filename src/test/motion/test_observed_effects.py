@@ -242,4 +242,38 @@ def test_explicit_lift_rotation_tolerance_preserves_height_and_comotion_checks()
     assert not evaluate_lift(before, rotated, support_top_z=.2, after=10.4, now=11.,
                              retention_rotation_rad=.2).satisfied
     with pytest.raises(ValueError, match='invalid_retention_rotation'):
-        evaluate_lift(before, rotated, support_top_z=0., after=10.4, now=11., retention_rotation_rad=.36)
+        evaluate_lift(before, rotated, support_top_z=0., after=10.4, now=11., retention_rotation_rad=np.pi+.01)
+
+
+def test_explicit_lift_translation_tolerance_keeps_default_and_support_gates():
+    before = frame(10.)
+    frames = [frame(t, obj=(.023, 0., .13), ee=(0., 0., .13)) for t in (10.5, 10.8)]
+    assert not evaluate_lift(before, frames, support_top_z=0., after=10.4, now=11.).satisfied
+    assert evaluate_lift(before, frames, support_top_z=0., after=10.4, now=11.,
+                         retention_translation_m=.03).satisfied
+    assert not evaluate_lift(before, frames, support_top_z=.2, after=10.4, now=11.,
+                             retention_translation_m=.03).satisfied
+    with pytest.raises(ValueError, match='invalid_retention_translation'):
+        evaluate_lift(before, frames, support_top_z=0., after=10.4, now=11., retention_translation_m=.06)
+
+
+def test_unconstrained_lift_orientation_does_not_disable_position_or_support_checks():
+    before = frame(10.)
+    samples = []
+    for stamp in (10.5, 10.8):
+        sample = frame(stamp, obj=(0., 0., .13), ee=(0., 0., .13))
+        pose = sample.payload.pose.world_from_object.copy()
+        pose[:3, :3] = Rotation.from_euler('y', 1.).as_matrix()
+        samples.append(replace(sample, payload=replace(sample.payload,
+            pose=replace(sample.payload.pose, world_from_object=pose))))
+    assert not evaluate_lift(before, samples, support_top_z=0., after=10.4, now=11.).satisfied
+    assert evaluate_lift(before, samples, support_top_z=0., after=10.4, now=11.,
+                         retention_rotation_rad=np.pi).satisfied
+    assert not evaluate_lift(before, samples, support_top_z=.2, after=10.4, now=11.,
+                             retention_rotation_rad=np.pi).satisfied
+    displaced = samples[-1].payload.pose.world_from_object.copy()
+    displaced[0, 3] = .1
+    samples[-1] = replace(samples[-1], payload=replace(samples[-1].payload,
+        pose=replace(samples[-1].payload.pose, world_from_object=displaced)))
+    assert not evaluate_lift(before, samples, support_top_z=0., after=10.4, now=11.,
+                             retention_rotation_rad=np.pi).satisfied

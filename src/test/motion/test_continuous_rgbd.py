@@ -285,3 +285,41 @@ def test_transient_fit_policy_does_not_swallow_identity_failure():
     with pytest.raises(ObservationUnavailable, match='moving_mask_motion_bound_exceeded'):
         stream.poll_once()
     assert stream.rejected_fit_captures == 0
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_retransmitted_rejected_capture_is_not_refitted_or_counted_twice(changed):
+    clock = [10.]
+    packet = views(clock[0])
+    tracker = TrackingBoundary(packet, lambda: clock[0])
+    update, attempted = tracker.update, []
+
+    def fit(views, *, scene_epoch):
+        identifier = views['head'].capture.observation_id
+        assert identifier not in attempted  # Real trackers reject repeated IDs.
+        attempted.append(identifier)
+        if identifier == 'rejected':
+            tracker.latest = None
+            raise ObservationUnavailable('geometry_tracking_no_match')
+        return update(views, scene_epoch=scene_epoch)
+
+    tracker.update = fit
+    stream = ContinuousRgbdSource(tracker, initial_views=packet, read_views=lambda: packet,
+                                  clock=lambda: clock[0], max_transient_fit_rejections=2)
+    clock[0] = 10.1
+    packet = views(10.1, 'rejected')
+    assert not stream.poll_once()
+    if changed:
+        packet['head'] = replace(packet['head'], rgb=np.ones((8, 8, 3), np.uint8))
+        with pytest.raises(ObservationUnavailable, match='capture_replayed'):
+            stream.poll_once()
+    else:
+        assert not stream.poll_once()
+        assert attempted == ['rejected']
+        assert stream.rejected_fit_captures == 1 and stream.duplicate_packets == 1
+        assert stream.snapshot().fit.capture.earliest == 10.
+        clock[0] = 10.2
+        packet = views(10.2, 'accepted')
+        assert stream.poll_once()
+        assert stream.snapshot().fit.capture.earliest == 10.2
+    stream.close()

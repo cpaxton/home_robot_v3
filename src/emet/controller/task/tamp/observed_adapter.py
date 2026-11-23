@@ -121,7 +121,7 @@ class ObservedStoredPlan:
 class _PayloadEnvelope:
     input_mode = 'observed'
 
-    def __init__(self, observe, initial, *, attachment_ee_positions=None, attachment_tracking_error_m=0.):
+    def __init__(self, observe, initial, *, attachment_ee_positions=None, attachment_tracking_error_m=0., retention_translation_m=.02):
         self.observe, self.initial = observe, initial
         frame = initial.frame
         self.vertices = frame.payload.vertices_reference
@@ -132,7 +132,7 @@ class _PayloadEnvelope:
         # The calibration radius must cover the relative displacement already
         # permitted by runtime retention. Otherwise a hidden few-mm lever gate
         # rejects a payload before the declared 2 cm retention limit is tested.
-        self.lever_limit = lever+frame.position_error_m+attachment_tracking_error_m+.02
+        self.lever_limit = lever+frame.position_error_m+attachment_tracking_error_m+retention_translation_m
         self.robot_position = max(frame.robot_before.position_error_m, frame.robot_after.position_error_m)
         self.robot_rotation = max(frame.robot_before.rotation_error_rad, frame.robot_after.rotation_error_rad)
         # Per-capture EE error. Transport needs two captures; retention adds
@@ -468,7 +468,8 @@ class ObservedNativeAdapter:
                     attachment_ee_positions=[targets[1][0] for targets in
                         [ex.grasp_targets, *ex.grasp_target_options,
                          *(option.grasp for option in ex.transfer_candidates)]],
-                    attachment_tracking_error_m=ex.position_tolerance_m)
+                    attachment_tracking_error_m=ex.position_tolerance_m,
+                    retention_translation_m=ex.payload_retention_translation_m)
                 ex.synchronize(ex.data)
                 initial_joints = ex.data.qpos.copy()
                 ex.ik_call_budget = self.max_ik_calls
@@ -537,6 +538,7 @@ class ObservedNativeAdapter:
                 verifier = ObservedVisualVerifier(object_ref=task.object_ref, support_bounds=target_bounds,
                     observe=observe_effect, collect=collect_effect, observe_after=observe_after, clock=self.clock,
                     retention_rotation_rad=ex.payload_retention_rotation_rad,
+                    retention_translation_m=ex.payload_retention_translation_m,
                     # Use the same measured occlusion-bracketed footprint that
                     # admitted the resting object, not just the largest visible
                     # rectangle beside it.

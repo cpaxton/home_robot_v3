@@ -1467,3 +1467,37 @@ planning retains candidate tool poses. The 20 mm translation threshold remains
 unchanged. Source-bound regressions verify asynchronous feedback, true slip,
 stale evidence and planning separation. The integrated suite passed 563 tests
 with the diagnostic allocator (29.49 s), plus lint and diff checks.
+
+`logs/pandaomron-finish-capture-retention-Lvx2` completed **visual lift
+verification** with two distinct fresh observations. Independent physics measured
+90.8 mm two-pad lift, zero unintended contacts and 133 mm overall object motion.
+It began transport and stopped on uncertainty-inclusive retention estimates
+20.53 mm / 0.316 rad versus 20 mm / 0.2 rad. These observations establish a real
+and visually verified grasp/lift milestone, not sink placement. The next explicit
+simulator diagnostic uses 30 mm / 0.35 rad consistently in runtime retention,
+visual lift checking and fixed lever calibration.
+
+`logs/pandaomron-finish-transport-tolerances-QkvD` stopped earlier on a geometry
+fit rejection. Offline replay of its retained packet found a wrist candidate
+with 95th-percentile surface error 1.01 mm but maximum 16.08 mm: the hard 9 mm
+cap rejected an otherwise close fit. Four starts and a 5 mm residual setting did
+not admit it; two starts and a 6 mm setting admitted wrist/fused candidates in
+38/43 ms, preserving all points. This diagnostic setting is simulator-gated and
+separately reported, not a claim of calibrated confidence. The replay also
+motivated applying the original learned appearance inside geometry search masks.
+
+A producer bug could refit the same rejected packet on retransmission, then
+latch an already-seen capture-ID error. Exact retransmissions of rejected packets
+now skip fitting and rejection counting while preserving the last accepted
+capture's original age. Regressions verify this, recovery on a future real packet,
+and rejection of changed data under the rejected ID.
+
+`logs/pandaomron-finish-residual-retransmission-woCa` again verified lift visually,
+then stopped on a 0.484 rad angular retention estimate. The orientation-unconstrained
+control `logs/pandaomron-finish-unconstrained-angle-nfBa` stopped on 34.47 mm
+uncertainty-inclusive translation during transport. This points to unstable full
+pose fitting under gripper occlusion; repeatedly widening retention thresholds
+is not a satisfactory tracking solution. The next work is capture-aligned,
+vision-checked attachment-motion prediction, with declared conditioning and
+independent grip/task scoring. Latest validation: 570 integrated tests passed
+with the diagnostic allocator (31.50 s), plus lint and diff checks.

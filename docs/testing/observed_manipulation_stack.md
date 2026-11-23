@@ -192,7 +192,7 @@ prefixes retain their fine execution waypoints. The diagnostic trial uses
 0.002 rad/0.2 mm and reduced one pregrasp from 364 samples to 101 commands.
 
 `simulation_retention_rotation_rad` may explicitly raise the normal 0.1 rad
-retention threshold (up to 0.35 rad) for scored simulator diagnostics. The same
+retention threshold (up to π rad in an orientation-unconstrained simulator control) for scored simulator diagnostics. The same
 configured angle is used by runtime retention and visual lift verification; the
 2 cm relative translation limit, measured co-motion, support clearance and
 independent physical lift score remain. The current diagnostic uses 0.2 rad.
@@ -231,3 +231,31 @@ capture of the robot at home cannot replace the planned grasp transform. Legacy
 providers without a capture-owned tool pose retain their original interface.
 Regression tests cover asynchronous servo movement, matching camera/tool motion,
 true relative slip, stale evidence, immutable transforms and hypothetical planning.
+
+`simulation_retention_translation_m` can explicitly request 20–50 mm instead of
+the ordinary 20 mm limit. Runtime retention, visual lift verification and the
+fixed attachment lever calibration use the same value. This is recorded
+separately from angular retention assistance. A diagnostic is now testing
+30 mm / 0.35 rad; defaults, measured lift, support clearance and independent
+physical scoring remain unchanged.
+
+`simulation_fit_residual_m` is another explicit simulator diagnostic (3–10 mm,
+default 3 mm). It applies consistently to reference and updated geometry fits.
+The existing validation still checks every measured point: the 95th percentile
+must stay within the configured value and the maximum within three times that
+value. No points are trimmed. These fit residuals do not calibrate pose confidence.
+
+Geometry-generated tracking windows now intersect the original measured
+appearance model before fitting; proximity to the prior alone cannot turn robot
+pixels into object identity. An exact retransmission of a rejected capture is
+skipped as a duplicate, without another fit or renewed evidence. Changed data
+under that rejected capture ID still raises replay, and future real captures
+must pass normal fitting and age checks.
+
+
+A simulator-only retention angle of π is explicitly labeled
+`simulation_retention_orientation_unconstrained`. It tests native carry/placement
+without requiring a fixed observed material orientation inside the fingers.
+Relative-position, identity, visual co-motion, support and independent physical
+scores still apply. This control cannot qualify a rigid payload orientation
+assumption for collision-aware planning. Ordinary retention remains 20 mm/0.1 rad.

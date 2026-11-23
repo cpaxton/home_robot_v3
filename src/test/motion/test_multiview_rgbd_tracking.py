@@ -504,3 +504,50 @@ def test_best_fit_initialization_uses_the_same_explicit_policy(monkeypatch, best
         assert len(track.latest.fit.poses) == 1 and len(track.last_candidate_fit.poses) == 2
         assert track.latest.fit.received_monotonic == track.last_candidate_fit.received_monotonic
         assert track.hypothesis_selections == 1 and not track.latest.execution_qualified
+
+
+def test_live_geometry_window_keeps_appearance_identity_near_gripper(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.controller.task.tamp import live_transfer as live
+
+    tracker, clock = setup()
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    measured, mask = view(cap)
+    rgb = measured.rgb.copy()
+    white = np.zeros(mask.shape, bool)
+    for y, x in np.argwhere(mask)[100:180]:
+        white[y, x] = True
+    rgb[white] = [240, 240, 240]  # Same search volume, different material.
+    measured = replace(measured, rgb=rgb)
+    sample = SimpleNamespace(capture=cap, observations={'head': measured})
+    scene = live.LiveTransferScene.__new__(live.LiveTransferScene)
+    scene.profile = {'tracking_geometry_window_m': .015, 'tracking_views': ['head']}
+    scene.read_sample = lambda _: sample
+    scene.epoch, scene.initial_capture_id = 'scene', 'first'
+    scene.initial_views, scene.samples, scene.supports = {}, {}, []
+    scene.stream, scene.payload_model, scene.enclosure = SimpleNamespace(tracker=tracker), tracker.model, None
+    monkeypatch.setattr(live, 'synchronized_views', lambda sample: sample.observations)
+    result = scene._read_views()['head']
+    assert result.foreground_mask.sum() >= 25
+    assert not np.any(result.foreground_mask & white)
+    assert result.capture is cap
+
+
+@pytest.mark.parametrize('residual', [.003, .006])
+def test_explicit_fit_residual_keeps_all_points_and_actual_capture(residual):
+    tracker, clock = setup(max_residual_m=residual)
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    clock[0] = 10.5
+    measured, mask = view(cap)
+    world = measured.world.copy()
+    world[55, 60, 1] -= .016  # A measured depth error, not a competing component.
+    measured = replace(measured, world=world, foreground_mask=mask)
+    if residual == .003:
+        with pytest.raises(ObservationUnavailable, match='geometry_tracking_no_match'):
+            tracker.update({'head': measured}, scene_epoch='scene')
+    else:
+        result = tracker.update({'head': measured}, scene_epoch='scene')
+        assert result.capture is cap
+        assert result.masks[0][1][55, 60]  # No trimming the difficult measurement.
+        assert result.fit.received_monotonic == cap.received_monotonic

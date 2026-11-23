@@ -87,6 +87,7 @@ class PhysicalPickPlaceExecutor:
     ENDPOINT_STILLNESS_TOLERANCE = 0.002
     GRIPPER_TRACKING_TOLERANCE = 0.001
     payload_retention_rotation_rad = .1
+    payload_retention_translation_m = .02
 
     execution_mode = "physical"
     release_refiner: Callable[[], PhysicalMotionResult] | None = None
@@ -762,7 +763,7 @@ class PhysicalPickPlaceExecutor:
         except ObservationUnavailable as exc:
             self.event(phase="payload_retention", accepted=False, reason=str(exc))
             return False
-        retained = bool(displacement <= 0.02 and angle <= self.payload_retention_rotation_rad)
+        retained = bool(displacement <= self.payload_retention_translation_m and angle <= self.payload_retention_rotation_rad)
         if not retained:
             self.event(
                 phase="payload_retention",
@@ -770,7 +771,7 @@ class PhysicalPickPlaceExecutor:
                 reason="payload_not_retained",
                 translation_residual_m=displacement,
                 rotation_residual_rad=float(angle),
-                translation_tolerance_m=0.02,
+                translation_tolerance_m=self.payload_retention_translation_m,
                 rotation_tolerance_rad=self.payload_retention_rotation_rad,
             )
         return retained

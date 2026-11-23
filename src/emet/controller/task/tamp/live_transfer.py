@@ -169,6 +169,9 @@ class LiveTransferScene:
                     continue
                 distance = np.linalg.norm(view.world[..., None, :] - centers, axis=-1).min(axis=-1)
                 foreground = (view.depth >= .1) & (distance <= radius)
+                # A geometry window is only a search region. Gripper pixels
+                # inside it must not bypass the track's original appearance.
+                foreground &= self.stream.tracker.appearance_mask(view.rgb)
                 if self.enclosure is not None:
                     pose = fit.fit.poses[0]
                     local = (view.world - pose[:3, 3]) @ pose[:3, :3]
@@ -299,6 +302,7 @@ class LiveTransferScene:
             initial_poses=initial_poses,
             max_starts=profile.get("tracking_max_starts", 6),
             max_fit_points=profile.get("tracking_max_points", 180),
+            max_residual_m=profile.get("simulation_fit_residual_m", .003),
             max_update_s=profile.get("tracking_max_update_s", 1.0), max_gap_s=2.0,
             single_view_fallback=profile.get("tracking_single_view_fallback", False),
             best_fit_hypothesis=profile.get("simulation_best_fit_pose", False),

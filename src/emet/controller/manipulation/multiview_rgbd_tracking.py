@@ -261,7 +261,7 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
                 selected, self.model, object_ref=self.object_ref,
                 observation_ids=(capture.observation_id,), received_monotonic=capture.received_monotonic,
                 initial_poses=previous.fit.poses[:12], max_evaluations=self.max_evaluations,
-                max_starts=self.max_starts, max_points=self.max_fit_points)
+                max_starts=self.max_starts, max_points=self.max_fit_points, max_residual_m=self.max_residual_m)
             self.last_candidate_fit = candidate
             if self.best_fit_hypothesis and len(candidate.poses) > 1:
                 candidate = self._preferred_hypothesis(candidate)

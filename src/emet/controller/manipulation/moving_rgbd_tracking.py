@@ -144,6 +144,7 @@ class MovingRgbdTracker:
         initial_poses=(),
         max_starts=24,
         max_fit_points=800,
+        max_residual_m=.003,
         clock=time.monotonic,
     ):
         if (
@@ -171,6 +172,9 @@ class MovingRgbdTracker:
         self.chroma_distance, self.edge_m, self.max_pixels = chroma_distance, max_edge_m, max_pixels
         self.max_update_s, self.max_evaluations = max_update_s, max_evaluations
         self.max_starts, self.max_fit_points = max_starts, max_fit_points
+        if not np.isfinite(max_residual_m) or not 0 < max_residual_m <= .01:
+            raise ValueError('invalid_tracking_fit_residual')
+        self.max_residual_m = max_residual_m
         self.appearance_model = appearance_model
         self._colour_features = _neutral_specular if appearance_model == "neutral_specular" else _chroma
         self.reference_id = "moving_reference:" + uuid.uuid4().hex
@@ -214,7 +218,7 @@ class MovingRgbdTracker:
             received_monotonic=received_monotonic,
             max_evaluations=max_evaluations,
             initial_poses=initial_poses,
-            max_starts=max_starts, max_points=max_fit_points,
+            max_starts=max_starts, max_points=max_fit_points, max_residual_m=self.max_residual_m,
         )
         self._require_fit(fit)
         self._require_time(received_monotonic)
@@ -236,18 +240,25 @@ class MovingRgbdTracker:
         ):
             raise ObservationUnavailable("moving_geometry_ambiguous")
 
+    def appearance_mask(self, rgb):
+        """Match the original measured appearance without fitting or re-ID."""
+        rgb = np.asarray(rgb)
+        appearance = np.isfinite(rgb).all(axis=-1) & (rgb.sum(axis=-1) >= self._min_brightness)
+        if self.appearance_model == "neutral_specular":
+            appearance &= _saturated(rgb)
+        ys, xs = np.where(appearance)
+        if len(ys):
+            distances = self._appearance.query(self._colour_features(rgb[ys, xs]))[0]
+            appearance[ys, xs] &= distances <= self.chroma_distance
+        return appearance
+
     def _candidate_mask(
         self, rgb, depth, world, *, centers, displacement, allow_image_boundary=False, merge_reachable=False
     ):
         """Associate a whole component without asserting full pose observability."""
         rgb, depth, world = _arrays(rgb, depth, world)
         valid = np.isfinite(depth) & (depth > 0) & np.isfinite(world).all(-1)
-        appearance = valid & (rgb.sum(axis=-1) >= self._min_brightness)
-        if self.appearance_model == "neutral_specular":
-            appearance &= _saturated(rgb)
-        ys, xs = np.where(appearance)
-        distances = self._appearance.query(self._colour_features(rgb[ys, xs]))[0]
-        appearance[ys, xs] &= distances <= self.chroma_distance
+        appearance = valid & self.appearance_mask(rgb)
         parts = _components(appearance, world, edge_m=self.edge_m, max_pixels=self.max_pixels)
         radius = float(np.linalg.norm(self.model.half_extents))
         reachable = []
@@ -297,7 +308,7 @@ class MovingRgbdTracker:
             received_monotonic=received_monotonic,
             initial_poses=previous.fit.poses[:12],
             max_evaluations=self.max_evaluations,
-            max_starts=self.max_starts, max_points=self.max_fit_points,
+            max_starts=self.max_starts, max_points=self.max_fit_points, max_residual_m=self.max_residual_m,
         )
         self._require_fit(fit)
         if np.any(cKDTree(centers).query(fit.poses[:, :3, 3])[0] > displacement):

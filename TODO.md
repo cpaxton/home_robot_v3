@@ -93,9 +93,9 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       Checked three-leg corridors admit pregrasp, grasp and lift planning.
       A newer bypass control moved the tool 46 cm with zero scored unintended
       contacts, then stopped on visual unobservability without a verified lift.
-      An explicitly assisted bypass run now physically lifted the shaker 7.2 cm
+      An explicitly assisted bypass run now physically and visually verified a 9.1 cm shaker lift
       with both finger pads and zero scored unintended contacts, then stopped
-      on visual geometry mismatch. It does not qualify collision-aware transport
+      during transport on uncertain relative-pose estimates. It does not qualify collision-aware transport
       or placement. Resolve loaded transport and approach sensing separately.
       Native reference motions
       also need self-collision repair; the scorer now measures self contacts.
