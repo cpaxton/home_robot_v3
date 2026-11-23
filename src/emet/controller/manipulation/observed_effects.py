@@ -141,11 +141,18 @@ class VisualEffectFrame:
     # Matching endpoints alone do not establish stillness during exposure.
     alignment_error_m: float | None = None
     alignment_error_rad: float | None = None
+    observed_bounds_world: np.ndarray | None = None
 
     def __post_init__(self):
         if (not np.isfinite([self.position_error_m, self.rotation_error_rad]).all()
                 or self.position_error_m < 0 or self.rotation_error_rad < 0):
             raise ValueError('invalid_tracking_error_bounds')
+        if self.observed_bounds_world is not None:
+            bounds = np.asarray(self.observed_bounds_world, float)
+            if bounds.shape != (2, 3) or not np.isfinite(bounds).all() or np.any(bounds[1] < bounds[0]):
+                raise ValueError('invalid_observed_support_extent')
+            object.__setattr__(self, 'observed_bounds_world',
+                np.frombuffer(bounds.tobytes(), dtype=float).reshape(2, 3))
 
     def require(self, *, now, after=None):
         self.capture.require(now=now, after=after)
@@ -171,6 +178,12 @@ class VisualEffectFrame:
                 or self.rotation_error_rad < self.payload.rotation_error_rad):
             raise ObservationUnavailable('object_pose_ambiguous')
         return pose, b.world_from_ee
+
+    def support_evidence_bounds(self):
+        """Current measured extent for support checks, separate from payload padding."""
+        if self.observed_bounds_world is None:
+            return self.bounds()
+        return self.observed_bounds_world + np.array([[-self.position_error_m], [self.position_error_m]])
 
     def bounds(self):
         pose = self.payload.pose.world_from_object
@@ -336,7 +349,7 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None, settli
         first = anchor.payload.pose.world_from_object
         for frame in frames:
             obj, ee = frame.require(now=now, after=after)
-            box = frame.bounds()
+            box = frame.support_evidence_bounds()
             # The entire possible footprint must fit. Support consistency is
             # visual geometry, not an invented force/contact measurement.
             gripper = frame.robot_after.gripper_bounds

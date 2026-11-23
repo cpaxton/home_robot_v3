@@ -339,6 +339,17 @@ class LiveTransferScene:
             labels[camera][ref] = mask & np.all((world >= bounds[0]) & (world <= bounds[1]), axis=-1)
         labels[selected.object_camera][self.task.object_ref] = selected.object_mask
         initial_poses = ()
+        if self.payload_model is None or self.payload_model.construction == "approximate_observed_box":
+            from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+            cloud = ObservedGeometry(capture.observation_id, selected.object_camera, capture.earliest,
+                views[selected.object_camera].world[selected.object_mask], profile['position_error_m'])
+            self.payload_model, reference = registration_surface(
+                cloud, box_padding_m=profile.get('payload_box_padding_m', .01))
+            initial_poses = reference[None]
+            self.diagnostics['payload_geometry_source'] = 'approximate_observed_box'
+            self.diagnostics['payload_box_padding_m'] = self.payload_model.box_padding_m
+            self.diagnostics['payload_extent_is_assumed'] = True
         if self.enclosure is not None:
             points = views[selected.object_camera].world[selected.object_mask]
             if len(points) < 25:
@@ -542,6 +553,10 @@ class LiveTransferScene:
 
     def _pose(self, fit):
         profile = self.profile
+        if fit.model.construction == 'approximate_observed_box':
+            self.diagnostics['payload_pose_is_estimated'] = True
+            self.diagnostics['payload_orientation_observed'] = fit.orientation_observable
+            return fit.require_approximate_box(now=self.clock())
         if profile.get("simulation_best_fit_pose") and len(fit.poses) > 1:
             # Explicit diagnostic hypothesis selection, never a claim that the
             # other measured fits have become impossible. Keep the full fit in
@@ -569,12 +584,24 @@ class LiveTransferScene:
         geometry = self.enclosure if self.enclosure is not None else self.payload_model
         payload = PayloadGeometryEvidence(
             self.task.object_ref, fit.reference_id, self.payload_model.model_id,
-            geometry.vertices_reference, pose, "known_model_prior",
+            geometry.vertices_reference, pose,
+            "approximate_observed_box" if self.payload_model.construction == "approximate_observed_box" else "known_model_prior",
         )
+        measured_bounds = None
+        if self.payload_model.construction == 'approximate_observed_box':
+            measured = []
+            for camera, mask in fit.masks:
+                if np.any(mask):
+                    _, _, world = capture_arrays(sample.observations[camera])
+                    measured.append(world[mask])
+            if measured:
+                points = np.concatenate(measured)
+                measured_bounds = np.stack((points.min(0), points.max(0)))
         frame = VisualEffectFrame(
             payload, sample.capture, sample.robot_before, sample.robot_after,
             profile["position_error_m"], profile["rotation_error_rad"],
             profile["alignment_error_m"], profile["alignment_error_rad"],
+            observed_bounds_world=measured_bounds,
         )
         frame.require(now=self.clock())
         return sample, frame

@@ -4,7 +4,7 @@
 """Turn current-view semantic masks into frame-bound transfer proposals."""
 
 import numpy as np
-from scipy.ndimage import binary_erosion, label
+from scipy.ndimage import binary_dilation, binary_erosion, label
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 
@@ -38,6 +38,10 @@ def _seed_from_support(mask, world, *, max_height=None):
         if sizes.max() < 25:
             continue
         ys, xs = np.where(components == sizes.argmax())
+        surface = world[ys, xs]
+        _, singular, axes = np.linalg.svd(surface-surface.mean(axis=0), full_matrices=False)
+        if singular[1]/np.sqrt(len(surface)) < .005 or abs(axes[-1, 2]) < .94:
+            continue  # A horizontal slice of a cabinet face is not a support.
         nearest = np.argmin((xs - xs.mean()) ** 2 + (ys - ys.mean()) ** 2)
         h, w = mask.shape
         seed = [int(np.ceil(1000 * xs[nearest] / w)), int(np.ceil(1000 * ys[nearest] / h))]
@@ -61,7 +65,7 @@ def _box_mask(box, image_shape):
     return mask
 
 
-def select_transfer(sample, *, profile, segment=None):
+def select_transfer(sample, *, profile, segment=None, grow_object_region=False):
     ground = profile["grounding"]
     cameras = {
         role: ground[role]["camera"] for role in ("object", "source", "destination")
@@ -85,10 +89,49 @@ def select_transfer(sample, *, profile, segment=None):
                 mask = np.asarray(matches[0]["mask"], dtype=bool)
             masks[role] = mask & (depth >= .1) & np.isfinite(world[camera]).all(axis=-1)
     source_camera, dest_camera, object_camera = (cameras[role] for role in ("source", "destination", "object"))
-    source_seed, counter_height, source_mask = _seed_from_support(masks["source"], world[source_camera])
-    dest_seed, _, dest_mask = _seed_from_support(masks["destination"], world[dest_camera], max_height=counter_height - .025)
+    source_region = masks['source']
+    if grow_object_region:
+        source_region = binary_dilation(source_region, iterations=12)
+        if source_camera == object_camera:
+            source_region &= ~binary_dilation(masks['object'], iterations=2)
+    source_seed, counter_height, source_mask = _seed_from_support(source_region, world[source_camera])
+    dest_seed, floor_height, dest_mask = _seed_from_support(masks["destination"], world[dest_camera], max_height=counter_height - .025)
+    if grow_object_region:
+        floor_points = world[dest_camera]
+        plane = np.isfinite(floor_points).all(axis=-1) & (np.abs(floor_points[..., 2]-floor_height) <= .008)
+        components, _ = label(plane)
+        ids, counts = np.unique(components[dest_mask], return_counts=True)
+        counts[ids == 0] = 0
+        if counts.max() > 0:
+            dest_mask = components == ids[counts.argmax()]
     # A segmented pickup candidate needs depth above the selected counter.
     object_mask = masks["object"] & (world[object_camera][..., 2] > counter_height + .008)
+    if grow_object_region:
+        # A semantic image hint seeds measured connected geometry; it need not
+        # trace the entire silhouette. Competing seeded components stay ambiguous.
+        depth = np.asarray(sample.observations[object_camera].depth)
+        eligible = (np.isfinite(world[object_camera]).all(axis=-1) & (depth >= .1)
+                    & (world[object_camera][..., 2] > counter_height + .008))
+        grown, _ = label(eligible)
+        ids = np.unique(grown[object_mask])
+        ids = ids[ids != 0]
+        if not len(ids) and masks['object'].any():
+            # VLM coordinates are coarse hints. Snap only to a nearby, clearly
+            # preferred measured component, never an arbitrary scene object.
+            yy, xx = np.where(masks['object'])
+            center = np.array([xx.mean(), yy.mean()])
+            candidates = []
+            for component in range(1, int(grown.max())+1):
+                cy, cx = np.where(grown == component)
+                if len(cx) >= 25:
+                    distance = np.linalg.norm(np.array([cx.mean(), cy.mean()])-center)
+                    candidates.append((distance, component))
+            candidates.sort()
+            scale = np.hypot(*depth.shape)
+            if (candidates and candidates[0][0] <= .1*scale
+                    and (len(candidates) == 1 or candidates[1][0]-candidates[0][0] > .01*scale)):
+                ids = np.array([candidates[0][1]])
+        object_mask = np.isin(grown, ids) if len(ids) else np.zeros_like(object_mask)
     components, _ = label(object_mask)
     sizes = np.bincount(components.ravel())
     sizes[0] = 0
@@ -102,3 +145,60 @@ def select_transfer(sample, *, profile, segment=None):
         object_camera, object_mask, source_camera, source_seed, dest_camera, dest_seed,
         sample.capture.observation_id, source_mask, dest_mask,
     )
+
+
+def select_transfer_from_hints(sample, hints, *, refine):
+    """Ground a transfer from agent-provided image hints and measured depth.
+
+    No asset identity, object CAD or manual benchmark profile is consulted.
+    ``refine(rgb, box_xyxy)`` supplies a segmentation mask for an image-space
+    proposal. Subsequent depth checks remain the same as ordinary grounding.
+    """
+    from emet.perception.grasps.observed import GroundingHint
+
+    roles = ('object', 'source', 'destination')
+    if set(hints) != set(roles) or not callable(refine):
+        raise ValueError('invalid_transfer_hints')
+    ground = {}
+    masks = {}
+    for role in roles:
+        hint = hints[role]
+        if (not isinstance(hint, GroundingHint) or hint.observation_id != sample.capture.observation_id
+                or hint.camera_id not in sample.observations):
+            raise ObservationUnavailable('capture_identity_mismatch')
+    # Validate every hint before invoking a potentially expensive model.
+    for role in roles:
+        hint = hints[role]
+        obs = sample.observations[hint.camera_id]
+        mask = np.asarray(refine(obs.rgb, hint.box_xyxy))
+        if mask.dtype != bool or mask.shape != obs.rgb.shape[:2]:
+            raise ValueError('unaligned_grounding_mask')
+        masks[role] = mask
+        ground[role] = {'camera': hint.camera_id, 'label': role}
+
+    def segment(_rgb, _depth, vocabulary):
+        return [{'label': role, 'mask': masks[role]} for role in vocabulary]
+
+    return select_transfer(sample, profile={'grounding': ground}, segment=segment)
+
+
+def propose_transfer_cloud_grasps(sample, selection, *, provider, position_error_m):
+    """Generate capture-bound world-hand proposals from the selected raw RGB-D.
+
+    The returned geometry describes visible samples only. It does not qualify a
+    complete carried-object collision envelope or invent an object pose.
+    """
+    from emet.perception.grasps.observed import GroundingHint, geometry_from_mask
+
+    if selection.capture_id != sample.capture.observation_id:
+        raise ObservationUnavailable('capture_identity_mismatch')
+    camera = selection.object_camera
+    obs = sample.observations[camera]
+    _, _, world = capture_arrays(obs)
+    hint = GroundingHint(selection.capture_id, camera, tuple(_bounds(selection.object_mask)), 'selected-object')
+    geometry = geometry_from_mask(
+        hint, observation_id=sample.capture.observation_id, camera_id=camera,
+        acquired_monotonic=sample.capture.earliest, mask=selection.object_mask,
+        world_points=world, position_error_m=position_error_m,
+    )
+    return geometry, provider.propose(geometry)

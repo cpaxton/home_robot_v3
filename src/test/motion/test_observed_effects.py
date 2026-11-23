@@ -305,3 +305,16 @@ def test_unconstrained_lift_orientation_does_not_disable_position_or_support_che
         pose=replace(samples[-1].payload.pose, world_from_object=displaced)))
     assert not evaluate_lift(before, samples, support_top_z=0., after=10.4, now=11.,
                              retention_rotation_rad=np.pi).satisfied
+
+
+def test_measured_support_extent_is_separate_from_padded_planning_payload():
+    sample = frame(10., obj=(0, 0, .02), ee=(0, 0, .2))
+    measured = np.array([[-.01, -.01, .005], [.01, .01, .035]])
+    sample = replace(sample, observed_bounds_world=measured)
+    assert np.allclose(sample.support_evidence_bounds(), measured + [[-.001], [.001]])
+    assert not np.allclose(sample.support_evidence_bounds(), sample.bounds())
+    with pytest.raises(ValueError):
+        sample.observed_bounds_world[0, 0] = 100.
+    # Historical callers without measured extents retain their existing checks.
+    legacy = replace(sample, observed_bounds_world=None)
+    assert np.array_equal(legacy.support_evidence_bounds(), legacy.bounds())

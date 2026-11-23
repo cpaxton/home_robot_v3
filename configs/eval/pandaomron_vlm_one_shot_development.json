@@ -1,0 +1,17 @@
+{
+  "description": "Simulation-only runtime VLM grounding and one-shot native transfer. No object CAD or saved image regions. Environment collision checking is bypassed; independent physical scoring remains active.",
+  "grasps": [
+    {
+      "close_joints": [
+        [
+          "gripper0_right_finger_joint1",
+          0.012
+        ],
+        [
+          "gripper0_right_finger_joint2",
+          -0.012
+        ]
+      ]
+    }
+  ]
+}

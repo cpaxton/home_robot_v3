@@ -1619,3 +1619,155 @@ Validation: 586 integrated tests passed (29.68 s), Ruff and whitespace checks.
 The exact profile is tracked as
 `configs/eval/pandaomron_sink_assisted_transfer_development.json`; the generated
 CAD prior and benchmark assets remain separate as described in the stack recipe.
+
+### One-shot depth pick control (2026-11-23)
+
+At the user's request, isolate a simple tuned pick before adding more tracking.
+`scripts/eval_pandaomron_sink_agent.py --open-loop-pick --observed-profile ...`
+uses one initial RGB-D estimate, the native robot-only IK model, a staged approach,
+finger closure and 10 cm lift. Object CAD, continuous object registration and
+environment collision checking are absent. Native measured joint arrival remains
+checked. This is a simulation-only diagnostic, not production CHAT execution.
+
+`logs/pandaomron-one-shot-pick-oBx3` reached the grasp without unintended contact,
+then stopped on a diagnostic gripper argument-format bug. The corrected
+`logs/pandaomron-one-shot-pick-closure-bSUT` completed grasp and lift. Independent
+physics measured 92.58 mm two-pad lift, zero unintended shallow touches, scored
+external contacts or self contacts. The old runner's full-sink report remains
+false because this trial deliberately tested only pick/lift, not transfer. New
+runs write a separate `open-loop-score.json` with the task scope recorded.
+
+This successful control used diagnostic image regions, not a runtime VLM call.
+An assistant-selected narrower image region then failed before motion in
+`logs/pandaomron-one-shot-visual-hint-UyaT`: the reset camera view shifted the target
+outside the hint. A broader visual hint is being tested; it must not be described
+as autonomous runtime VLM grounding. Preserve this failed attempt in results.
+
+The broader assistant visual hint in
+`logs/pandaomron-one-shot-loose-hint-rc0a/open-loop-score.json` passed the separate
+pick/lift score: completed closure and lift, 92.57 mm two-pad lift, 92.76 mm object
+motion, zero unintended shallow touches, scored external contacts or self contacts.
+There were no runtime VLM calls. This is assistant-guided image selection plus
+one-shot measured depth, not autonomous grounding. The wrapper returned signal
+status 143 after writing the complete score; retain that teardown issue separately
+from the independently recorded physical pick result. Eighteen targeted tests and
+Ruff passed. These results motivate testing fresh runtime grounding and broader
+case coverage before adding mandatory continuous object registration.
+
+### Local runtime VLM + one-shot pick (2026-11-23)
+
+Caliban refused connections. The host RTX 4090 had 23.6 GB free; cached
+Qwen/Qwen3-VL-8B-Instruct was loaded in BF16 on a localhost-only service at
+127.0.0.1:8765. Warm inference used about 19 GB VRAM, leaving roughly 5 GB.
+The diagnostic sends the fresh scene image to the model for object, source,
+destination regions and an image-frame closing direction. Depth converts that
+direction and region to metric native targets. Requests, responses, decisions and
+input images are retained; there is no fallback to saved grounding regions.
+
+The model twice declined the benchmark label "salt shaker". An explicit visual
+description, "small brown condiment grinder on the counter", produced regions,
+but overly narrow/coarsely placed regions failed depth grounding before motion.
+For runtime VLM hints, measured components above the counter now grow from the
+hint; a missed hint may snap to a component within 10% of the image diagonal only
+when its centroid is clearly preferred over alternatives by 1% of the diagonal.
+Distant or ambiguous alternatives remain unavailable. This is image-space
+association assistance, not shape completion or a semantic confidence guarantee.
+
+`logs/pandaomron-local-vlm-depth-snap-kP8L/open-loop-score.json` records one actual
+runtime VLM grounding call and a completed pick/lift. Independent physics measured
+89.06 mm two-pad lift, 89.15 mm object motion, zero >1 mm unintended contacts and
+zero scored self contacts. The clean-pick score is **false**: 39 shallow contact
+frames involved wrist link6 and cabinets. This demonstrates a physical VLM-guided
+pick, not clean execution, full transfer, original-label robustness or held-out
+qualification. The fixed staged approach still needs clearance work. A separate
+post-pick VLM judgment is saved in `vlm-outcome.json` and does not replace physics.
+Nineteen targeted tests and Ruff passed, including narrow/missed hint recovery and
+rejection of distant targets. No object CAD or continuous surface tracker was used.
+
+Post-pick Qwen3-VL-8B judgments were false from both the wide scene image and a
+second wrist close view (`vlm-outcome.json`, `vlm-wrist-outcome.json`), despite the
+independent measured two-pad lift. The wrist answer interpreted the object as
+resting below the gripper. Preserve this disagreement: VLM-only still-image
+success judgments are not qualified. Future agent verification should combine
+fresh views with native finger/hand feedback and depth-backed motion evidence;
+the scorer's privileged pad contacts must remain evaluation-only.
+
+### Full no-CAD runtime VLM transfer and matched instructions
+
+The one-shot control now includes carry, lowering, release and retreat, with
+separate official physical and clean-contact scores. The initial Qwen3-VL-8B
+full attempt (`pandaomron-vlm-full-transfer-zvSl`) lost its grip and stopped during
+lowering. A lower surface initially described as a cabinet ledge was incorrectly
+identified in that analysis: calibrated RGB-D shows a deeper left sink basin
+(about 0.715 m) and a shallower right basin (about 0.773 m). Preserve that correction.
+The failure was not evidence that all lower surfaces were outside the sink.
+
+Cached Qwen3.5-9B, revision `c202236235762e1c871ad0ccb60c8ee5ba337b9a`, was then
+served locally in BF16 with Transformers 5.10.2, using about 19 GB VRAM. The
+request includes a coordinate grid, a natural-language visual target description,
+and a destination instruction. The model chooses all regions and closing direction.
+Measured depth grows/snaps coarse object hints and measures counter support beside
+the object. Top-band XY centering and a deeper grasp corrected visible-side bias;
+the object remained held through roughly 0.8 m of transport. Initial retries
+stopped at shallow forearm/faucet contact near preplace; another stopped on a tiny
+out-of-range interpolated command. Commands now stay within nominal joint limits.
+
+Scene-only floor depth missed the front portion of the right basin. Associating
+wrist/scene returns with the selected floor height and local footprint supplied
+that geometry. Spatial downsampling reduces camera sampling-density bias. The
+native control chooses a front interior point from the measured floor; it does
+not read a benchmark fixture pose. A preplace waypoint may be accepted within
+35 mm / 0.15 rad with an explicit measured-error receipt, allowing downward motion
+from shallow contact. Final placement and independent scoring are unchanged.
+The first release run then stopped during a new retreat IK solution. Reversing
+measured transport configurations solved that final departure.
+
+`logs/pandaomron-vlm35-retrace-transfer-sLBw/open-loop-score.json` records:
+
+- Official RoboCasa success and full basin containment: **true**.
+- Native pick, lift, carry, placement, release and retreat: completed.
+- Two-pad lift: 93.49 mm; object displacement: 818.78 mm.
+- Final object speed: 2.11 micrometers/s.
+- Unintended >1 mm contact/self-contact frames: 0/0; shallow touch frames: **355**.
+- Physical transfer: **passed**; historical zero-contact score: **failed**. The
+  original wrapper used that stricter score for its exit status. Contact policy
+  was subsequently updated by the user; see below.
+
+This remains a repeatedly tuned development case, with scripted phase routing,
+explicit visual target description and environment collision-check bypass.
+It demonstrates a runtime VLM-selected physical transfer without object CAD or
+continuous surface registration, not an autonomous-agent or held-out result.
+The minimal tracked profile supplies only native gripper targets; its path skips
+all of the older CAD/tracking profile initialization.
+
+`logs/vlm-matched-instructions-20261123/report.json` compares two instructions on
+identical RGB-D (image hash recorded). Qwen3.5-9B selected the left versus right
+basin. Both passed depth grounding, producing floor points approximately
+[1.062,-0.452,0.714] and [1.522,-0.494,0.772] m. This is a causal instruction
+control on one image: it measures changed grounded goals, not successful physical
+execution of both instructions. Reproduce with `scripts/eval_vlm_instruction_pair.py`.
+Earlier 8B and narrow-hint failures remain in their separate artifacts.
+
+Before/after VLM verification on the alternate scene view returned unknown after
+the successful transfer, correctly avoiding a success claim when the object was
+not clear. The second fixed-camera pair returned `right_basin` and `instruction_satisfied=true`,
+agreeing with the official physical score (`vlm-front-verification.json`). These semantic
+judgments never override physical scoring. Full 20-case qualification, real CHAT
+routing, clean-contact repair and the other robot ports remain open. Integrated
+validation passed 599 tests (30.33 s), plus targeted geometry/CLI tests and Ruff.
+
+The user subsequently confirmed that contact is acceptable. The primary one-shot
+score now follows completed execution and independent task success, with contacts
+reported separately. `task-policy-rescore.json` derives `task_passed=true` for the
+successful transfer and preserves the original report via its SHA256; the raw
+historical report is unchanged. Regression cases ensure contact alone does not
+fail a completed task, while unfinished execution, absent lift, failed official
+success, wrong containment and continuing object motion still fail. The 355
+shallow frames remain visible for interpretation, not a blanket failure gate.
+
+Final task-policy validation: **605 integrated tests passed** (28.00 s), with
+Ruff and whitespace checks clean. The alternate fixed-camera verification
+(`vlm-front-verification.json`) identified the grinder in the right basin and
+reported `instruction_satisfied=true`. The first view's unknown response is
+retained; selecting a more informative view resolved this instance without
+feeding privileged task state to the model.

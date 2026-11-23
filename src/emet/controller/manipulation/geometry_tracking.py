@@ -71,6 +71,24 @@ class GeometryFit:
             raise ObservationUnavailable("object_pose_ambiguous")
         return ObjectPoseEvidence(self.poses[0], self.received_monotonic, "rgbd_tracking", self.observation_ids[-1])
 
+    def require_approximate_box(self, *, now=None):
+        """Use a fit as an approximate box estimate, not an observable rigid pose.
+
+        Ambiguity within 20 mm is accepted as a task-level approximation. All
+        retained geometry fits have already passed measured-surface residual
+        validation. The caller must preserve approximate-box provenance.
+        """
+        now = time.monotonic() if now is None else now
+        if self.model.construction != 'approximate_observed_box':
+            raise ObservationUnavailable('approximate_payload_required')
+        if not 0 <= now-self.received_monotonic <= 2.:
+            raise ObservationUnavailable('object_observation_stale')
+        if self.search_boundary_hit or np.max(np.ptp(self.poses[:, :3, 3], axis=0)) > .02:
+            raise ObservationUnavailable('moving_geometry_ambiguous')
+        index = int(np.argmin(self.rms_m))
+        return ObjectPoseEvidence(self.poses[index], self.received_monotonic,
+                                  'rgbd_tracking', self.observation_ids[-1])
+
     def candidate_bounds(self):
         """Union of retained models; sampled candidates are NOT an uncertainty certificate."""
         boxes = np.array([self.model.world_bounds(p[:3, :3], p[:3, 3]) for p in self.poses])

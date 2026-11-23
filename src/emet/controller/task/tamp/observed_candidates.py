@@ -158,3 +158,27 @@ def candidates_from_supports(
     # Try distinct wrist orientations at the central landing before spending
     # the candidate budget on small translations of one blocked orientation.
     return tuple(entry[3] for entry in sorted(results, key=lambda entry: entry[:3])[:limit])
+
+
+def calibrate_cloud_grasps(proposals, *, observation_id, world_from_reference,
+                          hand_from_ee, close_joints, approach_m=.08, lift_m=.1):
+    """Adapt measured world-hand proposals to the native transfer candidate seam.
+
+    The reference is the caller's geometry frame, not a claim of material object
+    orientation. Opening-width compatibility must be checked by the robot port;
+    these transforms do not certify contact, hidden extent or collision freedom.
+    """
+    from emet.perception.grasps.observed import GraspProposal
+
+    reference = rigid_copy(world_from_reference)
+    calibration = rigid_copy(hand_from_ee)
+    result = []
+    for proposal in proposals:
+        if not isinstance(proposal, GraspProposal) or proposal.observation_id != observation_id:
+            raise ObservationUnavailable('capture_identity_mismatch')
+        local = np.linalg.inv(reference) @ proposal.world_from_hand @ calibration
+        # Convert hand +Z approach into the calibrated tool convention.
+        approach = calibration[:3, :3].T @ np.array([0., 0., 1.])
+        result.append(CalibratedGrasp(local, tuple(approach), tuple(close_joints),
+                                      approach_m=approach_m, lift_m=lift_m))
+    return tuple(result)

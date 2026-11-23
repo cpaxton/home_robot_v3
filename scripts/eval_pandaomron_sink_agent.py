@@ -401,7 +401,7 @@ def run(args, *, observed_native_factory=None):
     requests = []
     live_scenes = []
     grounding_mode = None
-    if args.observed_profile is not None:
+    if args.observed_profile is not None and not getattr(args, "open_loop_pick", False):
         if observed_native_factory is not None:
             raise ValueError("provide a single observed transfer factory")
         from emet.eval.pandaomron_live_transfer import panda_transfer_factory
@@ -465,27 +465,34 @@ def run(args, *, observed_native_factory=None):
                 redirect_stdout(transcript),
                 redirect_stderr(transcript),
             ):
-                if args.model_endpoint:
-                    with recorded_chat_gateway(args.model_endpoint, output / "model-requests") as endpoint:
-                        run_agent_session(
-                            client,
-                            lambda _: next(prompts, None),
-                            endpoint,
-                            args.model,
-                            robot_name="pandaomron",
-                            max_tokens=args.max_tokens,
-                            observed_native_factory=observed_native_factory,
-                        )
+                if getattr(args, 'open_loop_pick', False):
+                    from emet.eval.panda_open_loop import run_pick
+                    run_pick(client, output, args.observed_profile, model_endpoint=args.model_endpoint,
+                             model_name=args.model, object_name=getattr(args, 'open_loop_object_description', None) or object_name,
+                             full_transfer=getattr(args, 'open_loop_transfer', False),
+                             destination_name=getattr(args, 'open_loop_destination', 'sink'))
                 else:
-                    with scripted_model(output, turns) as (endpoint, requests):
-                        run_agent_session(
-                            client,
-                            lambda _: next(prompts, None),
-                            endpoint,
-                            SCRIPTED_MODEL,
-                            robot_name="pandaomron",
-                            observed_native_factory=observed_native_factory,
-                        )
+                    if args.model_endpoint:
+                        with recorded_chat_gateway(args.model_endpoint, output / "model-requests") as endpoint:
+                            run_agent_session(
+                                client,
+                                lambda _: next(prompts, None),
+                                endpoint,
+                                args.model,
+                                robot_name="pandaomron",
+                                max_tokens=args.max_tokens,
+                                observed_native_factory=observed_native_factory,
+                            )
+                    else:
+                        with scripted_model(output, turns) as (endpoint, requests):
+                            run_agent_session(
+                                client,
+                                lambda _: next(prompts, None),
+                                endpoint,
+                                SCRIPTED_MODEL,
+                                robot_name="pandaomron",
+                                observed_native_factory=observed_native_factory,
+                            )
         except Exception as error:
             if client is None:
                 (output / "run-status.json").write_text(json.dumps({
@@ -529,6 +536,20 @@ def run(args, *, observed_native_factory=None):
                 terminate_process_tree(server)
 
     physics = json.loads((output / "physics.json").read_text())
+    if getattr(args, 'open_loop_pick', False):
+        diagnostic = json.loads((output / 'open-loop-pick.json').read_text())
+        from emet.eval.panda_open_loop import score_diagnostic
+
+        transfer = getattr(args, 'open_loop_transfer', False)
+        scores = score_diagnostic(diagnostic, physics, full_transfer=transfer)
+        result = {'task': 'counter_to_sink_transfer' if transfer else 'pick_and_lift_only',
+                  'case': args.case, 'evaluation_split': CASES[args.case].get('evaluation_split', 'development'),
+                  'routing_mode': 'scripted_phases_with_vlm_grounding' if args.model_endpoint else 'scripted_phases',
+                  'model': args.model, **scores,
+                  'full_transfer_evaluated': transfer, 'diagnostic': diagnostic, 'physics': physics}
+        (output / 'open-loop-score.json').write_text(json.dumps(result, indent=2)+'\n')
+        print(json.dumps(result, indent=2))
+        return 0 if scores["task_passed"] else 1
     transcript = (output / "agent.log").read_text()
     audit = output / "actuation.jsonl"
     actions = audit.read_text().splitlines() if audit.exists() else []
@@ -592,8 +613,16 @@ if __name__ == "__main__":
     parser.add_argument("--model-endpoint")
     parser.add_argument("--model")
     parser.add_argument("--max-tokens", type=int, choices=range(16, 513), metavar="16..512", default=128)
+    parser.add_argument("--open-loop-transfer", action="store_true", help="Extend the one-shot pick diagnostic through release and retreat.")
+    parser.add_argument("--open-loop-destination", default="sink", help="Natural-language destination for runtime VLM grounding.")
+    parser.add_argument("--open-loop-object-description", help="Explicit natural-language target description for the diagnostic.")
+    parser.add_argument("--open-loop-pick", action="store_true", help="Simulation-only one-shot depth pick diagnostic.")
     parser.add_argument("--serve-fixture", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.open_loop_transfer:
+        args.open_loop_pick = True
+    if args.open_loop_pick and args.observed_profile is None:
+        parser.error('--open-loop-pick requires --observed-profile')
     if not 0 <= args.diagnostic_torso_offset_m <= 0.01:
         parser.error("--diagnostic-torso-offset-m must be between 0 and 0.01 m")
     if args.scene_camera_fovy_deg is not None and not 30 <= args.scene_camera_fovy_deg <= 100:

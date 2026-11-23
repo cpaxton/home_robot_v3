@@ -10,6 +10,31 @@ not evidence of general perception or physical-robot readiness.
 
 ## Changes by layer
 
+### Design requirement: observed geometry first
+
+Core goal, reaffirmed by the user on 2026-11-23: build a general-purpose agent
+harness with minimal assumptions. Let the agent acquire information, choose
+tools, act, inspect outcomes, and recover. Do not require benchmark-specific
+knowledge, fixed task sequences, manually supplied regions, object assets, or
+perfect perception as prerequisites for ordinary manipulation. Keep physical
+robot capabilities and calibrated sensing explicit; expose missing information
+and uncertainty so the agent can resolve them. Benchmark adapters translate
+sensor/control interfaces and score outcomes; they must not supply hidden task
+solutions. Scripted task routing is a diagnostic control, not agent qualification.
+
+User decision, 2026-11-23: the general manipulation harness must not require
+supplied object CAD, asset identity, or a complete material object pose to plan,
+execute, or verify ordinary pick-and-place. Use VLM semantic hints, measured
+point clouds, local feedback, and explicit uncertainty about unseen surfaces.
+Robot kinematic/gripper models remain necessary and are distinct from object CAD.
+
+Object CAD may be an optional known-object input or diagnostic control. Keep
+such assistance explicit in evaluation receipts; assisted success does not
+qualify the default observed method. Do not let diagnostic shortcuts become
+mandatory shared interfaces. The live source now supports an approximate box
+without CAD. Its tracking path and the separate VLM one-shot diagnostic remain
+under development; neither constitutes general agent or hardware qualification.
+
 | Layer | Main files under `src/emet/` | Reason and resulting behavior |
 | --- | --- | --- |
 | Agent decisions | `agent/loop.py`, `agent/tamp_session.py` | Permit at most two fresh perception/planning recovery rounds after explicitly unstarted planning failures. Partial execution requires inspection; consumed handles cannot be replayed. |
@@ -354,3 +379,37 @@ micrometers; rejecting that measured start blocked pre-release retreat. Collisio
 checks use the actual unmodified state, while IK/sampling retain nominal ranges.
 The diagnostic and boolean validators share this band. Regression coverage
 checks return from a 50 micrometer overshoot and rejection at 200 micrometers.
+
+## Runtime VLM diagnostic and instruction controls
+
+`configs/eval/pandaomron_vlm_one_shot_development.json` contains only native
+finger targets. The one-shot path skips the old tracking-profile factory. With
+`--open-loop-transfer --model-endpoint URL --model MODEL
+--open-loop-object-description DESCRIPTION --open-loop-destination DESTINATION`,
+`eval_pandaomron_sink_agent.py` asks the VLM for image regions and closing direction,
+uses depth for metric targets, and executes native pick/carry/release/retreat.
+This is scripted phase routing with VLM grounding, not production agent routing.
+It bypasses environment collision checks and must remain simulation-only.
+
+Coarse object hints seed measured depth components; missed hints can snap only
+to a nearby clearly preferred component. Source support is measured beside the
+object rather than accepting the object's own top as a counter. Destination
+floor growth stays connected to the VLM-selected region. The front placement
+point uses multi-view depth, spatially balanced samples and estimated floor axes.
+No complete object pose, asset identity or object CAD is required. Approximate
+preplace acceptance is limited to 35 mm / 0.15 rad, recorded explicitly; it does
+not change the final target or independent physical scoring.
+
+Run `scripts/eval_vlm_instruction_pair.py SENSOR_NPZ NEW_OUTPUT --endpoint URL
+--model MODEL --object DESCRIPTION --destination LEFT_REQUEST --destination
+RIGHT_REQUEST` to compare decisions against exactly the same recorded image and
+depth, without robot motion. Its report includes the image hash, raw decisions,
+depth failures and metric goals. Different goals are evidence of instruction
+sensitivity, not proof of physical task completion or general performance.
+
+User decision, 2026-11-23: contact is acceptable. Success is completed execution
+and the task's independent predicate, not zero contact. The one-shot diagnostic
+therefore reports `task_passed` separately from `zero_contact` and the historical
+`clean_transfer_passed` statistic. Contacts remain telemetry. Incomplete execution,
+missing lift, wrong containment, an unsuccessful official predicate or an unsettled
+object still fails the task score. Preserve older raw scores when rescoring policy.

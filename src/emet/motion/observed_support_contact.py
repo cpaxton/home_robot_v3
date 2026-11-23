@@ -171,7 +171,7 @@ class ObservedSupportContact:
         normal, offset = self.unit_plane
         return float(np.min(box_corners(physical.bounds) @ normal - offset) - self.patch.measurement_margin_m)
 
-    def pickup_observation_bounds(self, footprint):
+    def pickup_observation_bounds(self, footprint, *, approximate=False):
         """Bracket an occluded footprint for a visual resting-height check.
 
         The selected plane must have nearby measured support outside all four
@@ -190,6 +190,16 @@ class ObservedSupportContact:
         rays = np.column_stack(((x - k[0, 2]) / k[0, 0], (y - k[1, 2]) / k[1, 1], np.ones(len(x))))
         world = (rays * z[:, None]) @ pose[:3, :3].T + pose[:3, 3]
         nearby_m = .035
+        if approximate:
+            # A visible support beside a partly occluded object supplies a
+            # resting hypothesis; it need not surround every padded box corner.
+            delta = np.maximum(np.maximum(xy[0]-world[:, :2], world[:, :2]-xy[1]), 0.)
+            if np.count_nonzero(np.linalg.norm(delta, axis=1) <= nearby_m) < 4:
+                return None
+            low, high = xy + np.array([[-.005], [.005]])
+            corners = np.array([[low[0], low[1]], [high[0], high[1]]])
+            height = corners @ self.patch.plane[:2] + self.patch.plane[2]
+            return np.array([[*low, height.min()-margin], [*high, height.max()+margin]])
         for i, j in np.ndindex(2, 2):
             corner = np.array([xy[i, 0], xy[j, 1]])
             outward = (world[:, :2] - corner) * [2 * i - 1, 2 * j - 1]

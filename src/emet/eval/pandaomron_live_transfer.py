@@ -78,16 +78,18 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
     slack = float(profile.get("simulation_clearance_slack_m", 0.0))
     if not math.isfinite(slack) or not 0 <= slack <= .005 or (slack and not profile.get("local_resolution_m")):
         raise ValueError("invalid_simulation_clearance_slack")
-    prior = json.loads((profile_path.parent / profile["payload_prior"]).read_text())
-    prior_scale = float(profile.get("payload_prior_scale", 1.))
-    if not math.isfinite(prior_scale) or not .5 <= prior_scale <= 2.:
-        raise ValueError("invalid_payload_prior_scale")
-    geometry = KnownMeshSurface(
-        np.asarray(prior["surface_points_reference_m"])*prior_scale, prior["surface_normals_reference"],
-        np.asarray(prior["vertices_reference_m"])*prior_scale,
-    )
-    if profile.get("payload_axial_enclosure") is not None:
-        geometry = AxialMeshSurface(geometry)
+    geometry = None
+    if profile.get("payload_prior"):
+        prior = json.loads((profile_path.parent / profile["payload_prior"]).read_text())
+        prior_scale = float(profile.get("payload_prior_scale", 1.))
+        if not math.isfinite(prior_scale) or not .5 <= prior_scale <= 2.:
+            raise ValueError("invalid_payload_prior_scale")
+        geometry = KnownMeshSurface(
+            np.asarray(prior["surface_points_reference_m"])*prior_scale, prior["surface_normals_reference"],
+            np.asarray(prior["vertices_reference_m"])*prior_scale,
+        )
+        if profile.get("payload_axial_enclosure") is not None:
+            geometry = AxialMeshSurface(geometry)
     task = ObservedNativeTask("payload", "basin-floor", object_name, "sink", source_support_ref="counter")
     grasps = tuple(
         CalibratedGrasp(

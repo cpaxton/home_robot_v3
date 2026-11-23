@@ -38,8 +38,9 @@ from emet.motion.placement_geometry import (
 class PayloadGeometryEvidence:
     """One coherent geometry/pose snapshot in a provider-defined reference frame.
 
-    ``vertices_reference`` encloses the possible object volume, not just visible
-    samples. ``known_model_prior`` is an explicit prior tier; ``multiview_bound``
+    ``vertices_reference`` represents the planning payload volume.
+    ``approximate_observed_box`` explicitly assumes unseen extent from a padded
+    measured box; it is not a certified enclosure. ``known_model_prior`` is an explicit prior tier; ``multiview_bound``
     requires a separately qualified multi-view constructor. These labels record
     provenance and do not prove that the producer built a valid bound.
 
@@ -71,7 +72,7 @@ class PayloadGeometryEvidence:
             raise ValueError('invalid_payload_geometry_evidence')
         if (not self.object_ref or not self.reference_id or not self.revision
                 or not isinstance(self.pose, (ObjectPoseEvidence, ShapePoseEvidence))
-                or self.construction not in {'known_model_prior', 'multiview_bound'}
+                or self.construction not in {'known_model_prior', 'multiview_bound', 'approximate_observed_box'}
                 or not np.isfinite([self.position_error_m, self.rotation_error_rad]).all()
                 or self.position_error_m < 0 or not 0 <= self.rotation_error_rad <= np.pi
                 or not np.isfinite([self.attachment_error_m, self.attachment_rotation_error_rad]).all()

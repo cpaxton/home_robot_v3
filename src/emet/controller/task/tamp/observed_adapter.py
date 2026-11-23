@@ -434,7 +434,8 @@ class ObservedNativeAdapter:
                 initial = self._observe(task)
                 pickup_bounds = initial.source_support_bounds
                 if initial.source_support_contact is not None:
-                    pickup_bounds = initial.source_support_contact.pickup_observation_bounds(initial.frame.bounds())
+                    pickup_bounds = initial.source_support_contact.pickup_observation_bounds(initial.frame.support_evidence_bounds(),
+                        approximate=initial.frame.payload.construction == "approximate_observed_box")
                     if pickup_bounds is None:
                         return self._failure('plan_pick_place', 'task_object_not_settled_on_support')
                 frames = tuple(self.source.collect(task.object_ref, task.support_ref, after=initial.frame.capture.latest))

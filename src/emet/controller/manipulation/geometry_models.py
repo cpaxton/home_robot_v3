@@ -186,15 +186,17 @@ class AxialMeshSurface:
 class MeasuredSurfaceModel:
     """Reference-frame measured surfaces with a separately certified envelope.
 
-    The envelope must come from the enclosure constructor, never the visible
-    points' box. Reference axes are a coordinate convention, not measured yaw.
+    When supplied, the complete envelope comes from the enclosure constructor.
+    Without it, bounds describe observed samples only and construction is explicitly
+    partial; downstream complete-payload admission must not accept those bounds. Reference axes are a coordinate convention, not measured yaw.
     Registration does not assert that every future surface was already observed.
     """
 
     construction = "observed_multiview_surface"
     symmetry = "undeclared"
 
-    def __init__(self, points_reference, *, world_from_reference, enclosure):
+    def __init__(self, points_reference, *, world_from_reference, enclosure=None,
+                 observation_ids=(), received_monotonic=None):
         points = np.asarray(points_reference, float)
         pose = np.asarray(world_from_reference, float)
         if (
@@ -209,14 +211,25 @@ class MeasuredSurfaceModel:
             or not np.isclose(np.linalg.det(pose[:3, :3]), 1)
         ):
             raise ValueError("invalid_measured_surface_model")
-        corners = (enclosure.vertices_world - pose[:3, 3]) @ pose[:3, :3]
+        self.complete_enclosure = enclosure is not None
+        if enclosure is None:
+            if (not observation_ids or not all(isinstance(v, str) and v for v in observation_ids)
+                    or received_monotonic is None or not np.isfinite(received_monotonic)):
+                raise ValueError("partial_surface_capture_required")
+            # This box encloses observed samples only, never the complete object.
+            corners = box_corners([points.min(0), points.max(0)])
+            self.construction = "observed_partial_surface"
+            self.observation_ids = tuple(observation_ids)
+            self.received_monotonic = float(received_monotonic)
+        else:
+            corners = (enclosure.vertices_world - pose[:3, 3]) @ pose[:3, :3]
+            self.observation_ids = enclosure.observation_ids
+            self.received_monotonic = enclosure.received_monotonic
         if np.any(points.min(0) < corners.min(0)) or np.any(points.max(0) > corners.max(0)):
             raise ValueError("surface_outside_certified_enclosure")
         self.points_reference = immutable(points)
         self.vertices_reference = immutable(corners)
         self.half_extents = immutable(np.max(np.abs(corners), axis=0))
-        self.observation_ids = enclosure.observation_ids
-        self.received_monotonic = enclosure.received_monotonic
         self._tree = cKDTree(self.points_reference, copy_data=True)
         neighbours = self._tree.query(points, k=min(16, len(points)))[1]
         patches = points[neighbours]

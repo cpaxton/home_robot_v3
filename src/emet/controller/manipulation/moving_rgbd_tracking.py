@@ -234,9 +234,10 @@ class MovingRgbdTracker:
     @staticmethod
     def _require_fit(fit):
         if (
-            not fit.translation_observable
+            (not fit.translation_observable and fit.model.construction != "approximate_observed_box")
             or fit.search_boundary_hit
-            or np.max(np.ptp(fit.poses[:, :3, 3], axis=0)) > 0.005
+            or np.max(np.ptp(fit.poses[:, :3, 3], axis=0)) > (
+                .02 if fit.model.construction == "approximate_observed_box" else .005)
         ):
             raise ObservationUnavailable("moving_geometry_ambiguous")
 

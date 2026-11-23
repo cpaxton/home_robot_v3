@@ -137,6 +137,19 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       The earlier Stretch control measured the unloaded approach and
       above-rim reach. Its tongs candidates stopped before closure.
       [Follow-up experiments](docs/experiments/harness_assessment_20261119.md#tabletop-manipulation-and-robocasa-reachability-follow-up).
+- [x] Demonstrate a runtime VLM-guided transfer without object CAD or continuous
+      surface registration on the tuned PandaOmron development fixture. Qwen3.5-9B
+      selected regions/direction; depth and native control completed pick, place,
+      release and retreat. Official success passed with 9.35 cm two-pad lift.
+      Contact telemetry recorded 355 shallow frames and zero >1 mm or self-contact
+      frames; contact itself is not a task failure. Same-image left/right instructions produced separate
+      depth-supported basin goals. This is scripted phase routing, not agent
+      qualification or a held-out result. See `docs/testing/observed_manipulation_stack.md`.
+- [ ] Qualify the no-CAD VLM path on frozen 20-case pilots (16/20 full success
+      separately for scripted and real-agent routing), including absent targets,
+      distractors, changed instructions, recovery, and cross-robot transfer.
+      Characterize contact outcomes and verify results with fresh views plus
+      native feedback; do not treat VLM-only image judgments as ground truth.
 - [ ] Port the observed-transfer contract to each benchmark's chosen
       embodiment. Use PandaOmron for RoboCasa365 and Stretch for the in-house
       tabletop control. Evaluate MolmoSpaces/rby1 next. Select and qualify
