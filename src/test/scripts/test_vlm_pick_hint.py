@@ -88,3 +88,117 @@ def test_contacts_do_not_override_task_success_but_completion_still_matters(fail
     assert score['task_passed'] is (failure is None)
     assert not score['zero_contact']
     assert not score['clean_transfer_passed']
+
+
+def test_failed_grounding_can_adapt_twice_without_actuating(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from emet.controller.manipulation.native_inputs import ObservationUnavailable
+    from emet.eval.panda_open_loop import run_pick
+
+    rgb = np.zeros((20, 30, 3), np.uint8)
+    observation = SimpleNamespace(rgb=rgb, auxiliary_rgbd_views={'scene_alt': {'rgb': rgb}},
+        ee_rgb=rgb, ee_depth=np.ones((20, 30)), ee_camera_K=np.eye(3), ee_camera_pose=np.eye(4))
+    calls = []
+
+    def query(_image, **kwargs):
+        calls.append(kwargs)
+        return {role: [0, 0, 1000, 1000] for role in ('object', 'source', 'destination')}
+
+    def reject(*args, **kwargs):
+        raise ObservationUnavailable('support_geometry_unknown')
+
+    class Client:
+        def get_emet_session(self):
+            return {'runtime_kind': 'robocasa_native'}
+
+        def get_observation(self):
+            return observation
+
+        def open_gripper(self):
+            raise AssertionError('must not actuate with invalid grounding')
+
+    monkeypatch.setattr('emet.eval.vlm_pick_hint.query_pick_hint', query)
+    monkeypatch.setattr('emet.eval.panda_open_loop.select_transfer', reject)
+    profile = tmp_path/'profile.json'
+    profile.write_text('{}')
+    output = tmp_path/'run'
+    output.mkdir()
+    run_pick(Client(), output, profile, model_endpoint='http://test/v1', model_name='test', object_name='pear')
+    receipt = json.loads((output/'open-loop-pick.json').read_text())
+    assert len(calls) == 3
+    assert calls[0]['feedback'] is None
+    assert calls[1]['feedback'] == 'support_geometry_unknown'
+    assert all(call['object_name'] == 'pear' for call in calls)
+    assert receipt['completed'] is False and receipt['events'] == []
+    assert len(receipt['grounding_attempts']) == 3
+
+
+def test_vlm_can_choose_view_and_estimate_grasp_and_approach(monkeypatch, tmp_path):
+    decision = {'camera': 'wrist', 'object': [100, 100, 300, 400],
+                'source': [50, 400, 400, 800], 'destination': [500, 300, 900, 900],
+                'grasp_yaw_degrees': 90, 'grasp_height_fraction': .3, 'approach': 'direct'}
+    captured = []
+
+    def reply(request, timeout):
+        captured.append(json.loads(request.data))
+        return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(decision)}}]}).encode())
+
+    monkeypatch.setattr('urllib.request.urlopen', reply)
+    rgb = np.zeros((20, 30, 3), np.uint8)
+    result = query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
+                            output=tmp_path, views={'scene': rgb, 'wrist': rgb})
+    assert result['camera'] == 'wrist' and result['approach'] == 'direct'
+    content = captured[0]['messages'][0]['content']
+    assert sum(item['type'] == 'image_url' for item in content) == 2
+    decision['camera'] = 'missing-camera'
+    with pytest.raises(ValueError, match='invalid_vlm_camera_choice'):
+        query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
+                        output=tmp_path, views={'scene': rgb, 'wrist': rgb})
+
+
+def test_vlm_height_selects_body_section_and_other_views_reduce_surface_bias(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.eval.panda_open_loop import estimated_grasp_section
+
+    body = np.column_stack((np.tile([-.01, .01], 40), np.full(80, -.02), np.linspace(.94, .97, 80)))
+    stem = np.column_stack((np.full(20, .02), np.full(20, -.01), np.ones(20)))
+    world = np.zeros((12, 10, 3))
+    world[:10] = np.concatenate((body, stem)).reshape(10, 10, 3)
+    world[10:, :, 2] = .92
+    other = world.copy()
+    other[:8, :, 1] = .01
+    obj, support = np.zeros((12, 10), bool), np.zeros((12, 10), bool)
+    obj[:10], support[10:] = True, True
+    selection = SimpleNamespace(object_camera='scene', source_camera='scene',
+                                object_mask=obj, source_mask=support)
+    monkeypatch.setattr('emet.eval.panda_open_loop.capture_arrays', lambda o: (None, None, o.world))
+    views = {'scene': SimpleNamespace(world=world), 'other': SimpleNamespace(world=other)}
+    _, body_target = estimated_grasp_section(views, selection, .3)
+    _, stem_target = estimated_grasp_section(views, selection, 1.)
+    assert abs(body_target[0]) < .005
+    assert body_target[1] > -.01
+    assert body_target[2] == pytest.approx(.958)
+    assert stem_target[0] > .015
+
+
+def test_vlm_supports_independent_surface_views(monkeypatch, tmp_path):
+    decision = {'camera': 'wrist', 'source_camera': 'scene', 'destination_camera': 'scene_alt',
+                'object': [100, 100, 300, 400], 'source': [50, 400, 400, 800],
+                'destination': [500, 300, 900, 900], 'grasp_yaw_degrees': 90}
+
+    def reply(request, timeout):
+        return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(decision)}}]}).encode())
+
+    monkeypatch.setattr('urllib.request.urlopen', reply)
+    rgb = np.zeros((20, 30, 3), np.uint8)
+    views = dict.fromkeys(('wrist', 'scene', 'scene_alt'), rgb)
+    result = query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
+                             output=tmp_path, views=views)
+    assert result['source_camera'] == 'scene'
+    assert result['destination_camera'] == 'scene_alt'
+    decision['source_camera'] = 'nonexistent'
+    with pytest.raises(ValueError, match='invalid_vlm_camera_choice'):
+        query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
+                         output=tmp_path, views=views)

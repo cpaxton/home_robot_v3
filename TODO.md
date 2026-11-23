@@ -145,6 +145,11 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       frames; contact itself is not a task failure. Same-image left/right instructions produced separate
       depth-supported basin goals. This is scripted phase routing, not agent
       qualification or a held-out result. See `docs/testing/observed_manipulation_stack.md`.
+- [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
+      pear/garlic/tongs development screens v1–v4 each scored 0/3 full transfers;
+      pear achieved 8.51 cm lift in v2 but slipped during carry. Resolve arrival,
+      retention and surface grounding; preserve all rounds. VLM estimates of
+      camera, grasp height/direction and approach are allowed harness inputs.
 - [ ] Qualify the no-CAD VLM path on frozen 20-case pilots (16/20 full success
       separately for scripted and real-agent routing), including absent targets,
       distractors, changed instructions, recovery, and cross-robot transfer.

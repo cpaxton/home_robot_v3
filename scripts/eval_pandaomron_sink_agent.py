@@ -409,6 +409,7 @@ def run(args, *, observed_native_factory=None):
         observed_native_factory, grounding_mode = panda_transfer_factory(
             args.observed_profile, output / "robot-only.xml", CASES[args.case]["object_name"], live_scenes,
         )
+    case_args = ["--case-spec", str(args.case_spec.resolve())] if getattr(args, "case_spec", None) else []
     probe_args = ["--probe-calibration", str(args.probe_calibration.resolve())] if args.probe_calibration else []
     fovy = getattr(args, "scene_camera_fovy_deg", None)
     camera_args = ["--scene-camera-fovy-deg", str(fovy)] if fovy is not None else []
@@ -429,6 +430,7 @@ def run(args, *, observed_native_factory=None):
                 args.scene_camera,
                 "--diagnostic-torso-offset-m",
                 str(torso_offset),
+                *case_args,
                 *probe_args,
                 *camera_args,
             ],
@@ -603,7 +605,8 @@ if __name__ == "__main__":
     parser.add_argument("fixture", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--port-offset", type=int, default=2436)
-    parser.add_argument("--case", choices=CASES, default="development-tongs")
+    parser.add_argument("--case", default="development-tongs")
+    parser.add_argument("--case-spec", type=Path, help="Frozen fixture metadata; consumed by the scorer, not the VLM.")
     parser.add_argument("--scene-camera", choices=SCENE_CAMERAS, default="right")
     parser.add_argument("--scene-camera-fovy-deg", type=float, help="Explicit simulated lens change; recorded as sensor assistance.")
     parser.add_argument("--observed-profile", type=Path)
@@ -619,6 +622,14 @@ if __name__ == "__main__":
     parser.add_argument("--open-loop-pick", action="store_true", help="Simulation-only one-shot depth pick diagnostic.")
     parser.add_argument("--serve-fixture", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.case_spec:
+        spec = json.loads(args.case_spec.read_text())
+        if (not isinstance(spec, dict) or any(type(spec.get(k)) is not int for k in ('layout', 'style', 'seed'))
+                or any(not isinstance(spec.get(k), str) or not spec[k] for k in ('target_asset', 'object_name'))):
+            parser.error('invalid frozen case specification')
+        CASES[args.case] = spec
+    if args.case not in CASES:
+        parser.error('unknown case; supply a frozen --case-spec')
     if args.open_loop_transfer:
         args.open_loop_pick = True
     if args.open_loop_pick and args.observed_profile is None:

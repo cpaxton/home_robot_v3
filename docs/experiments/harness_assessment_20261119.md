@@ -1771,3 +1771,51 @@ Ruff and whitespace checks clean. The alternate fixed-camera verification
 reported `instruction_satisfied=true`. The first view's unknown response is
 retained; selecting a more informative view resolved this instance without
 feeding privileged task state to the model.
+
+
+### VLM-adaptive expansion screen (2026-11-23)
+
+The harness allows VLM estimates of camera, semantic image regions, grasp
+closing direction, body-height fraction and direct versus viewer-side approach.
+Regions remain coarse proposals grounded in current calibrated RGBD. Source and
+destination can independently choose clearer cameras; no object CAD or exact
+asset pose is supplied to the policy. Up to two pre-motion re-estimates receive
+grounding failure feedback. These are not post-grasp recovery or production
+CHAT routing. Native finger feedback is recorded at closure, lift and release.
+
+`configs/eval/vlm_transfer_expansion_development.json` freezes three archived
+fixtures: pear and garlic in layout 1, plus the earlier tongs control in layout
+11. `scripts/eval_vlm_transfer_batch.py` verifies fixture hashes, snapshots
+policy sources and model metadata, runs one simulator at a time, and reports
+first-attempt versus recovered results. These are development screens, not the
+20-case qualification pilot. Previously tested fixtures cannot become untouched
+held-out cases by renaming their split.
+
+Preserved rounds under root `logs/`:
+
+| Batch | Full transfers | Relevant observation |
+| --- | --- | --- |
+| `vlm-expansion-screen-20261123-v1` | 0/3 | Pear/garlic approach arrival failures; tongs no physical lift. |
+| `vlm-expansion-screen-20261123-v2` | 0/3 | Pear lifted 8.51 cm with two pads but slipped during carry; garlic/tongs no qualifying lift. |
+| `vlm-expansion-screen-20261123-v3` | 0/3 | Pear arrival failed with 29 mm tool residual and no contacts; garlic exhausted grounding proposals; tongs reached preplace without a qualifying lift. |
+
+The native Panda server advances physics continuously in `_sim_loop`; wall-time
+waits do not pause physics. Synchronized camera capture is distinct from
+action-stepped physics. Arrival, retention and surface grounding remain separate
+blockers; do not attribute these failures to synchronized stepping. The fourth
+round tests independent source/destination camera selection.
+
+Fourth-round result (`logs/vlm-expansion-screen-20261123-v4/report.json`):
+**0/3 full transfers**, with no qualifying physical picks. Pear repeated the
+29 mm approach residual. Garlic changed source to `scene` and destination to
+`wrist` on its second proposal and completed all motion stages, but independent
+physics measured no two-pad lift. Tongs reached preplace then timed out, also
+without a qualifying lift (82 touch frames). Independent-view grounding thus
+unblocked garlic's sequence, but does not establish grasp success. Retain
+first-attempt/recovery distinctions and avoid promoting any of these cases.
+
+Validation: **609 tests passed** in 28.88 s; Ruff and whitespace checks passed.
+One simulator ran at a time on six assigned CPU cores; the local 9B model used
+about 20.3 GB GPU memory with 3.7 GB free at the sampled checkpoint. Next priority
+is native approach-error correction and observable grasp/retention recovery,
+then a fresh frozen qualification pilot.
