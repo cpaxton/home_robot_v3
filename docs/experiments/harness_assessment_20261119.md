@@ -1819,3 +1819,39 @@ One simulator ran at a time on six assigned CPU cores; the local 9B model used
 about 20.3 GB GPU memory with 3.7 GB free at the sampled checkpoint. Next priority
 is native approach-error correction and observable grasp/retention recovery,
 then a fresh frozen qualification pilot.
+
+
+### Native arrival feedback experiment (2026-11-23)
+
+`native_goal_wait.py` adds bounded encoder-feedback correction to the native
+simulation diagnostic: up to three corrections, at most 0.04 rad per arm joint
+per correction, 0.12 rad total, and 1 mm/4 mm corresponding torso bounds. Native
+joint limits and a four-second deadline remain enforced. Success uses measured
+error against the original nominal goal, not the compensated command. Each
+interpolated command is checked against its own robot-only FK pose; previously
+it was compared with the outer waypoint even before interpolation finished.
+The same helper handles reverse-path retreat. All applied corrections are
+recorded. This is not a hardware-qualified contact controller.
+
+Frozen round v5 scored 0/3 transfers: pear remained at approach (12 mm position
+and 0.158 rad orientation residual after compensation); garlic reached
+preplace-front without a qualifying lift; tongs exhausted three surface
+grounding proposals. This does not establish bias compensation as a fix.
+Round v6 separately allows 4 cm / 0.2 rad tolerance with no compensation at
+departure/staging, retaining 8 mm / 0.1 rad for grasp endpoints.
+Regression coverage includes constant servo bias, blocked motion, accurate
+arrival, and the distinction between transit and precise endpoint tolerances.
+**614 tests passed** in 31.77 s.
+
+Round v6 (`logs/vlm-expansion-screen-20261123-v6/report.json`) finished with
+**1/3 physical picks and 0/3 full transfers**. Pear passed the earlier approach
+stop and recorded 7.52 cm two-pad lift; lowering later stopped with 22.3 mm
+position residual. Its object displacement was only 8.88 cm, so this is not
+evidence that the pear remained held through carry. Native contacts remain
+telemetry (70 deeper frames, 81 touch frames, no self-contact frames). Garlic
+exhausted three surface-grounding proposals, demonstrating grounding instability
+on this development fixture across fresh captures. Tongs reached preplace but
+registered no qualifying lift. None of these failures is relabeled successful
+by the relaxed transit gate. First-attempt and recovered full success both
+remain zero. The next gaps are fresh-view grasp/retention verification and
+recovery, source-support grounding reliability, and contact-aware lowering.

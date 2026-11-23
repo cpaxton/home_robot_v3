@@ -53,7 +53,7 @@ def main():
             raise ValueError('frozen_fixture_changed: '+case['id'])
     (args.output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     sources = ['scripts/eval_pandaomron_sink_agent.py', 'src/emet/eval/panda_open_loop.py',
-               'src/emet/eval/vlm_pick_hint.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
+               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
                'scripts/eval_vlm_transfer_batch.py']
     source_hashes = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in sources}
     (args.output/'source-hashes.json').write_text(json.dumps(source_hashes, indent=2)+'\n')

@@ -146,8 +146,10 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       depth-supported basin goals. This is scripted phase routing, not agent
       qualification or a held-out result. See `docs/testing/observed_manipulation_stack.md`.
 - [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
-      pear/garlic/tongs development screens v1–v4 each scored 0/3 full transfers;
-      pear achieved 8.51 cm lift in v2 but slipped during carry. Resolve arrival,
+      pear/garlic/tongs development screens v1–v6 each scored 0/3 full transfers;
+      pear achieved 8.51 cm lift in v2 but slipped during carry. V6 passed the
+      approach stop and lifted 7.52 cm, then stopped during lowering; retention
+      through carry is unverified. Resolve arrival,
       retention and surface grounding; preserve all rounds. VLM estimates of
       camera, grasp height/direction and approach are allowed harness inputs.
 - [ ] Qualify the no-CAD VLM path on frozen 20-case pilots (16/20 full success

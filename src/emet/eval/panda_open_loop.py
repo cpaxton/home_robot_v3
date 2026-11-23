@@ -10,6 +10,7 @@ import numpy as np
 
 from emet.controller.task.tamp.observed_capture import capture_arrays
 from emet.controller.task.tamp.transfer_grounding import select_transfer
+from emet.eval.native_goal_wait import wait_for_native_goal
 from emet.motion.mujoco_arm_ik import solve_pose_ik
 from emet.robots import get_robot_backend
 from emet.robots.pandaomron.observed import synchronize_pandaomron
@@ -183,7 +184,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         events.append(name)
         (output/'open-loop-progress.json').write_text(json.dumps(events)+'\n')
 
-    def move(position, orientation, *, approximate_waypoint=False, position_tolerance_m=.008):
+    def move(position, orientation, *, approximate_waypoint=False, position_tolerance_m=.008, transit=False):
         arm.synchronize(data)
         origin = data.body(arm.chain.ee_body).xpos.copy()
         for fraction in np.linspace(0., 1., max(2, int(np.ceil(np.linalg.norm(position-origin)/.02)))+1)[1:]:
@@ -199,34 +200,24 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             steps = max(1, int(np.ceil(np.max(np.abs(goal-start)/np.r_[np.full(7, .1), .02]))))
             for q in np.linspace(start, goal, steps+1)[1:]:
                 q = np.clip(q, limits[:, 0], limits[:, 1])
-                arm.command_joints(q)
-                deadline = time.monotonic()+4.
-                while True:
-                    time.sleep(.02)
-                    arm.synchronize(data)
-                    error = np.abs(data.qpos[addresses]-q)
+                arrival = wait_for_native_goal(arm, model, data, addresses, limits, q,
+                    position_tolerance_m=position_tolerance_m,
+                    rotation_tolerance_rad=.2 if transit else .1, max_corrections=0 if transit else 3)
+                if arrival['corrections']:
+                    receipt.setdefault('servo_corrections', []).append(arrival)
+                if not arrival['arrived']:
                     body = data.body(arm.chain.ee_body)
-                    task_error = float(np.linalg.norm(body.xpos-waypoint))
-                    task_angle = float(np.arccos(np.clip((np.trace(
+                    distance = float(np.linalg.norm(body.xpos-position))
+                    angle = float(np.arccos(np.clip((np.trace(
                         body.xmat.reshape(3, 3).T @ orientation)-1)/2, -1., 1.)))
-                    if (np.max(error[:7]) < .015 and error[7] < .001) or (
-                            task_error <= position_tolerance_m and task_angle <= .1):
-                        break
-                    if time.monotonic() > deadline:
-                        body = data.body(arm.chain.ee_body)
-                        distance = float(np.linalg.norm(body.xpos-position))
-                        angle = float(np.arccos(np.clip((np.trace(
-                            body.xmat.reshape(3, 3).T @ orientation)-1)/2, -1., 1.)))
-                        if approximate_waypoint and distance <= .035 and angle <= .15:
-                            receipt.setdefault('approximate_waypoints', []).append({
-                                'target_m': position.tolist(), 'measured_m': body.xpos.tolist(),
-                                'translation_error_m': distance, 'rotation_error_rad': angle})
-                            executed.append(data.qpos[addresses].copy())
-                            return
-                        receipt['last_motion_error'] = {'joint_errors': error.tolist(),
-                            'tool_position_error_m': task_error, 'tool_rotation_error_rad': task_angle,
-                            'waypoint_m': waypoint.tolist(), 'measured_m': body.xpos.tolist()}
-                        raise RuntimeError('open_loop_arrival_failed')
+                    if approximate_waypoint and distance <= .035 and angle <= .15:
+                        receipt.setdefault('approximate_waypoints', []).append({
+                            'target_m': position.tolist(), 'measured_m': body.xpos.tolist(),
+                            'translation_error_m': distance, 'rotation_error_rad': angle})
+                        executed.append(data.qpos[addresses].copy())
+                        return
+                    receipt['last_motion_error'] = arrival
+                    raise RuntimeError('open_loop_arrival_failed')
                 executed.append(data.qpos[addresses].copy())
 
     receipt = {'mode': 'one_shot_depth_open_loop_transfer' if full_transfer else 'one_shot_depth_open_loop_pick',
@@ -257,7 +248,8 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             route = [('departure', home+offset, current_rotation),
                      ('staging', target+[0, 0, .1]+offset, rotation), *route]
         for name, pos, rot in route:
-            move(pos, rot, position_tolerance_m=.02 if name in {'departure', 'staging'} else .008)
+            move(pos, rot, position_tolerance_m=.04 if name in {'departure', 'staging'} else .008,
+                 transit=name in {'departure', 'staging'})
             record_event(name)
         close = dict(profile['grasps'][0]['close_joints'])
         client.command_gripper_joints([close[name] for name in arm.gripper_control_joint_names])
@@ -294,25 +286,12 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             receipt['retreat_configurations'] = len(path)
             for goal in reversed(path):
                 goal = np.clip(goal, limits[:, 0], limits[:, 1])
-                scratch = mujoco.MjData(model)
-                scratch.qpos[:] = data.qpos
-                scratch.qpos[addresses] = goal
-                mujoco.mj_kinematics(model, scratch)
-                reference = scratch.body(arm.chain.ee_body)
-                arm.command_joints(goal)
-                deadline = time.monotonic()+4.
-                while True:
-                    time.sleep(.02)
-                    arm.synchronize(data)
-                    error = np.abs(data.qpos[addresses]-goal)
-                    body = data.body(arm.chain.ee_body)
-                    distance = np.linalg.norm(body.xpos-reference.xpos)
-                    angle = np.arccos(np.clip((np.trace(body.xmat.reshape(3, 3).T @
-                        reference.xmat.reshape(3, 3))-1)/2, -1., 1.))
-                    if (np.max(error[:7]) < .015 and error[7] < .001) or (distance <= .008 and angle <= .1):
-                        break
-                    if time.monotonic() > deadline:
-                        raise RuntimeError('open_loop_retreat_failed')
+                arrival = wait_for_native_goal(arm, model, data, addresses, limits, goal)
+                if arrival['corrections']:
+                    receipt.setdefault('servo_corrections', []).append(arrival)
+                if not arrival['arrived']:
+                    receipt['last_motion_error'] = arrival
+                    raise RuntimeError('open_loop_retreat_failed')
             record_event('retreat')
             time.sleep(2.)
         receipt['completed'] = True
