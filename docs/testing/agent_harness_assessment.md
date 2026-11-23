@@ -37,6 +37,122 @@ actual motion, and final goal predicates individually. A refusal can pass its
 own negative case while the task itself remains incomplete. Keep current and
 historical images labeled and scorer-only object state upstream of scoring only.
 
+## Native controllers across embodiments
+
+Use the same public tools, evidence requirements and independent success
+checks across robots. Each adapter sends admitted motion to its embodiment's
+native controller and reports the joint, gripper and base feedback that the
+controller exposes. Track simulated kinematic execution as a distinct test
+condition. Add a skill and embodiment to the controller training track when
+repeated native trials identify a control gap. Hold the fixture split, sensing,
+admission rules and success criteria fixed when evaluating the learned policy.
+
+### Port a benchmark arm
+
+1. Add the benchmark, native robot, runner when available, frozen cases and asset IDs to
+   the [transfer roster](../../configs/eval/observed_transfer_ports.json).
+   Use the benchmark's supported embodiment. The first two bindings are
+   PandaOmron for RoboCasa365 and Stretch for the in-house tabletop fixture.
+   MolmoSpaces/rby1 is the next simulated arm to evaluate with this contract.
+   Its native asset uses different joint, actuator and camera names from the
+   current Galaxea-based backend, and drives its coupled fingers with motors.
+   Qualify position feedback and the finger command loop on the native model.
+   Select the robot for each additional benchmark when its task and
+   controller requirements are known.
+2. Implement `RobotBackend.bind_observed_arm` with stopped-base feedback,
+   a robot-only kinematic model, and native joint and finger commands.
+   Record controller limits, model fingerprint, synchronized camera/encoder
+   timing, model-to-feedback pose residuals, and measured gripper arrival.
+   Run a bridge smoke before connecting the agent. The
+   [PandaOmron smoke](../../scripts/smoke_pandaomron_bridge.py) is a worked
+   example. Mark unsupported commands independently of task success.
+3. Feed `ObservedTransferSource` original RGB-D/encoder captures, a tracked
+   payload, distinct pickup and destination supports, and calibrated robot
+   collision material. Preserve unknown and conflicting volume. If a shape
+   prior is needed, [calibrate it separately](../../scripts/calibrate_transfer_payload.py)
+   from an isolated object asset or independent measurements. Check fit,
+   pose uncertainty and tracking through occlusion. Record any excluded
+   annotation geometry. Use
+   `candidates_from_supports` with calibrated object-to-tool transforms
+   and native finger targets. Bind the source and candidates through
+   `observed_arm_factory`.
+4. Use production CHAT `scene_tasks`, `plan_pick_place` and
+   `execute_pick_place_plan`. Run the scripted routing first, then repeat with a
+   real model and a held-out fixture. Keep scores for sensing, admission,
+   pickup, carry, release and settled placement. Include the stale-frame
+   and evidence-loss controls, measured motion, timing and resource use.
+   The benchmark scorer owns simulator object and contact state. Keep
+   native reference replay, live preflight and observed transfer as
+   distinct assessment stages. Include the roster with
+   `summarize_harness_assessment.py --transfer-ports configs/eval/observed_transfer_ports.json`
+   to audit and export those assignments alongside the capability matrix.
+
+### PandaOmron sink bridge
+
+Launch the stopped-base RoboCasa365 profile with a compatible RoboCasa and
+RoboSuite installation.
+
+```sh
+emet serve robocasa --robot pandaomron --headless \
+  --robocasa-task PickPlaceCounterToSink --robocasa-layout 11 --robocasa-style 11
+```
+
+Connect through the shared robot client as `pandaomron`. Full observations carry
+front and wrist RGB-D with camera calibration, capture time and measured joint
+state. State packets include independent joint feedback and the gripper pose.
+Arm and torso targets use seven angles in radians followed by the torso height
+in meters. The bridge accepts binary and paired native finger targets and
+exposes joint limits in the session. A successful command receipt acknowledges a target.
+Use measured feedback to verify physical arrival.
+
+Run the bridge smoke on dedicated loopback ports.
+
+```sh
+PYTHONPATH=src python scripts/smoke_pandaomron_bridge.py --output /tmp/pandaomron-bridge
+```
+
+Use `--sim-pythonpath` to point the simulator subprocess at a separately
+pinned RoboCasa365 environment. The normal agent client can stay in the Emet
+environment. This profile supports stopped-base arm, torso and gripper control.
+
+To run production CHAT on the same archived counter-to-sink scene, pass the
+preflight fixture directory and a fresh output directory.
+
+```sh
+PYTHONPATH=src python scripts/eval_pandaomron_sink_agent.py \
+  "$archived_fixture" /tmp/pandaomron-sink-agent
+```
+
+The default scripted tool selection exercises the public photo, discovery and
+planning gates. Supply `--model-endpoint` and `--model` to test model behavior.
+Use `--scene-camera left` or `--scene-camera center` to compare RoboCasa's
+other native scene cameras with the default right view. Each run exports the
+scene camera and wrist RGB-D, calibration, and the encoder-derived robot-only
+configuration. Use `eval_pandaomron_sink_observation.py` with recorded pixel
+selections to compare measured support footprints and isolated IK.
+The robot process publishes sensor packets while the scorer alone reads contact
+and object state. A transfer pass requires the RoboCasa predicate, full basin
+footprint, a measured two-pad lift and settling. The native arm and the
+shared refiner are available. Supply `--observed-profile` to attach the live
+RGB-D provider to production CHAT. The profile declares visual labels and
+camera roles, isolated surface and payload geometry, grasp transforms,
+robot geometry calibration, and the observed workspace. Explicit pixel
+regions are recorded as diagnostic grounding. The runner exports measured
+support bounds, payload fit, and the first evidence failure in its report.
+
+The simulation-only contact fallback requires a matched `--probe-calibration`
+file and a guarded placement profile. The bridge checks the commanded descent
+and the virtual wrist wrench locally and holds on any terminal condition.
+Calibrate and score the loaded wrist separately from the empty-wrist stop
+smokes. The ordinary RGB-D placement path remains available without a probe
+profile.
+
+The native reference evaluator can replay sensor-derived shaker goals with
+simulator-state collision supervision. It accepts the diagnostic JSON via
+`--observed-shaker-goals`. Record the camera selection, approach variants,
+lift height, and torso planning flags with the report. Label that run as
+simulator-assisted and keep it outside the observed CHAT score.
+
 ## Discord in simulation
 
 Use a dedicated test bot installed only in the private test server. Set
@@ -242,3 +358,9 @@ poses and synchronized images, followed by a two-case recovery panel. Select
 the lowest-ID eligible successful recovery and retained failure in each
 frozen cohort. Keep the compact CSV, hashes, and figures under paper evidence
 with a link to the raw run directory.
+
+For observed native pick-and-place, the [agent-stack change map and arm transfer
+recipe](observed_manipulation_stack.md) identify the shared planning, sensing,
+contact, execution and CHAT changes, the Panda-specific calibration, and the
+explicit simulation assistance. Keep full-task success separate from the
+invalid-start recovery handoff regression.

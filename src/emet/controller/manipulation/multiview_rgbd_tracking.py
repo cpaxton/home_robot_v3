@@ -9,18 +9,19 @@ These remain diagnostic associations, not calibrated execution certificates.
 """
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.spatial import cKDTree
 
-from emet.controller.manipulation.geometry_models import PrimitiveModel
+from emet.controller.manipulation.geometry_models import AxialMeshSurface, PrimitiveModel
 from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_geometry
 from emet.controller.manipulation.moving_rgbd_tracking import MovingRgbdTracker, _arrays, _frozen
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
 from emet.controller.manipulation.rgbd_capture_geometry import RgbdCaptureGeometry
 from emet.controller.manipulation.robot_view_guard import RobotViewGuard
+from emet.controller.manipulation.shape_pose import shape_rotation_distance
 
 
 @dataclass(frozen=True)
@@ -31,11 +32,20 @@ class SynchronizedRgbdView:
     capture: CaptureInterval
     robot_guard: RobotViewGuard | None = None
     geometry: RgbdCaptureGeometry | None = None
+    foreground_mask: np.ndarray | None = None
 
     def __post_init__(self):
         arrays = _arrays(self.rgb, self.depth, self.world)
         for name, array in zip(("rgb", "depth", "world"), arrays, strict=True):
             object.__setattr__(self, name, _frozen(array))
+        if self.foreground_mask is not None:
+            mask = np.asarray(self.foreground_mask)
+            if (
+                mask.dtype != bool or mask.shape != self.depth.shape or mask.sum() < 25
+                or not np.isfinite(self.world[mask]).all() or np.any(self.depth[mask] <= 0)
+            ):
+                raise ValueError("invalid_moving_reference_mask")
+            object.__setattr__(self, "foreground_mask", _frozen(mask))
         if self.robot_guard is not None and not isinstance(self.robot_guard, RobotViewGuard):
             raise ValueError("invalid_robot_view_guard")
         if self.geometry is not None:
@@ -100,6 +110,8 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         scene_epoch,
         allow_clipped_views=False,
         component_policy="single_component",
+        single_view_fallback=False,
+        best_fit_hypothesis=False,
         **kwargs,
     ):
         if not isinstance(reference_view, str) or not reference_view:
@@ -107,10 +119,17 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         if type(allow_clipped_views) is not bool or (allow_clipped_views and not isinstance(model, PrimitiveModel)):
             raise ValueError("clipped_views_require_declared_primitive")
         if component_policy not in {"single_component", "complete_prior_union"} or (
-            component_policy == "complete_prior_union" and not isinstance(model, PrimitiveModel)
+            component_policy == "complete_prior_union" and not isinstance(model, (PrimitiveModel, AxialMeshSurface))
         ):
             raise ValueError("invalid_component_policy")
         capture = reference.capture
+        if type(single_view_fallback) is not bool:
+            raise ValueError("invalid_single_view_fallback")
+        if type(best_fit_hypothesis) is not bool:
+            raise ValueError("invalid_best_fit_hypothesis")
+        self.best_fit_hypothesis = best_fit_hypothesis
+        self.hypothesis_selections = 0
+        self.single_view_fallback = single_view_fallback
         self.allow_clipped_views = allow_clipped_views
         self.component_policy = component_policy
         self.last_view_rejections = ()
@@ -138,6 +157,9 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             **kwargs,
         )
         seed = self.latest
+        if self.best_fit_hypothesis and len(seed.fit.poses) > 1:
+            seed = replace(seed, fit=self._preferred_hypothesis(seed.fit))
+            self.hypothesis_selections += 1
         capture.require(now=self.clock())
         self.latest = MultiViewMaskFit(
             seed.fit,
@@ -149,6 +171,18 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             component_policy=self.component_policy,
             appearance_model=self.appearance_model,
         )
+
+    @staticmethod
+    def _preferred_hypothesis(fit):
+        index = int(np.argmin(fit.rms_m))
+        return replace(fit, poses=fit.poses[index:index+1], rms_m=fit.rms_m[index:index+1],
+                       nullspaces=(fit.nullspaces[index],))
+
+    def _require_fit(self, fit):
+        if self.best_fit_hypothesis and len(fit.poses) > 1:
+            self.last_candidate_fit = fit
+            fit = self._preferred_hypothesis(fit)
+        MovingRgbdTracker._require_fit(fit)
 
     def update(self, views, *, scene_epoch):
         previous, self.latest = self.latest, None
@@ -193,15 +227,17 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             if view.robot_guard is not None:
                 view.robot_guard.require(capture, depth, world, now=self.clock())
             try:
-                mask = self._candidate_mask(
-                    rgb,
-                    depth,
-                    world,
-                    centers=centers,
-                    displacement=displacement,
-                    allow_image_boundary=self.allow_clipped_views,
-                    merge_reachable=self.component_policy == "complete_prior_union",
-                )
+                if view.foreground_mask is not None:
+                    mask = view.foreground_mask
+                    radius = float(np.linalg.norm(self.model.half_extents))
+                    if np.any(cKDTree(centers).query(world[mask])[0] > radius + displacement):
+                        raise ObservationUnavailable("moving_mask_motion_bound_exceeded")
+                else:
+                    mask = self._candidate_mask(
+                        rgb, depth, world, centers=centers, displacement=displacement,
+                        allow_image_boundary=self.allow_clipped_views,
+                        merge_reachable=self.component_policy == "complete_prior_union",
+                    )
                 if view.robot_guard is not None:
                     view.robot_guard.require_no_interference(mask)
             except ObservationUnavailable as error:
@@ -214,16 +250,51 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         self.last_view_rejections = tuple(rejected)
         if not masks:
             raise ObservationUnavailable("moving_multiview_association_unknown")
-        fit = fit_geometry(
-            np.concatenate(points),
-            self.model,
-            object_ref=self.object_ref,
-            observation_ids=(capture.observation_id,),
-            received_monotonic=capture.received_monotonic,
-            initial_poses=previous.fit.poses[:12],
-            max_evaluations=self.max_evaluations,
-        )
-        self._require_fit(fit)
+        def fit_points(selected):
+            candidate = fit_geometry(
+                selected, self.model, object_ref=self.object_ref,
+                observation_ids=(capture.observation_id,), received_monotonic=capture.received_monotonic,
+                initial_poses=previous.fit.poses[:12], max_evaluations=self.max_evaluations,
+                max_starts=self.max_starts, max_points=self.max_fit_points)
+            self.last_candidate_fit = candidate
+            if self.best_fit_hypothesis and len(candidate.poses) > 1:
+                candidate = self._preferred_hypothesis(candidate)
+                self.hypothesis_selections += 1
+            self._require_fit(candidate)
+            return candidate
+
+        try:
+            fit = fit_points(np.concatenate(points))
+        except ObservationUnavailable as error:
+            if not self.single_view_fallback or len(points) < 2 or str(error) not in {
+                'geometry_tracking_no_match', 'geometry_tracking_unobservable',
+                'geometry_tracking_budget_exhausted', 'moving_geometry_ambiguous',
+            }:
+                raise
+            qualified = []
+            for (name, mask), selected in zip(masks, points, strict=True):
+                try:
+                    candidate = fit_points(selected)
+                    qualified.append((name, mask, candidate))
+                except ObservationUnavailable as rejected_fit:
+                    rejected.append((name, str(rejected_fit)))
+            if not qualified:
+                raise error
+            pose_centers = np.concatenate([entry[2].poses[:, :3, 3] for entry in qualified])
+            if np.linalg.norm(np.ptp(pose_centers, axis=0)) > .005:
+                raise ObservationUnavailable('moving_geometry_ambiguous') from error
+            best = min(qualified, key=lambda entry: float(np.min(entry[2].rms_m)))
+            representative = best[2].poses[0, :3, :3]
+            if any(shape_rotation_distance(self.model, representative, pose[:3, :3]) > .03
+                   for _, _, candidate in qualified for pose in candidate.poses):
+                raise ObservationUnavailable('moving_geometry_ambiguous') from error
+            name, mask, fit = best
+            rejected.extend((other, 'fusion_rejected_single_view_fallback')
+                            for other, _ in masks if other != name and other not in {row[0] for row in rejected})
+            masks = [(name, mask)]
+            clipped = [camera for camera in clipped if camera == name]
+            self.last_candidate_fit = fit
+            self.last_view_rejections = tuple(rejected)
         if np.any(cKDTree(centers).query(fit.poses[:, :3, 3])[0] > displacement):
             raise ObservationUnavailable("moving_mask_motion_bound_exceeded")
         capture.require(now=self.clock())

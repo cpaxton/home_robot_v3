@@ -1,0 +1,96 @@
+{
+  "robocasa365": {
+    "robot": "pandaomron",
+    "task": "PickPlaceCounterToSink",
+    "runner": "scripts/eval_pandaomron_sink_agent.py",
+    "development": {
+      "case": "development-tongs",
+      "layout": 11,
+      "style": 11,
+      "seed": 0,
+      "target_asset": "lightwheel/tongs/Tongs010",
+      "object_name": "tongs"
+    },
+    "held_out": {
+      "case": "held-out-shaker",
+      "layout": 1,
+      "style": 1,
+      "seed": 1,
+      "target_asset": "lightwheel/salt_and_pepper_shaker/SaltShaker012",
+      "object_name": "salt shaker",
+      "evaluation_split": "development",
+      "split_note": "This named snapshot has been used for iterative development; it is not an untouched held-out evaluation."
+    },
+    "budget_s": 360,
+    "assessments": [
+      {
+        "split": "development",
+        "stage": "transfer-native-reference",
+        "tier": "simulator-state-assisted native reference"
+      },
+      {
+        "split": "development",
+        "stage": "transfer-scripted",
+        "tier": "observed simulation, scripted CHAT"
+      },
+      {
+        "split": "held_out",
+        "stage": "transfer-scripted",
+        "tier": "observed simulation, scripted CHAT"
+      },
+      {
+        "split": "development",
+        "stage": "transfer-model",
+        "tier": "observed simulation, model CHAT"
+      },
+      {
+        "split": "held_out",
+        "stage": "transfer-model",
+        "tier": "observed simulation, model CHAT"
+      }
+    ]
+  },
+  "emet_tabletop": {
+    "robot": "stretch",
+    "task": "cylinder-to-green-region",
+    "runner": "scripts/eval_stretch_navigation_chat.py",
+    "development": {
+      "case": "model-table-transfer",
+      "target": "red cylinder",
+      "protected": "blue cube"
+    },
+    "assessments": [
+      {
+        "split": "development",
+        "stage": "transfer-preflight",
+        "tier": "observed simulation, sensing preflight"
+      },
+      {
+        "split": "development",
+        "stage": "transfer-scripted",
+        "tier": "observed simulation, scripted CHAT"
+      }
+    ]
+  },
+  "molmospaces": {
+    "robot": "rby1",
+    "task": "bowl-pick-place",
+    "development": {
+      "case": "molmo_ithor_rby1_s2_bowl_pp",
+      "fixture_manifest": "configs/ovmm/full_episodes.yaml",
+      "target": "bowl"
+    },
+    "assessments": [
+      {
+        "split": "development",
+        "stage": "transfer-preflight",
+        "tier": "observed simulation, sensing preflight"
+      },
+      {
+        "split": "development",
+        "stage": "transfer-scripted",
+        "tier": "observed simulation, scripted CHAT"
+      }
+    ]
+  }
+}

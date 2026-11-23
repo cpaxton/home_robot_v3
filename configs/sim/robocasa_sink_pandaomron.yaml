@@ -1,0 +1,7 @@
+kind: robocasa
+robot: pandaomron
+robocasa_task: PickPlaceCounterToSink
+robocasa_style: 11
+robocasa_layout: 11
+headless: true
+seed: 0

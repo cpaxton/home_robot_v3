@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
+from emet.motion.guarded_placement_probe import MAX_TRAVEL_M
 from emet.motion.observed_support import ObservedSupportPatch
-from emet.motion.placement_geometry import box_corners
+from emet.motion.placement_geometry import bounds_array, box_corners
 
 if TYPE_CHECKING:
     from emet.controller.manipulation.observed_effects import CaptureInterval
@@ -97,6 +100,21 @@ class ObservedSupportContact:
         digest.update(self.patch.bounds.tobytes() + self.patch.plane.tobytes())
         object.__setattr__(self, "_digest", digest.hexdigest())
 
+    @cached_property
+    def _measured_surface_tree(self):
+        y, x = np.nonzero(self.support_mask)
+        rays = np.column_stack((x, y, np.ones(len(x)))) @ np.linalg.inv(self.intrinsic).T
+        points = (rays*self.depth[y, x, None]) @ self.world_from_camera[:3, :3].T + self.world_from_camera[:3, 3]
+        return cKDTree(points)
+
+    def measured_surface_distance(self, point):
+        """Distance to original selected depth, without claiming free space.
+
+        Consumers must separately check the plane, footprint and permitted
+        contact depth. This supports bounded association across camera views.
+        """
+        return float(self._measured_surface_tree.query(np.asarray(point, float))[0])
+
     @property
     def unit_plane(self):
         a, b, c = self.patch.plane
@@ -145,6 +163,39 @@ class ObservedSupportContact:
         """Worst-case signed distance, retaining the payload and plane errors."""
         normal, offset = self.unit_plane
         return float(np.min(box_corners(physical.bounds) @ normal - offset) - self.patch.measurement_margin_m)
+
+    def pickup_observation_bounds(self, footprint):
+        """Bracket an occluded footprint for a visual resting-height check.
+
+        The selected plane must have nearby measured support outside all four
+        footprint corners. The returned region is only a pickup hypothesis.
+        Contact admission still uses the original patch and depth rays.
+        """
+        footprint = bounds_array(footprint)
+        margin = self.patch.measurement_margin_m
+        xy = footprint[:, :2]
+        if np.all(xy[0] >= self.patch.bounds[0, :2]) and np.all(xy[1] <= self.patch.bounds[1, :2]):
+            return self.patch.bounds
+
+        y, x = np.nonzero(self.support_mask)
+        z = self.depth[y, x]
+        k, pose = self.intrinsic, self.world_from_camera
+        rays = np.column_stack(((x - k[0, 2]) / k[0, 0], (y - k[1, 2]) / k[1, 1], np.ones(len(x))))
+        world = (rays * z[:, None]) @ pose[:3, :3].T + pose[:3, 3]
+        nearby_m = .035
+        for i, j in np.ndindex(2, 2):
+            corner = np.array([xy[i, 0], xy[j, 1]])
+            outward = (world[:, :2] - corner) * [2 * i - 1, 2 * j - 1]
+            bracket = np.all((outward >= margin) & (outward <= nearby_m), axis=1)
+            if np.count_nonzero(bracket) < 4:
+                return None
+
+        # Give the settling check a local allowance for tracking differences.
+        # This volume never becomes a free-space or material witness.
+        low, high = xy + np.array([[-.005], [.005]])
+        corners = np.array([[low[0], low[1]], [low[0], high[1]], [high[0], low[1]], [high[0], high[1]]])
+        height = corners @ self.patch.plane[:2] + self.patch.plane[2]
+        return np.array([[*low, height.min() - margin], [*high, height.max() + margin]])
 
     def eligible(self, physical, *, object_ref, phase, departure_clearance_m=None):
         if object_ref != self.object_ref or phase not in ("lift", "place", "release"):
@@ -196,3 +247,26 @@ class ObservedSupportContact:
             return False
         normal, offset = self.unit_plane
         return bool(np.min(corners @ normal - offset) >= margin - self.backing_depth_m)
+
+
+@dataclass(frozen=True)
+class ObservedProbeBand:
+    """A local exception for the underside of the held payload during a probe."""
+
+    support: ObservedSupportContact
+    half_height_m: float
+
+    def __post_init__(self):
+        if not isinstance(self.support, ObservedSupportContact) or not 0 < self.half_height_m <= MAX_TRAVEL_M / 2:
+            raise ValueError("invalid_probe_contact_band")
+
+    def covers_box(self, bounds):
+        patch = self.support.patch
+        if (
+            np.any(bounds[0, :2] < patch.bounds[0, :2] + patch.measurement_margin_m)
+            or np.any(bounds[1, :2] > patch.bounds[1, :2] - patch.measurement_margin_m)
+        ):
+            return False
+        normal, offset = self.support.unit_plane
+        heights = box_corners(bounds) @ normal - offset
+        return bool(heights.min() >= -self.half_height_m and heights.max() <= self.half_height_m)

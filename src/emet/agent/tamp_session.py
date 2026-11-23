@@ -18,11 +18,10 @@ def serial_tamp_calls(tool_calls: list[dict]) -> tuple[list[dict], list[dict]]:
     return tool_calls, []
 
 
-def tamp_followup(user_goal: str, results: list[ToolOutcome] | list[str]) -> str | None:
-    """Continue only a wholly successful TAMP batch; otherwise keep summarize-only.
+def tamp_followup(user_goal: str, results: list[ToolOutcome] | list[str], *, recovery_attempts: int = 0) -> str | None:
+    """Continue success or bounded, explicitly unstarted planning recovery.
 
-    Failures return to the user for inspection or an explicit recovery turn. In
-    particular, a partial/unknown execution must never gain autonomous retries.
+    Partial or unknown execution never gains autonomous retries.
     """
     if not results:
         return None
@@ -31,7 +30,36 @@ def tamp_followup(user_goal: str, results: list[ToolOutcome] | list[str]) -> str
         if outcome.tool not in TAMP_TOOLS:
             return None
         if not outcome.ok:
-            return None
+            data = outcome.payload.get("data", {})
+            recoverable = {
+                "geometry_tracking_no_match", "geometry_tracking_budget_exhausted",
+                "moving_tracking_time_budget_exhausted", "moving_tracking_lost_reinitialize",
+                "moving_multiview_association_unknown", "moving_geometry_ambiguous",
+                "object_pose_ambiguous", "support_geometry_unknown",
+                "background_scene_changed", "scene_changed_replan", "planning_failed", "ik_failed",
+                "no_plan_within_budget", "no_reachable_grasp",
+            }
+            if (
+                len(outcomes) != 1 or recovery_attempts >= 2
+                or outcome.tool not in {"plan_pick_place", "plan_task"}
+                or outcome.payload.get("status") != "error"
+                or outcome.payload.get("code") not in recoverable
+                or data.get("execution_started") is not False
+                or data.get("completed_ops") or data.get("completed_steps")
+            ):
+                return None
+            return (
+                f"Original user request:\n{user_goal}\n\n{outcome.render()}\n\n"
+                "Planning failed before any execution. Within the original authorized task, "
+                "inspect a fresh camera view or query the VLM to clarify object, support, and "
+                "approach geometry; then request a fresh plan. Use at most one tool per round. "
+                "Change the view or approach rather than repeating the same failed request. "
+                "A language or visual judgment is a hypothesis, not measured clearance. "
+                "Use only explicit, recorded runtime overrides; never invent an override or "
+                "claim a failed check passed. Joint bounds, fresh feedback, and stop control "
+                "remain required. Do not replay consumed handles. If evidence stays ambiguous, "
+                "report the blocker. This turn permits at most two planning recovery attempts."
+            )
         if outcome.payload.get("data", {}).get("discovery_only") is True:
             # A proposal provider cannot authorize a motion-capable next step.
             return None

@@ -273,6 +273,10 @@ class SceneGraphProcessor:
 
         return node_ids
 
+    def segment_current_view(self, rgb, depth, vocabulary):
+        """Expose the existing segmenter for frame-bound manipulation grounding."""
+        return self._run_segmentation(rgb, depth, list(vocabulary))
+
     def _run_segmentation(self, rgb: np.ndarray, depth: np.ndarray, vocabulary: list[str]) -> list[dict]:
         """Run the segmenter and return a list of detection dicts."""
         seg = self.segmenter

@@ -19,7 +19,6 @@ from scipy.spatial.transform import Rotation
 
 from emet.motion.base import IKSolverBase
 from emet.motion.constants import MANIP_STRETCH_URDF, STRETCH_GRASP_FRAME, STRETCH_HOME_Q
-from emet.motion.pinocchio_ik_solver import PinocchioIKSolver, PositionIKOptimizer
 from emet.motion.robot import Footprint
 
 
@@ -147,6 +146,8 @@ class HelloStretchKinematics:
         # return Footprint(width=0.2, length=0.2, width_offset=0.0, length_offset=0.1)
 
     def _create_ik_solvers(self, ik_type: str = "pinocchio", visualize: bool = False):
+        from emet.motion.pinocchio_ik_solver import PinocchioIKSolver, PositionIKOptimizer
+
         """Create ik solvers using physics backends such as pinocchio."""
         # You can set one of the visualize flags to true to debug IK issues
         # This is not exposed manually - only one though or it will fail

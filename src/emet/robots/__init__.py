@@ -26,6 +26,8 @@ ROBOT_REGISTRY = {
     "franka_fr3": "emet.robots.franka_fr3",
     "franka": "emet.robots.franka_fr3",
     "sourccey": "emet.robots.sourccey",
+    "pandaomron": "emet.robots.pandaomron",
+    "panda_omron": "emet.robots.pandaomron",
     "yor": "emet.robots.yor",
     "nori": "emet.robots.nori",  # Nori A3 bimanual mobile manipulator
     "nori_a3": "emet.robots.nori",

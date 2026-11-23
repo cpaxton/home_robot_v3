@@ -8,7 +8,12 @@ from scipy.spatial.transform import Rotation
 
 from emet.controller.manipulation.geometry_models import MeasuredSurfaceModel, PrimitiveModel, rotations_equivalent
 from emet.controller.manipulation.geometry_motion import check_geometry_comotion
-from emet.controller.manipulation.geometry_tracking import GeometryTracker, fit_geometry, fit_geometry_views
+from emet.controller.manipulation.geometry_tracking import (
+    GeometryFit,
+    GeometryTracker,
+    fit_geometry,
+    fit_geometry_views,
+)
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.motion.observed_object_bound import ObservedObjectBound, enclose_observed_object
 from emet.motion.observed_workspace import ObservedWorkspace
@@ -70,6 +75,22 @@ def test_partial_side_patch_does_not_invent_axial_translation_observability():
     with pytest.raises(ObservationUnavailable, match='ambiguous'):
         result.require_shape(now=10.1, calibration_id='synthetic-test-only',
             position_error_m=.002, rotation_error_rad=.02)
+
+
+def test_axial_outer_bound_accepts_heading_uncertainty_but_rejects_axis_uncertainty():
+    poses = np.repeat(np.eye(4)[None], 2, axis=0)
+    poses[1, :3, :3] = Rotation.from_euler("z", 1.6).as_matrix()
+    candidate = GeometryFit(PrimitiveModel("box", (.01, .01, .04)), "object", poses,
+                            np.array([.001, .001]), (np.empty((0, 6)),) * 2, ("camera",), 10.0, 2, False)
+    profile = {"calibration_id": "asset", "position_error_m": .002, "rotation_error_rad": .02, "now": 10.1}
+    enclosure = PrimitiveModel("cylinder", (.015, .04))
+    assert candidate.require_axial_enclosure(enclosure, **profile).model == enclosure
+    with pytest.raises(ObservationUnavailable, match="payload_geometry_unknown"):
+        candidate.require_axial_enclosure(PrimitiveModel("cylinder", (.012, .04)), **profile)
+    tilt = poses.copy()
+    tilt[1, :3, :3] = Rotation.from_euler("x", .2).as_matrix()
+    with pytest.raises(ObservationUnavailable, match="object_pose_ambiguous"):
+        replace(candidate, poses=tilt).require_axial_enclosure(enclosure, **profile)
 
 
 def test_bad_surface_and_work_budget_fail_without_fabricated_pose():

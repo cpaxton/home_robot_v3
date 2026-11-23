@@ -9,6 +9,7 @@ through the same ``execute_task_plan`` seam as symbolic and latch controls.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -16,12 +17,32 @@ from dataclasses import dataclass, replace
 
 import mujoco
 import numpy as np
+from scipy.spatial.transform import Rotation, Slerp
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable, read_object_pose
 from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker
 from emet.core.zmq_protocol import motion_wait_timeout_scale, read_sim_to_real_ratio
-from emet.motion.arm_rrt import plan_arm_joint_path
+from emet.motion.arm_rrt import ContactClearancePath, DeparturePath, joint_limits_from_model, plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
+
+logger = logging.getLogger(__name__)
+
+
+def coalesce_collinear_waypoints(path, maximum_step):
+    """Remove only redundant points on the same bounded joint-space segment."""
+    if len(path) < 3:
+        return path
+    result = [path[0]]
+    for index in range(1, len(path)-1):
+        start, middle, end = map(np.asarray, (result[-1], path[index], path[index+1]))
+        delta = end-start
+        norm = float(delta @ delta)
+        fraction = float((middle-start) @ delta)/norm if norm else 0.
+        redundant = 0. <= fraction <= 1. and np.max(np.abs(middle-start-fraction*delta)) <= 1e-10
+        if not redundant or np.any(np.abs(delta) > maximum_step):
+            result.append(path[index])
+    result.append(path[-1])
+    return result
 
 
 @dataclass
@@ -58,6 +79,7 @@ class PhysicalPickPlaceExecutor:
         coupled_groups=(),
         event: Callable = lambda **kwargs: None,
         joint_tolerance: float = 0.03,
+        linear_joint_tolerance_m: float | None = None,
         joint_settle_timeout_s: float = 5.0,
         endpoint_settle_s: float = 0.0,
         use_sim_time: bool = False,
@@ -73,6 +95,15 @@ class PhysicalPickPlaceExecutor:
         input_mode: str = "observed",
         object_pose_provider=None,
         visual_verifier=None,
+        ik_seed_configurations=(),
+        approach_joint_routes=(),
+        joint_planning_timeout_s=10.0,
+        ik_random_starts=0,
+        preplace_staging_offsets_m=(),
+        pregrasp_staging_offsets_m=(),
+        cartesian_transport=False,
+        coalesce_execution_waypoints=False,
+        reuse_validated_grasp_paths=False,
     ):
         if input_mode not in {"observed", "privileged"}:
             raise ValueError("invalid_tamp_inputs")
@@ -93,6 +124,13 @@ class PhysicalPickPlaceExecutor:
         self.synchronize, self.command_joints = synchronize, command_joints
         self.coupled_groups, self.event = coupled_groups, event
         self.joint_tolerance = joint_tolerance
+        if linear_joint_tolerance_m is not None and (
+            not np.isfinite(linear_joint_tolerance_m) or linear_joint_tolerance_m <= 0
+        ):
+            raise ValueError("invalid_linear_joint_tolerance")
+        self.reuse_validated_grasp_paths = bool(reuse_validated_grasp_paths)
+        self.coalesce_execution_waypoints = bool(coalesce_execution_waypoints)
+        self.linear_joint_tolerance_m = linear_joint_tolerance_m
         if not np.isfinite(joint_settle_timeout_s) or joint_settle_timeout_s <= 0:
             raise ValueError("Positive finite joint settling timeout required")
         self.joint_settle_timeout_s = float(joint_settle_timeout_s)
@@ -105,17 +143,53 @@ class PhysicalPickPlaceExecutor:
         self.settling_wall_timeout_s = float(settling_wall_timeout_s)
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
+        self.ik_seed_configurations = tuple(np.asarray(seed, float) for seed in ik_seed_configurations)
+        if not np.isfinite(joint_planning_timeout_s) or not 0 < joint_planning_timeout_s <= 120:
+            raise ValueError("invalid_joint_planning_timeout")
+        self.joint_planning_timeout_s = float(joint_planning_timeout_s)
+        self.approach_joint_routes = tuple(np.asarray(route, float) for route in approach_joint_routes)
+        if len(self.approach_joint_routes) > 4 or any(
+            route.ndim != 2 or route.shape[1] != len(self.joint_names)
+            or not 1 <= len(route) <= 32 or not np.isfinite(route).all()
+            for route in self.approach_joint_routes
+        ):
+            raise ValueError("invalid_approach_joint_route")
+        if type(ik_random_starts) is not int or not 0 <= ik_random_starts <= 32 or (ik_random_starts and coupled_groups):
+            raise ValueError("invalid_ik_random_starts")
+        self.ik_random_starts = ik_random_starts
+        self.preplace_staging_offsets_m = tuple(np.asarray(offset, float) for offset in preplace_staging_offsets_m)
+        if len(self.preplace_staging_offsets_m) > 4 or any(
+            offset.shape != (3,) or not np.isfinite(offset).all() or np.linalg.norm(offset) > .5
+            for offset in self.preplace_staging_offsets_m
+        ):
+            raise ValueError('invalid_preplace_staging_offsets')
+        self.pregrasp_staging_offsets_m = tuple(np.asarray(offset, float) for offset in pregrasp_staging_offsets_m)
+        if len(self.pregrasp_staging_offsets_m) > 4 or any(
+            offset.shape != (3,) or not np.isfinite(offset).all() or np.linalg.norm(offset) > .5
+            for offset in self.pregrasp_staging_offsets_m
+        ):
+            raise ValueError('invalid_pregrasp_staging_offsets')
+        self.ik_solver_calls = 0
+        self.ik_call_budget = None
+        if any(seed.shape != (len(self.joint_names),) or not np.isfinite(seed).all()
+               for seed in self.ik_seed_configurations):
+            raise ValueError("invalid_native_ik_seed")
         self.base_body = base_body
         self.joint_limit_margins = dict(joint_limit_margins or {})
         self.gripper_open_configuration = dict(gripper_open_configuration)
         self.gripper_close_configuration = dict(gripper_close_configuration)
         self.command_gripper_joints = command_gripper_joints
         self.gripper_close_command = gripper_close_command
+        if type(cartesian_transport) is not bool:
+            raise ValueError("invalid_cartesian_transport")
+        self.cartesian_transport = cartesian_transport
+        self._contact_clearance_scope = None
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
         self.grasp_target_options: list = []
         self.place_targets: list = []
+        self.transfer_candidates = ()
         self.transport: Callable | None = None
         self.payload_body: str | None = None
 
@@ -145,31 +219,192 @@ class PhysicalPickPlaceExecutor:
         return active
 
     def plan_pose(self, position, rotation, *, ordered_groups=False):
+        previous = getattr(self, '_pose_planning_deadline', None)
+        self._pose_planning_deadline = time.monotonic()+self.joint_planning_timeout_s
+        try:
+            return self._plan_pose(position, rotation, ordered_groups=ordered_groups)
+        finally:
+            self._pose_planning_deadline = previous
+
+    def _plan_pose(self, position, rotation, *, ordered_groups=False):
         """Plan from the offline current state; caller preserves candidate state."""
         start = self.data.qpos.copy()
-        result = solve_pose_ik(
-            self.model,
-            self.data,
-            ee_body=self.ee_body,
-            joint_names=self.joint_names,
-            target_pos=position,
-            target_rotation=rotation,
-            coupled_groups=self.coupled_groups,
-            joint_limit_margins=self.joint_limit_margins,
-            tol_m=self.position_tolerance_m,
-            tol_rad=self.orientation_tolerance_rad,
-        )
-        if not result.success:
+        error = 'pose_ik_failed'
+        phase = getattr(self.collision, 'phase', None)
+        if self.cartesian_transport and phase in {'pregrasp', 'grasp', 'lift', 'preplace', 'place', 'retreat'}:
+            offsets = self.preplace_staging_offsets_m if phase == 'preplace' else ()
+            routes = [((np.asarray(position)+offset), np.asarray(position)) for offset in offsets]
+            routes.append((np.asarray(position),))
+            for route in routes:
+                if time.monotonic() >= self._pose_planning_deadline:
+                    return None, "no_plan_within_budget"
+                path, error = self._plan_cartesian_route(route, rotation)
+                logger.info("Cartesian %s proposal: %s (%s waypoints; collision=%s geom=%s admission=%s)",
+                            phase, error or "ok", len(path) if path is not None else 0,
+                            self.collision.last_reason, getattr(self.collision, 'last_blocked_geom', None),
+                            getattr(getattr(self.collision, 'last_admission', None), 'reason', None))
+                if path is not None:
+                    return path, None
+                self.data.qpos[:] = start
+                mujoco.mj_kinematics(self.model, self.data)
+        route_seeds = tuple(route[-1] for route in self.approach_joint_routes) if (
+            getattr(self.collision, 'phase', None) == 'pregrasp'
+        ) else ()
+        seeds = [*route_seeds, None, *self.ik_seed_configurations]
+        if self.ik_random_starts:
+            low, high = joint_limits_from_model(self.model, self.joint_names)
+            rng = np.random.default_rng(0)
+            # Redundant arms need distinct elbow/torso solutions for one tool
+            # pose. These are proposals only: IK, joint bounds, goal collision
+            # and the complete swept path still have to pass for every seed.
+            for index in range(self.ik_random_starts):
+                anchor = start[self.qadr] if index % 2 == 0 else (low+high)/2
+                seeds.append(np.clip(anchor+rng.normal(size=len(low))*(high-low)*.25, low, high))
+        staged = []
+        phase = getattr(self.collision, 'phase', None)
+        offsets = self.pregrasp_staging_offsets_m if phase == 'pregrasp' else self.preplace_staging_offsets_m if phase == 'preplace' else ()
+        if offsets:
+            for offset in offsets:
+                if self.ik_call_budget is not None and self.ik_solver_calls >= self.ik_call_budget:
+                    break
+                self.data.qpos[:] = start
+                self.ik_solver_calls += 1
+                via = solve_pose_ik(self.model, self.data, ee_body=self.ee_body,
+                    joint_names=self.joint_names, target_pos=np.asarray(position)+offset,
+                    target_rotation=rotation, coupled_groups=self.coupled_groups,
+                    joint_limit_margins=self.joint_limit_margins, tol_m=self.position_tolerance_m,
+                    tol_rad=self.orientation_tolerance_rad)
+                if via.success:
+                    staged.append(self.data.qpos[self.qadr].copy())
+        proposals = [(seed, (seed,)) for seed in staged]+[(seed, ()) for seed in seeds]
+        for seed_index, (seed, via) in enumerate(proposals):
+            if time.monotonic() >= self._pose_planning_deadline:
+                self.data.qpos[:] = start
+                mujoco.mj_kinematics(self.model, self.data)
+                return None, "no_plan_within_budget"
+            if self.ik_call_budget is not None and self.ik_solver_calls >= self.ik_call_budget:
+                error = 'no_plan_within_budget'
+                break
+            self.ik_solver_calls += 1
             self.data.qpos[:] = start
-            return None, f"pose_ik_failed:position={result.pos_error_m:.4f},rotation={result.orientation_error_rad:.4f}"
-        goal = self.data.qpos[self.qadr].copy()
+            if seed is not None:
+                self.data.qpos[self.qadr] = seed
+            result = solve_pose_ik(
+                self.model,
+                self.data,
+                ee_body=self.ee_body,
+                joint_names=self.joint_names,
+                target_pos=position,
+                target_rotation=rotation,
+                coupled_groups=self.coupled_groups,
+                joint_limit_margins=self.joint_limit_margins,
+                tol_m=self.position_tolerance_m,
+                tol_rad=self.orientation_tolerance_rad,
+            )
+            if not result.success:
+                error = f"pose_ik_failed:position={result.pos_error_m:.4f},rotation={result.orientation_error_rad:.4f}"
+                continue
+            goal = self.data.qpos[self.qadr].copy()
+            self.data.qpos[:] = start
+            mujoco.mj_kinematics(self.model, self.data)
+            path, error = self.plan_joint_target(goal, ordered_groups=ordered_groups, via_configurations=via)
+            if path is not None:
+                return path, None
+            logger.warning(
+                'Native pose seed %s failed path certification: %s (geometry=%s, admission=%s, contacts=%s, surface=%s, reason=%s, departure=%s)',
+                seed_index, error, getattr(self.collision, 'last_blocked_geom', None),
+                getattr(getattr(self.collision, 'last_admission', None), 'reason', None),
+                getattr(self.collision, 'last_contacts', ()),
+                getattr(getattr(self.collision, 'local_scene', None), 'last_collision', None),
+                getattr(self.collision, 'last_reason', None),
+                getattr(self.collision, 'last_departure_diagnostics', None),
+            )
         self.data.qpos[:] = start
-        return self.plan_joint_target(goal, ordered_groups=ordered_groups)
+        mujoco.mj_kinematics(self.model, self.data)
+        return None, error
 
-    def plan_joint_target(self, goal, *, ordered_groups=False):
+    def _plan_cartesian_route(self, positions, rotation):
+        """Continue native IK through a proposed tool route; check every joint edge."""
+        start = self.data.qpos.copy()
+        path = [start[self.qadr].copy()]
+        complete = False
+        low, high = joint_limits_from_model(self.model, self.joint_names)
+        resolution = np.array([.002 if self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE
+                               else .025 for name in self.joint_names])
+        scope = self._contact_clearance_scope or nullcontext
+        try:
+            with scope():
+                for destination in positions:
+                    ee = self.data.body(self.ee_body)
+                    origin, initial_rotation = ee.xpos.copy(), ee.xmat.reshape(3, 3).copy()
+                    rotations = Rotation.from_matrix([initial_rotation, rotation])
+                    sweep = Slerp([0., 1.], rotations)
+                    angle = (rotations[0].inv()*rotations[1]).magnitude()
+                    count = max(1, int(np.ceil(np.linalg.norm(destination-origin)/.02)), int(np.ceil(angle/.1)))
+                    for fraction in np.linspace(0., 1., count+1)[1:]:
+                        if self.ik_call_budget is not None and self.ik_solver_calls >= self.ik_call_budget:
+                            return None, 'no_plan_within_budget'
+                        before = self.data.qpos.copy()
+                        self.ik_solver_calls += 1
+                        pose = solve_pose_ik(self.model, self.data, ee_body=self.ee_body,
+                            joint_names=self.joint_names, target_pos=origin+(destination-origin)*fraction,
+                            target_rotation=sweep(fraction).as_matrix(), coupled_groups=self.coupled_groups,
+                            joint_limit_margins=self.joint_limit_margins, tol_m=self.position_tolerance_m,
+                            tol_rad=self.orientation_tolerance_rad)
+                        if not pose.success:
+                            return None, 'cartesian_ik_failed'
+                        goal = self.data.qpos[self.qadr].copy()
+                        if np.any(goal < low) or np.any(goal > high):
+                            return None, 'cartesian_joint_bounds'
+                        self.data.qpos[:] = before
+                        mujoco.mj_kinematics(self.model, self.data)
+                        samples = max(2, int(np.ceil(np.max(np.abs(goal-before[self.qadr])/resolution)))+1)
+                        segment = plan_arm_joint_path(self.model, self.data, joint_names=self.joint_names,
+                            q_start=before[self.qadr], q_goal=goal, collision=self.collision, planner='linear',
+                            linear_steps=samples, goal_tolerance=0., departure=False, shortcut=False,
+                            max_time_s=min(self.joint_planning_timeout_s, 10.))
+                        if not segment.success:
+                            return None, 'cartesian_path_failed:'+str(segment.reason)
+                        path.extend(segment.waypoints[1:])
+                        self.data.qpos[self.qadr] = goal
+                        mujoco.mj_kinematics(self.model, self.data)
+            complete = True
+            return (ContactClearancePath(path, self._contact_clearance_scope)
+                    if self._contact_clearance_scope else path), None
+        finally:
+            # Preserve the endpoint only on a complete route; failed proposals
+            # cannot seed the next attempt from an unexecuted intermediate pose.
+            if not complete:
+                self.data.qpos[:] = start
+                mujoco.mj_kinematics(self.model, self.data)
+
+    def plan_joint_target(self, goal, *, ordered_groups=False, via_configurations=()):
+        """Keep original contact clearance across this transfer's phase plans."""
+        previous = self._contact_clearance_scope
+        if (previous is None and isinstance(self.collision, ObservedNativeCollisionChecker)
+                and self.collision.allow_contact_departure and self.collision.local_scene is not None):
+            with self.collision.motion_scope(self.model, self.data, self.joint_names, self.data.qpos[self.qadr]):
+                policy = self.collision.make_departure(self.model, self.data, self.joint_names,
+                                                      self.data.qpos[self.qadr], clearance_only=True)
+                if policy is not None:
+                    with policy.clearance_scope():
+                        if not self.collision.configuration_collides(self.model, self.data):
+                            self._contact_clearance_scope = policy.clearance_scope
+        scope = self._contact_clearance_scope or nullcontext
+        with scope():
+            result = self._plan_joint_target(goal, ordered_groups=ordered_groups, via_configurations=via_configurations)
+        if result[0] is None:
+            self._contact_clearance_scope = previous
+        return result
+
+    def _plan_joint_target(self, goal, *, ordered_groups=False, via_configurations=()):
         """Certify a profile posture transition using the same arm collision path."""
         start = self.data.qpos.copy()
         q0 = start[self.qadr].copy()
+        deadline = getattr(self, '_pose_planning_deadline', None)
+        timeout = min(self.joint_planning_timeout_s, 30.)
+        if deadline is not None:
+            timeout = max(.001, min(timeout, deadline-time.monotonic()))
         path = plan_arm_joint_path(
             self.model,
             self.data,
@@ -177,12 +412,16 @@ class PhysicalPickPlaceExecutor:
             q_start=q0,
             q_goal=goal,
             collision=self.collision,
+            via_configurations=(*via_configurations, *((*self.approach_joint_routes, *self.ik_seed_configurations) if getattr(self.collision, 'phase', None) == 'pregrasp'
+                                and getattr(self.collision, 'payload', None) is None else ())),
             step_size=0.025,
             goal_tolerance=0.01,
             max_iter=400,
             shortcut=False,
             linear_fallback=True,
             planner="linear" if self.coupled_groups else "rrt_connect",
+            max_time_s=timeout if getattr(self.collision, 'local_scene', None) is not None else None,
+            rng=np.random.default_rng(0) if getattr(self.collision, 'local_scene', None) is not None else None,
         )
         # Coupled actuators cannot use independent-joint RRT samples. When a
         # simultaneous move cuts through furniture, try two bounded group orders
@@ -236,7 +475,13 @@ class PhysicalPickPlaceExecutor:
             mujoco.mj_kinematics(self.model, self.data)
             if self.collision.payload_body is not None and self.collision.configuration_collides(self.model, self.data):
                 return None, "arm_goal_revalidation_failed"
-            return path.waypoints, None
+            waypoints = path.waypoints
+            clearance = getattr(waypoints, 'clearance_scope', None) or self._contact_clearance_scope
+            if clearance is not None:
+                self._contact_clearance_scope = clearance
+                if not callable(getattr(waypoints, 'clearance_scope', None)):
+                    waypoints = ContactClearancePath(waypoints, clearance)
+            return waypoints, None
         return None, (
             f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}"
         )
@@ -252,6 +497,11 @@ class PhysicalPickPlaceExecutor:
         addresses = joint_qpos_addrs(self.model, names)
         before = self.data.qpos.copy()
         goal = np.array(list(self.gripper_open_configuration.values()))
+        if np.max(np.abs(before[addresses]-goal)) <= self.GRIPPER_TRACKING_TOLERANCE:
+            # Retain the measured open geometry. A redundant opening cannot
+            # resolve nearby arm clearance; the subsequent arm sweep still has
+            # to certify its own departure from the measured starting state.
+            return [before[addresses].copy()], None
         try:
             result = plan_arm_joint_path(
                 self.model,
@@ -268,6 +518,9 @@ class PhysicalPickPlaceExecutor:
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
         if not result.success:
+            logger.warning('Gripper open rejected: %s; geometry=%s; reason=%s', result.reason,
+                           getattr(self.collision, 'last_blocked_geom', None),
+                           getattr(self.collision, 'last_reason', None))
             detail = f":{result.detail}" if result.detail else ""
             return None, f"gripper_open_path_failed:{result.reason}{detail}"
         self.data.qpos[addresses] = goal
@@ -289,13 +542,46 @@ class PhysicalPickPlaceExecutor:
         goal = np.array(list(self.gripper_close_configuration.values()))
         try:
             with self._collision_phase('close'):
-                result = plan_arm_joint_path(self.model, self.data, joint_names=names,
-                    q_start=before[addresses], q_goal=goal, collision=self.collision,
-                    planner='linear', step_size=.001, goal_tolerance=.0001)
+                probe = getattr(self.collision, 'simulation_contact_terminated_close', False)
+                previous = getattr(self.collision, '_planning_gripper_contact_corridor', False)
+                try:
+                    if probe:
+                        self.collision._planning_gripper_contact_corridor = True
+                    result = plan_arm_joint_path(self.model, self.data, joint_names=names,
+                        q_start=before[addresses], q_goal=goal, collision=self.collision,
+                        planner='linear', step_size=.001, goal_tolerance=.0001)
+                finally:
+                    self.collision._planning_gripper_contact_corridor = previous
+                if result.success and probe:
+                    # Certify the rest of the task with a bounded contact-stop
+                    # hypothesis, never with fingers passing through the object.
+                    prefix = []
+                    contact = self.collision.target_contact
+                    try:
+                        # Predict first nominal contact, not the deepest state
+                        # admitted by the execution penetration allowance. That
+                        # allowance is needed for real contact/model error; it
+                        # is not a prediction that fingers compress the object.
+                        self.collision.target_contact = replace(contact, max_penetration_m=0.)
+                        with self.collision.motion_scope(self.model, self.data, names, before[addresses]):
+                            for q in np.linspace(before[addresses], goal, 65):
+                                self.data.qpos[addresses] = q
+                                if self.collision.configuration_collides(self.model, self.data):
+                                    break
+                                prefix.append(q.copy())
+                    finally:
+                        self.collision.target_contact = contact
+                    if not prefix:
+                        return None, 'gripper_contact_initial_state_invalid'
+                    goal = prefix[-1]
+                    result = type(result)(True, prefix, 'contact_terminated_closure')
         finally:
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
         if not result.success:
+            logger.warning('Gripper close rejected: %s; geometry=%s; reason=%s', result.reason,
+                           getattr(self.collision, 'last_blocked_geom', None),
+                           getattr(self.collision, 'last_reason', None))
             detail = f':{result.detail}' if result.detail else ''
             return None, f'gripper_close_path_failed:{result.reason}{detail}'
         self.data.qpos[addresses] = goal
@@ -315,6 +601,22 @@ class PhysicalPickPlaceExecutor:
             mujoco.mj_kinematics(self.model, self.data)
         if error:
             return PhysicalMotionResult(False, error, 'grasp')
+        if getattr(self.collision, 'simulation_contact_terminated_close', False):
+            target = np.asarray(list(self.gripper_close_configuration.values()), float)
+            response = self.command_gripper_joints(target)
+            if not isinstance(response, (bool, np.bool_)) or not response:
+                return PhysicalMotionResult(False, 'gripper_close_command_failed', 'grasp')
+            # Motor settling short of the finite endpoint is only possible
+            # contact. The existing measured lift/retention checks prove pickup.
+            names = tuple(self.gripper_close_configuration)
+            addresses = joint_qpos_addrs(self.model, names)
+            with self.collision.motion_scope(self.model, self.data, names, before[addresses]):
+                result = self._wait_gripper_still(position, timeout_s)
+            if not result.success:
+                self.synchronize(self.data)
+                addresses = joint_qpos_addrs(self.model, tuple(self.gripper_close_configuration))
+                self.command_gripper_joints(self.data.qpos[addresses].copy())
+            return result
         names = tuple(self.gripper_close_configuration)
         addresses = joint_qpos_addrs(self.model, names)
         active = self._settling_window(timeout_s)
@@ -502,6 +804,12 @@ class PhysicalPickPlaceExecutor:
 
     def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp, open_gripper_geometry=True):
         """Arrival tolerance is not an IK certificate: rebuild world-pose paths."""
+        snapshot = getattr(self.collision, 'planning_snapshot', nullcontext)
+        with snapshot():
+            return self._replan_snapshot(phases, targets, object_body=object_body, grasp=grasp,
+                                         open_gripper_geometry=open_gripper_geometry)
+
+    def _replan_snapshot(self, phases, targets, *, object_body, grasp, open_gripper_geometry):
         self.synchronize(self.data)
         before = self.data.qpos.copy()
         previous_payload = self.collision.capture_payload()
@@ -540,15 +848,50 @@ class PhysicalPickPlaceExecutor:
             mujoco.mj_kinematics(self.model, self.data)
 
     def _execute_path(self, phase, path):
+        clearance = getattr(path, 'clearance_scope', None)
+        if callable(clearance):
+            self._contact_clearance_scope = clearance
+        escape_end = getattr(path, 'escape_end_index', None)
+        if escape_end is not None:
+            prefix = DeparturePath(path.departure.execution_waypoints(path[:escape_end + 1]), path.departure)
+            result = self._execute_path(phase, prefix)
+            if not result.success or escape_end == len(path) - 1:
+                return result
+            suffix = path[escape_end:]
+            clearance_scope = getattr(path, 'clearance_scope', None)
+            if clearance_scope is not None:
+                suffix = ContactClearancePath(suffix, clearance_scope)
+            return self._execute_path(phase, suffix)
         with self._collision_phase(phase):
-            return self._execute_path_in_phase(phase, path)
+            scope = (self.collision.motion_scope(self.model, self.data, self.joint_names, path[0])
+                     if hasattr(self.collision, 'motion_scope') and path else nullcontext())
+            clearance_scope = getattr(path, 'clearance_scope', nullcontext)
+            with scope, clearance_scope():
+                previous = getattr(self.collision, 'active_departure', None)
+                departure = getattr(path, 'departure', None)
+                if departure is not None:
+                    self.collision.active_departure = departure
+                try:
+                    return self._execute_path_in_phase(phase, path)
+                finally:
+                    if departure is not None:
+                        self.collision.active_departure = previous
 
     def _execute_path_in_phase(self, phase, path):
+        departure = getattr(path, 'departure', None)
+        departure_deadline = time.monotonic() + min(30., max(5., 2.*len(path))) if departure is not None else None
+        joint_tolerance = min(self.joint_tolerance, .001) if departure is not None else self.joint_tolerance
+        scales = np.ones(len(self.joint_names))
+        if self.linear_joint_tolerance_m is not None:
+            for i, name in enumerate(self.joint_names):
+                if self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE:
+                    scales[i] = joint_tolerance / min(joint_tolerance, self.linear_joint_tolerance_m)
+
         def joint_residual(target):
             delta = self.data.qpos[self.qadr] - target
             if not np.isfinite(delta).all():
                 return float("inf")
-            errors = [float(np.max(np.abs(delta)))]
+            errors = [float(np.max(np.abs(delta)*scales))]
             errors.extend(
                 abs(float(sum(delta[self.joint_names.index(n)] for n in group))) for group in self.coupled_groups
             )
@@ -574,9 +917,17 @@ class PhysicalPickPlaceExecutor:
         if not self.payload_retained():
             return PhysicalMotionResult(False, "payload_not_retained", phase)
         residual = joint_residual(path[0])
-        if residual > self.joint_tolerance:
+        if residual > joint_tolerance:
             return PhysicalMotionResult(False, "stale_arm_plan", phase, residual)
-        for target in path[1:]:
+        waypoints = path
+        if self.coalesce_execution_waypoints and departure is None:
+            maximum = np.array([.005 if self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE else .1
+                                for name in self.joint_names])
+            waypoints = coalesce_collinear_waypoints(path, maximum)
+        for target in waypoints[1:]:
+            if departure_deadline is not None and time.monotonic() >= departure_deadline:
+                return PhysicalMotionResult(False, "contact_departure_timeout", phase)
+            command_started = time.monotonic()
             # Recheck the next segment against fresh state, including the payload.
             self.synchronize(self.data)
             if base_drifted():
@@ -584,6 +935,9 @@ class PhysicalPickPlaceExecutor:
             if not self.payload_retained():
                 return PhysicalMotionResult(False, "payload_not_retained", phase)
             current = self.data.qpos[self.qadr].copy()
+            departure = getattr(path, 'departure', None)
+            if departure is not None and not departure.validate_edge(current, target):
+                return PhysicalMotionResult(False, 'contact_departure_invalidated', phase)
             check = plan_arm_joint_path(
                 self.model,
                 self.data,
@@ -593,7 +947,11 @@ class PhysicalPickPlaceExecutor:
                 collision=self.collision,
                 planner="linear",
                 step_size=0.025,
-                goal_tolerance=0.001,
+                goal_tolerance=0.,
+                linear_steps=max(15, int(np.ceil(max(
+                    abs(float(b-a))/(.002 if self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE else .025)
+                    for name, a, b in zip(self.joint_names, current, target, strict=True)
+                )))+1),
             )
             if not check.success:
                 self.event(
@@ -620,8 +978,10 @@ class PhysicalPickPlaceExecutor:
             # simulator has applied/settled the command. Wait for measured
             # convergence, retaining the same certificate tolerance.
             active = self._settling_window(self.joint_settle_timeout_s)
-            while ok and np.isfinite(residual) and residual > self.joint_tolerance and active():
+            while ok and np.isfinite(residual) and residual > joint_tolerance and active():
                 time.sleep(0.05)
+                if departure_deadline is not None and time.monotonic() >= departure_deadline:
+                    return PhysicalMotionResult(False, "contact_departure_timeout", phase)
                 self.synchronize(self.data)
                 if base_drifted():
                     return PhysicalMotionResult(False, "base_drift_during_arm", phase)
@@ -637,7 +997,9 @@ class PhysicalPickPlaceExecutor:
                 residual=residual,
                 controller_success=bool(ok),
             )
-            if not ok or residual > self.joint_tolerance:
+            if departure is not None:
+                time.sleep(max(0., .05 - (time.monotonic() - command_started)))
+            if not ok or residual > joint_tolerance:
                 return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)
         if self.endpoint_settle_s:
             # A waypoint tolerance can be reached while the arm is still moving.
@@ -655,7 +1017,7 @@ class PhysicalPickPlaceExecutor:
                 residual = joint_residual(path[-1])
                 if not np.isfinite(residual):
                     return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
-                if residual > self.joint_tolerance or joint_residual(anchor) > self.ENDPOINT_STILLNESS_TOLERANCE:
+                if residual > joint_tolerance or joint_residual(anchor) > self.ENDPOINT_STILLNESS_TOLERANCE:
                     anchor = self.data.qpos[self.qadr].copy()
                     stable_since = self._motion_time()
                 elif self._motion_time() - stable_since >= self.endpoint_settle_s:
@@ -682,11 +1044,13 @@ class PhysicalPickPlaceExecutor:
             return PhysicalMotionResult(False, "visual_verification_unavailable", "preflight")
         if len(self.grasp_paths) != 3 or len(self.grasp_targets) != 3 or object_gt_body is None:
             return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
+        already_open = False
         if self.gripper_open_configuration:
             self.synchronize(self.data)
             before = self.data.qpos.copy()
             try:
-                _, error = self.plan_gripper_open()
+                opening, error = self.plan_gripper_open()
+                already_open = error is None and len(opening) == 1
             finally:
                 self.data.qpos[:] = before
                 mujoco.mj_kinematics(self.model, self.data)
@@ -714,16 +1078,25 @@ class PhysicalPickPlaceExecutor:
                     break
             return paths, error
 
-        paths, error = replan("grasp_replan", open_geometry=True)
-        if error is not None:
-            return error
-        if not self.robot.open_gripper(blocking=True):
-            return PhysicalMotionResult(False, "gripper_open_failed", "pregrasp")
-        # Opening changes collision geometry and may slightly disturb the arm.
-        # Rebuild paths from the measured open state before any arm motion.
-        paths, error = replan("grasp_replan_after_open", open_geometry=False)
-        if error is not None:
-            return error
+        limits = np.array([self.linear_joint_tolerance_m
+                           if self.linear_joint_tolerance_m is not None and self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE
+                           else self.joint_tolerance for name in self.joint_names])
+        reusable = self.reuse_validated_grasp_paths and already_open and self.grasp_paths[0] and np.all(
+            np.abs(self.data.qpos[self.qadr]-self.grasp_paths[0][0]) <= limits)
+        if reusable:
+            paths = self.grasp_paths
+            self.event(phase="grasp_plan_reused", controller_success=True)
+        else:
+            paths, error = replan("grasp_replan", open_geometry=True)
+            if error is not None:
+                return error
+            if not self.robot.open_gripper(blocking=True):
+                return PhysicalMotionResult(False, "gripper_open_failed", "pregrasp")
+            # Opening changes collision geometry and may slightly disturb the arm.
+            # Rebuild paths from the measured open state before any arm motion.
+            paths, error = replan("grasp_replan_after_open", open_geometry=False)
+            if error is not None:
+                return error
         self.grasp_paths = paths
         for phase, path in zip(("pregrasp", "grasp"), self.grasp_paths[:2], strict=True):
             result = self._execute_path(phase, path)

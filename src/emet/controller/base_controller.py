@@ -129,6 +129,12 @@ class BaseController(ABC):
         """Return the voxel size in meters."""
         return self._voxel_size
 
+    def _declared_robot_capabilities(self):
+        get_session = getattr(self.robot, "get_emet_session", None)
+        session = get_session() if callable(get_session) else None
+        capabilities = session.get("capabilities") if isinstance(session, dict) else None
+        return capabilities if isinstance(capabilities, dict) else {}
+
     def start(
         self,
         goal: str | None = None,
@@ -149,23 +155,27 @@ class BaseController(ABC):
             )
         if verbose:
             logger.debug("ZMQ connection to robot started.")
+        capabilities = self._declared_robot_capabilities()
+        navigation = capabilities.get("nav_velocity_drive") is not False
         if can_move:
-            self.robot.switch_to_manipulation_mode()
-            self.robot.open_gripper()
-            if verbose:
-                logger.debug("Sending arm to home...")
-            self.robot.move_to_nav_posture()
+            if navigation:
+                self.robot.switch_to_manipulation_mode()
+                self.robot.open_gripper()
+                if verbose:
+                    logger.debug("Sending arm to home...")
+                self.robot.move_to_nav_posture()
             # Stretch nav posture historically left the head near the floor; raise to look_front.
             look_front = getattr(self.robot, "look_front", None)
-            if callable(look_front):
+            if callable(look_front) and capabilities.get("head_motion") is not False:
                 look_front(blocking=True)
                 if verbose:
                     logger.debug("Head at look_front.")
             if verbose:
                 logger.debug("... done.")
-        self.robot.switch_to_navigation_mode()
-        if verbose:
-            logger.debug("- Update map after switching to navigation posture")
+        if navigation:
+            self.robot.switch_to_navigation_mode()
+            if verbose:
+                logger.debug("- Update map after switching to navigation posture")
 
     @abstractmethod
     def get_voxel_map(self):

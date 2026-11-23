@@ -62,6 +62,17 @@ class WorldSolid:
         object.__setattr__(self, 'world_from_local', immutable(pose))
         object.__setattr__(self, 'dimensions', dimensions)
 
+    def with_offset(self, offset_m):
+        """Reuse immutable, validated geometry when only clearance changes."""
+        offset = float(offset_m)
+        if not np.isfinite(offset):
+            raise ValueError('invalid_observed_solid')
+        result = object.__new__(type(self))
+        result.__dict__.update(self.__dict__)
+        result.__dict__.pop('bounds', None)
+        object.__setattr__(result, 'offset_m', offset)
+        return result
+
     @classmethod
     def from_geom(cls, model, data, gid, *, offset_m=0., convex_material_calibration_id=None):
         """Copy one geom pose; meshes require an explicit convex-solid prior."""

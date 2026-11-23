@@ -174,6 +174,7 @@ class Observations:
     # Untyped task-specific observations
     # --------------------------------------------------------
 
+    auxiliary_rgbd_views: dict[str, Any] | None = None  # Named calibrated sensor views from the same acquisition packet.
     task_observations: dict[str, Any] | None = None
     image_timing: dict[str, Any] | None = None
     rgbd_registration: dict[str, Any] | None = None  # Optional original sensor grids/calibration; no scene labels.
@@ -285,6 +286,7 @@ class Observations:
             joint_velocities=data.get("joint_velocities"),
             relative_resting_position=data.get("relative_resting_position"),
             is_holding=data.get("is_holding"),
+            auxiliary_rgbd_views=data.get("auxiliary_rgbd_views"),
             task_observations=data.get("task_observations"),
             image_timing=data.get("image_timing"),
             rgbd_registration=data.get("rgbd_registration"),

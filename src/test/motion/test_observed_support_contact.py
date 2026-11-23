@@ -18,7 +18,7 @@ from emet.motion.observed_admission import CapturedRobotMaterial, ObservedMateri
 from emet.motion.observed_background import ObservedBackground, StaticBackgroundAssumption
 from emet.motion.observed_solids import WorldSolid
 from emet.motion.observed_support import fit_observed_support
-from emet.motion.observed_support_contact import ObservedSupportContact
+from emet.motion.observed_support_contact import ObservedProbeBand, ObservedSupportContact
 from emet.motion.observed_workspace import ObservedWorkspace
 from emet.motion.placement_geometry import box_corners
 
@@ -109,6 +109,36 @@ def test_support_contact_admits_shallow_payload_but_never_frees_the_voxel():
     assert query(layer, contact).allowed
     assert not background.known_free(padded.bounds, now=10.02)
     np.testing.assert_array_equal(background.workspace.cells, before)
+
+
+def test_occluded_pickup_footprint_needs_nearby_support_on_all_sides():
+    background, original, _ = scene(backing=0.0)
+    patch = replace(original.patch, bounds=[[-.06, -.06, -.0001], [-.025, .06, .0001]])
+    mask = original.support_mask.copy()
+    mask[45:51, 45:51] = False
+    contact = replace(original, patch=patch, support_mask=mask)
+    footprint = box().bounds
+    observed = contact.pickup_observation_bounds(footprint)
+    np.testing.assert_allclose(observed[:, :2], [[-.025, -.025], [.025, .025]])
+    np.testing.assert_allclose(observed[:, 2], [-.0001, .0001], atol=1e-10)
+    assert not query(admission(background), contact, phase="lift", floor=-.001).allowed
+
+    mask[:, 48:] = False
+    one_sided = replace(contact, support_mask=mask)
+    assert one_sided.pickup_observation_bounds(footprint) is None
+
+
+def test_probe_band_allows_local_payload_contact_but_keeps_obstacles_occupied():
+    background, contact, _ = scene(backing=0.0)
+    shallow = box(center=(0., 0., .009), half=(.01, .01, .01))
+    band = ObservedProbeBand(contact, .004)
+    layer = admission(background)
+    assert not layer.query(shallow, now=10.02, free_witness=contact).allowed
+    assert layer.query_probe_payload(shallow, shallow, band=band, object_ref="item", now=10.02).allowed
+    occupants = tuple(background.exclusively_owned_cells("table"))
+    blocked = admission(replace(background, occupied_owners=(("table", occupants), ("obstacle", occupants))))
+    verdict = blocked.query_probe_payload(shallow, shallow, band=band, object_ref="item", now=10.02)
+    assert not verdict.allowed and verdict.reason == "occupied_environment"
 
 
 def test_cached_exclusive_owners_follow_immutable_background_replacement():

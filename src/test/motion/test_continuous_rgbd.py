@@ -184,3 +184,101 @@ def test_blocked_reader_shutdown_is_reported_and_can_be_joined_later():
         release.set()
         stream.close()
     assert not stream._thread.is_alive()
+
+
+def test_consumer_waits_for_inflight_fresh_capture_without_latching_old_age():
+    clock = [10.]
+    acquiring, release = threading.Event(), threading.Event()
+
+    def read():
+        acquiring.set()
+        assert release.wait(2.)
+        return views(11.4, 'fresh')
+
+    stream = source(read, lambda: clock[0])
+    producer = threading.Thread(target=stream.poll_once)
+    producer.start()
+    assert acquiring.wait(1.)
+    clock[0] = 11.6
+    result = []
+    consumer = threading.Thread(target=lambda: result.append(stream.snapshot()))
+    consumer.start()
+    release.set()
+    producer.join(2.)
+    consumer.join(2.)
+    assert not producer.is_alive() and not consumer.is_alive()
+    assert result[0].fit.capture.observation_id == 'fresh'
+    assert result[0].fit.capture.earliest == 11.4
+    assert stream._failure is None
+    stream.close()
+
+
+def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence():
+    clock = [10.]
+    initial = views(clock[0])
+    tracker = TrackingBoundary(initial, lambda: clock[0])
+    update = tracker.update
+    failures = [1]
+
+    def fit(packet, *, scene_epoch):
+        if failures[0]:
+            failures[0] -= 1
+            tracker.latest = None  # Real tracker invalidates the candidate before fitting.
+            raise ObservationUnavailable('geometry_tracking_no_match')
+        return update(packet, scene_epoch=scene_epoch)
+
+    tracker.update = fit
+    stream = ContinuousRgbdSource(tracker, initial_views=initial,
+        read_views=lambda: views(clock[0], str(clock[0])), clock=lambda: clock[0], max_transient_fit_rejections=2)
+    clock[0] = 10.1
+    assert not stream.poll_once()
+    assert stream.snapshot().fit.capture.received_monotonic == 10.
+    assert stream.processed_captures == 1 and stream.rejected_fit_captures == 1
+    clock[0] = 10.2
+    assert stream.poll_once()
+    assert stream.snapshot().fit.capture.received_monotonic == 10.2
+    assert stream.consecutive_fit_rejections == 0
+    failures[0] = 3
+    for stamp in (10.3, 10.4):
+        clock[0] = stamp
+        assert not stream.poll_once()
+    clock[0] = 10.5
+    with pytest.raises(ObservationUnavailable, match='geometry_tracking_no_match'):
+        stream.poll_once()
+    with pytest.raises(ObservationUnavailable):
+        stream.snapshot()
+
+
+def test_transient_fit_policy_cannot_extend_evidence_age():
+    clock = [10.]
+    initial = views(clock[0])
+    tracker = TrackingBoundary(initial, lambda: clock[0])
+
+    def reject(*args, **kwargs):
+        raise ObservationUnavailable('geometry_tracking_no_match')
+
+    tracker.update = reject
+    stream = ContinuousRgbdSource(tracker, initial_views=initial,
+        read_views=lambda: views(clock[0], str(clock[0])), clock=lambda: clock[0], max_transient_fit_rejections=2)
+    clock[0] = 10.1
+    assert not stream.poll_once()
+    clock[0] = 11.6
+    with pytest.raises(ObservationUnavailable):
+        stream.snapshot()
+
+
+def test_transient_fit_policy_does_not_swallow_identity_failure():
+    clock = [10.]
+    initial = views(clock[0])
+    tracker = TrackingBoundary(initial, lambda: clock[0])
+
+    def reject(*args, **kwargs):
+        raise ObservationUnavailable('moving_mask_motion_bound_exceeded')
+
+    tracker.update = reject
+    stream = ContinuousRgbdSource(tracker, initial_views=initial,
+        read_views=lambda: views(clock[0], str(clock[0])), clock=lambda: clock[0], max_transient_fit_rejections=2)
+    clock[0] = 10.1
+    with pytest.raises(ObservationUnavailable, match='moving_mask_motion_bound_exceeded'):
+        stream.poll_once()
+    assert stream.rejected_fit_captures == 0

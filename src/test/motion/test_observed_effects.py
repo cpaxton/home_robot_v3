@@ -73,6 +73,21 @@ def test_lift_requires_repeated_comotion_and_separation():
     assert not evaluate_lift(before, wrong, support_top_z=0, after=10.4, now=11.).satisfied
 
 
+def test_visual_verifier_checks_lift_against_pickup_height():
+    before = frame(10., obj=(0, 0, .25), ee=(0, 0, .25))
+    lifted = [frame(t, obj=(0, 0, .35), ee=(0, 0, .35)) for t in (10.5, 10.8)]
+    verifier = ObservedVisualVerifier(
+        object_ref='object',
+        support_bounds=[[-.5, -.5, .5], [.5, .5, .6]],
+        source_support_bounds=[[-.5, -.5, .1], [.5, .5, .22]],
+        observe=lambda _: before,
+        collect=lambda *args, **kwargs: lifted,
+        clock=lambda: 11.,
+    )
+    assert verifier.begin_grasp(after=9.9).satisfied
+    assert verifier.verify_lift(after=10.4).satisfied
+
+
 @pytest.mark.parametrize('obj', [(0, 0, .03), (.1, 0, .13)])
 def test_static_or_slipped_object_does_not_pass_lift(obj):
     after = [frame(t, obj=obj, ee=(0, 0, .13)) for t in (10.5, 10.8)]

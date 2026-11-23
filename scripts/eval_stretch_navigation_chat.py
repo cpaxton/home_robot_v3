@@ -468,7 +468,7 @@ def build_table_fixture(output, *, transfer_target=False):
 
 
 def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NAME, initial_gaze=(0.0, -0.2),
-        table_preflight_only=False, table_sweep=False):
+        table_preflight_only=False, table_sweep=False, observed_native_factory=None):
     from emet.agent import loop
     from emet.app.robot_cli import create_robot_client_from_cli
     from emet.core.command_client import command_receipt
@@ -806,7 +806,8 @@ def run(case, output, offset, scene, *, model_endpoint=None, model_name=MODEL_NA
                 stack.enter_context(redirect_stdout(agent_log))
                 stack.enter_context(redirect_stderr(agent_log))
                 run_agent_session(robot, None if interactive_discord else read, url, model_name,
-                                  measured_floor=True, discord=interactive_discord, **options)
+                                  measured_floor=True, discord=interactive_discord,
+                                  observed_native_factory=observed_native_factory, **options)
             if interactive_discord:
                 outcome.update(complete=True, scoring_status="operator_review_required")
                 return

@@ -18,7 +18,7 @@ TIMINGS = ("wall_s", "simulation_s", "model_s", "planning_s", "collision_s", "ex
 RESOURCES = ("cpu_peak_percent", "gpu_peak_memory_mib", "max_resident_kib")
 
 
-def load_manifest(path, root):
+def load_manifest(path, root, *, transfer_ports=None):
     protocol = json.loads(path.read_text())
     if protocol["schema_version"] != 1:
         raise ValueError("Unsupported assessment version")
@@ -31,6 +31,16 @@ def load_manifest(path, root):
         )
     dev_cases = json.loads((root / protocol["development_cases"]).read_text())["episodes"]
     cases = list(protocol["cases"])
+    if transfer_ports is not None:
+        for benchmark, port in json.loads(transfer_ports.read_text()).items():
+            for assessment in port["assessments"]:
+                cases.append({
+                    "id": f"{benchmark}-{port[assessment['split']]['case']}",
+                    "stage": assessment["stage"],
+                    "adapter": port["robot"],
+                    "tier": assessment["tier"],
+                    "status": "pending",
+                })
     if "robocasa_pilot" in protocol:
         pilot = json.loads((root / protocol["robocasa_pilot"]).read_text())
         for task in pilot["tasks"]:
@@ -104,8 +114,8 @@ def audited_results(path, cases):
     return rows
 
 
-def export(manifest_path, report_paths, out, root):
-    protocol, assignments = load_manifest(manifest_path, root)
+def export(manifest_path, report_paths, out, root, *, transfer_ports=None):
+    protocol, assignments = load_manifest(manifest_path, root, transfer_ports=transfer_ports)
     index = {(row["stage"], row["id"]): row for row in assignments}
     results = {}
     for path in report_paths:
@@ -407,6 +417,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=Path("configs/eval/harness_assessment_20261119.json"))
     parser.add_argument("--results", type=Path, action="append", default=[])
+    parser.add_argument("--transfer-ports", type=Path, help="Add the selected benchmark arm transfer assignments.")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--plot", action="store_true")
     parser.add_argument("--recorded-geometry", type=Path)
@@ -416,7 +427,7 @@ def main():
     if bool(args.recorded_geometry) != bool(args.recorded_replay):
         parser.error("--recorded-geometry and --recorded-replay must be supplied together")
     root = Path(__file__).resolve().parents[1]
-    rows = export(args.manifest, args.results, args.output, root)
+    rows = export(args.manifest, args.results, args.output, root, transfer_ports=args.transfer_ports)
     if args.plot:
         plot_outcomes(rows, args.output)
     if args.recorded_geometry:

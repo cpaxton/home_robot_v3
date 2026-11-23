@@ -1274,6 +1274,7 @@ def run_agent_with_robot(
             last_tool_results = []
             retrying_reply = False
             turn_t0 = timeit.default_timer()
+            tamp_recovery_attempts = 0
             for _round in range(max_tool_rounds):
                 round_input = current_input
                 cam_image = None
@@ -1480,7 +1481,11 @@ def run_agent_with_robot(
                 if has_info:
                     # Last round: do not continue into exhaustion with a silent turn —
                     # force a no-tool summarize or relay tool text.
-                    continuation = tamp_followup(turn_request, dispatched.outcomes)
+                    continuation = tamp_followup(
+                        turn_request, dispatched.outcomes, recovery_attempts=tamp_recovery_attempts,
+                    )
+                    if continuation and any(not outcome.ok for outcome in dispatched.outcomes):
+                        tamp_recovery_attempts += 1
                     tamp_stopped = any(c.get("name") in TAMP_TOOLS for c in tool_calls) and continuation is None
                     last_round = _round >= max_tool_rounds - 1 or tamp_stopped
                     followup = (

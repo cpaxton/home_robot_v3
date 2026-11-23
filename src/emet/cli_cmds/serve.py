@@ -135,6 +135,8 @@ from emet.cli_cmds.habitat import _run_habitat_wrapper
     default="",
     help="Robocasa task name (e.g. PickPlaceCounterToCabinet). Use --list-robocasa-tasks to see all.",
 )
+@click.option("--robocasa-layout", type=int, default=1, show_default=True, help="RoboCasa kitchen layout ID.")
+@click.option("--robocasa-style", type=int, default=1, show_default=True, help="RoboCasa kitchen style ID.")
 @click.option(
     "--robot",
     default=None,
@@ -222,6 +224,8 @@ def serve(
     port_offset: int,
     list_robocasa_tasks: bool,
     robocasa_task: str,
+    robocasa_layout: int,
+    robocasa_style: int,
     robot: str,
     habitat_question_id: int | None,
     habitat_scene_id: str | None,
@@ -377,6 +381,8 @@ def serve(
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
                 port_offset=port_offset,
                 robocasa_task=robocasa_task,
+                robocasa_layout=robocasa_layout,
+                robocasa_style=robocasa_style,
             )
         except ValueError as e:
             click.echo(str(e), err=True)

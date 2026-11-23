@@ -141,6 +141,9 @@ class MovingRgbdTracker:
         max_update_s=0.75,
         max_evaluations=6000,
         appearance_model="chromaticity",
+        initial_poses=(),
+        max_starts=24,
+        max_fit_points=800,
         clock=time.monotonic,
     ):
         if (
@@ -158,6 +161,8 @@ class MovingRgbdTracker:
             or max_update_s <= 0
             or type(max_pixels) is not int
             or max_pixels < 25
+            or type(max_starts) is not int or not 1 <= max_starts <= 64
+            or type(max_fit_points) is not int or max_fit_points < 25
             or appearance_model not in {"chromaticity", "neutral_specular"}
         ):
             raise ValueError("invalid_moving_tracking_profile")
@@ -165,6 +170,7 @@ class MovingRgbdTracker:
         self.speed, self.gap, self.margin = max_speed_m_s, max_gap_s, association_margin_m
         self.chroma_distance, self.edge_m, self.max_pixels = chroma_distance, max_edge_m, max_pixels
         self.max_update_s, self.max_evaluations = max_update_s, max_evaluations
+        self.max_starts, self.max_fit_points = max_starts, max_fit_points
         self.appearance_model = appearance_model
         self._colour_features = _neutral_specular if appearance_model == "neutral_specular" else _chroma
         self.reference_id = "moving_reference:" + uuid.uuid4().hex
@@ -207,6 +213,8 @@ class MovingRgbdTracker:
             observation_ids=(observation_id,),
             received_monotonic=received_monotonic,
             max_evaluations=max_evaluations,
+            initial_poses=initial_poses,
+            max_starts=max_starts, max_points=max_fit_points,
         )
         self._require_fit(fit)
         self._require_time(received_monotonic)
@@ -289,6 +297,7 @@ class MovingRgbdTracker:
             received_monotonic=received_monotonic,
             initial_poses=previous.fit.poses[:12],
             max_evaluations=self.max_evaluations,
+            max_starts=self.max_starts, max_points=self.max_fit_points,
         )
         self._require_fit(fit)
         if np.any(cKDTree(centers).query(fit.poses[:, :3, 3])[0] > displacement):

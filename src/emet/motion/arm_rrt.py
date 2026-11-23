@@ -10,7 +10,9 @@ agent voxel / 2D obstacle map when provided — not CuRobo / not MJCF mesh geome
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +35,24 @@ class ArmRrtPlanResult:
     planner: str
     reason: str | None = None
     detail: str | None = None
+    departure: Any | None = None
+
+
+class DeparturePath(list):
+    """Waypoints retaining the edge policy needed by runtime revalidation."""
+
+    def __init__(self, waypoints, departure, escape_end_index=None):
+        super().__init__(waypoints)
+        self.departure = departure
+        self.escape_end_index = escape_end_index
+
+
+class ContactClearancePath(list):
+    """Ordinary motion retaining only original-patch clearance context."""
+
+    def __init__(self, waypoints, clearance_scope):
+        super().__init__(waypoints)
+        self.clearance_scope = clearance_scope
 
 
 def joint_limits_from_model(
@@ -74,6 +94,7 @@ def make_arm_validate_fn(
     *,
     mins: np.ndarray | None = None,
     maxs: np.ndarray | None = None,
+    deadline: float | None = None,
 ) -> Callable[[np.ndarray], bool]:
     """Return a validate(q) that checks joint bounds + optional link collision."""
     qadr = joint_qpos_addrs(model, joint_names)
@@ -83,6 +104,8 @@ def make_arm_validate_fn(
     hi = np.asarray(maxs, dtype=np.float64).reshape(-1)
 
     def validate(q: np.ndarray) -> bool:
+        if deadline is not None and time.monotonic() >= deadline:
+            return False
         qq = np.asarray(q, dtype=np.float64).reshape(-1)
         if qq.shape[0] != len(qadr) or not np.isfinite(qq).all():
             return False
@@ -133,7 +156,59 @@ def arm_config_violation(
     return None
 
 
-def plan_arm_joint_path(
+def plan_arm_joint_path(model, data, *, joint_names, q_start, q_goal, collision=None,
+                        via_configurations=(), **kwargs):
+    """Try certified posture detours, then plan the commanded environmental sweep.
+
+    Postures are proposals from the embodiment, never trusted free-space states.
+    Each leg uses the same edge checks; colliding guide states are discarded.
+    """
+    scope = (collision.motion_scope(model, data, joint_names, q_start)
+             if collision is not None and hasattr(collision, 'motion_scope') else nullcontext())
+    with scope:
+        started = time.monotonic()
+        budget = kwargs.get("max_time_s")
+        q_start = np.asarray(q_start, float).reshape(-1)
+        q_goal = np.asarray(q_goal, float).reshape(-1)
+        if (len(via_configurations) == 0 or q_start.size != len(joint_names) or q_goal.size != len(joint_names)
+                or not np.isfinite(q_start).all() or not np.isfinite(q_goal).all()
+                or (budget is not None and (not np.isfinite(budget) or budget <= 0))):
+            return _plan_arm_joint_path(model, data, joint_names=joint_names, q_start=q_start,
+                                        q_goal=q_goal, collision=collision, **kwargs)
+        # Cheap deterministic routes avoid spending the whole random search
+        # budget rediscovering a robot's standard folded posture.
+        for via in via_configurations:
+            route = np.atleast_2d(np.asarray(via, float))
+            if route.shape[1:] != q_start.shape or not 1 <= len(route) <= 32 or not np.isfinite(route).all():
+                continue
+            waypoints = [q_start.copy()]
+            for destination in (*route, q_goal):
+                remaining = None if budget is None else budget - (time.monotonic() - started)
+                if remaining is not None and remaining <= 0:
+                    break
+                leg_options = {**kwargs, "planner": kwargs.get("planner", "rrt_connect"), "linear_fallback": True,
+                               "max_time_s": remaining, "departure": False}
+                leg = _plan_arm_joint_path(model, data, joint_names=joint_names, q_start=waypoints[-1],
+                                          q_goal=destination, collision=collision, **leg_options)
+                if not leg.success:
+                    break
+                waypoints.extend(leg.waypoints[1:])
+            else:
+                return ArmRrtPlanResult(True, waypoints, "posture_detour")
+        # A failed route must not leave a hypothetical posture in the caller's
+        # model, including when the remaining time budget is exhausted.
+        data.qpos[joint_qpos_addrs(model, joint_names)] = q_start
+        mujoco.mj_kinematics(model, data)
+        if budget is not None:
+            remaining = budget - (time.monotonic() - started)
+            if remaining <= 0:
+                return ArmRrtPlanResult(False, [], str(kwargs.get("planner", "rrt_connect")), "no_plan_within_budget")
+            kwargs["max_time_s"] = remaining
+        return _plan_arm_joint_path(model, data, joint_names=joint_names, q_start=q_start,
+                                    q_goal=q_goal, collision=collision, **kwargs)
+
+
+def _plan_arm_joint_path(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     *,
@@ -151,6 +226,8 @@ def plan_arm_joint_path(
     linear_steps: int = 15,
     verbose: bool = False,
     rng=None,
+    departure=None,
+    max_time_s=None,
 ) -> ArmRrtPlanResult:
     """Plan a joint-space path from ``q_start`` to ``q_goal``.
 
@@ -165,15 +242,28 @@ def plan_arm_joint_path(
     if not np.isfinite(q0).all() or not np.isfinite(q1).all():
         return ArmRrtPlanResult(False, [], planner, "nonfinite_configuration")
 
+    if max_time_s is not None and (not np.isfinite(max_time_s) or max_time_s <= 0):
+        return ArmRrtPlanResult(False, [], planner, "invalid_planning_budget")
+    deadline = time.monotonic() + max_time_s if max_time_s is not None else None
     space = make_arm_configuration_space(model, joint_names, step_size=step_size, rng=rng)
-    validate = make_arm_validate_fn(model, data, joint_names, collision, mins=space.mins, maxs=space.maxs)
+    validate = make_arm_validate_fn(model, data, joint_names, collision, mins=space.mins, maxs=space.maxs,
+                                   deadline=deadline)
 
     start_reason = arm_config_violation(model, data, joint_names, q0, collision, mins=space.mins, maxs=space.maxs)
     if start_reason is not None:
+        if start_reason == 'collision' and departure is None and hasattr(collision, 'make_departure'):
+            departure = collision.make_departure(model, data, joint_names, q0)
+        if start_reason == 'collision' and departure is not None and departure is not False:
+            return _plan_departure(
+                model, data, joint_names, q0, q1, collision, departure,
+                space=space, step_size=step_size, rng=rng,
+            )
         return ArmRrtPlanResult(False, [], planner, "invalid_start", detail=start_reason)
     goal_reason = arm_config_violation(model, data, joint_names, q1, collision, mins=space.mins, maxs=space.maxs)
     if goal_reason is not None:
         return ArmRrtPlanResult(False, [], planner, "invalid_goal", detail=goal_reason)
+    if deadline is not None and time.monotonic() >= deadline:
+        return ArmRrtPlanResult(False, [], planner, "no_plan_within_budget")
 
     # Even a short move can cross an obstacle. Validate it before accepting.
     if float(np.linalg.norm(q1 - q0)) < float(goal_tolerance):
@@ -210,15 +300,126 @@ def plan_arm_joint_path(
         return ArmRrtPlanResult(False, [], algo, "unknown_planner")
 
     # Linear (explicit request or RRT fallback)
+    if deadline is not None and time.monotonic() >= deadline:
+        return ArmRrtPlanResult(False, [], algo, "no_plan_within_budget")
     path = interpolate_arm_waypoints(q0, q1, n_steps=int(linear_steps))
     for index, (a, b) in enumerate(zip(path, path[1:], strict=False)):
         for q in space.extend(a, b):
+            if deadline is not None and time.monotonic() >= deadline:
+                return ArmRrtPlanResult(False, [], "linear", "no_plan_within_budget")
             violation = arm_config_violation(
                 model, data, joint_names, q, collision, mins=space.mins, maxs=space.maxs
             )
             if violation is not None:
                 return ArmRrtPlanResult(False, [], "linear", f"linear_collision_at_{index}", detail=violation)
     return ArmRrtPlanResult(True, path, "linear", None)
+
+
+def _plan_departure(model, data, joint_names, start, goal, collision, departure, *, space, step_size, rng):
+    """Search forward from contact using an explicitly supplied edge policy.
+
+    The policy owns the original contact baseline and physical travel bounds.
+    Its edge check must inspect the full segment, including its endpoints.
+    Ordinary collision checking resumes at the first clear configuration.
+    """
+    generator = np.random.default_rng(0) if rng is None else rng
+    addresses = joint_qpos_addrs(model, joint_names)
+    nodes, parents = [start.copy()], [-1]
+    data.qpos[addresses] = start
+    mujoco.mj_kinematics(model, data)
+    joints = [model.joint(name).id for name in joint_names]
+    slides = [i for i, jid in enumerate(joints) if model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_SLIDE]
+    slides.sort(key=lambda i: -abs(float(data.xaxis[joints[i], 2])))
+    probes = []
+    for i in slides:
+        direction = 1. if data.xaxis[joints[i], 2] >= 0 else -1.
+        for sign in (direction, -direction):
+            for distance in (.005, .01, .02):
+                q = start.copy()
+                q[i] += sign * distance
+                probes.append(q)
+    for route in getattr(departure, 'guide_configurations', ()):
+        for target in route:
+            target = np.asarray(target, float)
+            if target.shape != start.shape:
+                continue
+            # Steering already bounds each proposal. Repeating sixteen
+            # fractions of each guide starves gradient/random escape proposals.
+            probes.append(target)
+    for i in range(len(joints)):
+        if i not in slides:
+            for sign in (1., -1.):
+                q = start.copy()
+                q[i] += sign * .02
+                probes.append(q)
+    deadline = time.monotonic() + getattr(departure, 'search_timeout_s', 2.0)
+    clear_candidates, last_connection_failure = 0, None
+    for attempt in range(2000):
+        if time.monotonic() >= deadline:
+            break
+        if attempt < len(probes):
+            target = probes[attempt]
+        elif attempt % 3 == 0:
+            target = np.asarray(departure.sample_separating(generator), float)
+        elif attempt % 3 == 1:
+            target = goal
+        else:
+            target = generator.uniform(space.mins, space.maxs)
+        if target.shape != start.shape or not np.isfinite(target).all():
+            continue
+        nearest = int(np.argmin([np.linalg.norm(q - target) for q in nodes]))
+        origin = nodes[nearest]
+        delta = target - origin
+        candidate = origin + delta * min(1.0, step_size / max(np.linalg.norm(delta), 1e-12))
+        if np.any(candidate < space.mins) or np.any(candidate > space.maxs):
+            continue
+        if not departure.validate_edge(origin, candidate):
+            continue
+        nodes.append(candidate.copy())
+        parents.append(nearest)
+        clearance_scope = getattr(departure, 'clearance_scope', nullcontext)
+        with clearance_scope():
+            violation = arm_config_violation(model, data, joint_names, candidate, collision,
+                                            mins=space.mins, maxs=space.maxs)
+            if violation is not None:
+                continue
+            clear_candidates += 1
+            remaining = deadline-time.monotonic()
+            if remaining <= 0:
+                break
+            tail = plan_arm_joint_path(model, data, joint_names=joint_names, q_start=candidate,
+                                      q_goal=goal, collision=collision, step_size=step_size, rng=generator,
+                                      departure=False, max_iter=100, shortcut=False, max_time_s=remaining,
+                                      via_configurations=getattr(departure, 'guide_configurations', ()))
+        if not tail.success:
+            last_connection_failure = {"reason": tail.reason, "detail": tail.detail,
+                                       "collision_reason": getattr(collision, 'last_reason', None),
+                                       "geometry": getattr(collision, 'last_blocked_geom', None),
+                                       "contacts": list(getattr(getattr(collision, 'self_collision', None), 'last_contacts', ())),
+                                       "surface": getattr(getattr(collision, 'local_scene', None), 'last_collision', None)}
+            continue
+        prefix, index = [], len(nodes) - 1
+        while index >= 0:
+            prefix.append(nodes[index])
+            index = parents[index]
+        data.qpos[addresses] = start
+        mujoco.mj_kinematics(model, data)
+        path = DeparturePath(list(reversed(prefix)) + tail.waypoints[1:], departure, len(prefix) - 1)
+        path.clearance_scope = getattr(departure, 'clearance_scope', None)
+        return ArmRrtPlanResult(True, path, 'departure_rrt', departure=departure)
+    data.qpos[addresses] = start
+    mujoco.mj_kinematics(model, data)
+    if hasattr(collision, 'last_departure_diagnostics'):
+        collision.last_departure_diagnostics = {
+            **(collision.last_departure_diagnostics or {}),
+            'reason': 'escape_search_exhausted',
+            'rejections': dict(getattr(departure, 'rejections', {})),
+            'last_rejection': getattr(departure, 'last_rejection', None),
+            'accepted_nodes': len(nodes),
+            'clear_candidates': clear_candidates,
+            'last_connection_failure': last_connection_failure,
+        }
+    return ArmRrtPlanResult(False, [], 'departure_rrt', 'escape_search_exhausted')
 
 
 def resolve_agent_manip_planner(*, config_mode: str | None = None) -> str:

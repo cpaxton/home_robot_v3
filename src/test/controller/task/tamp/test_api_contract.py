@@ -476,3 +476,9 @@ def test_unsupported_adapter_does_not_ignore_placement_region():
 def test_verification_evidence_rejects_private_or_malformed_values(value):
     from emet.controller.task.tamp.api import VerificationFailure
     assert VerificationFailure.from_data(value) is None
+
+
+@pytest.mark.parametrize("reason", ["moving_tracking_time_budget_exhausted", "moving_tracking_lost_reinitialize"])
+def test_observed_tracking_failure_preserves_actionable_public_code(reason):
+    from emet.controller.task.tamp.api import failure_code
+    assert failure_code(reason) == reason

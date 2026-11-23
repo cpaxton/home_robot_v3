@@ -96,6 +96,11 @@ class StretchBackend(RobotBackend):
 
         return StretchZmqClient(robot_ip=robot_ip, **kwargs)
 
+    def bind_observed_arm(self, robot, model):
+        from emet.robots.stretch.observed import bind_stretch_arm
+
+        return bind_stretch_arm(robot, model)
+
     def create_model(self, **kwargs) -> HelloStretchKinematics:
         return HelloStretchKinematics(**kwargs)
 

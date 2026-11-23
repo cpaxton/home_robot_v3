@@ -316,7 +316,7 @@ def evaluate_lift(reference, frames, *, support_top_z, after, now=None):
         return VisualEffectResult("unknown", str(exc))
 
 
-def evaluate_place(reference, frames, *, support_bounds, after, now=None):
+def evaluate_place(reference, frames, *, support_bounds, after, now=None, settling_tolerance_m=.01):
     """Verify footprint/support consistency and settling after measured retreat."""
     now = time.monotonic() if now is None else now
     try:
@@ -356,7 +356,7 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None):
                 or box[0, 2] < support[1, 2] - 0.02
                 or box[1, 2] <= support[1, 2]
                 or box[0, 2] > support[1, 2] + 0.02
-                or np.linalg.norm(obj[:3, 3] - first[:3, 3]) + error > 0.01
+                or np.linalg.norm(obj[:3, 3] - first[:3, 3]) + error > settling_tolerance_m
                 or evidence_rotation_distance(frame.payload.pose, obj[:3, :3], first[:3, :3]) + angular_error > 0.1
             ):
                 return VisualEffectResult("violated", "visual_placement_not_verified", ids)
@@ -367,8 +367,14 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None):
 
 class ObservedVisualVerifier:
     """Execution consumer of live frames and bounded stop-and-observe batches."""
-    def __init__(self, *, object_ref, support_bounds, observe, collect, clock=time.monotonic, observe_after=None):
+    def __init__(
+        self, *, object_ref, support_bounds, observe, collect, clock=time.monotonic,
+        observe_after=None, source_support_bounds=None,
+    ):
         self.object_ref, self.support_bounds = object_ref, bounds_array(support_bounds)
+        self.source_support_top_z = (
+            self.support_bounds[1, 2] if source_support_bounds is None else bounds_array(source_support_bounds)[1, 2]
+        )
         self.observe, self.collect, self.clock = observe, collect, clock
         self.observe_after = observe_after
         self.reference = self.lift_reference = None
@@ -396,7 +402,7 @@ class ObservedVisualVerifier:
 
     def verify_lift(self, *, after):
         frames = tuple(self.collect(self.object_ref, after=after))
-        result = evaluate_lift(self.reference, frames, support_top_z=self.support_bounds[1, 2],
+        result = evaluate_lift(self.reference, frames, support_top_z=self.source_support_top_z,
                                after=after, now=self.clock())
         if result.satisfied:
             self.lift_reference = frames[-1]

@@ -356,6 +356,34 @@ def main(
 
     use_stretch = robot.lower() in ("stretch", "hello_stretch", "hellostretch")
 
+    if robot.lower().replace("-", "_") in {"pandaomron", "panda_omron"}:
+        if not use_robocasa or molmospaces_session_scene or scene_path or robocasa_write_to_xml:
+            raise click.UsageError("PandaOmron requires a native RoboCasa task. Use --use-robocasa without a scene XML.")
+        from emet.simulation.pandaomron_environment import make_pandaomron_environment
+        from emet.simulation.pandaomron_server import PandaOmronZmqServer
+
+        env = make_pandaomron_environment(task=robocasa_task, layout=robocasa_layout, style=robocasa_style, seed=seed)
+        env.reset()
+        server = PandaOmronZmqServer(
+            env=env,
+            environment=zmq_environment,
+            send_port=send_port,
+            recv_port=recv_port,
+            send_state_port=send_state_port,
+            send_servo_port=send_servo_port,
+            use_remote_computer=use_remote_computer,
+            verbose=verbose,
+            no_cameras=no_cameras,
+            max_sim_steps=steps,
+        )
+        try:
+            server.start(headless=headless, show_viewer_ui=show_viewer_ui, use_glx=use_glx)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.stop()
+        return
+
     if use_robocasa:
         # Lazy import so we only load robosuite/numba when actually using Robocasa.
         wizard = model_generation_wizard

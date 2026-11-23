@@ -508,3 +508,72 @@ def test_tamp_batch_waits_for_tool_result_and_never_dispatches_invented_handle(m
 def test_mixed_capability_batches_keep_existing_dispatch_semantics():
     calls = [{"name": "describe_scene"}, {"name": "plan_task"}]
     assert serial_tamp_calls(calls) == (calls, [])
+
+
+@pytest.mark.parametrize("code", [
+    "geometry_tracking_no_match", "planning_failed", "background_scene_changed",
+    "moving_tracking_time_budget_exhausted", "no_plan_within_budget",
+])
+def test_unstarted_planning_failure_allows_bounded_visual_recovery(code):
+    result = response("plan_pick_place", code=code, data={"execution_started": False, "completed_ops": []})
+    lines = ["[plan_pick_place] " + json.dumps(result)]
+    assert "query the VLM" in tamp_followup("Move the shaker to the sink", lines)
+    assert tamp_followup("Move the shaker", lines, recovery_attempts=1)
+    assert tamp_followup("Move the shaker", lines, recovery_attempts=2) is None
+
+
+@pytest.mark.parametrize("data", [{}, {"execution_started": True}, {"execution_started": False, "completed_ops": ["grasp"]}])
+def test_recovery_needs_explicit_no_execution_and_no_progress(data):
+    result = response("plan_pick_place", code="planning_failed", data=data)
+    assert tamp_followup("Move the shaker", ["[plan_pick_place] " + json.dumps(result)]) is None
+
+
+def test_real_chat_bounds_repeated_unstarted_planning_recovery(monkeypatch):
+    setup_chat_loop(monkeypatch)
+    plan = MagicMock(return_value=json.dumps(response(
+        "plan_pick_place", code="planning_failed", data={"execution_started": False},
+    )))
+    monkeypatch.setattr(loop, "get_tools", lambda _: [Tool(
+        name="plan_pick_place", description="test", parameters={"type": "object", "properties": {}},
+        func=plan, returns_info=True,
+    )])
+    call = json.dumps({"tool_calls": [{"name": "plan_pick_place", "arguments": {}}]})
+    llm = MagicMock(side_effect=[(call, .1)] * 3 + [('{"message":"Planning remains blocked","tool_calls":[]}', .1)])
+    monkeypatch.setattr(loop, "_call_llm", llm)
+    loop.run_agent_with_robot(
+        discord=False, use_llm=True, commands=["Move the shaker into the sink"], device="cpu",
+        thinking_status=False, max_tool_rounds=8,
+    )
+    assert plan.call_count == 3
+    assert "query the VLM" in llm.call_args_list[1].args[1]
+    assert "Do not call any more tools" in llm.call_args_list[3].args[1]
+
+
+def test_real_chat_visual_inspection_then_fresh_plan_execution(monkeypatch):
+    setup_chat_loop(monkeypatch)
+    plan = MagicMock(side_effect=[
+        json.dumps(response("plan_pick_place", code="geometry_tracking_no_match", data={"execution_started": False})),
+        json.dumps(response("plan_pick_place", data={"plan_ref": "fresh-plan"})),
+    ])
+    inspect = MagicMock(return_value="The gripper obscures the object; use the other camera.")
+    execute = MagicMock(return_value=json.dumps(response("execute_pick_place_plan")))
+    tools = [Tool(name=name, description="test", parameters={"type": "object", "properties": {}}, func=fn, returns_info=True)
+             for name, fn in (("plan_pick_place", plan), ("describe_scene", inspect), ("execute_pick_place_plan", execute))]
+    monkeypatch.setattr(loop, "get_tools", lambda _: tools)
+
+    def call(name, arguments=None):
+        return json.dumps({"tool_calls": [{"name": name, "arguments": arguments or {}}]}), .1
+
+    llm = MagicMock(side_effect=[
+        call("plan_pick_place"), call("describe_scene"), call("plan_pick_place"),
+        call("execute_pick_place_plan", {"plan_ref": "fresh-plan"}),
+        ('{"message":"Complete","tool_calls":[]}', .1),
+    ])
+    monkeypatch.setattr(loop, "_call_llm", llm)
+    loop.run_agent_with_robot(
+        discord=False, use_llm=True, commands=["Move the shaker into the sink"], device="cpu",
+        thinking_status=False, max_tool_rounds=8,
+    )
+    inspect.assert_called_once()
+    assert plan.call_count == 2
+    execute.assert_called_once_with(plan_ref="fresh-plan")

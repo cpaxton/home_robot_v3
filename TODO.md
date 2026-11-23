@@ -62,14 +62,69 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       control and held-out episodes. Sink transfer requires the observed
       transfer gate. Drawer opening requires observed articulation. The
       composite also requires the stopped-base handoff.
-      The original kitchen starts require stance changes under the tested
-      arm poses. The development sink has clear off-center endpoint probes.
-      The development reset passed the guarded unloaded drive with confirmed
-      rest after wheel-command calibration. Raising
-      the stowed lift cleared above-rim empty-arm paths at five landing stances.
-      Qualify a grasp and approach for the tongs in countertop clutter,
-      then test loaded carry and release into a freshly measured clear region.
+      Use PandaOmron, RoboCasa365's native embodiment, for the sink pilot.
+      Its stopped-base bridge publishes calibrated front and wrist RGB-D with
+      synchronized joint feedback, and executes native arm, torso and gripper
+      commands through the shared client. The archived tongs transfer passed
+      through that client using a simulator-state-assisted reference trajectory.
+      Production CHAT starts without issuing navigation or camera motion on
+      the stopped profile. The right camera shows both the tongs and sink.
+      The optional live provider now discovers the shaker task from
+      synchronized depth, an asset-derived shape envelope and measured support
+      surfaces. Measured counter depth around the shaker also supports a
+      pickup-height check under occlusion. Motion-scoped checking now retains
+      fixed chassis contact, and an optional 5 mm local depth map checks arm
+      geometry. A sampled departure planner can start in contact with bounded
+      overlap slack. Recovery now uses measured surface patches instead of
+      voxel contact identities, with bounded sliding and 5 mm patch slack under
+      a separate hard penetration cap. Qualify live execution/contact monitoring.
+      Audit found missed robot surface returns in the local map; actual visual
+      mesh association and vertical-first escape probes now have regressions.
+      Scoped original-patch clearance now survives goal connection and runtime
+      handoff; regressions cover prefix/suffix commands and newly seen obstacles.
+      Panda has executed a full recovery prefix and clearance suffix: five
+      commands, 7.04 mm torso progress, zero scored unintended contacts. Full sink transfer remains incomplete and startup-dependent.
+      Shared stack changes and the reproducible development profile are mapped in
+      `docs/testing/observed_manipulation_stack.md`: three-camera sensing, native
+      feedback, convex contact, bounded IK/Cartesian planning, and runtime path
+      revalidation. Require verified lift, sink placement and independent contact
+      scoring before closing this item.
+      Native reference motions
+      also need self-collision repair; the scorer now measures self contacts.
+      Simulator-only collision bypass controls moved the end effector 5.1 cm
+      without scored unintended contacts and 12.6 cm with unintended contacts.
+      Both stopped on visual association and remain incomplete transfers.
+      CHAT now permits at most two autonomous recovery rounds for explicitly
+      unstarted planning failures: inspect fresh imagery or query the VLM,
+      adapt the view/approach and request a fresh plan. Partial or unknown
+      execution does not enter this recovery path. Explicit simulator overrides
+      remain recorded; VLM judgment does not certify metric clearance.
+      A 5 mm map cell is resolution, not sensor accuracy. Qualify uncertainty
+      margins and monitored contact independently on physical robots.
+      Fixed-camera tracking can now continue independently of wrist-based
+      initialization. Every segment of a proposed home-posture or configured
+      demonstration detour is checked before execution; route proposals do not
+      waive collisions. The bypass contacts were at a cabinet handle during
+      pregrasp travel, before reaching the object. Qualify this corridor first.
+      Resolve moving-view association and qualify precise collision checking
+      against fresh local geometry. Qualify continuous pose tracking through
+      motion and complete pickup, carry and release through production CHAT
+      with observed clearance. Qualify the guarded placement fallback on a
+      loaded wrist after the bridge's empty-wrist stop controls.
+      The shaker is the simpler next target. Its depth patches cover the
+      placement footprint. A sensor-seeded native run passed after testing
+      collision detours, torso motion and a longer retreat under simulator
+      supervision. Bind live evidence before repeating it through CHAT.
+      Seed 1 is a development diagnostic. Freeze a fresh held-out scene
+      for qualification.
+      The earlier Stretch control measured the unloaded approach and
+      above-rim reach. Its tongs candidates stopped before closure.
       [Follow-up experiments](docs/experiments/harness_assessment_20261119.md#tabletop-manipulation-and-robocasa-reachability-follow-up).
+- [ ] Port the observed-transfer contract to each benchmark's chosen
+      embodiment. Use PandaOmron for RoboCasa365 and Stretch for the in-house
+      tabletop control. Evaluate MolmoSpaces/rby1 next. Select and qualify
+      additional native controllers against the tasks they will run.
+      [Onboarding recipe](docs/testing/agent_harness_assessment.md#port-a-benchmark-arm).
 - [x] Verify that Stretch can revisit and see a block whose position changed
       while out of view. The explicit head revisit recovers the moved block
       without base motion.
@@ -103,8 +158,12 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       the observations and receipts available at every decision, including
       what caused a refusal and which follow-up view helped. Compare the
       baseline and a trained model on the same held-out tasks, public tools
-      and action checks. Evaluate the Mars teacher-action policies on the
-      controller track.
+      and action checks. Use each embodiment's native controller as the
+      control baseline under the shared tool and observation contract. Add an
+      embodiment and skill to the controller training track when native runs
+      establish a repeatable control or retention gap. Compare learned and
+      native controllers on the same task, inputs and held-out fixtures.
+      Evaluate the Mars teacher-action policies on this controller track.
 
 ## Parallel TAMP controls and performance
 

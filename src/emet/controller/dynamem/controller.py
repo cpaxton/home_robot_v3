@@ -190,9 +190,11 @@ class DynamemController(BaseController):
             "Agent init: nav posture + look_front "
             "(head timeout warnings on a slow sim are OK; lifelong --input-path load starts after this)"
         )
-        self.robot.move_to_nav_posture()
+        capabilities = self._declared_robot_capabilities()
+        if capabilities.get("nav_velocity_drive") is not False:
+            self.robot.move_to_nav_posture()
         look_front = getattr(self.robot, "look_front", None)
-        if callable(look_front):
+        if callable(look_front) and capabilities.get("head_motion") is not False:
             # Prefer a short wait: MuJoCo Stretch often settles ~0.03–0.04 rad off target and
             # the default 10s look_front timeout looks like a hang before --input-path load.
             look_front(blocking=True, timeout=3.0)

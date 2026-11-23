@@ -114,6 +114,47 @@ class GeometryFit:
             calibration_id,
         )
 
+    def require_axial_enclosure(self, enclosure, *, calibration_id, position_error_m, rotation_error_rad, now=None):
+        """Bound all fitted headings with an independently supplied cylinder."""
+        now = time.monotonic() if now is None else now
+        if (
+            not isinstance(enclosure, PrimitiveModel) or enclosure.kind != "cylinder"
+            or not calibration_id or not np.isfinite([position_error_m, rotation_error_rad]).all()
+            or not 0 < position_error_m <= .01 or not 0 < rotation_error_rad <= .05
+        ):
+            raise ObservationUnavailable("geometry_tracking_uncalibrated")
+        shape = self.model.vertices_reference
+        if (
+            np.linalg.norm(shape[:, :2], axis=1).max() > enclosure.dimensions[0]
+            or np.max(np.abs(shape[:, 2])) > enclosure.dimensions[1]
+        ):
+            raise ObservationUnavailable("payload_geometry_unknown")
+        if not 0 <= now - self.received_monotonic <= 2.0:
+            raise ObservationUnavailable("object_observation_stale")
+        first = self.poses[0]
+        if (
+            self.search_boundary_hit or not self.translation_observable
+            or any(len(space) and np.max(np.linalg.norm(space[:, 3:5], axis=1)) >= .05 for space in self.nullspaces)
+            or any(
+                np.linalg.norm(p[:3, 3] - first[:3, 3]) > position_error_m
+                or shape_rotation_distance(enclosure, first[:3, :3], p[:3, :3]) > rotation_error_rad
+                for p in self.poses
+            )
+        ):
+            raise ObservationUnavailable("object_pose_ambiguous")
+        z_axis = first[:3, 2].copy()
+        if z_axis[2] < 0:
+            z_axis *= -1
+        seed = np.eye(3)[0 if abs(z_axis[0]) < .9 else 1]
+        x_axis = seed - (seed @ z_axis) * z_axis
+        x_axis /= np.linalg.norm(x_axis)
+        pose = first.copy()
+        pose[:3, :3] = np.column_stack((x_axis, np.cross(z_axis, x_axis), z_axis))
+        return ShapePoseEvidence(
+            pose, self.received_monotonic, "rgbd_tracking", self.observation_ids[-1], enclosure,
+            position_error_m, rotation_error_rad, calibration_id,
+        )
+
     def as_dict(self):
         return {
             "state": "candidate",
@@ -261,6 +302,8 @@ def fit_geometry(
                 same_orientation = True
             elif model.symmetry == "axial_unoriented":
                 same_orientation = abs(old[:3, 2] @ pose[:3, 2]) > np.cos(0.01)
+            elif model.symmetry == "axial_oriented":
+                same_orientation = old[:3, 2] @ pose[:3, 2] > np.cos(0.01)
             else:
                 same_orientation = np.trace(old[:3, :3].T @ rotation) > 1 + 2 * np.cos(0.01)
             if same_center and same_orientation:

@@ -360,3 +360,111 @@ def test_bounded_closing_budget_expiring_during_revalidation_sends_no_next_comma
     monkeypatch.setattr(motion, "plan_arm_joint_path", slow)
     result = ex._close_gripper_until_still(timeout_s=1.0)
     assert not result.success and result.message == "gripper_settling_timeout" and commands == []
+
+
+def test_gripper_approach_removes_travel_padding_but_never_allows_housing_overlap():
+    shape = [WorldSolid('sphere', (.01,), box(center=(.064, 0., 0.)).world_from_local,
+                        offset_m=np.sqrt(3)*.005 + .001)]
+    checker = SimpleNamespace(target_contact=policy(gid=0), target_approach_geom_ids=frozenset({1}),
+        margin=.005, phase='grasp', _robot_bound=lambda *args: (shape[0], .001))
+
+    def collides(gid=1):
+        return ObservedNativeCollisionChecker._target_robot_collides(checker, None, None, gid)
+
+    assert not collides()
+    assert collides(2)  # Unrelated arm geometry retains travel clearance.
+    checker.phase = 'pregrasp'
+    assert collides()
+    checker.phase = 'grasp'
+    shape[0] = replace(shape[0], world_from_local=box(center=(.058, 0., 0.)).world_from_local)
+    assert collides()  # Housing never gains the fingertip penetration allowance.
+    checker.target_contact = replace(checker.target_contact, target=checker.target_contact.target.with_offset(.01))
+    checker.simulation_contact_terminated_close = True
+    checker._planning_gripper_contact_corridor = False
+    shape[0] = replace(shape[0], world_from_local=box(center=(.064, 0., 0.)).world_from_local)
+    assert not collides()  # Correlated carried/gripper uncertainty is not physical overlap.
+    assert collides(2)  # An unrelated robot link retains the target's full uncertainty.
+    shape[0] = replace(shape[0], world_from_local=box(center=(.058, 0., 0.)).world_from_local)
+    assert collides()  # Nominal housing penetration still rejects in the simulator mode.
+
+
+def test_contact_terminated_close_certifies_motor_corridor_and_bounded_stop_only():
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="robot"><body name="ee">
+      <body><joint name="left" type="slide" axis="1 0 0" range=".01 .08"/>
+        <geom type="sphere" size=".005" mass="1"/></body>
+      <body><joint name="right" type="slide" axis="-1 0 0" range=".01 .08"/>
+        <geom type="sphere" size=".005" mass="1"/></body>
+    </body></body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    data.qpos[:] = .06
+    mujoco.mj_forward(model, data)
+    contact = replace(policy(model_signature(model), target=box(half=(.02, .02, .02))),
+                      fingertip_geom_ids=frozenset({0, 1}))
+    scene = PlacementScene([], source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
+    provider = SimpleNamespace(input_mode='observed')
+    checker = ObservedNativeCollisionChecker(model, robot_body='robot', ee_body='ee', scene=scene,
+        payload_provider=provider, scene_revision='scene', current_revision=lambda: 'scene',
+        received_monotonic=contact.capture.received_monotonic, clock=lambda: 10.01, margin_m=0., target_contact=contact)
+    checker.simulation_contact_terminated_close = True
+    ex = PhysicalPickPlaceExecutor(SimpleNamespace(), model=model, data=data, ee_body='ee',
+        joint_names=('left', 'right'), collision=checker, synchronize=lambda data: None,
+        command_joints=lambda goals: True, command_gripper_joints=lambda goals: True,
+        gripper_close_configuration=(('left', .01), ('right', .01)), object_pose_provider=checker)
+    path, error = ex.plan_gripper_close()
+    assert error is None and len(path) > 1
+    assert np.all(data.qpos > .02)  # Contact stop hypothesis, not the empty-jaw motor endpoint.
+    assert np.all(path[-1] > .01)
+    assert checker._planning_gripper_contact_corridor is False
+    assert checker.target_contact is contact
+    nominal_contact = replace(contact, max_penetration_m=0.)
+    for gid in contact.fingertip_geom_ids:
+        assert not nominal_contact.collides(WorldSolid.from_geom(model, data, gid), geom_id=gid, phase='close')
+    with checker.motion_phase('close'):
+        assert not checker.configuration_collides(model, data)
+        data.qpos[:] = .01
+        assert checker.configuration_collides(model, data)  # Deep actual penetration remains rejected.
+    data.qpos[:] = .06
+    checker.scene = PlacementScene([[[.028, -.02, -.02], [.032, .02, .02]]],
+        source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
+    path, error = ex.plan_gripper_close()
+    assert path is None and error  # A non-target obstacle cannot become a contact stop.
+
+
+def test_convex_halfspace_solver_resolves_narrow_gap_with_overlapping_bounds():
+    rotation = Rotation.from_euler('z', np.pi/4).as_matrix()
+    vertices = box_corners([[-.5, -.001, -.01], [.5, .001, .01]])
+    pose = np.eye(4)
+    pose[:3, :3] = rotation
+    first = WorldSolid('convex', (), pose, vertices=vertices, material_calibration_id='test')
+    pose = pose.copy()
+    pose[:3, 3] = rotation[:, 1]*.0021
+    second = WorldSolid('convex', (), pose, vertices=vertices, material_calibration_id='test')
+    assert not first.disjoint_box(second.bounds)
+    assert solids_disjoint(first, second, max_nodes=1)
+    assert not solids_disjoint(first, second.with_offset(.0002), max_nodes=1)
+    assert solids_disjoint(first, second.with_offset(-.0002), max_nodes=1)
+
+
+def test_convex_solver_failure_keeps_conservative_subdivision(monkeypatch):
+    import emet.motion.observed_contact as native
+
+    vertices = box_corners([[-.5, -.001, -.01], [.5, .001, .01]])
+    pose = np.eye(4)
+    pose[:3, :3] = Rotation.from_euler('z', np.pi/4).as_matrix()
+    first = WorldSolid('convex', (), pose, vertices=vertices, material_calibration_id='test')
+    shifted = pose.copy()
+    shifted[:3, 3] += pose[:3, 1]*.0021
+    second = replace(first, world_from_local=shifted)
+    monkeypatch.setattr(native, 'linprog', lambda *args, **kwargs: SimpleNamespace(status=4, success=False))
+    assert not solids_disjoint(first, second, max_nodes=1)
+
+
+def test_convex_payload_core_and_box_pad_keep_exact_contact_cap():
+    vertices = box_corners([[-.05]*3, [.05]*3])
+    target = WorldSolid('convex', (), np.eye(4), vertices=vertices, material_calibration_id='test')
+    contact = policy(target=target)
+    shallow = box(center=(.0522, 0., 0.), half=(.005, .005, .005))
+    deep = box(center=(.0518, 0., 0.), half=(.005, .005, .005))
+    assert not contact.collides(shallow, geom_id=0, phase='grasp')
+    assert contact.collides(deep, geom_id=0, phase='grasp')
+    assert contact.collides(shallow, geom_id=1, phase='grasp')

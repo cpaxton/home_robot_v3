@@ -89,13 +89,20 @@ class ObservedWorkspace:
             projected = camera @ intrinsic.T
             with np.errstate(divide='ignore', invalid='ignore'):
                 uv = projected[..., :2] / projected[..., 2:]
-            for index in np.flatnonzero(in_front):
-                lo, hi = uv[index].min(0), uv[index].max(0)
-                if np.any(lo < -.5) or hi[0] >= width - .5 or hi[1] >= height - .5:
-                    continue
-                low, high = np.floor(lo + .5).astype(int), np.floor(hi + .5).astype(int)
-                patch = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
-                if np.isfinite(patch).all() and np.all(patch > camera[index, :, 2].max() + depth_margin_m):
+            lo, hi = uv.min(axis=1), uv.max(axis=1)
+            visible = in_front & np.all(lo >= -.5, axis=1) & np.all(hi < [width - .5, height - .5], axis=1)
+            indices = np.flatnonzero(visible)
+            x0, y0 = np.floor(lo[indices] + .5).astype(int).T
+            x1, y1 = np.floor(hi[indices] + .5).astype(int).T
+            far = camera[indices, :, 2].max(axis=1) + depth_margin_m
+            # These samples cheaply rule out occluded boxes. Admission still
+            # checks every pixel, including interior holes and narrow obstacles.
+            possible = (depth[y0, x0] > far) & (depth[y0, x1] > far) & (depth[y1, x0] > far) & (depth[y1, x1] > far)
+            possible &= depth[(y0 + y1) // 2, (x0 + x1) // 2] > far
+            for candidate in np.flatnonzero(possible):
+                patch = depth[y0[candidate]:y1[candidate] + 1, x0[candidate]:x1[candidate] + 1]
+                if patch.min() > far[candidate]:
+                    index = indices[candidate]
                     cells[tuple(ids[index])] = 1
         # Endpoint cells are occupied; a margin-neighbourhood remains unknown
         # because free carving already stops before each return by that margin.
@@ -218,7 +225,8 @@ class ObservedOccupancyPartition:
     def qualify_robot_material(self, material, *, capture, now, point_error_m=0., robot_ref='robot'):
         """Keep inconsistent self labels as background, before any exclusion.
 
-        A measured endpoint's entire error ball must fit captured inner material.
+        Endpoints may match a calibrated primitive surface within its error
+        margin or fit entirely within captured inner material.
         Labels alone, a shared voxel, and an outer model AABB are insufficient.
         Missing point provenance cannot qualify exclusion of occupied cells.
         """
@@ -242,6 +250,7 @@ class ObservedOccupancyPartition:
             qualified = np.zeros(len(points), bool)
             for solid in material.inner_solids:
                 qualified |= solid.lower_distance(points) + point_error_m <= 0
+            qualified |= material.matches_surface(points, point_error_m=point_error_m)
             proved, invalid = np.unique(ids[qualified]), np.unique(ids[~qualified])
         # Every endpoint in a cell must be qualified, not just one matching point.
         invalid = np.union1d(invalid, np.setdiff1d(self_ids, proved))

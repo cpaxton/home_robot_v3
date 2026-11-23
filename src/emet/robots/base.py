@@ -188,6 +188,10 @@ class RobotBackend(ABC):
         """Create a kinematic/planning model of the robot."""
         ...
 
+    def bind_observed_arm(self, robot, model):
+        """Bind native commands and measured feedback to a robot-only collision model."""
+        raise NotImplementedError("observed arm binding unavailable for this robot")
+
     def get_emote_backend(self) -> "EmoteBackend":
         """Emote/gesture implementation for this robot (Stretch motion vs speech-only, etc.)."""
         from emet.controller.emotes.backend import GenericEmoteBackend

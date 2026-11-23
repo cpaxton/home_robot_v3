@@ -110,6 +110,12 @@ def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
     Dividing total extension across the collinear telescope preserves rigid FK.
     Individual-link collision geometry and localization errors need their own bounds.
     """
+    estimate, _ = stretch_configuration_from_encoders(observation, model, now=now)
+    return estimate
+
+
+def stretch_configuration_from_encoders(observation, model, *, now=None):
+    """Return nominal robot-only planning data alongside measured-frame FK."""
     motors = read_local_sim_motor_capture(observation, now=now)
     data, base_addr, cid, assigned = _motor_frame_kinematics(motors, model, include_ee=True)
     root_from_camera = camera_opencv_pose(model, data, cid, upright=True)
@@ -126,4 +132,4 @@ def estimate_stretch_ee_from_encoders(observation, model, *, now=None):
         for j in range(model.njnt)
         if mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) not in assigned
     )
-    return EncoderKinematicEstimate(pose, motors, inferred, world_from_root)
+    return EncoderKinematicEstimate(pose, motors, inferred, world_from_root), data

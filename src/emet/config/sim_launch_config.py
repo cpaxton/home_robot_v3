@@ -205,6 +205,8 @@ def build_sim_launch_config_from_serve_cli(
     debug_molmospaces_spawn: bool,
     port_offset: int,
     robocasa_task: str,
+    robocasa_layout: int = 1,
+    robocasa_style: int = 1,
 ) -> SimLaunchConfig:
     """Build :class:`SimLaunchConfig` the same way ``emet serve mujoco`` does (single source of truth)."""
     resolved = classify_scene_selector(scene)
@@ -230,7 +232,13 @@ def build_sim_launch_config_from_serve_cli(
             **common,
         )
     if resolved.kind == "robocasa":
-        return SimLaunchRobocasa(robot=robot, robocasa_task=robocasa_task or "", **common)
+        return SimLaunchRobocasa(
+            robot=robot,
+            robocasa_task=robocasa_task or "",
+            robocasa_layout=robocasa_layout,
+            robocasa_style=robocasa_style,
+            **common,
+        )
     if resolved.kind == "path":
         return SimLaunchDefaultMujoco(robot=robot, scene_path=resolved.scene_path, **common)
     return SimLaunchDefaultMujoco(robot=robot, scene_path=None, **common)

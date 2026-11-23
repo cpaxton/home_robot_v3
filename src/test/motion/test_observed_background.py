@@ -73,6 +73,25 @@ def test_mixed_robot_obstacle_cell_invalidates_static_epoch_instead_of_erasing_w
         initial().update(current, excluded_refs=("robot",), scene_epoch="scene", capture=stamp("next", 11.0), now=11.1)
 
 
+def test_endpoint_conflict_can_seed_a_stricter_map_for_a_new_plan():
+    background = initial()
+    current = partition([2, 0, 1, 0], [[.05, .05, .05]], ["foreground_obstacle"])
+    args = {"excluded_refs": ("robot",), "scene_epoch": "scene", "capture": stamp("next", 11.), "now": 11.1,
+            "expand_free": False, "retain_new_obstacles": True}
+    updated = background.update(current, **args)
+    np.testing.assert_array_equal(updated.workspace.cells[:, 0, 0], [2, 1, 0, 2])
+    np.testing.assert_allclose(updated.observed_monotonic[[0, 1, 3], 0, 0], [11., 10., 10.])
+    assert updated.occupied_owners == (("foreground_obstacle", (0,)), ("wall", (3,)))
+    assert updated.geometry_revision != background.geometry_revision
+    assert updated.is_conservative_update_of(background)
+    assert not background.is_conservative_update_of(updated)
+    renamed = ObservedBackground(updated.workspace, updated.observed_monotonic, updated.scene_epoch,
+                                updated.capture_ids, updated.latest_capture, capture_history=updated.capture_history)
+    assert not renamed.is_conservative_update_of(background)
+    with pytest.raises(ObservationUnavailable, match="background_scene_changed"):
+        background.update(partition([2, 0, 0, 1]), **args)
+
+
 @pytest.mark.parametrize("change", ["replay", "epoch", "reverse_time", "cleared_obstacle"])
 def test_stale_or_contradictory_background_cannot_be_published(change):
     current = partition([0, 0, 0, 1 if change == "cleared_obstacle" else 0])
@@ -162,3 +181,11 @@ def test_unqualified_self_mask_cannot_keep_cached_free_space_for_a_native_path()
     checker.scene = background.placement_scene(static_assumption=assumption, clock=lambda: clock[0])
     assert plan(0.05).reason == 'invalid_start'  # Static age does not qualify a self label.
     assert not plan(0.35).success  # Beyond the old camera frustum remains unknown.
+
+
+def test_static_assumption_exact_limit_survives_clock_roundoff():
+    from emet.motion.observed_background import StaticBackgroundAssumption
+
+    for started in (26.1000000001, 100.123456789, 1800.123456789):
+        assumption = StaticBackgroundAssumption('scene', started, started + 300., 'bounded')
+        assert assumption.expires_monotonic == started + 300.

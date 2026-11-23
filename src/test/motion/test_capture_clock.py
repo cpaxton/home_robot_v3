@@ -6,6 +6,7 @@ import pytest
 
 from emet.controller.manipulation import capture_clock
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
+from emet.core import capture_clock as clock_identity
 
 
 def timing():
@@ -21,15 +22,15 @@ def test_clock_identity_retries_failures_and_caches_only_success(monkeypatch):
         if len(calls) == 1:
             raise OSError('transient procfs failure')
         return 'boot'
-    capture_clock._local_monotonic_clock_id.cache_clear()
-    monkeypatch.setattr(capture_clock, 'Path', lambda _: SimpleNamespace(read_text=read))
-    monkeypatch.setattr(capture_clock.os, 'readlink', lambda _: 'namespace')
+    clock_identity._local_monotonic_clock_id.cache_clear()
+    monkeypatch.setattr(clock_identity, 'Path', lambda _: SimpleNamespace(read_text=read))
+    monkeypatch.setattr(clock_identity.os, 'readlink', lambda _: 'namespace')
     try:
-        assert capture_clock.local_monotonic_clock_id() is None
-        identity = capture_clock.local_monotonic_clock_id()
-        assert identity and capture_clock.local_monotonic_clock_id() == identity and len(calls) == 2
+        assert clock_identity.local_monotonic_clock_id() is None
+        identity = clock_identity.local_monotonic_clock_id()
+        assert identity and clock_identity.local_monotonic_clock_id() == identity and len(calls) == 2
     finally:
-        capture_clock._local_monotonic_clock_id.cache_clear()
+        clock_identity._local_monotonic_clock_id.cache_clear()
 
 
 def test_interval_union_preserves_stereo_skew_and_cannot_renew_replay(monkeypatch):

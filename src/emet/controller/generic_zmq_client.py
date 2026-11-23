@@ -252,6 +252,7 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
         head_camera_K_right=obs.get("camera_K_right"),
         head_camera_pose_right=obs.get("camera_pose_right"),
         ee_rgb=obs.get("ee_rgb"),
+        ee_depth=obs.get("ee_depth"),
         ee_camera_K=obs.get("ee_camera_K"),
         ee_camera_pose=obs.get("ee_camera_pose"),
         ee_pose=obs.get("ee_pose"),
@@ -265,7 +266,9 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
         seq_id=int(obs.get("step", -1)) if obs.get("step") is not None else -1,
         is_simulation=bool(obs.get("is_simulation", False)),
         emet_session=read_emet_session(obs),
+        auxiliary_rgbd_views=obs.get("auxiliary_rgbd_views"),
         image_timing=read_image_timing(obs),
+        received_monotonic=obs.get("_received_monotonic"),
     )
 
 
@@ -686,6 +689,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             if output is None:
                 continue
+            output["_received_monotonic"] = time.monotonic()
             self._seq_id += 1
             with self._obs_lock:
                 servo_msg = self._servo
@@ -945,6 +949,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             head_camera_K_right=obs.get("camera_K_right"),
             head_camera_pose_right=obs.get("camera_pose_right"),
             ee_rgb=ee_rgb,
+            ee_depth=obs.get("ee_depth"),
             ee_camera_K=ee_camera_K,
             ee_camera_pose=ee_camera_pose,
             ee_pose=ee_pose,
@@ -955,8 +960,12 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             compass=compass,
             third_person_image=obs.get("third_person_image"),
             overhead_image=obs.get("overhead_image"),
+            seq_id=int(obs["step"]) if obs.get("step") is not None else -1,
+            is_simulation=bool(obs.get("is_simulation", False)),
             emet_session=read_emet_session(obs),
+            auxiliary_rgbd_views=obs.get("auxiliary_rgbd_views"),
             image_timing=read_image_timing(obs),
+            received_monotonic=obs.get("_received_monotonic"),
         )
 
     def peek_emet_robot_id(self) -> str | None:

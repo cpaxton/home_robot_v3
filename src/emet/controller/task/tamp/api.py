@@ -71,7 +71,8 @@ TASK_FAILURE_CODES = frozenset({
     "capture_identity_mismatch", "capture_clock_changed", "capture_replayed",
     "visual_evidence_incomplete", "gripper_geometry_unknown", "support_geometry_unknown",
     "robot_material_identity_changed", "robot_material_geometry_unavailable", "robot_collision_envelope_unknown",
-    "target_contact_identity_changed", "gripper_contact_collision",
+    "target_contact_identity_changed", "target_contact_geometry_unknown", "gripper_contact_collision",
+    "no_observed_transfer_candidate",
     "gripper_close_geometry_unavailable", "stale_gripper_plan",
     "base_approach_unavailable", "base_approach_invalidated", "base_approach_failed",
     "navigation_cancellation_unconfirmed",
@@ -144,7 +145,8 @@ def response(
                 "receptacle_not_found",
             }
             else "replan"
-            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan", "stale_task_plan", "base_approach_invalidated"}
+            if code in {"scene_changed_replan", "background_scene_changed", "unknown_plan", "approach_changed_replan",
+                        "stale_task_plan", "base_approach_invalidated"}
             else "inspect"
         )
     return {
@@ -266,7 +268,16 @@ def failure_code(message: str) -> str:
             if part.endswith(suffix):
                 return code
     allowed = {
-        "invalid_tamp_inputs", "observed_scene_unavailable",
+        "invalid_tamp_inputs", "observed_scene_unavailable", "transfer_grounding_unavailable",
+        "moving_geometry_ambiguous", "moving_multiview_association_unknown",
+        "moving_reference_appearance_unavailable", "support_geometry_unknown", "support_plane_unqualified",
+        "support_patch_unavailable", "geometry_tracking_no_match", "geometry_tracking_budget_exhausted",
+        "moving_tracking_time_budget_exhausted", "moving_tracking_lost_reinitialize",
+        "robot_material_geometry_unavailable", "robot_collision_envelope_unknown", "background_scene_changed",
+        "probe_unavailable", "probe_path_unavailable", "probe_unexpected_force",
+        "probe_no_contact", "probe_contact_outside_band", "probe_tracking_deviation",
+        "probe_feedback_stale", "probe_payload_tracking_lost", "probe_retreat_unavailable",
+        "probe_timeout", "probe_stop_unconfirmed", "probe_contact_unstable",
         "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
         "privileged_inputs_require_simulation", "native_execution_unavailable",
         "native_model_mismatch", "native_robot_unsupported", "native_policy_unsupported", "invalid_measured_state",
@@ -290,6 +301,7 @@ def failure_code(message: str) -> str:
         "receptacle_not_in_live_scene",
         "no_reachable_grasp",
         "no_plan_within_budget",
+        "escape_search_exhausted", "contact_departure_invalidated", "contact_departure_timeout",
         "no_grasp_candidates",
         "object_not_in_gt",
         "execution_error",

@@ -133,5 +133,29 @@ def test_decode_zmq_obs_images_inplace_decodes_depth_without_rgb():
     assert float(obs["depth"][0, 0]) == pytest.approx(1.0, rel=0.05)
 
 
+def test_decode_synchronized_wrist_images_without_head_images():
+    rgb = np.full((32, 32, 3), [20, 60, 200], dtype=np.uint8)
+    depth_mm = np.full((32, 32), 700, dtype=np.uint16)
+    obs = {"ee_rgb": compression.to_jpg(rgb), "ee_depth": compression.to_jp2(depth_mm)}
+    decode_zmq_obs_images_inplace(obs)
+    assert obs["ee_rgb"].shape == rgb.shape
+    np.testing.assert_allclose(obs["ee_rgb"][0, 0], rgb[0, 0], atol=3)
+    assert obs["ee_depth"].shape == depth_mm.shape
+    np.testing.assert_allclose(obs["ee_depth"], 0.7, atol=0.035)
+
+
 def test_full_obs_has_wire_images_false_without_jpeg_keys():
     assert not full_obs_has_wire_images({"gps": np.zeros(2)})
+
+
+def test_named_auxiliary_rgbd_views_keep_original_arrays_calibration_and_timing():
+    timing = {'timestamp_ns': 123, 'capture_interval_ns': [123, 125]}
+    auxiliary = {'scene_alt': {'rgb': np.zeros((2, 3, 3), np.uint8),
+        'depth': np.full((2, 3), .345678, np.float32), 'camera_K': np.eye(3),
+        'camera_pose': np.eye(4), 'timing': timing}}
+    raw = {'rgb': np.zeros((2, 3, 3), np.uint8), 'depth': np.ones((2, 3)),
+           'auxiliary_rgbd_views': auxiliary}
+    observation = get_observation_from_zmq_dict(raw)
+    assert observation.auxiliary_rgbd_views is auxiliary
+    assert observation.auxiliary_rgbd_views['scene_alt']['timing'] is timing
+    assert observation.auxiliary_rgbd_views['scene_alt']['depth'][0, 0] == np.float32(.345678)

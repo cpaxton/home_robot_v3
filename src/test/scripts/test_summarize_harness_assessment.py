@@ -38,6 +38,15 @@ def test_manifest_rejects_missing_skill(report_module, tmp_path):
         report_module.load_manifest(path, ROOT)
 
 
+def test_transfer_roster_preserves_benchmark_embodiments(report_module):
+    roster = ROOT / "configs/eval/observed_transfer_ports.json"
+    _, original = report_module.load_manifest(MANIFEST, ROOT)
+    _, combined = report_module.load_manifest(MANIFEST, ROOT, transfer_ports=roster)
+    new = {(row["stage"], row["id"]): row["adapter"] for row in combined if row not in original}
+    assert new["transfer-scripted", "robocasa365-held-out-shaker"] == "pandaomron"
+    assert new["transfer-preflight", "emet_tabletop-model-table-transfer"] == "stretch"
+
+
 def test_results_require_independent_check_and_cannot_overwrite_attempt(report_module, tmp_path):
     artifact = tmp_path / "summary.json"
     artifact.write_text("{}")

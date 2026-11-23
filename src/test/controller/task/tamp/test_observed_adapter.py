@@ -157,6 +157,53 @@ def plan(system):
     return json.loads(system.tools['plan_pick_place'].func(object_name='block', receptacle_name='counter'))
 
 
+def test_pickup_support_can_differ_from_destination(system):
+    from dataclasses import replace
+
+    original = system.source.snapshot
+
+    def snapshot(obj, support):
+        before = original(obj, support)
+        # Same arm and payload as the positive control, with disjoint
+        # rectangles on the two sides of the workspace.
+        return replace(before, source_support_bounds=[[0.1, -0.1, -0.1], [0.3, 0.1, 0.0]],
+                       support_bounds=[[0.3, -0.1, -0.1], [0.5, 0.1, 0.0]])
+
+    system.source.snapshot = snapshot
+    result = plan(system)
+    assert result['status'] == 'ok', result
+    assert not system.calls
+    release = system.adapter.execute(result['data']['plan_ref'])
+    assert release['status'] == 'ok', release
+
+
+def test_ranked_transfer_selects_only_a_complete_pair(system):
+    from emet.controller.task.tamp.observed_arm import TransferCandidate
+
+    task = next(iter(system.adapter.tasks.values()))
+    original = system.adapter.refine
+
+    def refine(task, snapshot):
+        ex = original(task, snapshot)
+        # The first grasp is fine but its destination is far beyond reach.
+        close = (('opening', 0.0),)
+        unreachable = tuple((point + [2., 0., 0.], rot) for point, rot in ex.place_targets)
+        ex.transfer_candidates = (
+            TransferCandidate(tuple(ex.grasp_targets), unreachable, close),
+            TransferCandidate(tuple(ex.grasp_targets), tuple(ex.place_targets), close),
+        )
+        return ex
+
+    system.adapter.refine = refine
+    result = plan(system)
+    assert result['status'] == 'ok', result
+    assert result['data']['planning_ik_calls'] > 6
+    assert system.calls == []
+    stored = system.adapter.plans[result['data']['plan_ref']]
+    assert stored.task == task
+    assert stored.executor.place_targets[1][0][0] == pytest.approx(.35)
+
+
 def support_snapshot(system):
     from emet.controller.manipulation.native_scene import model_signature
 
@@ -191,6 +238,38 @@ def support_snapshot(system):
     return task, initial, ex, raw
 
 
+def test_material_source_preserves_separate_support_roles(system):
+    from emet.controller.task.tamp.observed_source import ObservedTransferEvidence, ObservedTransferSource
+
+    task, initial, _, _ = support_snapshot(system)
+    dest = initial.support_contact
+    source = replace(dest, support_ref='counter')
+    evidence = ObservedTransferEvidence(initial.frame, initial.admission.background,
+        initial.admission.robot_material, source, dest, initial.admission.query_robot_geometry)
+    def clock():
+        return system.clock[0]
+
+    arm_source = ObservedTransferSource(read=lambda *_: evidence, collect=lambda *_, **__: (),
+        current_revision=lambda: evidence.background.geometry_revision, invalidate=lambda: None,
+        model_signature=evidence.robot_material.model_signature, fingertip_geom_ids=(0,), clock=clock)
+    observed = arm_source.snapshot(task.object_ref, task.support_ref)
+    assert observed.source_support_contact is source
+    assert observed.support_contact is dest
+    system.clock[0] += 3
+    with pytest.raises(ObservationUnavailable, match='object_observation_stale'):
+        arm_source.snapshot(task.object_ref, task.support_ref)
+
+
+def test_transfer_candidates_can_retreat_farther_than_the_pickup_lift(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    profile = CalibratedGrasp(np.eye(4), (0., 0., -1.), (('opening', 0.),), lift_m=.10, retreat_m=.235)
+    (candidate,) = candidates_from_supports(snapshot, [profile], limit=1)
+    assert candidate.grasp[2][0][2] - candidate.grasp[1][0][2] == pytest.approx(.10)
+    assert candidate.place[2][0][2] - candidate.place[1][0][2] == pytest.approx(.235)
+
+
 @pytest.mark.parametrize('change', ['calibration', 'mask', 'backing', 'missing'])
 def test_support_profile_change_stops_refresh_before_mutation_or_commands(system, change):
     task, initial, ex, _ = support_snapshot(system)
@@ -218,6 +297,30 @@ def test_support_binding_rejects_wrong_payload_and_bounds(system):
         replace(initial, support_contact=replace(initial.support_contact, object_ref='other'))
     with pytest.raises(ValueError, match='invalid_observed_support_contact'):
         replace(initial, support_bounds=initial.support_bounds + [0., 0., .01])
+
+
+def test_planned_release_still_checks_live_payload_at_pickup(system, monkeypatch):
+    from emet.motion.observed_admission import AdmissionDecision
+
+    task, initial, ex, _ = support_snapshot(system)
+    source = replace(initial.support_contact, support_ref='pickup')
+    checker = ex.collision
+    checker.set_source_support_contact(source)
+    checker.set_payload(ex.model, ex.data, task.object_ref, ex.ee_body)
+    checker.set_payload(ex.model, ex.data, None)
+    queried = []
+
+    def query(_vertices, _bounds, _error, _ref, phase, contact):
+        queried.append((phase, contact.support_ref))
+        return AdmissionDecision(True, 'clear', 0)
+
+    monkeypatch.setattr(checker, '_query_supported_payload', query)
+    with checker.certify_transfer():
+        assert not checker._payload_scene_collides(ex.model, ex.data, checker.released_bounds)
+    assert queried == [('release', task.support_ref), ('release', 'pickup')]
+    queried.clear()
+    assert not checker._payload_scene_collides(ex.model, ex.data, checker.released_bounds)
+    assert queried == [('release', task.support_ref)] * 2
 
 
 def test_expired_support_is_no_actuation_even_with_fresh_payload_observation(system):
@@ -701,3 +804,389 @@ def test_camera_clock_calibration_change_invalidates_plan_before_commands(system
     result = system.adapter.execute(planned['data']['plan_ref'])
     assert result['status'] == 'error' and result['code'] == 'scene_changed_replan'
     assert not result['data']['execution_started'] and system.calls == []
+
+
+def test_unstarted_tracking_failure_resets_source_and_requires_fresh_plan(system):
+    snapshot = system.source.snapshot
+    lost = [True]
+    resets = []
+
+    def read(obj, support):
+        if lost[0]:
+            raise ObservationUnavailable('geometry_tracking_no_match')
+        return snapshot(obj, support)
+
+    def reset():
+        resets.append(True)
+        lost[0] = False
+
+    system.source.snapshot = read
+    system.source.invalidate = reset
+    failed = plan(system)
+    assert failed['code'] == 'geometry_tracking_no_match'
+    assert failed['data']['execution_started'] is False
+    assert failed['data']['perception_reset'] is True
+    assert failed['recovery'] == 'replan'
+    assert resets == [True]
+    assert not system.adapter.plans
+    assert plan(system)['status'] == 'ok'
+
+
+def test_rejected_pickup_is_not_replanned_for_each_landing(system, monkeypatch):
+    calls = []
+    pick = ((np.zeros(3), np.eye(3)),)
+    alternatives = tuple(SimpleNamespace(grasp=pick, place=((np.array([x, 0., 0.]), np.eye(3)),), close_joints=())
+                         for x in (.1, .2, .3))
+    executor = SimpleNamespace(transfer_candidates=alternatives, grasp_paths=[], place_paths=[])
+
+    def reject(ex, task, region):
+        calls.append(True)
+        ex.last_certification_phase = 'grasp'
+        return 'collision'
+
+    monkeypatch.setattr(system.adapter, '_certify_pair', reject)
+    assert system.adapter._certify_candidates(executor, None, None) == 'collision'
+    assert calls == [True]
+
+
+def test_world_aligned_grasp_keeps_measured_geometry_and_attachment_transform(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    measured = snapshot.frame.payload.pose.world_from_object.copy()
+    measured[:3, :3] = Rotation.from_euler('y', .15).as_matrix()
+    pose = replace(snapshot.frame.payload.pose, world_from_object=measured)
+    snapshot = replace(snapshot, frame=replace(snapshot.frame, payload=replace(snapshot.frame.payload, pose=pose)))
+    tool = np.diag([1., -1., -1., 1.])
+    tool[2, 3] = .025
+    profile = CalibratedGrasp(tool, (0., 0., 1.), (('opening', 0.),), world_aligned=True)
+    (candidate,) = candidates_from_supports(snapshot, [profile], yaw_options=(np.pi/2,), limit=1)
+    assert np.allclose(candidate.grasp[1][0], measured[:3, 3] + [0., 0., .025])
+    assert np.allclose(candidate.grasp[1][1], tool[:3, :3])
+    assert np.allclose(candidate.place[1][1], Rotation.from_euler('z', np.pi/2).as_matrix() @ tool[:3, :3])
+    assert np.array_equal(snapshot.frame.payload.pose.world_from_object, measured)
+
+
+@pytest.mark.parametrize("support_tolerance", [0., .005])
+def test_local_payload_contact_keeps_support_cap_and_other_obstacles(system, support_tolerance):
+    from emet.motion.local_manipulation_map import LocalManipulationMap
+
+    task, snapshot, ex, _ = support_snapshot(system)
+    support = snapshot.support_contact
+    obs = SimpleNamespace(rgb=np.zeros((*support.depth.shape, 3), np.uint8), depth=support.depth.copy(),
+                          camera_K=support.intrinsic, camera_pose=support.world_from_camera)
+    checker = ex.collision
+    checker.local_scene = LocalManipulationMap({'camera': obs}, {'camera': np.zeros(obs.depth.shape, bool)},
+                                               simulation_allow_unknown=True)
+    checker.simulation_local_payload_contact = True
+    checker.simulation_support_contact_tolerance_m = support_tolerance
+    checker.set_payload(ex.model, ex.data, task.object_ref, ex.ee_body)
+    with checker.motion_phase('lift'):
+        assert not checker._local_payload_scene_collides(ex.model, ex.data)
+        ex.data.qpos[2] -= .002
+        mujoco.mj_kinematics(ex.model, ex.data)
+        assert checker._local_payload_scene_collides(ex.model, ex.data) == (support_tolerance == 0.)
+        ex.data.qpos[2] += .002
+        mujoco.mj_kinematics(ex.model, ex.data)
+        ex.data.qpos[2] -= .02
+        mujoco.mj_kinematics(ex.model, ex.data)
+        assert checker._local_payload_scene_collides(ex.model, ex.data)
+        assert checker.last_reason == 'payload_support_penetration'
+        ex.data.qpos[2] += .02
+        mujoco.mj_kinematics(ex.model, ex.data)
+        obs.depth[18:23, 26:31] = .96
+        checker.local_scene = LocalManipulationMap({'camera': obs}, {'camera': np.zeros(obs.depth.shape, bool)},
+                                                   simulation_allow_unknown=True)
+        assert checker._local_payload_scene_collides(ex.model, ex.data)
+        assert checker.last_admission.reason == 'occupied_local_surface'
+
+
+def test_recessed_destination_preserves_source_lift_height_during_transfer(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    recessed = SimpleNamespace(frame=snapshot.frame, support_bounds=snapshot.support_bounds,
+        support_contact=SimpleNamespace(patch=SimpleNamespace(plane=np.array([0., 0., -.2]))))
+    grasp = CalibratedGrasp(np.eye(4), (0., 0., -1.), (('opening', 0.),), lift_m=.1)
+    (candidate,) = candidates_from_supports(recessed, (grasp,), limit=1)
+    assert candidate.place[1][0][2] < candidate.grasp[1][0][2] - .15
+    assert candidate.place[0][0][2] >= candidate.grasp[2][0][2]
+    assert candidate.place[0][0][2] - candidate.place[1][0][2] > .25
+
+
+def test_runtime_revalidation_checks_only_the_commanded_direct_segment(system, monkeypatch):
+    from emet.controller.manipulation import physical_pick_place as native
+
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    q0 = ex.data.qpos[ex.qadr].copy()
+    q1 = q0 + [.01, 0., 0.]
+    ex.approach_joint_routes = (np.array([q0, q0 + [.3, .3, .1]]),)
+    original = native.plan_arm_joint_path
+    checked = []
+
+    def direct(*args, **kwargs):
+        assert not kwargs.get('via_configurations')
+        assert kwargs['planner'] == 'linear'
+        checked.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(native, 'plan_arm_joint_path', direct)
+    assert ex._execute_path('pregrasp', [q0, q1]).success
+    assert checked
+
+
+def test_linear_joint_tracking_cannot_treat_five_mm_lag_as_radians(system):
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    ex.linear_joint_tolerance_m = .001
+    q0 = ex.data.qpos[ex.qadr].copy()
+    q1 = q0 + [.02, 0., 0.]
+
+    def lagging(goals):
+        system.q[ex.qadr] = np.asarray(goals) - [.005, 0., 0.]
+        return True
+
+    ex.command_joints = lagging
+    result = ex._execute_path('pregrasp', [q0, q1])
+    assert not result.success and result.message == 'arm_tracking_failed'
+    assert abs(system.q[0] - q1[0]) == pytest.approx(.005)
+
+
+def test_already_open_gripper_retains_measured_geometry_without_new_sweep(system, monkeypatch):
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    before = ex.data.qpos.copy()
+    calls = []
+    monkeypatch.setattr(ex.collision, 'configuration_collides', lambda *args: calls.append(True) or True)
+    path, error = ex.plan_gripper_open()
+    assert error is None and len(path) == 1
+    assert not calls and not system.calls
+    np.testing.assert_array_equal(ex.data.qpos, before)
+    # The arm still needs its own collision/departure checks.
+    _, error = ex.plan_joint_target(before[ex.qadr] + [.01, 0., 0.])
+    assert error and calls
+
+
+def test_departure_handoff_retains_patch_context_during_suffix_execution(system):
+    from contextlib import contextmanager
+
+    from emet.motion.arm_rrt import DeparturePath
+
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    q0 = ex.data.qpos[ex.qadr].copy()
+    q1, q2 = q0.copy(), q0.copy()
+    q1[0] += .0002
+    q2[0] += .0004
+    active, commands = [False], []
+
+    @contextmanager
+    def clearance_scope():
+        assert not active[0]
+        active[0] = True
+        try:
+            yield
+        finally:
+            active[0] = False
+
+    policy = SimpleNamespace(joint_names=ex.joint_names, execution_waypoints=lambda path: path,
+        validate_edge=lambda a, b: True, configuration_allowed=lambda q: True)
+    path = DeparturePath([q0, q1, q2], policy, escape_end_index=1)
+    path.clearance_scope = clearance_scope
+    original = ex.command_joints
+
+    def command(q):
+        commands.append((active[0], ex.collision.active_departure))
+        return original(q)
+
+    ex.command_joints = command
+    result = ex._execute_path('pregrasp', path)
+    assert result.success, result
+    assert commands[0] == (False, policy)
+    assert commands[-1] == (True, None)
+    assert not active[0] and ex.collision.active_departure is None
+    np.testing.assert_allclose(system.q[ex.qadr], q2)
+
+
+def test_local_payload_support_associates_cross_view_returns_without_erasing_raised_obstacle(system):
+    from emet.motion.local_manipulation_map import LocalManipulationMap
+
+    task, snapshot, ex, _ = support_snapshot(system)
+    support = snapshot.support_contact
+    obs = SimpleNamespace(rgb=np.zeros((*support.depth.shape, 3), np.uint8), depth=support.depth.copy(),
+                          camera_K=support.intrinsic, camera_pose=support.world_from_camera,
+                          received_monotonic=support.capture.received_monotonic)
+    mask = support.support_mask.copy()
+    mask[20, 28] = False  # Occluded in the original selected-support view.
+    patch = fit_observed_support(obs, mask, observation_id=support.capture.observation_id,
+                                 measurement_margin_m=support.patch.measurement_margin_m)
+    support = replace(support, support_mask=mask, patch=patch)
+    checker = ex.collision
+    checker.set_support_contact(support)
+    checker.local_scene = LocalManipulationMap({'other_camera': obs}, {'other_camera': np.zeros(mask.shape, bool)},
+                                               simulation_allow_unknown=True)
+    checker.simulation_local_payload_contact = True
+    checker.set_payload(ex.model, ex.data, task.object_ref, ex.ee_body)
+    assert support.measured_surface_distance([.2, 0., 0.]) == pytest.approx(.025)
+    with checker.motion_phase('lift'):
+        assert not checker._local_payload_scene_collides(ex.model, ex.data)
+        obs.depth[19:22, 27:30] = .96  # A supported depth component above the counter plane.
+        checker.local_scene = LocalManipulationMap({'other_camera': obs},
+            {'other_camera': np.zeros(mask.shape, bool)}, simulation_allow_unknown=True)
+        assert checker._local_payload_scene_collides(ex.model, ex.data)
+
+
+def test_transit_clearance_uses_measured_counter_instead_of_lift_height(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    snapshot = replace(snapshot, source_support_contact=snapshot.support_contact,
+                       source_support_bounds=snapshot.support_contact.patch.bounds)
+    grasp = CalibratedGrasp(np.eye(4), (0., 0., -1.), (('opening', 0.),),
+                            lift_m=.15, transit_clearance_m=.035)
+    (candidate,) = candidates_from_supports(snapshot, (grasp,), limit=1)
+    tool = np.asarray(candidate.place[0][0])
+    landing = np.asarray(candidate.place[1][0])
+    payload_low_from_tool = snapshot.frame.payload.vertices_reference[:, 2].min()
+    assert tool[2]+payload_low_from_tool >= .035-1e-9
+    assert tool[2] < candidate.grasp[2][0][2]-.05
+    assert landing[2] < tool[2]
+
+
+def test_landing_budget_covers_distinct_orientations_before_translations(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    grasp = CalibratedGrasp(np.eye(4), (0., 0., -1.), (('opening', 0.),))
+    candidates = candidates_from_supports(snapshot, (grasp,), limit=4,
+                                          yaw_options=(0., np.pi/2, np.pi, 3*np.pi/2))
+    assert len(candidates) == 4
+    centers = np.array([candidate.place[1][0][:2] for candidate in candidates])
+    np.testing.assert_allclose(centers, np.tile(centers[0], (4, 1)))
+    assert len({np.asarray(candidate.place[1][1]).round(6).tobytes() for candidate in candidates}) == 4
+
+
+def test_preplace_staging_is_a_checked_detour_around_an_observed_obstacle(system):
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    ex.collision.scene = PlacementScene([[[.08, -.03, .17], [.12, .03, .23]]],
+        source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
+    ex.preplace_staging_offsets_m = (np.array([0., -.12, 0.]),)
+    ex.cartesian_transport = True
+    with ex.collision.motion_phase('preplace'):
+        path, error = ex.plan_pose([.2, 0., .2], np.eye(3))
+        assert error is None and path
+        assert any(q[1] < -.1 for q in path)
+        for q in path:
+            ex.data.qpos[ex.qadr] = q
+            mujoco.mj_forward(ex.model, ex.data)
+            assert not ex.collision.configuration_collides(ex.model, ex.data)
+        np.testing.assert_allclose(ex.data.body('ee').xpos, [.2, 0., .2], atol=ex.position_tolerance_m)
+
+
+
+@pytest.mark.parametrize("phase", ["pregrasp", "grasp", "lift", "preplace", "place", "retreat"])
+def test_cartesian_continuation_is_available_for_each_transfer_phase(system, phase):
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    ex.cartesian_transport = True
+    start = ex.data.qpos[ex.qadr].copy()
+    with ex.collision.motion_phase(phase):
+        path, error = ex.plan_pose([.03, 0., .2], np.eye(3))
+    assert error is None and path
+    np.testing.assert_array_equal(path[0], start)
+    np.testing.assert_allclose(ex.data.body('ee').xpos, [.03, 0., .2], atol=ex.position_tolerance_m)
+
+
+def test_failed_cartesian_route_restores_unexecuted_model_state(system):
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    ex.collision.scene = PlacementScene([[[.15, -.03, .17], [.25, .03, .23]]],
+        source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
+    before = ex.data.qpos.copy()
+    path, error = ex._plan_cartesian_route((np.array([.2, 0., .2]),), np.eye(3))
+    assert path is None and error
+    np.testing.assert_array_equal(ex.data.qpos, before)
+    assert system.calls == []
+
+
+def test_execution_coalescing_preserves_bends_endpoints_and_slide_limits():
+    from emet.controller.manipulation.physical_pick_place import coalesce_collinear_waypoints
+
+    path = [np.array([x, 0.]) for x in np.linspace(0., .2, 21)]
+    path.extend(np.array([.2, y]) for y in np.linspace(.001, .01, 10))
+    result = coalesce_collinear_waypoints(path, np.array([.1, .005]))
+    assert len(result) < len(path) / 2
+    np.testing.assert_array_equal(result[0], path[0])
+    np.testing.assert_array_equal(result[-1], path[-1])
+    assert any(np.array_equal(point, [.2, 0.]) for point in result)
+    assert np.all(np.abs(np.diff(result, axis=0)) <= np.array([.1, .005]) + 1e-12)
+
+
+def test_axial_grasp_can_keep_measured_tool_heading_without_changing_down_axis(system):
+    from scipy.spatial.transform import Rotation
+
+    from emet.controller.manipulation.geometry_models import PrimitiveModel
+    from emet.controller.manipulation.shape_pose import ShapePoseEvidence
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    pose = snapshot.frame.payload.pose
+    shape_pose = ShapePoseEvidence(pose.world_from_object, pose.received_monotonic, pose.source,
+        pose.observation_id, PrimitiveModel('cylinder', (.005, .005)), .002, .02, 'test-shape')
+    heading = -.7
+    measured = snapshot.frame.robot_before.world_from_ee.copy()
+    measured[:3, :3] = Rotation.from_euler('z', heading).as_matrix()
+    robot = replace(snapshot.frame.robot_before, world_from_ee=measured)
+    frame = replace(snapshot.frame, payload=replace(snapshot.frame.payload, pose=shape_pose),
+                    robot_before=robot, robot_after=robot)
+    snapshot = replace(snapshot, frame=frame)
+    calibration = np.eye(4)
+    calibration[:3, :3] = Rotation.from_euler('x', np.pi).as_matrix()
+    grasp = CalibratedGrasp(calibration, (0., 0., 1.), (('opening', 0.),),
+                            world_aligned=True, keep_current_heading=True)
+    candidate = candidates_from_supports(snapshot, (grasp,), yaw_options=(0.,))[0]
+    rotation = candidate.grasp[0][1]
+    assert np.arctan2(rotation[1, 0], rotation[0, 0]) == pytest.approx(heading)
+    np.testing.assert_allclose(rotation[:, 2], [0., 0., -1.], atol=1e-12)
+    unqualified = replace(snapshot, frame=replace(frame, payload=replace(frame.payload, pose=pose)))
+    with pytest.raises(ObservationUnavailable, match='grasp_heading_symmetry_unknown'):
+        candidates_from_supports(unqualified, (grasp,))
+
+
+def test_pose_planning_budget_is_shared_across_ik_proposals(system, monkeypatch):
+    from emet.controller.manipulation import physical_pick_place as native
+
+    task = next(iter(system.adapter.tasks.values()))
+    ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
+    ex.ik_random_starts = 16
+    ex.joint_planning_timeout_s = .1
+    before = ex.data.qpos.copy()
+    ticks = iter([10., 10.2])
+    monkeypatch.setattr(native.time, 'monotonic', lambda: next(ticks, 11.))
+    path, reason = ex.plan_pose([.2, 0., .2], np.eye(3))
+    assert path is None and reason == 'no_plan_within_budget'
+    assert ex._pose_planning_deadline is None
+    np.testing.assert_array_equal(ex.data.qpos, before)
+    assert not system.calls
+
+
+def test_open_measured_arm_can_reuse_validated_grasp_with_live_edge_checks(system):
+    receipt = plan(system)
+    assert receipt['status'] == 'ok'
+    executor = system.adapter.plans[receipt['data']['plan_ref']].executor
+    executor.reuse_validated_grasp_paths = True
+    events = []
+    executor.event = lambda **fields: events.append(fields)
+    original = executor._replan_at_measured_pose
+
+    def no_redundant_grasp_search(phases, *args, **kwargs):
+        assert phases[0] != 'pregrasp'
+        return original(phases, *args, **kwargs)
+
+    executor._replan_at_measured_pose = no_redundant_grasp_search
+    result = system.adapter.execute(receipt['data']['plan_ref'])
+    assert result['status'] == 'ok'
+    assert any(event.get('phase') == 'grasp_plan_reused' for event in events)
+    assert system.calls

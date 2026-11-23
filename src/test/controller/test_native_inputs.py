@@ -176,3 +176,55 @@ def test_privileged_native_tools_require_session_capability(robot):
     tools = {t.name: t for t in get_tools({
         'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged'})}
     assert json.loads(tools['scene_tasks'].func())['code'] == 'privileged_inputs_require_simulation'
+
+
+def test_panda_native_servo_feedback_is_atomic_fresh_and_independent_of_camera():
+    import threading
+    import time
+
+    from emet.robots.pandaomron.client import PandaOmronClient
+
+    client = PandaOmronClient.__new__(PandaOmronClient)
+    client._obs_lock = threading.Lock()
+    client._state_received_monotonic = time.monotonic()
+    client._state = {"joint_positions": np.arange(10.), "base_pose": [1., 2., .3],
+                     "emet_session": {"navigation_origin_xyt": [4., 5., .1]}}
+    client._obs = {"joint": [-99.] * 10}
+    feedback = client.get_native_feedback()
+    np.testing.assert_array_equal(feedback.joint, np.arange(10.))
+    np.testing.assert_allclose(feedback.gps, [1., 2.])
+    client._state["joint_positions"][:] = -5
+    np.testing.assert_array_equal(feedback.joint, np.arange(10.))
+    client._state_received_monotonic -= 1.
+    with pytest.raises(ObservationUnavailable, match="joint_observation_stale"):
+        client.get_native_feedback()
+
+
+def test_panda_fixed_torso_preserves_measured_anchor_and_refuses_drift():
+    from dataclasses import dataclass
+    from types import SimpleNamespace
+
+    from emet.robots.pandaomron import ARM_JOINTS, PANDA_ARM_CHAIN
+    from emet.robots.pandaomron.observed import fixed_torso_arm
+
+    @dataclass
+    class Binding:
+        chain: object
+        synchronize: object
+        command_joints: object
+
+    commands = []
+    robot = SimpleNamespace(get_native_feedback=lambda: SimpleNamespace(joint=[0.] * 7 + [.16, .03, -.03]),
+                            send_action=commands.append)
+    arm = fixed_torso_arm(robot, Binding(PANDA_ARM_CHAIN, lambda data: None, None))
+    assert arm.chain.joint_names == ARM_JOINTS and len(arm.chain.home_arm_q) == 7
+    assert arm.command_joints(np.ones(7))
+    np.testing.assert_array_equal(commands[0]['joint'], [1.] * 7 + [.16])
+    data = SimpleNamespace(joint=lambda name: SimpleNamespace(qpos=[.1605]))
+    arm.synchronize(data)
+    data.joint = lambda name: SimpleNamespace(qpos=[.17])
+    with pytest.raises(ObservationUnavailable, match='fixed_torso_drift'):
+        arm.synchronize(data)
+    with pytest.raises(ValueError, match='invalid_native_arm_goal'):
+        arm.command_joints(np.ones(8))
+    assert len(commands) == 1

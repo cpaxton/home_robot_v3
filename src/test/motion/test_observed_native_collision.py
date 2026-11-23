@@ -330,3 +330,168 @@ def test_observed_grasp_without_visual_verifier_cannot_actuate():
         object_pose_provider=checker, synchronize=lambda d: None, command_joints=lambda q: calls.append(q))
     result = executor.grasp_only('object', object_gt_body='observed:opaque:1')
     assert not result.success and result.message == 'visual_verification_unavailable' and calls == []
+
+
+def test_stationary_environment_overlap_is_scoped_to_commanded_joints():
+    model, data, checker, *_ = rig(boxes=[[[-.03, -.03, -.03], [.03, .03, .03]]])
+    assert checker.configuration_collides(model, data)
+    with checker.motion_scope(model, data, (), ()):
+        assert not checker.configuration_collides(model, data)
+        data.qpos[0] = .01
+        mujoco.mj_kinematics(model, data)
+        assert checker.configuration_collides(model, data)
+    data.qpos[0] = 0.
+    mujoco.mj_kinematics(model, data)
+    with checker.motion_scope(model, data, ('x',), (0.,)):
+        assert checker.configuration_collides(model, data)
+    assert checker.configuration_collides(model, data)
+
+
+def test_geometry_cache_does_not_survive_pose_or_query_changes(monkeypatch):
+    from emet.motion.observed_solids import WorldSolid
+
+    model, data, checker, *_ = rig()
+    original = WorldSolid.from_geom
+    constructions = []
+    bounds = []
+
+    def capture(cls, *args, **kwargs):
+        constructions.append(True)
+        return original(*args, **kwargs)
+
+    def query(model, data):
+        first = checker._robot_bound(model, data, 0)[0]
+        second = checker._robot_bound(model, data, 0)[0]
+        np.testing.assert_array_equal(first.bounds, second.bounds)
+        bounds.append(first.bounds.copy())
+        return False
+
+    monkeypatch.setattr(WorldSolid, 'from_geom', classmethod(capture))
+    monkeypatch.setattr(checker, '_configuration_collides', query)
+    assert not checker.configuration_collides(model, data)
+    assert len(constructions) == 1
+    data.qpos[0] = .1
+    mujoco.mj_kinematics(model, data)
+    assert not checker.configuration_collides(model, data)
+    assert len(constructions) == 2
+    np.testing.assert_allclose(bounds[1] - bounds[0], [[.1, 0., 0.]]*2)
+    checker.margin = .002
+    assert not checker.configuration_collides(model, data)
+    assert len(constructions) == 3
+    assert np.all(bounds[2][0] < bounds[1][0])
+
+
+def test_departure_rechecks_latest_map_with_stable_voxel_keys():
+    from emet.motion.observed_admission import AdmissionDecision
+
+    model, data, checker, *_ = rig()
+    checker.allow_contact_departure = True
+
+    def scene(points):
+        points = np.asarray(points, float)
+        return SimpleNamespace(
+            centers=points, resolution=.002, error=.003,
+            nearby_distances=lambda solid: {
+                i: float(solid.lower_distance(p[None])[0]-.0018)
+                for i, p in enumerate(points) if solid.lower_distance(p[None])[0] < .01
+            },
+            query=lambda *args, **kwargs: AdmissionDecision(True, 'observed_free'),
+        )
+
+    checker.local_scene = scene([[.019, .001, .001]])
+    policy = checker.make_departure(model, data, ('x',), np.zeros(1))
+    assert policy is not None
+    baseline_keys = set(policy.baseline.distances)
+    # Inserting an unrelated voxel changes array indices, not contact identity.
+    checker.local_scene = scene([[.501, .501, .501], [.019, .001, .001]])
+    assert set(policy._measurement(np.zeros(1)).distances) == baseline_keys
+    assert policy.validate_edge(np.zeros(1), np.zeros(1))
+    # A newly measured contact must invalidate the existing recovery policy.
+    checker.local_scene = scene([[.019, .001, .001], [-.019, .001, .001]])
+    assert not policy.validate_edge(np.zeros(1), np.zeros(1))
+    assert policy.last_rejection['reason'] == 'new_physical_contact'
+    checker.local_scene.error = .004
+    with pytest.raises(ObservationUnavailable, match='map_profile_changed'):
+        policy.validate_edge(np.zeros(1), np.zeros(1))
+
+    checker.local_scene = scene([[.001, .001, .001]])
+    assert checker.make_departure(model, data, ('x',), np.zeros(1)) is None
+    assert checker.last_departure_diagnostics['point_m'] == [.001, .001, .001]
+
+
+def test_observed_departure_slides_over_measured_plane_across_voxel_boundaries():
+    from emet.motion.local_manipulation_map import LocalManipulationMap
+
+    model, data, checker, *_ = rig()
+    pose = np.diag([1., -1., -1., 1.])
+    pose[2, 3] = 1.
+    obs = SimpleNamespace(rgb=np.zeros((61, 101, 3), np.uint8), depth=np.full((61, 101), .981),
+        camera_K=np.array([[1000., 0., 30.], [0., 1000., 30.], [0., 0., 1.]]), camera_pose=pose)
+    mask = np.zeros(obs.depth.shape, bool)
+    checker.local_scene = LocalManipulationMap({'camera': obs}, {'camera': mask},
+        resolution_m=.005, simulation_allow_unknown=True)
+    checker.allow_contact_departure = True
+    policy = checker.make_departure(model, data, ('x',), np.zeros(1))
+    assert policy is not None
+    assert any(key[0] == 'environment_patch' for key in policy.baseline.distances)
+    # Two voxel widths of tangential motion change which measured points touch.
+    assert policy.validate_edge([0.], [.01]), policy.last_rejection
+    # Reobservation at a different pixel/grid alignment still describes the plane.
+    obs.camera_pose = pose.copy()
+    obs.camera_pose[0, 3] = .0007
+    checker.local_scene = LocalManipulationMap({'camera': obs}, {'camera': mask},
+        resolution_m=.005, simulation_allow_unknown=True)
+    assert policy.validate_edge([0.], [.01]), policy.last_rejection
+    obs.depth[26:35, 26:35] = 1.019  # Separate surface at the opposite box face.
+    checker.local_scene = LocalManipulationMap({'camera': obs}, {'camera': mask},
+        resolution_m=.005, simulation_allow_unknown=True)
+    assert not policy.validate_edge([0.], [.01])
+    assert policy.last_rejection['reason'] == 'new_physical_contact'
+
+
+def test_bounded_ik_starts_find_clear_redundant_posture_instead_of_rejecting_tool_pose():
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body name="robot">
+      <joint name="shoulder" type="slide" axis="1 0 0" range="-.5 .5"/>
+      <geom size=".01"/>
+      <body name="ee" pos="0 0 .1">
+        <joint name="extension" type="slide" axis="1 0 0" range="-.5 .5"/>
+        <geom size=".01"/>
+      </body></body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    now = time.monotonic()
+    scene = PlacementScene([[[.08, -.03, -.03], [.5, .03, .03]]], source='observed_voxels',
+                           workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
+    checker = ObservedNativeCollisionChecker(model, robot_body='robot', ee_body='ee', scene=scene,
+        payload_provider=SimpleNamespace(input_mode='observed'), scene_revision='scene',
+        current_revision=lambda: 'scene', received_monotonic=now, clock=lambda: now, margin_m=0.)
+    executor = PhysicalPickPlaceExecutor(SimpleNamespace(), model=model, data=data, ee_body='ee',
+        joint_names=('shoulder', 'extension'), collision=checker, synchronize=lambda d: None,
+        command_joints=lambda q: True, object_pose_provider=checker)
+    path, error = executor.plan_pose([.2, 0., .1], np.eye(3))
+    assert path is None and error  # Minimum-norm IK puts the shoulder in the obstacle.
+    executor.ik_random_starts = 8
+    path, error = executor.plan_pose([.2, 0., .1], np.eye(3))
+    assert error is None and path
+    assert data.qpos[0] < .07
+    np.testing.assert_allclose(data.body('ee').xpos, [.2, 0., .1], atol=executor.position_tolerance_m)
+    for q in path:
+        data.qpos[:] = q
+        mujoco.mj_forward(model, data)
+        assert not checker.configuration_collides(model, data)
+
+
+def test_planning_snapshot_preserves_real_evidence_clock_and_restores_live_age_checks():
+    model, data, checker, _, _, clock, _ = rig()
+    checker.local_scene = SimpleNamespace()  # Enable the local planning-snapshot clock only.
+    captured = checker.received_monotonic
+    with checker.planning_snapshot():
+        clock[0] += 5.
+        assert checker.clock() == captured
+        assert checker._certify_live_clock() == clock[0]
+        assert checker.received_monotonic == captured
+        assert not checker._certifying_transfer
+    assert checker.clock() == clock[0]
+    assert checker._certify_live_clock is None
+    assert checker.configuration_collides(model, data)
+    assert checker.last_reason == 'scene_observation_stale'

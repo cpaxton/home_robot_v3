@@ -37,7 +37,7 @@ class StaticBackgroundAssumption:
             not self.scene_epoch
             or not self.assumption_id
             or not np.isfinite([self.started_monotonic, self.expires_monotonic]).all()
-            or not 0 < self.expires_monotonic - self.started_monotonic <= 300
+            or not self.started_monotonic < self.expires_monotonic <= self.started_monotonic + 300
         ):
             raise ValueError("invalid_static_background_assumption")
 
@@ -109,13 +109,17 @@ class ObservedBackground:
                    partition.self_material_profile, partition.owners)
 
     def update(self, partition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None,
-               robot_material=None, point_error_m=0.):
-        """Fuse only an explicitly unchanged background; contradictions reject.
+               robot_material=None, point_error_m=0., expand_free=True, retain_new_obstacles=False):
+        """Update historical evidence and reject contradictions by default.
 
         Current self-only endpoints become unknown before fusion. Mixed owners
         retain environment occupancy, so self masking cannot erase an obstacle.
-        The caller must discard this map and invalidate plans on scene changes.
+        Endpoint-only users may retain newly occupied cells for a fresh plan.
+        They must reject the current operation on a conflict and bind any new
+        plan to the revised map. Previously occupied evidence cannot be cleared.
         """
+        if retain_new_obstacles and expand_free:
+            raise ValueError('background_renewal_requires_endpoint_only_update')
         now = time.monotonic() if now is None else now
         capture.require(now=now, after=self.latest_capture.latest)
         excluded_refs = tuple(excluded_refs)
@@ -144,8 +148,9 @@ class ObservedBackground:
             or not np.array_equal(current.origin, old.origin)
         ):
             raise ObservationUnavailable("background_grid_changed")
-        contradiction = ((old.cells == 1) & (current.cells == 2)) | ((old.cells == 2) & (current.cells == 1))
-        if np.any(contradiction):
+        new_obstacle = (old.cells == 1) & (current.cells == 2)
+        cleared_obstacle = (old.cells == 2) & (current.cells == 1)
+        if np.any(cleared_obstacle) or (not retain_new_obstacles and np.any(new_obstacle)):
             raise ObservationUnavailable("background_scene_changed")
         cells, stamps = old.cells.copy(), self.observed_monotonic.copy()
         # An obstacle mislabelled as foreground must not disappear into a cached
@@ -160,6 +165,11 @@ class ObservedBackground:
         # caller declares a bounded static-scene assumption. This fusion is not
         # robot ownership/contact admission; that remains the separate #245 gate.
         observed = current.cells != 0
+        if not expand_free:
+            # An active plan retains its original free-space geometry. A new
+            # occupied return still changes it, while an agreeing return can
+            # renew evidence from the actual new acquisition.
+            observed &= (current.cells == 2) | (old.cells == 1)
         cells[observed], stamps[observed] = current.cells[observed], capture.earliest
         # Occupied contributors accumulate. A fresh support label cannot erase
         # an old obstacle in the same voxel or renew that contributor's age.
@@ -188,6 +198,24 @@ class ObservedBackground:
             + repr(self.occupied_owners).encode()
         )
         return "observed-background:" + digest.hexdigest()
+
+    def is_conservative_update_of(self, previous):
+        """Check that reusing this map adds no clearance or contact ownership."""
+        old, current = previous.workspace, self.workspace
+        if (
+            self.scene_epoch != previous.scene_epoch
+            or self.latest_capture.calibration_id != previous.latest_capture.calibration_id
+            or self.self_material_profile != previous.self_material_profile
+            or not previous.capture_ids <= self.capture_ids
+            or current.resolution != old.resolution
+            or current.cells.shape != old.cells.shape
+            or not np.array_equal(current.origin, old.origin)
+            or np.any((current.cells == 1) & (old.cells != 1))
+            or np.any((old.cells == 2) & (current.cells != 2))
+        ):
+            return False
+        owners = {ref: set(ids) for ref, ids in self.occupied_owners}
+        return all(owners.get(ref, set()).issuperset(ids) for ref, ids in previous.occupied_owners)
 
     @cached_property
     def _exclusive_owners(self):

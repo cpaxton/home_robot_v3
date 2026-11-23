@@ -10,9 +10,11 @@ and exhausted budgets reject. Capture/calibration bounds remain supplied priors.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.motion.observed_solids import WorldSolid
@@ -38,6 +40,8 @@ class CapturedRobotMaterial:
     uncertainty_m: tuple[float, ...]
     configuration_profile_id: str
     source: str = 'measured_joint_feedback'
+    surface_tolerance_m: float = 0.0
+    measured_surface_points: np.ndarray | None = None
 
     def __post_init__(self):
         # Deferred to avoid the effects -> collision -> admission import cycle.
@@ -48,11 +52,24 @@ class CapturedRobotMaterial:
                 or not all(isinstance(v, str) and v for v in
                            (self.model_signature, self.calibration_id, self.scene_epoch, self.configuration_profile_id))
                 or self.source != 'measured_joint_feedback' or not solids or len(error) != len(solids)
+                or not np.isfinite(self.surface_tolerance_m) or not 0 <= self.surface_tolerance_m <= .03
                 or not np.isfinite(error).all() or min(error) < 0
                 or any(not isinstance(s, WorldSolid) or s.offset_m != 0 for s in solids)):
             raise ValueError('invalid_robot_material_evidence')
         object.__setattr__(self, 'solids', solids)
         object.__setattr__(self, 'uncertainty_m', error)
+        if self.measured_surface_points is not None:
+            points = np.asarray(self.measured_surface_points, float)
+            if points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all():
+                raise ValueError('invalid_robot_surface_evidence')
+            frozen = np.frombuffer(points.tobytes(), dtype=float).reshape(points.shape)
+            object.__setattr__(self, 'measured_surface_points', frozen)
+
+    @cached_property
+    def _surface_tree(self):
+        if self.measured_surface_points is None or not len(self.measured_surface_points):
+            return None
+        return cKDTree(self.measured_surface_points)
 
     def require(self, *, now, model_signature, scene_epoch):
         self.capture.require(now=now)
@@ -64,10 +81,28 @@ class CapturedRobotMaterial:
         return tuple(replace(solid, offset_m=-error) for solid, error in
                      zip(self.solids, self.uncertainty_m, strict=True))
 
+    def matches_surface(self, points, *, point_error_m):
+        """Associate measured primitive surfaces within their combined error.
+
+        This association never expands the material used for swept clearance.
+        Convex plane lower bounds cannot establish surface proximity.
+        """
+        if not np.isfinite(point_error_m) or point_error_m < 0:
+            raise ValueError('invalid_self_material_qualification')
+        matched = np.zeros(len(points), dtype=bool)
+        for solid, error in zip(self.solids, self.uncertainty_m, strict=True):
+            if solid.kind != 'convex':
+                matched |= np.abs(solid.lower_distance(points)) <= max(error + point_error_m, self.surface_tolerance_m)
+        if self._surface_tree is not None and len(points):
+            finite = np.isfinite(points).all(axis=1)
+            matched[finite] |= self._surface_tree.query(points[finite], distance_upper_bound=1e-9)[0] <= 1e-9
+        return matched
+
     @property
     def profile_identity(self):
         return (self.model_signature, self.calibration_id, self.configuration_profile_id,
-                self.scene_epoch, self.capture.calibration_id)
+                self.scene_epoch, self.capture.calibration_id, self.surface_tolerance_m,
+                self.measured_surface_points is not None)
 
 
 @dataclass(frozen=True)
@@ -157,7 +192,19 @@ class ObservedEnvironmentAdmission:
         return self._query(padded, now=now, allow_captured_robot=allow_captured_robot,
                            support_contact=active, free_witness=contact)
 
-    def _query(self, solid, *, now, allow_captured_robot, support_contact=None, free_witness=None):
+    def query_probe_payload(self, physical, padded, *, band, object_ref, now):
+        from emet.motion.observed_support_contact import ObservedProbeBand
+
+        if not isinstance(band, ObservedProbeBand) or not padded.contains_solid(physical):
+            raise ValueError("invalid_probe_contact_band")
+        contact = band.support
+        if contact.object_ref != object_ref:
+            raise ValueError("payload_identity_mismatch")
+        contact.require(self.background, now=now, static_assumption=self.static_assumption)
+        return self._query(padded, now=now, allow_captured_robot=False, support_contact=contact,
+                           free_witness=contact, probe_band=band)
+
+    def _query(self, solid, *, now, allow_captured_robot, support_contact=None, free_witness=None, probe_band=None):
         if allow_captured_robot:
             self._require_material(now=now)
         grid = self.background.workspace
@@ -215,13 +262,16 @@ class ObservedEnvironmentAdmission:
                 is_support = (cells[tuple(local)] == 2
                               and np.ravel_multi_index(tuple(index), grid.cells.shape) in support_cells
                               and fresh[tuple(local)])
-                pending.append((np.stack((np.maximum(cell[0], bounds[0]), np.minimum(cell[1], bounds[1]))), is_support))
+                subbox = np.stack((np.maximum(cell[0], bounds[0]), np.minimum(cell[1], bounds[1])))
+                pending.append((subbox, is_support, cells[tuple(local)] == 0))
         while pending:
-            cell, is_support = pending.pop()
+            cell, is_support, is_unknown = pending.pop()
             nodes += 1
             if nodes > self.max_nodes:
                 return AdmissionDecision(False, 'admission_budget_exhausted', nodes)
             if solid.disjoint_box(cell):
+                continue
+            if probe_band is not None and (is_support or is_unknown) and probe_band.covers_box(cell):
                 continue
             if is_support:
                 if witness.covers_box(cell, allow_support_material=support_contact is not None):
@@ -243,7 +293,7 @@ class ObservedEnvironmentAdmission:
                 return AdmissionDecision(False, 'unknown_swept_volume', nodes)
             a, b = cell.copy(), cell.copy()
             a[1, axis] = b[0, axis] = float(np.mean(cell[:, axis]))
-            pending.extend(((a, is_support), (b, is_support)))
+            pending.extend(((a, is_support, is_unknown), (b, is_support, is_unknown)))
         return AdmissionDecision(True, 'observed_free_or_captured_material', nodes)
 
 

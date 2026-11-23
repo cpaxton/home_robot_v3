@@ -89,6 +89,16 @@ def guarded(measured, *, center=(0.08, 0.0, 0.04)):
     return replace(measured, robot_guard=guard)
 
 
+def test_current_grounded_mask_still_requires_a_fresh_geometric_fit():
+    track, clock = setup()
+    clock[0] = 10.4
+    capture = CaptureInterval("new", 10.3, 10.301, 10.31, "clock")
+    measured, mask = view(capture, shift=(.01, 0., 0.), distractor=True)
+    result = track.update({"head": replace(measured, foreground_mask=mask)}, scene_epoch="scene")
+    assert result.capture == capture
+    assert result.fit.poses[0, 0, 3] == pytest.approx(.01, abs=.002)
+    np.testing.assert_array_equal(dict(result.masks)["head"], mask)
+
 def guarded_setup():
     clock = [10.01]
     first = CaptureInterval("first", 10.0, 10.001, 10.01, "clock")
@@ -386,3 +396,103 @@ def test_global_unknown_clears_and_latches_without_reidentification(change):
     assert track.latest is None
     with pytest.raises(ObservationUnavailable, match="reinitialize"):
         track.update({"head": view(cap)[0]}, scene_epoch="scene")
+
+
+@pytest.mark.parametrize('fallback', [False, True])
+def test_qualified_view_fallback_retains_capture_when_fused_partial_views_fail(monkeypatch, fallback):
+    from emet.controller.manipulation import multiview_rgbd_tracking as native
+
+    track, clock = setup(single_view_fallback=fallback, max_starts=3, max_fit_points=100)
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    clock[0] = 10.5
+    head, mask = view(cap)
+    wrist, _ = view(cap, shift=(.002, 0., 0.))
+    fit = native.fit_geometry
+
+    def partial_only(points, *args, **kwargs):
+        if len(points) > int(mask.sum()):
+            raise ObservationUnavailable('geometry_tracking_no_match')
+        return fit(points, *args, **kwargs)
+
+    monkeypatch.setattr(native, 'fit_geometry', partial_only)
+    if not fallback:
+        with pytest.raises(ObservationUnavailable, match='no_match'):
+            track.update({'head': head, 'wrist': wrist}, scene_epoch='scene')
+        assert track.latest is None
+    else:
+        result = track.update({'head': head, 'wrist': wrist}, scene_epoch='scene')
+        assert result.capture is cap and result.fit.received_monotonic == cap.received_monotonic
+        assert len(result.masks) == 1 and len(result.view_rejections) == 1
+        assert np.linalg.norm(result.fit.poses[0, :3, 3]) <= .003
+
+
+def test_view_fallback_rejects_independently_qualified_camera_pose_disagreement(monkeypatch):
+    from emet.controller.manipulation import multiview_rgbd_tracking as native
+
+    track, clock = setup(single_view_fallback=True, max_starts=3, max_fit_points=100)
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    clock[0] = 10.5
+    head, mask = view(cap)
+    wrist, _ = view(cap, shift=(.025, 0., 0.))
+    fit = native.fit_geometry
+
+    def partial_only(points, *args, **kwargs):
+        if len(points) > int(mask.sum()):
+            raise ObservationUnavailable('geometry_tracking_no_match')
+        return fit(points, *args, **kwargs)
+
+    monkeypatch.setattr(native, 'fit_geometry', partial_only)
+    with pytest.raises(ObservationUnavailable, match='ambiguous'):
+        track.update({'head': head, 'wrist': wrist}, scene_epoch='scene')
+    assert track.latest is None
+
+
+@pytest.mark.parametrize('best_fit', [False, True])
+def test_best_fit_hypothesis_is_explicit_and_preserves_full_candidate_trace(monkeypatch, best_fit):
+    from emet.controller.manipulation import multiview_rgbd_tracking as native
+
+    track, clock = setup(best_fit_hypothesis=best_fit)
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    clock[0] = 10.5
+    full, _ = view(cap)
+    raw_fit = native.fit_geometry
+
+    def ambiguous(*args, **kwargs):
+        fit = raw_fit(*args, **kwargs)
+        poses = np.repeat(fit.poses[:1], 2, axis=0)
+        poses[1, 0, 3] += .02
+        return replace(fit, poses=poses, rms_m=np.array([.0001, .001]), nullspaces=(fit.nullspaces[0],)*2)
+
+    monkeypatch.setattr(native, 'fit_geometry', ambiguous)
+    if not best_fit:
+        with pytest.raises(ObservationUnavailable, match='moving_geometry_ambiguous'):
+            track.update({'head': full}, scene_epoch='scene')
+    else:
+        result = track.update({'head': full}, scene_epoch='scene')
+        assert len(result.fit.poses) == 1 and len(track.last_candidate_fit.poses) == 2
+        assert result.fit.received_monotonic == cap.received_monotonic
+        assert track.hypothesis_selections == 1
+        assert not result.execution_qualified
+
+
+@pytest.mark.parametrize('best_fit', [False, True])
+def test_best_fit_initialization_uses_the_same_explicit_policy(monkeypatch, best_fit):
+    from emet.controller.manipulation import moving_rgbd_tracking as native
+
+    raw_fit = native.fit_geometry
+
+    def ambiguous(*args, **kwargs):
+        fit = raw_fit(*args, **kwargs)
+        poses = np.repeat(fit.poses[:1], 2, axis=0)
+        poses[1, 0, 3] += .02
+        return replace(fit, poses=poses, rms_m=np.array([.0001, .001]), nullspaces=(fit.nullspaces[0],)*2)
+
+    monkeypatch.setattr(native, 'fit_geometry', ambiguous)
+    if not best_fit:
+        with pytest.raises(ObservationUnavailable, match='moving_geometry_ambiguous'):
+            setup(best_fit_hypothesis=False)
+    else:
+        track, _ = setup(best_fit_hypothesis=True)
+        assert len(track.latest.fit.poses) == 1 and len(track.last_candidate_fit.poses) == 2
+        assert track.latest.fit.received_monotonic == track.last_candidate_fit.received_monotonic
+        assert track.hypothesis_selections == 1 and not track.latest.execution_qualified

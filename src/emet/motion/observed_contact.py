@@ -9,10 +9,12 @@ must remain outside the target's eroded core. Unresolved geometry rejects.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+import warnings
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.optimize import OptimizeWarning, linprog
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.motion.observed_solids import WorldSolid
@@ -21,8 +23,35 @@ if TYPE_CHECKING:
     from emet.controller.manipulation.observed_effects import CaptureInterval
 
 
+def _convex_separation(a, b, bounds):
+    """Decide halfspace-envelope intersection without spatial subdivision."""
+    rows, limits = [], []
+    for solid in (a, b):
+        if solid.kind == 'convex':
+            planes = solid._planes
+        else:
+            normals = np.vstack((np.eye(3), -np.eye(3)))
+            planes = np.column_stack((normals, -np.tile(solid.dimensions, 2)))
+        normals = planes[:, :3] @ solid.world_from_local[:3, :3].T
+        rows.append(normals)
+        limits.append(solid.offset_m-planes[:, 3]+normals @ solid.world_from_local[:3, 3])
+    # Inflate by a tiny numeric allowance before accepting infeasibility. An
+    # unresolved solver outcome falls back to the existing conservative check.
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='Unrecognized options detected.*', category=OptimizeWarning)
+        result = linprog(np.zeros(3), A_ub=np.vstack(rows), b_ub=np.concatenate(limits)+1e-8,
+                         bounds=list(zip(bounds[0], bounds[1], strict=True)), method='highs-ds',
+                         options={'threads': 1, 'primal_feasibility_tolerance': 1e-9,
+                                  'dual_feasibility_tolerance': 1e-9})
+    if result.status == 2:
+        return True
+    if result.success and all(solid.lower_distance(result.x[None])[0] <= 1e-8+1e-12 for solid in (a, b)):
+        return False
+    return None
+
+
 def solids_disjoint(a: WorldSolid, b: WorldSolid, *, max_nodes=4096, min_extent_m=0.0001):
-    """Prove separation by bounded subdivision; touching/unresolved rejects.
+    """Prove separation with convex halfspaces or bounded subdivision.
 
     Both distance functions are conservative, 1-Lipschitz lower bounds. A box
     discarded by either solid cannot contain their intersection. This works for
@@ -34,6 +63,10 @@ def solids_disjoint(a: WorldSolid, b: WorldSolid, *, max_nodes=4096, min_extent_
     bounds = np.stack((np.maximum(a.bounds[0], b.bounds[0]), np.minimum(a.bounds[1], b.bounds[1])))
     if np.any(bounds[0] > bounds[1]):
         return True
+    if a.kind in {'convex', 'box'} and b.kind in {'convex', 'box'} and 'convex' in {a.kind, b.kind}:
+        exact = _convex_separation(a, b, bounds)
+        if exact is not None:
+            return exact
     pending, nodes = [bounds], 0
     while pending:
         cell = pending.pop()
@@ -55,7 +88,7 @@ def solids_disjoint(a: WorldSolid, b: WorldSolid, *, max_nodes=4096, min_extent_
 
 
 CONTACT_PHASES = frozenset(("grasp", "close", "lift", "preplace", "place", "release"))
-MOTION_PHASES = CONTACT_PHASES | frozenset(("preflight", "pregrasp", "retreat", "gripper_open"))
+MOTION_PHASES = CONTACT_PHASES | frozenset(("preflight", "pregrasp", "retreat", "gripper_open", "probe"))
 
 
 @dataclass(frozen=True)
@@ -144,7 +177,7 @@ class ObservedTargetContact:
             raise ValueError("invalid_contact_phase")
         target = self.target if target is None else target
         if geom_id in self.fingertip_geom_ids and phase in CONTACT_PHASES:
-            target = replace(target, offset_m=target.offset_m - self.max_penetration_m)
+            target = target.with_offset(target.offset_m - self.max_penetration_m)
             # A vanishing core must not turn the whole target into a contact
             # exemption. Prove a nonempty interior at a convex combination of
             # model vertices (or the primitive center), otherwise reject.

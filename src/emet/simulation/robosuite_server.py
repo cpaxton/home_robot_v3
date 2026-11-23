@@ -138,6 +138,7 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
     """
 
     hz = 20
+    _depth_jp2_quality = 800
 
     def __init__(
         self,
@@ -1456,10 +1457,11 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
             self._camera_render_states = {}
         self._camera_render_states[camera_name] = snapshot
 
-    def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
+    def _render_rgb_raw(self, camera_name: str, *, snapshot=None) -> np.ndarray:
         """Render private state without stopping physics or measured telemetry."""
         cam = self._camera_for_renderer(camera_name)
-        snapshot = self._capture_render_state()
+        if snapshot is None:
+            snapshot = self._capture_render_state()
         with self._render_lock:
             renderer = self._get_or_create_primary_renderer()
             self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
@@ -1468,10 +1470,11 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
             self._remember_render_state(camera_name, snapshot)
             return rgb
 
-    def _render_primary_rgb_and_depth_raw(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
+    def _render_primary_rgb_and_depth_raw(self, camera_name: str, *, snapshot=None) -> tuple[np.ndarray, np.ndarray]:
         """RGB/depth share a private snapshot and one serialized renderer."""
         cam = self._camera_for_renderer(camera_name)
-        snapshot = self._capture_render_state()
+        if snapshot is None:
+            snapshot = self._capture_render_state()
         with self._render_lock:
             renderer = self._get_or_create_primary_renderer()
             self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
@@ -2695,7 +2698,7 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
 
         message = {
             "rgb": compression.to_jpg(rgb),
-            "depth": compression.to_jp2(depth_u16),
+            "depth": compression.to_jp2(depth_u16, quality=self._depth_jp2_quality),
             "camera_K": K,
             "camera_pose": cam_pose,
             "ee_pose": np.eye(4),
@@ -2886,7 +2889,7 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
 
         message = {
             "head_color_image": compression.to_jpg(rgb),
-            "head_depth_image": compression.to_jp2(depth_u16),
+            "head_depth_image": compression.to_jp2(depth_u16, quality=self._depth_jp2_quality),
             "head_camera_K": K_servo,
             "camera_pose": cam_pose,
             "joint_positions": q,
@@ -3210,6 +3213,10 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                     )
 
         self._init_reactive_controller()
+        self._run_initialized_server(headless, show_viewer_ui)
+
+    def _run_initialized_server(self, headless: bool, show_viewer_ui: bool) -> None:
+        self._running = True
         super().start()
 
         self._sim_thread: threading.Thread | None = None

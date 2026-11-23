@@ -48,6 +48,16 @@ def grid(cells=None):
         np.zeros((12, 12, 20), np.uint8) if cells is None else cells)
 
 
+def test_surface_association_accepts_small_outside_error_without_expanding_material():
+    shape = solid()
+    admission = evidence(grid(), (shape,), error=.001)
+    material = admission.robot_material
+    points = np.array([[.1039, 0., .5], [.1041, 0., .5], [.12, 0., .5]])
+    np.testing.assert_array_equal(material.matches_surface(points, point_error_m=.003), [True, False, False])
+    assert material.inner_solids[0].lower_distance(points[:1])[0] > 0
+    assert not admission.query(solid(center=(.004, 0., .5)), now=10.02, allow_captured_robot=True).allowed
+
+
 @pytest.mark.parametrize('kind,dimensions', [('box', (.1, .04, .04)), ('sphere', (.08,)),
     ('capsule', (.04, .08)), ('cylinder', (.04, .08))])
 def test_exact_captured_solid_admits_start_without_free_aabb_corners(kind, dimensions):
@@ -368,3 +378,10 @@ def test_free_aabb_shortcut_is_conservative_near_map_boundary():
     overhanging = solid(center=(0.28, 0., .5))
     result = admission.query(overhanging, now=13., allow_captured_robot=False)
     assert not result.allowed and result.reason != 'observed_free_fast_path'
+
+
+def test_surface_evidence_preserves_missing_pixels_as_unclassified():
+    material = evidence(grid(), (solid(),)).robot_material
+    material = replace(material, measured_surface_points=np.array([[.2, .1, .5]]))
+    result = material.matches_surface(np.array([[.2, .1, .5], [np.nan, 0., .5]]), point_error_m=.003)
+    np.testing.assert_array_equal(result, [True, False])

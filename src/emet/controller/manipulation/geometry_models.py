@@ -29,6 +29,8 @@ def rotations_equivalent(model, a, b):
         return True
     if model.symmetry == "axial_unoriented":
         return np.allclose(np.outer(a[:, 2], a[:, 2]), np.outer(b[:, 2], b[:, 2]), atol=1e-10, rtol=0)
+    if model.symmetry == "axial_oriented":
+        return np.allclose(a[:, 2], b[:, 2], atol=1e-10, rtol=0)
     if model.symmetry == "finite_box":
         change = np.abs(a.T @ b)
         return np.allclose(change, np.rint(change), atol=1e-10, rtol=0) and np.allclose(
@@ -102,6 +104,83 @@ class PrimitiveModel:
         else:
             half = np.abs(rotation) @ self.half_extents
         return np.array([center - half, center + half])
+
+
+class KnownMeshSurface:
+    """An independent visual surface for registration and a separate outer envelope."""
+
+    construction = "known_model_prior"
+    symmetry = "undeclared"
+
+    def __init__(self, points_reference, normals, vertices_reference):
+        points = np.asarray(points_reference, dtype=float)
+        normals = np.asarray(normals, dtype=float)
+        vertices = np.asarray(vertices_reference, dtype=float)
+        if (
+            points.ndim != 2 or points.shape[1:] != (3,) or len(points) < 25
+            or normals.shape != points.shape or vertices.ndim != 2 or vertices.shape[1:] != (3,)
+            or len(vertices) < 4 or not all(np.isfinite(a).all() for a in (points, normals, vertices))
+            or not np.allclose(np.linalg.norm(normals, axis=1), 1.0, atol=1e-6)
+        ):
+            raise ValueError("invalid_known_mesh_prior")
+        from scipy.spatial import ConvexHull
+
+        hull = ConvexHull(vertices)
+        for start in range(0, len(points), 256):
+            if np.any(points[start : start + 256] @ hull.equations[:, :3].T + hull.equations[:, 3] > 1e-7):
+                raise ValueError("visual_surface_outside_payload_envelope")
+        self.points_reference = immutable(points)
+        self.normals = immutable(normals)
+        self.vertices_reference = immutable(vertices)
+        self.half_extents = immutable(np.max(np.abs(vertices), axis=0))
+        self.model_id = hashlib.sha256(points.tobytes() + normals.tobytes() + vertices.tobytes()).hexdigest()
+        self._tree = cKDTree(self.points_reference)
+
+    def distance(self, points):
+        indices = self._tree.query(points)[1]
+        return np.sum((points - self.points_reference[indices]) * self.normals[indices], axis=1)
+
+    def validation_distance(self, points):
+        return self._tree.query(points)[0]
+
+    def world_bounds(self, rotation, center):
+        vertices = self.vertices_reference @ rotation.T + center
+        return np.array([vertices.min(0), vertices.max(0)])
+
+
+class AxialMeshSurface:
+    """Registration in radius-height space for an object with a declared axial bound."""
+
+    construction = "known_model_prior"
+    symmetry = "axial_oriented"
+
+    def __init__(self, surface):
+        self.vertices_reference, self.half_extents = surface.vertices_reference, surface.half_extents
+        self.model_id = hashlib.sha256((surface.model_id + ":radial-registration").encode()).hexdigest()
+        points = surface.points_reference
+        radius = np.linalg.norm(points[:, :2], axis=1)
+        radial = np.zeros(len(points))
+        np.divide(np.sum(surface.normals[:, :2] * points[:, :2], axis=1), radius, out=radial, where=radius > 1e-8)
+        normals = np.column_stack((radial, surface.normals[:, 2]))
+        length = np.linalg.norm(normals, axis=1)
+        valid = length > 0.5
+        self.samples = immutable(np.column_stack((radius, points[:, 2]))[valid])
+        self.normals = immutable(normals[valid] / length[valid, None])
+        if len(self.samples) < 25:
+            raise ValueError("invalid_axial_surface_prior")
+        self.tree = cKDTree(self.samples)
+
+    def distance(self, points):
+        xz = np.column_stack((np.linalg.norm(points[:, :2], axis=1), points[:, 2]))
+        indices = self.tree.query(xz)[1]
+        return np.sum((xz - self.samples[indices]) * self.normals[indices], axis=1)
+
+    def validation_distance(self, points):
+        return self.tree.query(np.column_stack((np.linalg.norm(points[:, :2], axis=1), points[:, 2])))[0]
+
+    def world_bounds(self, rotation, center):
+        vertices = self.vertices_reference @ rotation.T + center
+        return np.array([vertices.min(0), vertices.max(0)])
 
 
 class MeasuredSurfaceModel:

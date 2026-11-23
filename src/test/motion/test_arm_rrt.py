@@ -189,3 +189,138 @@ def test_voxel_checker_rejects_colliding_config():
     obs[5, 5] = True
     assert link_samples_collide_2d(obs, grid_origin=np.array([0.0, 0.0]), resolution=0.1, sample_xy=[(0.55, 0.55)])
     assert not link_samples_collide_2d(obs, grid_origin=np.array([0.0, 0.0]), resolution=0.1, sample_xy=[(0.1, 0.1)])
+
+
+def test_departure_search_samples_around_blocked_direct_exit():
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+      <joint name="x" type="slide" axis="1 0 0" range="-.1 .1"/>
+      <joint name="y" type="slide" axis="0 1 0" range="-.1 .1"/>
+      <geom size=".001" mass="1"/></body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+
+    class Collision:
+        def configuration_collides(self, model, data):
+            x, y = data.qpos
+            return x < .02 or (x < .025 and y < .015)
+
+    class Departure:
+        def sample_separating(self, rng):
+            return np.array([0., .03])
+
+        def validate_edge(self, start, end):
+            for q in np.linspace(start, end, 30):
+                if np.linalg.norm(q) > .06 or (q[0] > .005 and q[1] < .015):
+                    return False
+            return True
+
+    start, goal = np.zeros(2), np.array([.04, .03])
+    collision, departure = Collision(), Departure()
+    ordinary = plan_arm_joint_path(model, data, joint_names=['x', 'y'], q_start=start,
+                                   q_goal=goal, collision=collision)
+    assert ordinary.reason == 'invalid_start'
+    recovered = plan_arm_joint_path(model, data, joint_names=['x', 'y'], q_start=start,
+                                   q_goal=goal, collision=collision, departure=departure, step_size=.005)
+    assert recovered.success, recovered
+    assert recovered.departure is departure
+    np.testing.assert_allclose(recovered.waypoints[0], start)
+    np.testing.assert_allclose(recovered.waypoints[-1], goal)
+    assert max(q[1] for q in recovered.waypoints if q[0] <= .005) >= .015
+
+
+def test_collision_departure_cannot_bypass_joint_limits_or_planning_deadline():
+    import time
+
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+      <joint name="x" type="slide" range="0 .1"/><geom size=".01" mass="1"/>
+      </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    invalid = plan_arm_joint_path(model, data, joint_names=['x'], q_start=[.2], q_goal=[.05], departure=object())
+    assert invalid.reason == 'invalid_start' and invalid.detail.startswith('joint_bounds')
+
+    class SlowClearance:
+        def configuration_collides(self, model, data):
+            time.sleep(.002)
+            return False
+
+    limited = plan_arm_joint_path(model, data, joint_names=['x'], q_start=[0.], q_goal=[.05],
+                                 collision=SlowClearance(), max_time_s=.0001)
+    assert not limited.success and limited.reason == 'no_plan_within_budget'
+
+
+def test_posture_detour_certifies_both_legs_and_exact_goal():
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+      <joint name="x" type="slide" axis="1 0 0" limited="true" range="-2 2"/>
+      <joint name="y" type="slide" axis="0 1 0" limited="true" range="-2 2"/>
+      <geom type="sphere" size=".01" mass="1"/>
+    </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+
+    class Wall:
+        def configuration_collides(self, model, data):
+            return bool(abs(data.qpos[0] - .5) < .12 and abs(data.qpos[1]) < .2)
+
+    checker = Wall()
+    result = plan_arm_joint_path(
+        model, data, joint_names=("x", "y"), q_start=np.array([0., 0.]), q_goal=np.array([1., 0.]),
+        collision=checker, planner="linear", step_size=.025, via_configurations=([.5, .6],),
+    )
+    assert result.success and result.planner == "posture_detour"
+    assert any(np.allclose(q, [.5, .6]) for q in result.waypoints)
+    assert np.array_equal(result.waypoints[-1], [1., 0.])
+    for first, second in zip(result.waypoints, result.waypoints[1:], strict=False):
+        for t in np.linspace(0, 1, 10):
+            data.qpos[:] = (1-t)*first + t*second
+            assert not checker.configuration_collides(model, data)
+    multi = plan_arm_joint_path(
+        model, data, joint_names=("x", "y"), q_start=np.array([0., 0.]), q_goal=np.array([1., 0.]),
+        collision=checker, planner="linear", step_size=.025,
+        via_configurations=([ [.1, .5], [.9, .5] ],),
+    )
+    assert multi.success and multi.planner == "posture_detour"
+    assert any(np.allclose(q, [.1, .5]) for q in multi.waypoints)
+    assert any(np.allclose(q, [.9, .5]) for q in multi.waypoints)
+    blocked = plan_arm_joint_path(
+        model, data, joint_names=("x", "y"), q_start=np.array([0., 0.]), q_goal=np.array([1., 0.]),
+        collision=checker, planner="linear", step_size=.025, via_configurations=([.5, 0.], [3., .6]),
+    )
+    assert not blocked.success
+
+
+def test_escape_probes_vertical_slide_before_gradient_or_random_search():
+    import mujoco
+    import pytest
+
+    from emet.motion.contact_departure import ContactDeparture, DepartureMeasurement
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><compiler angle="radian"/><worldbody><body>
+      <joint name="wrist" type="hinge" range="-1 1"/>
+      <joint name="lift" type="slide" axis="0 0 1" range="0 .1"/>
+      <geom type="sphere" size=".01" mass="1"/>
+    </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+
+    def query(q):
+        return DepartureMeasurement({'floor': float(q[1]-.005)}, np.array([[0., 0., q[1]]]))
+
+    policy = ContactDeparture(np.zeros(2), query)
+    # A long guide must not consume the search budget before simple escape.
+    policy.guide_configurations = ((np.array([.2, .02]),),)
+    policy.sample_separating = lambda rng: pytest.fail('Coordinate lift should solve this escape before gradient search')
+
+    class Floor:
+        def configuration_collides(self, model, data):
+            return data.qpos[1] < .01
+
+    result = plan_arm_joint_path(model, data, joint_names=('wrist', 'lift'), q_start=np.zeros(2),
+        q_goal=np.array([.3, .03]), collision=Floor(), departure=policy, shortcut=False,
+        rng=np.random.default_rng(0))
+    assert result.success and result.planner == 'departure_rrt'
+    prefix = result.waypoints[:result.waypoints.escape_end_index+1]
+    assert all(q[0] == 0. for q in prefix)
+    assert prefix[-1][1] >= .01
