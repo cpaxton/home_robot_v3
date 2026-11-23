@@ -506,7 +506,8 @@ def test_best_fit_initialization_uses_the_same_explicit_policy(monkeypatch, best
         assert track.hypothesis_selections == 1 and not track.latest.execution_qualified
 
 
-def test_live_geometry_window_keeps_appearance_identity_near_gripper(monkeypatch):
+@pytest.mark.parametrize('witness_covers_object', [False, True])
+def test_live_geometry_window_keeps_appearance_identity_near_gripper(monkeypatch, witness_covers_object):
     from types import SimpleNamespace
 
     from emet.controller.task.tamp import live_transfer as live
@@ -525,13 +526,18 @@ def test_live_geometry_window_keeps_appearance_identity_near_gripper(monkeypatch
     scene.profile = {'tracking_geometry_window_m': .015, 'tracking_views': ['head']}
     scene.read_sample = lambda _: sample
     scene.epoch, scene.initial_capture_id = 'scene', 'first'
-    scene.initial_views, scene.samples, scene.supports = {}, {}, []
+    scene.initial_views, scene.samples = {}, {}
+    scene.supports = [SimpleNamespace(patch=SimpleNamespace(plane=np.array([0., 0., 0.]),
+        bounds=np.array([[1., 1., -.001], [2., 2., .001]])),
+        measured_surface_bounds=np.array([[-.1, -.1, -.001], [.1, .1, .001]]) if witness_covers_object else
+                                np.array([[1., 1., -.001], [2., 2., .001]]))]
     scene.stream, scene.payload_model, scene.enclosure = SimpleNamespace(tracker=tracker), tracker.model, None
     monkeypatch.setattr(live, 'synchronized_views', lambda sample: sample.observations)
     result = scene._read_views()['head']
     assert result.foreground_mask.sum() >= 25
     assert not np.any(result.foreground_mask & white)
     assert result.capture is cap
+    assert bool(result.foreground_mask[55, 60]) is (not witness_covers_object)
 
 
 @pytest.mark.parametrize('residual', [.003, .006])
@@ -626,3 +632,32 @@ def test_carry_prediction_uses_capture_tool_motion_and_checks_gripper_aperture(m
         assert result.capture is cap
     scene.set_carry_prediction(None, {})
     assert scene._carry_prediction is None
+
+
+def test_carry_foreground_associates_actual_surface_instead_of_enclosure_interior(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.controller.task.tamp import live_transfer as live
+
+    tracker, clock = setup()
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    measured, mask = view(cap)
+    world = measured.world.copy()
+    world[55, 60] = 0.  # Same appearance, deep inside the enclosing solid.
+    measured = replace(measured, world=world)
+    robot = SimpleNamespace(joints=np.array([.022, -.022]), world_from_ee=np.eye(4))
+    sample = SimpleNamespace(capture=cap, observations={'head': measured}, robot_after=robot)
+    scene = live.LiveTransferScene.__new__(live.LiveTransferScene)
+    scene.profile = {'tracking_geometry_window_m': .015, 'tracking_views': ['head'],
+                     'depth_margin_m': .003, 'position_error_m': .005}
+    scene.read_sample = lambda _: sample
+    scene.epoch, scene.initial_capture_id = 'scene', 'first'
+    scene.initial_views, scene.samples, scene.supports, scene.diagnostics = {}, {}, [], {}
+    scene.stream, scene.payload_model, scene.enclosure = SimpleNamespace(tracker=tracker), tracker.model, tracker.model
+    scene._carry_prediction = (np.eye(4), np.array([0, 1]), np.array([.022, -.022]), np.array([.012, -.012]))
+    scene._carry_prediction_barrier = 10.
+    monkeypatch.setattr(live, 'synchronized_views', lambda sample: sample.observations)
+    result = scene._read_views()['head']
+    assert not result.foreground_mask[55, 60]
+    assert result.foreground_mask.sum() >= 25
+    assert result.pose_prior is not None and result.capture is cap

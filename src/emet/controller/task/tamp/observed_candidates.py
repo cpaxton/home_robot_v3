@@ -54,6 +54,7 @@ def candidates_from_supports(
     placement_region=None,
     yaw_options=(0.0, np.pi / 2),
     placement_gap_m=0.0,
+    position_fractions=None,
     limit=8,
 ):
     """Propose poses only. The shared executor certifies contact and the swept route."""
@@ -61,6 +62,12 @@ def candidates_from_supports(
         raise ValueError("invalid_candidate_budget")
     if not np.isfinite(placement_gap_m) or not 0 <= placement_gap_m <= 0.01:
         raise ValueError("invalid_placement_gap")
+    if position_fractions is not None:
+        position_fractions = np.asarray(position_fractions, float)
+        if (position_fractions.ndim != 2 or position_fractions.shape[1] != 2
+                or not 1 <= len(position_fractions) <= 9 or not np.isfinite(position_fractions).all()
+                or np.any(np.abs(position_fractions) > .5)):
+            raise ValueError('invalid_placement_position_fractions')
     if snapshot.support_contact is None:
         raise ObservationUnavailable("support_geometry_unknown")
     bounds = snapshot.support_bounds[:, :2]
@@ -93,9 +100,12 @@ def candidates_from_supports(
         # Rank the centers of the free footprint first, then sample the longer
         # feasible axis. These are pose proposals, not a free-space assertion.
         axis = int(np.argmax(high - low))
-        for fraction_index, fraction in enumerate((0.0, -0.25, 0.25)):
-            xy = (low + high) / 2
-            xy[axis] += fraction * (high - low)[axis]
+        fractions = position_fractions
+        if fractions is None:
+            fractions = np.zeros((3, 2))
+            fractions[:, axis] = (0., -.25, .25)
+        for fraction_index, fraction in enumerate(fractions):
+            xy = (low + high) / 2 + fraction * (high - low)
             floor = (rotated[:, :2] + xy) @ plane[:2] + plane[2]
             landing_z = np.max(floor - rotated[:, 2]) + placement_gap_m
             landing_pose = np.eye(4)

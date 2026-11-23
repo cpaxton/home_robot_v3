@@ -539,6 +539,7 @@ class ObservedNativeAdapter:
                     observe=observe_effect, collect=collect_effect, observe_after=observe_after, clock=self.clock,
                     retention_rotation_rad=ex.payload_retention_rotation_rad,
                     retention_translation_m=ex.payload_retention_translation_m,
+                    settling_tolerance_m=getattr(ex, 'placement_settling_tolerance_m', .01),
                     # Use the same measured occlusion-bracketed footprint that
                     # admitted the resting object, not just the largest visible
                     # rectangle beside it.
@@ -606,6 +607,11 @@ class ObservedNativeAdapter:
                 or not np.array_equal(a.vertices_reference, b.vertices_reference)
                 or np.linalg.norm(a.pose.world_from_object[:3, 3] - b.pose.world_from_object[:3, 3]) > .005
                 or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
+            logger.warning('Initial evidence changed: position_delta=%.5f rotation_delta=%.5f map_matches=%s source_bounds_match=%s destination_bounds_match=%s',
+                np.linalg.norm(a.pose.world_from_object[:3, 3]-b.pose.world_from_object[:3, 3]),
+                evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]),
+                map_matches, np.array_equal(initial.source_support_bounds, current.source_support_bounds),
+                np.array_equal(initial.support_bounds, current.support_bounds))
             raise ObservationUnavailable('scene_changed_replan')
 
     def execute(self, plan_ref):

@@ -9,6 +9,7 @@ clock using a qualified clock mapping/pipeline; receive time alone is inadequate
 from __future__ import annotations
 
 import hashlib
+import logging
 import time
 from dataclasses import dataclass
 
@@ -218,7 +219,9 @@ def _frames(reference, frames, *, now, after, min_span_s):
     # The grasp baseline is historical evidence, not a claim of current pose.
     # Validate it at its actual bracketed receive time without renewing its age.
     historical_time = max(reference.capture.received_monotonic, reference.robot_after.received_monotonic)
-    if not 0 <= now - reference.capture.earliest <= 30. or historical_time > now:
+    # A completed lift remains historical evidence during a long transport.
+    # Freshness applies to the current frames below, not the elapsed task time.
+    if now < reference.capture.earliest or historical_time > now:
         raise ObservationUnavailable('object_observation_stale')
     reference.require(now=historical_time)
     last = reference.capture.latest
@@ -322,6 +325,8 @@ def evaluate_lift(reference, frames, *, support_top_z, after, now=None, retentio
 
 def evaluate_place(reference, frames, *, support_bounds, after, now=None, settling_tolerance_m=.01):
     """Verify footprint/support consistency and settling after measured retreat."""
+    if not np.isfinite(settling_tolerance_m) or not 0 < settling_tolerance_m <= .03:
+        raise ValueError('invalid_placement_settling_tolerance')
     now = time.monotonic() if now is None else now
     try:
         _frames(reference, frames, now=now, after=after, min_span_s=0.3)
@@ -363,6 +368,12 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None, settli
                 or np.linalg.norm(obj[:3, 3] - first[:3, 3]) + error > settling_tolerance_m
                 or evidence_rotation_distance(frame.payload.pose, obj[:3, :3], first[:3, :3]) + angular_error > 0.1
             ):
+                logging.getLogger(__name__).warning(
+                    'Placement evidence rejected: bounds=%s support=%s translation_bound_m=%.6f '
+                    'translation_limit_m=%.6f rotation_bound_rad=%.6f',
+                    box.tolist(), support.tolist(), np.linalg.norm(obj[:3, 3]-first[:3, 3])+error,
+                    settling_tolerance_m,
+                    evidence_rotation_distance(frame.payload.pose, obj[:3, :3], first[:3, :3])+angular_error)
                 return VisualEffectResult("violated", "visual_placement_not_verified", ids)
         return VisualEffectResult("satisfied", "visual_placement_verified", ids)
     except ObservationUnavailable as exc:
@@ -374,6 +385,7 @@ class ObservedVisualVerifier:
     def __init__(
         self, *, object_ref, support_bounds, observe, collect, clock=time.monotonic,
         observe_after=None, source_support_bounds=None, retention_rotation_rad=.1, retention_translation_m=.02,
+        settling_tolerance_m=.01,
     ):
         self.object_ref, self.support_bounds = object_ref, bounds_array(support_bounds)
         self.source_support_top_z = (
@@ -385,6 +397,9 @@ class ObservedVisualVerifier:
         if not np.isfinite(retention_translation_m) or not 0 < retention_translation_m <= .05:
             raise ValueError('invalid_retention_translation')
         self.retention_translation_m = retention_translation_m
+        if not np.isfinite(settling_tolerance_m) or not 0 < settling_tolerance_m <= .03:
+            raise ValueError('invalid_placement_settling_tolerance')
+        self.settling_tolerance_m = settling_tolerance_m
         self.retention_rotation_rad = retention_rotation_rad
         self.observe_after = observe_after
         self.reference = self.lift_reference = None
@@ -422,5 +437,5 @@ class ObservedVisualVerifier:
     def verify_place(self, *, after):
         frames = tuple(self.collect(self.object_ref, after=after))
         result = evaluate_place(self.lift_reference, frames, support_bounds=self.support_bounds,
-                                after=after, now=self.clock())
+                                after=after, now=self.clock(), settling_tolerance_m=self.settling_tolerance_m)
         return self._record(result)

@@ -65,6 +65,10 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
     if not math.isfinite(retention_position) or not .02 <= retention_position <= .05:
         raise ValueError("invalid_simulation_retention_translation")
     relaxed_retention = retention_angle > .1 or retention_position > .02
+    settling_tolerance = float(profile.get("simulation_placement_settling_tolerance_m", .01))
+    if not math.isfinite(settling_tolerance) or not .01 <= settling_tolerance <= .03:
+        raise ValueError("invalid_simulation_placement_settling_tolerance")
+    relaxed_settling = settling_tolerance > .01
     best_view = profile.get("simulation_best_fit_view", False)
     if type(best_view) is not bool or best_view and not profile.get("tracking_single_view_fallback"):
         raise ValueError("invalid_simulation_best_fit_view")
@@ -168,19 +172,20 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
         build_source=build_source, tasks=(task,),
         candidates=lambda _task, snapshot, region: candidates_from_supports(
             snapshot, grasps, placement_region=region,
+            position_fractions=profile.get("placement_xy_fractions"),
             placement_gap_m=probe["hover_gap_m"] if probe is not None else 0.0,
             yaw_options=tuple(math.radians(yaw) for yaw in profile.get("placement_yaw_degrees", (0., 90.))),
         ),
         confirm_placement=confirm if probe is not None else None,
         configure_arm=fixed_torso_arm if lock_torso else None,
     )
-    if profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or profile.get("approach_joint_routes") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction:
+    if profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or profile.get("approach_joint_routes") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction or relaxed_settling:
         native_factory = factory
 
         def factory(robot, executor):
             session = robot.get_emet_session() or {}
             observation = robot.get_observation()
-            if (profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction) and (
+            if (profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction or relaxed_settling) and (
                 session.get("runtime_kind") != "robocasa_native" or not observation.is_simulation
             ):
                 raise ValueError("simulation_collision_override_requires_simulator")
@@ -199,6 +204,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
                     result.event = event
                 result.payload_retention_rotation_rad = retention_angle
                 result.payload_retention_translation_m = retention_position
+                result.placement_settling_tolerance_m = settling_tolerance
                 result.collision.simulation_ignore_environment = bool(profile.get("simulation_ignore_environment"))
                 result.collision.simulation_clearance_slack_m = slack
                 result.collision.simulation_contact_terminated_close = contact_close
@@ -221,6 +227,8 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
                 assistance.append("simulation_retention_rotation_tolerance")
             if retention_position > .02:
                 assistance.append("simulation_retention_translation_tolerance")
+            if relaxed_settling:
+                assistance.append("simulation_placement_settling_tolerance")
             if profile.get("target_surface_association_m", .008) > .008:
                 assistance.append("expanded_target_surface_association")
             if visual_self:
@@ -252,6 +260,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
                     data["visual_self_association_m"] = visual_self
                 data["retention_rotation_tolerance_rad"] = retention_angle
                 data["retention_translation_tolerance_m"] = retention_position
+                data["placement_settling_tolerance_m"] = settling_tolerance
                 data["geometry_fit_residual_m"] = fit_residual
                 data["execution_shortcut_angle_rad"] = profile.get("execution_shortcut_angle_rad", 0.)
                 data["execution_shortcut_slide_m"] = profile.get("execution_shortcut_slide_m", 0.)

@@ -210,12 +210,13 @@ class Control:
         base = self.live.body(ROBOT_BASE)
         return np.r_[base.xpos[:2], np.arctan2(base.xmat[3], base.xmat[0])]
 
-    def contacts(self, data, *, allow_finger_contact=False, carried=False, allow_source_contact=False):
+    def contacts(self, data, *, allow_finger_contact=False, carried=False, allow_source_contact=False,
+                 penetration_limit_m=PENETRATION_LIMIT_M):
         m = self.model
         bad = set()
         pads = set()
         for c in data.contact:
-            if c.dist >= -PENETRATION_LIMIT_M:
+            if c.dist >= -penetration_limit_m:
                 continue
             a, b = map(int, c.geom)
             ab, bb = map(int, m.geom_bodyid[[a, b]])

@@ -132,3 +132,24 @@ def test_native_bridge_owns_auxiliary_rendering_instead_of_generic_stereo(monkey
     # The generic second-camera path captures a different physics state and
     # overwrites the timestamp used by the bridge's synchronized RGB-D views.
     assert specs[0].camera_names == ['robot0_agentview_right']
+
+
+def test_initial_settle_holds_measured_robot_posture_and_opens_gripper():
+    from emet.simulation.pandaomron_environment import settle_absolute_environment
+
+    q = np.array([-.1, -.8, 0., -2.1, 0., 1.5, .7, .002])
+    commands = []
+    robot = SimpleNamespace(_ref_joint_pos_indexes=np.arange(7), _ref_torso_joint_pos_indexes=np.array([7]),
+        create_action_vector=lambda parts: np.r_[parts['right'], parts['torso'], parts['right_gripper']])
+    def step(action):
+        commands.append(action.copy())
+        q[:] += .001  # Measured drift must not become a moving hold target.
+    env = SimpleNamespace(robots=[robot], sim=SimpleNamespace(data=SimpleNamespace(qpos=q)), step=step)
+    original = q.copy()
+    settle_absolute_environment(env, steps=3)
+    assert len(commands) == 3
+    for action in commands:
+        np.testing.assert_allclose(action[:-1], original)
+        assert action[-1] == -1.
+    with pytest.raises(ValueError, match='invalid_initial_settle_steps'):
+        settle_absolute_environment(env, steps=-1)

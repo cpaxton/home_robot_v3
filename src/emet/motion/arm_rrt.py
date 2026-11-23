@@ -27,6 +27,11 @@ from emet.utils.logger import Logger
 
 logger = Logger(__name__)
 
+# Native servos and soft joint stops can briefly overshoot a nominal endpoint.
+# Admit at most 0.1 mm (slides) / 0.1 mrad (hinges), checking the actual measured
+# geometry rather than clipping feedback. IK goals and sampling keep nominal limits.
+JOINT_BOUND_TOLERANCE = 1e-4
+
 
 @dataclass(frozen=True)
 class ArmRrtPlanResult:
@@ -109,7 +114,7 @@ def make_arm_validate_fn(
         qq = np.asarray(q, dtype=np.float64).reshape(-1)
         if qq.shape[0] != len(qadr) or not np.isfinite(qq).all():
             return False
-        if np.any(qq < lo - 1e-6) or np.any(qq > hi + 1e-6):
+        if np.any(qq < lo - JOINT_BOUND_TOLERANCE) or np.any(qq > hi + JOINT_BOUND_TOLERANCE):
             return False
         for a, v in zip(qadr, qq, strict=True):
             data.qpos[a] = float(v)
@@ -145,10 +150,10 @@ def arm_config_violation(
         mins, maxs = joint_limits_from_model(model, joint_names)
     lo = np.asarray(mins, dtype=np.float64).reshape(-1)
     hi = np.asarray(maxs, dtype=np.float64).reshape(-1)
-    violated = np.flatnonzero((qq < lo - 1e-6) | (qq > hi + 1e-6))
+    violated = np.flatnonzero((qq < lo - JOINT_BOUND_TOLERANCE) | (qq > hi + JOINT_BOUND_TOLERANCE))
     if violated.size:
         i = int(violated[0])
-        return f"joint_bounds:{joint_names[i]}={qq[i]:.4f} in [{lo[i]:.4f},{hi[i]:.4f}]"
+        return f"joint_bounds:{joint_names[i]}={qq[i]:.6f} in [{lo[i]:.6f},{hi[i]:.6f}]"
     for a, v in zip(qadr, qq, strict=True):
         data.qpos[a] = float(v)
     if collision is not None and collision.configuration_collides(model, data):

@@ -82,6 +82,27 @@ fingerprint. Reground and recalibrate for another scene; its pixel selections ar
 not reusable semantic perception. Environment bypass is **off** in that profile.
 A positive control must explicitly set it on in a separate copied profile.
 
+The frozen full-transfer positive control is
+[`pandaomron_sink_assisted_transfer_development.json`](../../configs/eval/pandaomron_sink_assisted_transfer_development.json).
+Copy that file instead in the recipe below to reproduce the assisted transfer.
+It explicitly enables environment bypass and the simulation-only phase carry
+model. It uses a wider measured destination region, front-floor proposals and
+an aligned hand heading to fit between the rim and faucet. This does not qualify
+collision-aware transfer or automatically grounded perception.
+It also declares `simulation_placement_settling_tolerance_m=0.02`: the translation
+bound includes both captures' 5 mm errors. The ordinary 10 mm bound leaves no
+noise allowance with those errors. The simulator option is limited to 10–30 mm,
+reported in tool receipts, and does not change support, footprint, orientation
+stability or retreat checks. This is a task acceptance tolerance, not improved
+measurement accuracy.
+
+The development trial `logs/pandaomron-finish-bounded-stop-Wn4g/report.json`
+passes observed execution and independent physics: full transfer and final visual
+placement verification, 100.97 mm two-pad lift, zero unintended touches or scored
+contacts. This result uses scripted public-tool selection rather than a model
+choosing actions. Collision-aware transfer, fresh held-out cases, unknown-model
+perception and physical-robot qualification remain open.
+
 Use RoboCasa 1.0.1 at commit
 `7bfc60c9d26c02506d4265cbe0e86b35e6e25d42`, robosuite 1.5.2 and MuJoCo 3.3.1
 for the benchmark server, with the benchmark assets installed. The planner/client
@@ -278,3 +299,58 @@ orientation. Tool receipts identify the assistance. The model is disabled before
 release, and attachment references cannot drift during transport. Ordinary
 tracking and independent physical lift/contact/placement scoring remain separate.
 This is a simulator control, not calibrated hardware retention confidence.
+
+Placement proposals can take `placement_xy_fractions`: an ordered list of up to
+nine normalized offsets on both axes of the *measured feasible footprint region*.
+Each component is within ±0.5; the full uncertainty-expanded payload footprint
+remains inside the selected support. The default longer-axis proposals are
+unchanged. This lets a caller select a visible interior/front portion of a sink
+instead of repeatedly targeting its center near a faucet. Arm/gripper clearance
+still belongs to motion validation; a payload-fitting goal alone does not prove
+the hand fits through the opening.
+
+The scorer separately records `unintended_touch_contacts` / `unintended_touch_frames`
+for shallow negative-distance contacts. The existing 1 mm penetration score is
+unchanged. Zero scored penetration frames must not be described as zero physical
+touches. Those diagnostics are scorer-only and are not agent observations.
+
+The current assisted carry implementation still needs at least 25 visible depth
+samples and locally observable translation. Fully occluded carry using bounded
+belief and qualified force/contact evidence remains future work.
+
+## Pose requirements and remaining generalization work
+
+Continuous, independently observable material 6D pose is not the desired contract
+for every phase. Grasping needs a reachable contact region and a usable approach;
+carry needs evidence of retention with bounded slip; placement needs destination
+clearance, support and release evidence. Symmetry and task tolerances should decide
+which orientation components matter. Tight insertion or pouring can require much
+more orientation information than dropping an upright shaker into an open sink.
+
+The current implementation still represents these hypotheses as poses and uses a
+known CAD prior. Its simulation-only rigid-carry model reduces visual observability
+requirements, but does not qualify an occluded hardware grasp. General deployment
+still needs partial-view geometry without a supplied CAD model, task-dependent
+pose uncertainty, qualified contact/force or bounded-belief carry, and guarded
+placement recovery. These are explicit capability gaps, not solved by the pilot.
+
+Historical effect references retain their original acquisition times. They are
+validated at their original receive time and against current identity/geometry,
+without an arbitrary task-duration cutoff. Current placement samples still need
+fresh, ordered post-retreat captures and a measured settling interval. Extending
+a transport must not renew old images or invalidate an already observed lift.
+
+`ObservedSupportContact.measured_surface_bounds` bounds plane exclusions using
+all original measured witnesses, rather than an unbounded plane or an inscribed
+placement rectangle. Carry foreground association additionally checks proximity
+to the known measured model surface; an occluding pixel inside the coarse payload
+enclosure is insufficient. The Panda evaluation settles the restored fixture for
+30 native-control steps while holding the measured absolute arm/torso posture
+before publishing the initial scene. Independent scoring records that warmup.
+
+The shared arm validator admits only 0.1 mm slide / 0.1 mrad hinge overshoot at
+nominal joint stops. Native soft-stop feedback can exceed a nominal endpoint by
+micrometers; rejecting that measured start blocked pre-release retreat. Collision
+checks use the actual unmodified state, while IK/sampling retain nominal ranges.
+The diagnostic and boolean validators share this band. Regression coverage
+checks return from a 50 micrometer overshoot and rejection at 200 micrometers.

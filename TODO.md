@@ -83,7 +83,14 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       Scoped original-patch clearance now survives goal connection and runtime
       handoff; regressions cover prefix/suffix commands and newly seen obstacles.
       Panda has executed a full recovery prefix and clearance suffix: five
-      commands, 7.04 mm torso progress, zero scored unintended contacts. Full sink transfer remains incomplete and startup-dependent.
+      commands, 7.04 mm torso progress, zero scored unintended contacts.
+      An assisted development run now physically completes the full sink transfer
+      with 10.1 cm two-pad lift and zero unintended touches or scored contacts.
+      Full observed verification now also passes after fixing historical-reference
+      age, uncertainty-inclusive settling and tiny joint-stop overshoot handling.
+      The reproducible assisted recipe and stack changes are documented below.
+      Collision-aware, held-out and
+      model-selected full transfers remain unqualified.
       Shared stack changes and the reproducible development profile are mapped in
       `docs/testing/observed_manipulation_stack.md`: three-camera sensing, native
       feedback, convex contact, bounded IK/Cartesian planning, and runtime path
@@ -96,7 +103,9 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       An explicitly assisted bypass run now physically and visually verified a 9.1 cm shaker lift
       with both finger pads and zero scored unintended contacts, then stopped
       during transport on uncertain relative-pose estimates. It does not qualify collision-aware transport
-      or placement. Resolve loaded transport and approach sensing separately.
+      or placement. A later simulation-only carry model plus surface association
+      enabled the physical transfer described above; unfamiliar-object geometry
+      and occluded retention still need qualification.
       Native reference motions
       also need self-collision repair; the scorer now measures self contacts.
       Simulator-only collision bypass controls moved the end effector 5.1 cm

@@ -132,6 +132,34 @@ def test_historical_grasp_reference_is_not_renewed_or_required_to_be_live():
     assert before.payload.pose.received_monotonic == 5.02
 
 
+def test_long_transport_preserves_historical_reference_but_requires_fresh_placement():
+    before = frame(5., obj=(0, 0, .13), ee=(0, 0, .13))
+    frames = [frame(t, obj=(.1, 0, .02), ee=(.1, 0, .2)) for t in (130.5, 130.9)]
+    kwargs = {'support_bounds': [[-.3, -.3, -.1], [.3, .3, 0]], 'after': 130.4}
+    assert evaluate_place(before, frames, now=131., **kwargs).satisfied
+    assert evaluate_place(before, frames, now=135., **kwargs).reason == 'object_observation_stale'
+    assert before.capture.earliest == 5.
+    assert before.payload.pose.received_monotonic == 5.02
+
+
+def test_coarse_placement_settling_tolerance_includes_both_capture_errors():
+    before = frame(5., obj=(0, 0, .13), ee=(0, 0, .13))
+    frames = [replace(frame(t, obj=(x, 0, .02), ee=(.1, 0, .2)), position_error_m=.005)
+              for t, x in ((130.5, .1), (130.9, .101))]
+    kwargs = {'support_bounds': [[-.3, -.3, -.1], [.3, .3, 0]], 'after': 130.4, 'now': 131.}
+    assert not evaluate_place(before, frames, **kwargs).satisfied
+    assert evaluate_place(before, frames, settling_tolerance_m=.02, **kwargs).satisfied
+    moved = replace(frame(130.9, obj=(.13, 0, .02), ee=(.1, 0, .2)), position_error_m=.005)
+    assert not evaluate_place(before, [frames[0], moved], settling_tolerance_m=.02, **kwargs).satisfied
+
+
+@pytest.mark.parametrize('tolerance', [0., -.01, .031, float('nan')])
+def test_invalid_placement_settling_tolerance_is_rejected(tolerance):
+    with pytest.raises(ValueError, match='invalid_placement_settling_tolerance'):
+        evaluate_place(None, [], support_bounds=[[-.3, -.3, -.1], [.3, .3, 0]],
+                       after=0., settling_tolerance_m=tolerance)
+
+
 def test_uncertain_pose_and_wrong_capture_identity_are_unknown():
     frames = [frame(t, obj=(0, 0, .13), ee=(0, 0, .13)) for t in (10.5, 10.8)]
     for changed in (replace(frames[1], rotation_error_rad=.2),

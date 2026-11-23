@@ -1308,3 +1308,23 @@ def test_attachment_calibration_covers_allowed_retention_motion_without_rebasing
     # The original attachment stays fixed: further drift is still rejected.
     system.object_position[2] -= .02
     assert not ex.payload_retained()
+
+
+def test_placement_can_choose_both_support_axes_with_full_footprint_inside(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    grasp = CalibratedGrasp(np.eye(4), (0., 0., -1.), (('opening', 0.),))
+    candidates = candidates_from_supports(snapshot, (grasp,), yaw_options=(0.,),
+        position_fractions=((0., -.35), (.25, -.35), (0., 0.)), limit=3)
+    assert len(candidates) == 3
+    centers = np.array([candidate.place[1][0][:2] for candidate in candidates])
+    assert centers[0, 1] < centers[2, 1] and centers[1, 0] > centers[0, 0]
+    vertices = snapshot.frame.payload.vertices_reference[:, :2]
+    for center in centers:
+        footprint = vertices+center
+        assert np.all(footprint.min(0) >= snapshot.support_bounds[0, :2])
+        assert np.all(footprint.max(0) <= snapshot.support_bounds[1, :2])
+    for invalid in ((), ((0., .51),), ((np.nan, 0.),), ((0.,),)):
+        with pytest.raises(ValueError, match='invalid_placement_position_fractions'):
+            candidates_from_supports(snapshot, (grasp,), position_fractions=invalid)

@@ -115,3 +115,20 @@ def make_pandaomron_environment(*, task, layout, style, seed):
     )
     env.set_xml_processor(serial_mesh_compiler)
     return preserve_absolute_reset_posture(serial_robot_loader(env))
+
+
+def settle_absolute_environment(env, *, steps=30):
+    """Let restored fixture dynamics settle while natively holding robot joints."""
+    import numpy as np
+
+    if type(steps) is not int or not 0 <= steps <= 1000:
+        raise ValueError('invalid_initial_settle_steps')
+    robot = env.robots[0]
+    q = env.sim.data.qpos
+    action = robot.create_action_vector({
+        'right': np.array(q[robot._ref_joint_pos_indexes], copy=True),
+        'torso': np.array(q[robot._ref_torso_joint_pos_indexes], copy=True),
+        'right_gripper': np.array([-1.]),
+    })
+    for _ in range(steps):
+        env.step(action)

@@ -219,12 +219,23 @@ class LiveTransferScene:
                     pose = fit.fit.poses[0] if prior is None else prior
                     local = (view.world - pose[:3, 3]) @ pose[:3, :3]
                     foreground &= self.enclosure.distance(local.reshape(-1, 3)).reshape(view.depth.shape) <= .008
+                    if prior is not None:
+                        # A held object's enclosure contains empty space too.
+                        # Associate visible surfaces against the pre-fit motion
+                        # prediction, not every return inside that volume.
+                        selected = np.flatnonzero(foreground)
+                        distances = self.payload_model.validation_distance(local.reshape(-1, 3)[selected])
+                        band = self.profile['depth_margin_m'] + self.profile['position_error_m']
+                        foreground.ravel()[selected] = distances <= band
                 # Visible support surfaces are independent measurements and
                 # cannot contribute to the tracked object's foreground.
                 for support in self.supports:
                     patch = support.patch
                     height = view.world[..., :2] @ patch.plane[:2] + patch.plane[2]
-                    on_plane = np.abs(view.world[..., 2] - height) <= .008
+                    bounds = np.asarray(getattr(support, "measured_surface_bounds", patch.bounds))[:, :2]
+                    within = np.all((view.world[..., :2] >= bounds[0]-.008) &
+                                    (view.world[..., :2] <= bounds[1]+.008), axis=-1)
+                    on_plane = (np.abs(view.world[..., 2] - height) <= .008) & within
                     foreground &= ~on_plane
                 foreground = _tracking_interior(foreground)
                 if foreground.sum() >= 25:

@@ -219,6 +219,10 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
         control.live.qpos[address] = requested
         control.live.qvel[joint.dofadr[0]] = 0.0
     mujoco.mj_forward(control.model, control.live)
+    from emet.simulation.pandaomron_environment import settle_absolute_environment
+
+    initial_settle_steps = 30
+    settle_absolute_environment(control.env, steps=initial_settle_steps)
     before = control.live.body("obj_main").xpos.copy()
     initial_task_success = bool(control.env._check_success())
     ports = get_ports(port_offset)
@@ -229,6 +233,7 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
             super()._step_physics_tick()
             with self._mj_lock:
                 contacts, pads = control.contacts(control.live, allow_finger_contact=True)
+                touches, _ = control.contacts(control.live, allow_finger_contact=True, penetration_limit_m=0.)
                 self_contacts = []
                 for contact in control.live.contact:
                     if float(contact.dist) >= -.001:
@@ -243,6 +248,7 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
                         "xyz_m": position.tolist(),
                         "pad_contacts": len(pads),
                         "unintended_contacts": contacts,
+                        "unintended_touch_contacts": touches,
                         "unintended_self_contacts": self_contacts,
                         "ee_xyz_m": self._ee_pose(control.live)[:3, 3].tolist(),
                         "robot_joint_positions": control.live.qpos[self._qpos_addresses].tolist(),
@@ -271,6 +277,7 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
             verdict = {
                 "fixture_sha256": control.report["fixture_sha256"],
                 "initial_success": initial_task_success,
+                "initial_settle_steps": initial_settle_steps,
                 "upstream_success": bool(control.env._check_success()),
                 "basin_contains_tongs": control.basin_contains_tongs(),
                 "object_motion_m": float(np.linalg.norm(after - before)),
@@ -283,6 +290,7 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
                     default=0.0,
                 ),
                 "unintended_contact_frames": sum(bool(sample["unintended_contacts"]) for sample in samples),
+                "unintended_touch_frames": sum(bool(sample["unintended_touch_contacts"]) for sample in samples),
                 "unintended_self_contact_frames": sum(bool(sample["unintended_self_contacts"]) for sample in samples),
                 "final_object_speed_mps": float(
                     np.linalg.norm(control.live.qvel[control.model.jnt_dofadr[control.object_joint] :][:3])

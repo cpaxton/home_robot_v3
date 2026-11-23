@@ -1531,3 +1531,91 @@ were zero. This is not placement success. The next route lowers the preplace
 height and keeps the grasp heading to avoid the cabinet during final approach.
 Integrated validation passed 575 tests with the diagnostic allocator (32.90 s),
 plus lint and diff checks. The collision-aware full-transfer gate remains open.
+
+The lower, unchanged-heading run `logs/pandaomron-finish-lower-same-heading-znmN`
+stopped near preplace with zero >1 mm contact frames and 10.74 mrad joint error.
+A temporary 15 mrad arrival trial (`logs/pandaomron-finish-native-arrival-2KCy`)
+also stalled. Offline scorer-only reconstruction identified forearm/faucet
+intersection; the angular tolerance change was reverted. No oracle-derived
+trajectory was supplied to the agent. The scorer now retains shallow touches in
+addition to its unchanged 1 mm penetration metric.
+
+`logs/pandaomron-finish-lower-quarter-turn-B3JA` reported 187 shallow faucet touch
+frames and zero >1 mm frames. The narrow-region front-goal run
+`logs/pandaomron-finish-front-support-3QJm` likewise reported 144 shallow touches.
+Offline RGB-D replay found that the destination image region excluded visible
+front floor. Widening it from [575,350,870,660] to [600,350,970,740] expanded the
+measured floor patch from Y=[-0.46,-0.33] to [-0.53,-0.33] m, retaining the same
+support predicate. Placement proposals now optionally cover both support axes,
+with full payload footprint checks.
+
+`logs/pandaomron-finish-wide-front-support-G4Ph` completed preplace and began
+lowering. The quarter-turned hand then contacted the front counter rim during
+place (17 >1 mm frames, 182 shallow-touch frames); it stopped before release.
+The next trial aligns the hand's narrow dimension across the rim and selects an
+interior point farther from the faucet. Latest integrated validation: 576 tests
+passed with the diagnostic allocator (29.98 s), plus lint and diff checks.
+
+### Full physical transfer and phase-evidence fixes
+
+The aligned-hand/front-floor development run
+`logs/pandaomron-finish-aligned-front-witness-oLKY` completed native pick, carry,
+placement, release and retreat. Independent physics reported RoboCasa success,
+full basin containment, 100.8 mm two-pad lift, 802.7 mm object motion, final speed
+4.55 micrometers/s, and zero unintended shallow touches, >1 mm contacts or scored
+self contacts. This is a repeatedly tuned development case with environment
+collision bypass, supplied object CAD, hand-selected image regions, best-fit
+view/hypothesis selection and simulation-only carry conditioning. Public CHAT
+tools were invoked through scripted routing; this is not a model-selected or
+held-out result.
+
+Carry association now checks actual known-model surfaces rather than treating
+every depth return inside the payload enclosure as object material. Support-plane
+subtraction is bounded by the full original measured witness footprint: an
+unbounded plane erased unrelated held-object points, while using only the
+inscribed placement rectangle retained actual support pixels. Initial restored
+fixtures settle for 30 native-control steps at the measured absolute posture.
+
+The physical success still returned unknown final visual verification because
+the historical lift reference exceeded an arbitrary 30-second age limit. That
+limit is removed for immutable historical evidence; original timestamps,
+calibration/identity/geometry checks, and fresh ordered post-retreat samples are
+preserved. A regression verifies a 126-second-old reference with fresh settling
+images, and rejects the same images when current evidence becomes stale. The
+full suite passes 580 tests (29.87 s). End-to-end verification is being repeated
+under the frozen `pandaomron_sink_assisted_transfer_development.json` recipe.
+
+`logs/pandaomron-finish-fresh-placement-0C58` again passed independent physics:
+100.8 mm two-pad lift, 845.7 mm object motion, sink success, zero unintended
+touches/contacts/self contacts, final speed 15 micrometers/s. Fresh post-retreat
+verification now ran, but rejected settling. The ordinary 10 mm movement bound
+includes 5 mm position uncertainty from each capture, leaving zero slack for
+any nonzero measured displacement. The assisted transfer profile now explicitly
+requests a 20 mm uncertainty-inclusive settling bound (allowed 10–30 mm in the
+simulator-only option); ordinary verification remains at 10 mm. Footprint,
+support, rotation stability, retreat and freshness checks are unchanged. New
+regressions retain both capture errors and reject real motion above the bound.
+Placement rejection logs expose geometry and translation/rotation bounds rather
+than reporting only a generic placement failure.
+
+The first 20 mm settling trial, `logs/pandaomron-finish-coarse-settling-nAAO`,
+lifted and lowered the object into the sink without unintended contact, but did
+not release. Pre-release retreat replanning encountered a transient negative
+torso reading at its nominal zero stop; the 1 micrometer joint-bound band rejected
+the measured start. The shared validator now permits a bounded 0.1 mm slide /
+0.1 mrad hinge overshoot, retains the actual state for collision checking, and
+keeps nominal IK/sampling ranges. This is numerical stop handling, not permission
+to ignore joint limits or a claim of pose-estimation failure.
+
+`logs/pandaomron-finish-bounded-stop-Wn4g` passes both independent physics and
+observed execution (`passed=true`, `physics_passed=true`,
+`observed_execution_passed=true`). Public tool execution verified grasp/lift and
+placement after native release and retreat. Physics measured 100.97 mm two-pad
+lift, 845.74 mm object motion, RoboCasa success and full basin containment,
+zero unintended shallow touches, >1 mm contacts or scored self contacts, and
+2.24 micrometers/s final speed. This closes the assisted development execution
+milestone, not the collision-aware/held-out/model-selected/hardware gates.
+Validation: 586 integrated tests passed (29.68 s), Ruff and whitespace checks.
+The exact profile is tracked as
+`configs/eval/pandaomron_sink_assisted_transfer_development.json`; the generated
+CAD prior and benchmark assets remain separate as described in the stack recipe.

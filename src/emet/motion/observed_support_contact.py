@@ -107,6 +107,13 @@ class ObservedSupportContact:
         points = (rays*self.depth[y, x, None]) @ self.world_from_camera[:3, :3].T + self.world_from_camera[:3, 3]
         return cKDTree(points)
 
+    @cached_property
+    def measured_surface_bounds(self):
+        """Bounds of all original support samples, beyond the inscribed patch."""
+        points = self._measured_surface_tree.data
+        bounds = np.stack((points.min(0), points.max(0)))
+        return np.frombuffer(bounds.tobytes(), dtype=bounds.dtype).reshape(2, 3)
+
     def measured_surface_distance(self, point):
         """Distance to original selected depth, without claiming free space.
 

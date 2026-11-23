@@ -136,6 +136,32 @@ def test_plan_arm_rrt_connect_no_collision():
     assert len(plan.waypoints) >= 2
 
 
+def test_tiny_measured_joint_stop_overshoot_can_return_inside_without_clipping():
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.motion.arm_rrt import arm_config_violation, make_arm_validate_fn
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+        <joint name="slide" type="slide" range="0 .34"/><geom size=".01"/>
+        </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    seen = []
+    collision = SimpleNamespace(configuration_collides=lambda _m, d: seen.append(float(d.qpos[0])) or False)
+    check = make_arm_validate_fn(model, data, ['slide'], collision)
+    assert check(np.array([-5e-5]))
+    assert seen[-1] == -5e-5
+    assert arm_config_violation(model, data, ['slide'], np.array([-5e-5]), collision) is None
+    assert not check(np.array([-2e-4]))
+    assert arm_config_violation(model, data, ['slide'], np.array([-2e-4])).startswith('joint_bounds:')
+    plan = plan_arm_joint_path(model, data, joint_names=['slide'], q_start=np.array([-5e-5]),
+                               q_goal=np.array([.002]), collision=collision, planner='linear')
+    assert plan.success
+    assert plan.waypoints[0][0] == -5e-5
+    assert np.isclose(plan.waypoints[-1][0], .002)
+
+
 def test_invalid_start_distinguishes_bounds_from_collision():
     """invalid_start carries a detail naming which predicate failed."""
     from types import SimpleNamespace
