@@ -88,6 +88,7 @@ class PhysicalPickPlaceExecutor:
     GRIPPER_TRACKING_TOLERANCE = 0.001
     payload_retention_rotation_rad = .1
     payload_retention_translation_m = .02
+    payload_tracking_changed = None
 
     execution_mode = "physical"
     release_refiner: Callable[[], PhysicalMotionResult] | None = None
@@ -1185,6 +1186,16 @@ class PhysicalPickPlaceExecutor:
                 self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         except ObservationUnavailable as exc:
             return PhysicalMotionResult(False, str(exc), "grasp")
+        if callable(self.payload_tracking_changed):
+            measured_gripper = {name: float(self.data.joint(name).qpos[0])
+                                for name in self.gripper_close_configuration}
+            self.payload_tracking_changed(self.collision.payload_transform, self.gripper_close_configuration,
+                                          measured_gripper=measured_gripper)
+            # Closure can seat the object inside the pads. Freeze the actual
+            # attachment once, from fresh post-closure evidence, before lift.
+            self.synchronize(self.data)
+            initial_object_height = float(self._object_pose(object_gt_body)[2, 3])
+            self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body, capture_aligned=True)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
         if result.success:
@@ -1243,6 +1254,8 @@ class PhysicalPickPlaceExecutor:
         )
         if error is not None:
             return error
+        if callable(self.payload_tracking_changed):
+            self.payload_tracking_changed(None, {})
         if not self.robot.open_gripper(blocking=True):
             return PhysicalMotionResult(False, "gripper_open_failed", "release")
         self.event(phase="release", controller_success=True)

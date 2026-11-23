@@ -544,6 +544,7 @@ class ObservedNativeAdapter:
                     # rectangle beside it.
                     source_support_bounds=pickup_bounds)
                 ex.visual_verifier = verifier
+                ex.payload_tracking_changed = getattr(self.source, 'set_carry_prediction', None)
                 ex.transport = lambda: PhysicalMotionResult(True, 'stationary', 'transport')
                 ref = f'observed_plan:{uuid.uuid4().hex}'
                 if len(self.plans) >= 32:

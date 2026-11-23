@@ -51,6 +51,9 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
     best_fit = profile.get("simulation_best_fit_pose", False)
     if type(best_fit) is not bool:
         raise ValueError("invalid_simulation_best_fit_pose")
+    carry_prediction = profile.get("simulation_rigid_carry_prediction", False)
+    if type(carry_prediction) is not bool:
+        raise ValueError("invalid_simulation_carry_prediction")
     fit_residual = float(profile.get("simulation_fit_residual_m", .003))
     if not math.isfinite(fit_residual) or not .003 <= fit_residual <= .01:
         raise ValueError("invalid_simulation_fit_residual")
@@ -171,13 +174,13 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
         confirm_placement=confirm if probe is not None else None,
         configure_arm=fixed_torso_arm if lock_torso else None,
     )
-    if profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or profile.get("approach_joint_routes") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit:
+    if profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or profile.get("approach_joint_routes") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction:
         native_factory = factory
 
         def factory(robot, executor):
             session = robot.get_emet_session() or {}
             observation = robot.get_observation()
-            if (profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit) and (
+            if (profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction) and (
                 session.get("runtime_kind") != "robocasa_native" or not observation.is_simulation
             ):
                 raise ValueError("simulation_collision_override_requires_simulator")
@@ -210,6 +213,8 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
                 assistance.append("simulation_best_fit_view")
             if relaxed_fit:
                 assistance.append("simulation_geometry_fit_residual")
+            if carry_prediction:
+                assistance.append("simulation_rigid_carry_prediction")
             if retention_angle >= math.pi:
                 assistance.append("simulation_retention_orientation_unconstrained")
             elif retention_angle > .1:

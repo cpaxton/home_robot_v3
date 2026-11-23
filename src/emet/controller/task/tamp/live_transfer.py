@@ -140,15 +140,58 @@ class LiveTransferScene:
         self._map_thread = None
         self._map_stop = threading.Event()
         self._map_failure = None
+        self._carry_prediction = None
+        self._carry_prediction_barrier = -np.inf
         self.source = ObservedTransferSource(
             read=self.read, collect=self.collect, current_revision=self.current_revision, invalidate=self.invalidate,
             model_signature=self.signature, fingertip_geom_ids=fingertip_geom_ids, clock=clock,
             check_placement_surface=self.check_placement_surface,
         )
+        if profile.get("simulation_rigid_carry_prediction", False):
+            self.source.set_carry_prediction = self.set_carry_prediction
+
+    def set_carry_prediction(self, ee_from_object, close_configuration, *, measured_gripper=None):
+        if not self.profile.get("simulation_rigid_carry_prediction", False):
+            return
+        packet = self.stream.snapshot()
+        self._carry_prediction_barrier = self.clock()
+        if ee_from_object is None:
+            self._carry_prediction = None
+            return
+        sample = self.samples[packet.fit.capture.observation_id]
+        addresses = np.array([int(self.arm.model.joint(name).qposadr[0]) for name in close_configuration])
+        if not len(addresses):
+            raise ObservationUnavailable('carry_gripper_feedback_unavailable')
+        measured = (np.asarray(sample.robot_after.joints)[addresses].copy() if measured_gripper is None else
+                    np.asarray([measured_gripper[name] for name in close_configuration], float))
+        goal = np.asarray(list(close_configuration.values()), float)
+        if np.any(np.abs(measured)-np.abs(goal) < .002):
+            raise ObservationUnavailable('carry_grip_aperture_unconfirmed')
+        self._carry_prediction = (np.array(ee_from_object, copy=True), addresses, measured, goal)
+        self.diagnostics['carry_prediction_conditioning'] = 'rigid_attachment_orientation_with_blocked_gripper'
+        self.stream.collect(after=self._carry_prediction_barrier, min_span_s=.1, timeout_s=3.)
 
     def _read_views(self):
         sample = self.read_sample(self.epoch)
+        if sample.capture.latest <= getattr(self, '_carry_prediction_barrier', -np.inf):
+            return None
         views = synchronized_views(sample)
+        prior = None
+        hold = getattr(self, '_carry_prediction', None)
+        if hold is not None:
+            if sample.capture.latest <= self._carry_prediction_barrier:
+                return None
+            attachment, addresses, reference, goal = hold
+            measured = np.asarray(sample.robot_after.joints)[addresses]
+            if (np.any(np.abs(measured)-np.abs(goal) < .002) or
+                    np.any(np.abs(measured-reference) > .004)):
+                self.diagnostics['last_carry_aperture_rejection'] = {
+                    'measured': measured.tolist(), 'reference': reference.tolist(), 'goal': goal.tolist(),
+                    'capture_id': sample.capture.observation_id}
+                raise ObservationUnavailable('carry_grip_aperture_lost')
+            prior = sample.robot_after.world_from_ee @ attachment
+            views = {name: replace(view, pose_prior=prior) for name, view in views.items()}
+            self.diagnostics['carry_prediction_updates'] = self.diagnostics.get('carry_prediction_updates', 0)+1
         if self.initial_views is not None and sample.capture.observation_id == self.initial_capture_id:
             if not ContinuousRgbdSource._same_packet(self.initial_views, views):
                 raise ObservationUnavailable("capture_replayed")
@@ -157,7 +200,7 @@ class LiveTransferScene:
             fit = self.stream.tracker.latest
             if fit is None:
                 raise ObservationUnavailable("moving_tracking_lost_reinitialize")
-            centers = fit.fit.poses[:, :3, 3]
+            centers = fit.fit.poses[:, :3, 3] if prior is None else prior[None, :3, 3]
             allowance = float(self.profile["tracking_geometry_window_m"])
             if not 0 < allowance <= .03:
                 raise ValueError("invalid_tracking_geometry_window")
@@ -173,7 +216,7 @@ class LiveTransferScene:
                 # inside it must not bypass the track's original appearance.
                 foreground &= self.stream.tracker.appearance_mask(view.rgb)
                 if self.enclosure is not None:
-                    pose = fit.fit.poses[0]
+                    pose = fit.fit.poses[0] if prior is None else prior
                     local = (view.world - pose[:3, 3]) @ pose[:3, :3]
                     foreground &= self.enclosure.distance(local.reshape(-1, 3)).reshape(view.depth.shape) <= .008
                 # Visible support surfaces are independent measurements and
@@ -662,6 +705,7 @@ class LiveTransferScene:
                 self.last_tracking_rejection = rejection
             self.diagnostics["best_fit_hypothesis_selections"] = self.stream.tracker.hypothesis_selections
             self.diagnostics["best_fit_view_selections"] = self.stream.tracker.view_selections
+            self.diagnostics["carry_conditioned_captures"] = self.stream.tracker.conditional_capture_updates
             self.diagnostics["last_view_candidates"] = {
                 name: fit.as_dict() for name, fit in self.stream.tracker.last_view_candidates}
             candidate = getattr(self.stream.tracker, "last_candidate_fit", None)
@@ -680,6 +724,8 @@ class LiveTransferScene:
                 for packet in self.stream.history()
             ]
         self.stream, self.last_evidence = None, None
+        self._carry_prediction = None
+        self._carry_prediction_barrier = -np.inf
         self.samples.clear()
         self.epoch = "transfer:" + uuid.uuid4().hex
         self.initial_views = None

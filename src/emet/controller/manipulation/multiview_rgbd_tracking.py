@@ -15,7 +15,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from emet.controller.manipulation.geometry_models import AxialMeshSurface, PrimitiveModel
-from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_geometry
+from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_attachment_translation, fit_geometry
 from emet.controller.manipulation.moving_rgbd_tracking import MovingRgbdTracker, _arrays, _frozen
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
@@ -33,11 +33,17 @@ class SynchronizedRgbdView:
     robot_guard: RobotViewGuard | None = None
     geometry: RgbdCaptureGeometry | None = None
     foreground_mask: np.ndarray | None = None
+    pose_prior: np.ndarray | None = None
 
     def __post_init__(self):
         arrays = _arrays(self.rgb, self.depth, self.world)
         for name, array in zip(("rgb", "depth", "world"), arrays, strict=True):
             object.__setattr__(self, name, _frozen(array))
+        if self.pose_prior is not None:
+            from emet.controller.manipulation.native_inputs import ObjectPoseEvidence
+            prior = ObjectPoseEvidence(self.pose_prior, self.capture.received_monotonic,
+                                       'rgbd_tracking', self.capture.observation_id).world_from_object
+            object.__setattr__(self, 'pose_prior', prior)
         if self.foreground_mask is not None:
             mask = np.asarray(self.foreground_mask)
             if (
@@ -132,6 +138,7 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             raise ValueError("invalid_best_fit_view")
         self.best_fit_view = best_fit_view
         self.view_selections = 0
+        self.conditional_capture_updates = 0
         self.last_view_candidates = ()
         self.best_fit_hypothesis = best_fit_hypothesis
         self.hypothesis_selections = 0
@@ -256,7 +263,20 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         self.last_view_rejections = tuple(rejected)
         if not masks:
             raise ObservationUnavailable("moving_multiview_association_unknown")
+        priors = [view.pose_prior for view in views.values()]
+        prior = priors[0]
+        if any((value is None) != (prior is None) or
+               value is not None and not np.array_equal(value, prior) for value in priors):
+            raise ObservationUnavailable('multiview_pose_prior_mismatch')
         def fit_points(selected):
+            if prior is not None:
+                candidate = fit_attachment_translation(selected, self.model, prior=prior,
+                    object_ref=self.object_ref, observation_ids=(capture.observation_id,),
+                    received_monotonic=capture.received_monotonic, max_residual_m=self.max_residual_m,
+                    max_points=self.max_fit_points)
+                self.last_candidate_fit = candidate
+                self._require_fit(candidate)
+                return candidate
             candidate = fit_geometry(
                 selected, self.model, object_ref=self.object_ref,
                 observation_ids=(capture.observation_id,), received_monotonic=capture.received_monotonic,
@@ -323,4 +343,6 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             self.component_policy,
             self.appearance_model,
         )
+        if fit.conditioning is not None:
+            self.conditional_capture_updates += 1
         return self.latest

@@ -502,7 +502,7 @@ def run(args, *, observed_native_factory=None):
                     seed, rejected_views, reason = rejection
                     arrays = {f"{name}_{key}": getattr(view, key)
                               for name, view in rejected_views
-                              for key in ("rgb", "depth", "world", "foreground_mask")
+                              for key in ("rgb", "depth", "world", "foreground_mask", "pose_prior")
                               if getattr(view, key) is not None}
                     np.savez_compressed(output / f"tracking-rejection-{index:02}.npz",
                                         seed_poses=seed.poses, **arrays)

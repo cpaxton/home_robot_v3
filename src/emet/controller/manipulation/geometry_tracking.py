@@ -32,8 +32,11 @@ class GeometryFit:
     evaluations: int
     search_boundary_hit: bool
     search_starts: int = 0
+    conditioning: str | None = None
 
     def __post_init__(self):
+        if self.conditioning not in {None, 'rigid_attachment_orientation'}:
+            raise ValueError('invalid_geometry_fit_conditioning')
         for name in ("poses", "rms_m"):
             object.__setattr__(self, name, immutable(getattr(self, name)))
         object.__setattr__(self, "nullspaces", tuple(immutable(v) for v in self.nullspaces))
@@ -45,7 +48,7 @@ class GeometryFit:
 
     @property
     def orientation_observable(self):
-        return self.model.symmetry == "undeclared" and len(self.poses) == 1 and all(not len(v) for v in self.nullspaces)
+        return self.conditioning is None and self.model.symmetry == "undeclared" and len(self.poses) == 1 and all(not len(v) for v in self.nullspaces)
 
     def require_unique(self, *, now=None, position_error_m=None, rotation_error_rad=None):
         now = time.monotonic() if now is None else now
@@ -176,6 +179,7 @@ class GeometryFit:
             "evaluations": self.evaluations,
             "search_starts": self.search_starts,
             "execution_qualified": False,
+            "conditioning": self.conditioning,
             "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence",
         }
 
@@ -388,3 +392,38 @@ class GeometryTracker:
             max_evaluations=self.max_evaluations,
         )
         return self.latest
+
+
+def fit_attachment_translation(points_world, model, *, prior, object_ref, observation_ids,
+                               received_monotonic, max_residual_m=.003, max_points=800):
+    """Fit current depth conditioned on rigid attachment orientation.
+
+    The orientation comes from measured tool motion and an attachment prior,
+    rather than an independent visual orientation estimate. Translation still
+    fits current surfaces within a bounded search and must be observable.
+    """
+    prior = ObjectPoseEvidence(prior, received_monotonic, 'rgbd_tracking', observation_ids[-1]).world_from_object
+    points = np.asarray(points_world, float)
+    if (points.ndim != 2 or points.shape[1] != 3 or len(points) < 25 or not np.isfinite(points).all()
+            or not 0 < max_residual_m <= .01 or max_points < 25):
+        raise ObservationUnavailable('geometry_tracking_inputs_unavailable')
+    if np.linalg.svd(points-points.mean(0), compute_uv=False)[1]/np.sqrt(len(points)) < .004:
+        raise ObservationUnavailable('geometry_tracking_unobservable')
+    rotation, center = prior[:3, :3], prior[:3, 3]
+    sample = points[np.linspace(0, len(points)-1, min(len(points), max_points)).astype(int)]
+    result = least_squares(lambda position: model.distance((sample-position)@rotation), center,
+        bounds=(center-.02, center+.02), loss='soft_l1', f_scale=max_residual_m,
+        x_scale=np.full(3, .02), max_nfev=100)
+    if not result.success:
+        raise ObservationUnavailable('geometry_tracking_no_match')
+    errors = model.validation_distance((points-result.x)@rotation)
+    if np.quantile(errors, .95) > max_residual_m or errors.max() > 3*max_residual_m:
+        raise ObservationUnavailable('geometry_tracking_no_match')
+    _, singular, vt = np.linalg.svd(result.jac, full_matrices=False)
+    null = vt[singular < max(.02*singular[0], .01)]
+    space = np.column_stack((null, np.zeros((len(null), 3))))
+    pose = prior.copy()
+    pose[:3, 3] = result.x
+    return GeometryFit(model, object_ref, pose[None], np.array([np.sqrt(np.mean(errors**2))]),
+        (space,), tuple(observation_ids), received_monotonic, result.nfev,
+        bool(np.any(np.abs(result.x-center) >= .019)), 1, conditioning='rigid_attachment_orientation')

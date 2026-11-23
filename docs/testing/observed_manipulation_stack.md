@@ -259,3 +259,22 @@ without requiring a fixed observed material orientation inside the fingers.
 Relative-position, identity, visual co-motion, support and independent physical
 scores still apply. This control cannot qualify a rigid payload orientation
 assumption for collision-aware planning. Ordinary retention remains 20 mm/0.1 rad.
+
+## Phase-dependent carry evidence
+
+`simulation_rigid_carry_prediction` is an explicit simulator assistance tier.
+After native finger closure settles, the arm stays still while the source obtains
+fresh post-closure captures. The attachment reference is frozen once from those
+captures. Capture-owned tool motion then proposes object orientation; current
+visible depth fits translation within a 20 mm search. All points still receive
+residual validation, translation must be locally observable, and contradictory
+or missing evidence can stop the action. Captured finger aperture must remain
+blocked above its commanded closed endpoint and close to its settled reference.
+
+This replaces an unconstrained visual orientation fit during carry with a
+conditional mechanical model. `GeometryFit.conditioning` records
+`rigid_attachment_orientation`; it cannot claim independently observable material
+orientation. Tool receipts identify the assistance. The model is disabled before
+release, and attachment references cannot drift during transport. Ordinary
+tracking and independent physical lift/contact/placement scoring remain separate.
+This is a simulator control, not calibrated hardware retention confidence.

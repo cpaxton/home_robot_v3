@@ -551,3 +551,78 @@ def test_explicit_fit_residual_keeps_all_points_and_actual_capture(residual):
         assert result.capture is cap
         assert result.masks[0][1][55, 60]  # No trimming the difficult measurement.
         assert result.fit.received_monotonic == cap.received_monotonic
+
+
+@pytest.mark.parametrize('shift', [.008, .06])
+def test_attachment_conditioned_fit_uses_current_depth_and_rejects_contradictions(shift):
+    tracker, clock = setup()
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    clock[0] = 10.5
+    measured, mask = view(cap, shift=(shift, 0., 0.))
+    measured = replace(measured, foreground_mask=mask, pose_prior=np.eye(4))
+    if shift > .02:
+        with pytest.raises(ObservationUnavailable):
+            tracker.update({'head': measured}, scene_epoch='scene')
+    else:
+        result = tracker.update({'head': measured}, scene_epoch='scene')
+        assert result.capture is cap
+        assert result.fit.conditioning == 'rigid_attachment_orientation'
+        assert not result.fit.orientation_observable
+        assert tracker.conditional_capture_updates == 1
+        np.testing.assert_allclose(result.fit.poses[0, :3, 3], [shift, 0., 0.], atol=.001)
+        np.testing.assert_allclose(result.fit.poses[0, :3, :3], np.eye(3))
+
+
+def test_attachment_prior_must_match_across_camera_views():
+    tracker, clock = setup()
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    clock[0] = 10.5
+    measured, mask = view(cap)
+    with pytest.raises(ObservationUnavailable, match='multiview_pose_prior_mismatch'):
+        tracker.update({'head': replace(measured, foreground_mask=mask, pose_prior=np.eye(4)),
+                        'wrist': replace(measured, foreground_mask=mask)}, scene_epoch='scene')
+
+
+@pytest.mark.parametrize('lost', [False, True])
+def test_carry_prediction_uses_capture_tool_motion_and_checks_gripper_aperture(monkeypatch, lost):
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.controller.task.tamp import live_transfer as live
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+        <joint name="left" type="slide" axis="1 0 0"/><geom size=".01"/>
+        <body><joint name="right" type="slide" axis="0 1 0"/><geom size=".01"/></body>
+        </body></worldbody></mujoco>''')
+    old_cap = CaptureInterval('held', 10., 10.001, 10.01, 'clock')
+    packet = SimpleNamespace(fit=SimpleNamespace(capture=old_cap))
+    robot = SimpleNamespace(joints=np.array([.038, -.038]), world_from_ee=np.eye(4))
+    scene = live.LiveTransferScene.__new__(live.LiveTransferScene)
+    scene.profile, scene.arm = {'simulation_rigid_carry_prediction': True}, SimpleNamespace(model=model)
+    waits = []
+    scene.stream = SimpleNamespace(snapshot=lambda: packet, collect=lambda **kwargs: waits.append(kwargs))
+    scene.clock = lambda: 10.1
+    scene.samples = {'held': SimpleNamespace(robot_after=robot)}
+    scene.diagnostics = {}
+    scene.set_carry_prediction(np.eye(4), {'left': .012, 'right': -.012},
+                               measured_gripper={'left': .022, 'right': -.022})
+    assert waits[0]['after'] == 10.1 and waits[0]['after'] > old_cap.latest
+    cap = CaptureInterval('moving', 10.3, 10.301, 10.31, 'clock')
+    measured, _ = view(cap)
+    ee = np.eye(4)
+    ee[0, 3] = .1
+    robot = SimpleNamespace(joints=np.array([.012, -.012]) if lost else np.array([.022, -.022]),
+                            world_from_ee=ee)
+    sample = SimpleNamespace(capture=cap, observations={'head': measured}, robot_after=robot)
+    scene.read_sample, scene.epoch, scene.initial_views = lambda _: sample, 'scene', None
+    monkeypatch.setattr(live, 'synchronized_views', lambda sample: sample.observations)
+    if lost:
+        with pytest.raises(ObservationUnavailable, match='carry_grip_aperture_lost'):
+            scene._read_views()
+    else:
+        result = scene._read_views()['head']
+        np.testing.assert_allclose(result.pose_prior, ee)
+        assert result.capture is cap
+    scene.set_carry_prediction(None, {})
+    assert scene._carry_prediction is None

@@ -1501,3 +1501,33 @@ is not a satisfactory tracking solution. The next work is capture-aligned,
 vision-checked attachment-motion prediction, with declared conditioning and
 independent grip/task scoring. Latest validation: 570 integrated tests passed
 with the diagnostic allocator (31.50 s), plus lint and diff checks.
+
+### Carry-aware evidence and physical approach clearance
+
+The carry-aware source conditions orientation on capture-aligned measured tool
+motion and the initial attachment. It fits translation to current visible depth,
+requires local translation observability, checks all measured residuals and
+monitors finger aperture. The original ordinary SE(3) fitter resumes before
+release. A conditional fit is explicitly labeled and cannot claim independently
+observed orientation. Tests cover contradictory depth, mismatched camera priors,
+current tool motion, lost grip aperture and stale pre-closure imagery.
+
+The first carry trial, `logs/pandaomron-finish-carry-prediction-restored-R41b`,
+caught a stale aperture reference from before closure. The corrected transition
+uses current native finger readings and waits for post-closure captures before
+freezing the attachment once and starting lift. The exact benchmark runtime was
+restored under `logs/agent-harness-runtime` after temporary dependencies vanished;
+versions were verified as RoboCasa commit 7bfc60c, MuJoCo 3.3.1 and NumPy 2.2.5.
+`uv --no-config` was required to avoid project-wide version overrides. Existing
+asset files were reused; the recorded shaker XML SHA256 remained unchanged.
+
+`logs/pandaomron-finish-carry-transition-IsDe` used 20 mm / 0.2 rad retention,
+completed visual lift verification, and carried the shaker across the counter
+with 142 carry-predicted sensor updates. Physics measured 110.1 mm two-pad lift
+and 817 mm object displacement. It then stopped on controller tracking timeout
+near the end of preplace. Independent scoring caught 109 contact frames between
+`cab_2_main_group_right_door_g1` and `robot0_link6_collision`; self-contact frames
+were zero. This is not placement success. The next route lowers the preplace
+height and keeps the grasp heading to avoid the cabinet during final approach.
+Integrated validation passed 575 tests with the diagnostic allocator (32.90 s),
+plus lint and diff checks. The collision-aware full-transfer gate remains open.

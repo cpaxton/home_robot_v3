@@ -83,6 +83,8 @@ class ContinuousRgbdSource:
                 for a, b in ((old.rgb, new.rgb), (old.depth, new.depth), (old.world, new.world))
             ):
                 return False
+            if not np.array_equal(old.pose_prior, new.pose_prior):
+                return False
             if not np.array_equal(old.foreground_mask, new.foreground_mask):
                 return False
             a, b = old.robot_guard, new.robot_guard
