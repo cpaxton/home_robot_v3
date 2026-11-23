@@ -45,6 +45,35 @@ def coalesce_collinear_waypoints(path, maximum_step):
     return result
 
 
+def coalesce_bounded_waypoints(path, maximum_step, maximum_deviation):
+    """Propose short joint chords within a per-joint deviation of every sample.
+
+    This is command simplification, not collision certification. The executor
+    must validate each resulting chord against current geometry before sending.
+    """
+    if len(path) < 3:
+        return path
+    points = np.asarray(path)
+    result, anchor = [path[0]], 0
+    while anchor < len(path)-1:
+        chosen = anchor+1
+        for end in range(anchor+2, len(path)):
+            delta = points[end]-points[anchor]
+            if np.any(np.abs(delta) > maximum_step):
+                break
+            scaled = delta/maximum_step
+            offsets = points[anchor+1:end]-points[anchor]
+            norm = float(scaled @ scaled)
+            fractions = (offsets/maximum_step) @ scaled/norm if norm else np.zeros(len(offsets))
+            if (np.any(fractions < 0.) or np.any(fractions > 1.) or
+                    np.any(np.abs(offsets-fractions[:, None]*delta) > maximum_deviation)):
+                break
+            chosen = end
+        result.append(path[chosen])
+        anchor = chosen
+    return result
+
+
 @dataclass
 class PhysicalMotionResult:
     success: bool
@@ -57,6 +86,7 @@ class PhysicalPickPlaceExecutor:
     # Maximum joint motion during the stricter endpoint stillness window.
     ENDPOINT_STILLNESS_TOLERANCE = 0.002
     GRIPPER_TRACKING_TOLERANCE = 0.001
+    payload_retention_rotation_rad = .1
 
     execution_mode = "physical"
     release_refiner: Callable[[], PhysicalMotionResult] | None = None
@@ -103,6 +133,9 @@ class PhysicalPickPlaceExecutor:
         pregrasp_staging_offsets_m=(),
         cartesian_transport=False,
         coalesce_execution_waypoints=False,
+        execution_shortcut_angle_rad=0.,
+        execution_shortcut_slide_m=0.,
+        execution_max_slide_step_m=.005,
         reuse_validated_grasp_paths=False,
     ):
         if input_mode not in {"observed", "privileged"}:
@@ -130,6 +163,16 @@ class PhysicalPickPlaceExecutor:
             raise ValueError("invalid_linear_joint_tolerance")
         self.reuse_validated_grasp_paths = bool(reuse_validated_grasp_paths)
         self.coalesce_execution_waypoints = bool(coalesce_execution_waypoints)
+        if (not np.isfinite([execution_shortcut_angle_rad, execution_shortcut_slide_m]).all()
+                or not 0 <= execution_shortcut_angle_rad <= .005
+                or not 0 <= execution_shortcut_slide_m <= .001):
+            raise ValueError('invalid_execution_shortcut_deviation')
+        if not np.isfinite(execution_max_slide_step_m) or not .002 <= execution_max_slide_step_m <= .02:
+            raise ValueError('invalid_execution_slide_step')
+        self.execution_max_slide_step_m = execution_max_slide_step_m
+        self.execution_shortcut_deviation = np.array([
+            execution_shortcut_slide_m if model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE
+            else execution_shortcut_angle_rad for name in joint_names])
         self.linear_joint_tolerance_m = linear_joint_tolerance_m
         if not np.isfinite(joint_settle_timeout_s) or joint_settle_timeout_s <= 0:
             raise ValueError("Positive finite joint settling timeout required")
@@ -719,7 +762,7 @@ class PhysicalPickPlaceExecutor:
         except ObservationUnavailable as exc:
             self.event(phase="payload_retention", accepted=False, reason=str(exc))
             return False
-        retained = bool(displacement <= 0.02 and angle <= 0.1)
+        retained = bool(displacement <= 0.02 and angle <= self.payload_retention_rotation_rad)
         if not retained:
             self.event(
                 phase="payload_retention",
@@ -728,7 +771,7 @@ class PhysicalPickPlaceExecutor:
                 translation_residual_m=displacement,
                 rotation_residual_rad=float(angle),
                 translation_tolerance_m=0.02,
-                rotation_tolerance_rad=0.1,
+                rotation_tolerance_rad=self.payload_retention_rotation_rad,
             )
         return retained
 
@@ -940,9 +983,13 @@ class PhysicalPickPlaceExecutor:
             return PhysicalMotionResult(False, "stale_arm_plan", phase, residual)
         waypoints = path
         if self.coalesce_execution_waypoints and departure is None:
-            maximum = np.array([.005 if self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE else .1
+            maximum = np.array([self.execution_max_slide_step_m if self.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE else .1
                                 for name in self.joint_names])
-            waypoints = coalesce_collinear_waypoints(path, maximum)
+            waypoints = (coalesce_bounded_waypoints(path, maximum, self.execution_shortcut_deviation)
+                         if np.any(self.execution_shortcut_deviation) else
+                         coalesce_collinear_waypoints(path, maximum))
+        self.event(phase=phase, status="path_started", planned_waypoints=len(path),
+                   execution_waypoints=len(waypoints))
         for target in waypoints[1:]:
             if departure_deadline is not None and time.monotonic() >= departure_deadline:
                 return PhysicalMotionResult(False, "contact_departure_timeout", phase)

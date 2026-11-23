@@ -166,3 +166,52 @@ An explicit simulator diagnostic may widen visual self-association to 30 mm,
 subject also to the calibrated overall surface band. The ordinary 3 mm visual
 fallback remains unchanged. A wider band can absorb nearby external returns;
 it is labeled assistance and has not qualified real-robot self-segmentation.
+
+`simulation_best_fit_view` is a separate opt-in diagnostic requiring single-view
+fallback. If fused tracking fails and independently valid camera estimates
+conflict, it chooses the lowest-residual view, retaining all independently fitted
+view candidates and a selection counter in the report. Ordinary tracking still
+rejects conflicting cameras. Every selected fit retains its actual acquisition
+interval and must pass the same local observability, residual, search-boundary,
+identity and age checks. This is a best guess, not calibrated pose confidence.
+It is simulator-gated and listed separately in assistance receipts.
+
+With `debug_planning`, `observed_source.native_motion_events` retains command and
+measured joint endpoints, phases, residuals and monotonic event times. Path-start
+events distinguish planned and commanded waypoint counts. These records augment
+the actuation audit and independent physics trace.
+
+Optional `execution_shortcut_angle_rad` and `execution_shortcut_slide_m` simplify
+nearly collinear joint paths within declared per-joint deviations (defaults zero,
+limits 0.005 rad/1 mm). Every skipped original sample must stay within the bound
+of its proposed chord, and commands retain the 0.1 rad angular cap. The slide span defaults to 5 mm;
+`execution_max_slide_step_m` can request 2–20 mm with the same adaptive direct-edge checks.
+Each resulting direct segment is checked against fresh geometry before it is sent;
+this simplification is not an alternative collision certificate. Departure
+prefixes retain their fine execution waypoints. The diagnostic trial uses
+0.002 rad/0.2 mm and reduced one pregrasp from 364 samples to 101 commands.
+
+`simulation_retention_rotation_rad` may explicitly raise the normal 0.1 rad
+retention threshold (up to 0.35 rad) for scored simulator diagnostics. The same
+configured angle is used by runtime retention and visual lift verification; the
+2 cm relative translation limit, measured co-motion, support clearance and
+independent physical lift score remain. The current diagnostic uses 0.2 rad.
+Its receipt records both assistance and the numeric threshold.
+
+
+The separate `configs/eval/pandaomron_sink_assisted_lift_development.json` retains
+the exact assisted profile that physically lifted the shaker 7.2 cm with two-pad
+contact. It enables environment bypass and best-view assistance. It stopped on
+visual geometry mismatch before completing lift verification/transport; it is
+not the collision-aware development profile and does not demonstrate full transfer.
+
+The attachment-envelope calibration includes the same 2 cm relative-motion
+allowance as runtime retention when computing the maximum lever radius. This
+keeps angular error propagation conservative while avoiding a hidden smaller
+lever gate. The original attachment remains fixed; subsequent drift is still
+compared to it and cannot rebaseline itself.
+
+Rejected tracking packets are retained for diagnostic replay only. The benchmark
+writes `tracking-rejection-NN.npz` (RGB, depth, world points, foreground masks and
+seed poses) and a JSON file with original acquisition intervals and the rejection
+reason. A rejected packet never replaces accepted evidence or refreshes its age.

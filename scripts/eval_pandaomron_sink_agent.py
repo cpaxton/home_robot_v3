@@ -495,8 +495,22 @@ def run(args, *, observed_native_factory=None):
                 Image.fromarray(final_observation.ee_rgb).save(output / "final-wrist.png")
                 for name, view in (final_observation.auxiliary_rgbd_views or {}).items():
                     Image.fromarray(view["rgb"]).save(output / f"final-{name}.png")
-            for scene in live_scenes:
+            for index, scene in enumerate(live_scenes):
                 scene.invalidate()
+                rejection = getattr(scene, "last_tracking_rejection", None)
+                if rejection is not None and rejection[0] is not None:
+                    seed, rejected_views, reason = rejection
+                    arrays = {f"{name}_{key}": getattr(view, key)
+                              for name, view in rejected_views
+                              for key in ("rgb", "depth", "world", "foreground_mask")
+                              if getattr(view, key) is not None}
+                    np.savez_compressed(output / f"tracking-rejection-{index:02}.npz",
+                                        seed_poses=seed.poses, **arrays)
+                    (output / f"tracking-rejection-{index:02}.json").write_text(json.dumps({
+                        "reason": reason, "seed": seed.as_dict(),
+                        "views": {name: vars(view.capture) for name, view in rejected_views},
+                        "diagnostic_only": True,
+                    }, indent=2)+"\n")
             if client is not None:
                 client.stop()
             try:

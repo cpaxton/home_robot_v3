@@ -194,6 +194,9 @@ def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candida
             pregrasp_staging_offsets_m=getattr(source, "pregrasp_staging_offsets_m", ()),
             cartesian_transport=getattr(source, "cartesian_transport", False),
             coalesce_execution_waypoints=getattr(source, "coalesce_execution_waypoints", False),
+            execution_shortcut_angle_rad=getattr(source, "execution_shortcut_angle_rad", 0.),
+            execution_shortcut_slide_m=getattr(source, "execution_shortcut_slide_m", 0.),
+            execution_max_slide_step_m=getattr(source, "execution_max_slide_step_m", .005),
             reuse_validated_grasp_paths=getattr(source, "reuse_validated_grasp_paths", False),
         )
         checker.local_scene = snapshot.local_scene

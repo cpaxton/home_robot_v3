@@ -302,6 +302,7 @@ class LiveTransferScene:
             max_update_s=profile.get("tracking_max_update_s", 1.0), max_gap_s=2.0,
             single_view_fallback=profile.get("tracking_single_view_fallback", False),
             best_fit_hypothesis=profile.get("simulation_best_fit_pose", False),
+            best_fit_view=profile.get("simulation_best_fit_view", False),
             max_pixels=profile.get("tracking_max_pixels", 100000),
             component_policy=(
                 "complete_prior_union" if self.enclosure is not None and isinstance(self.payload_model, AxialMeshSurface)
@@ -652,7 +653,13 @@ class LiveTransferScene:
         self._map_thread, self._map_state, self._map_failure = None, None, None
         if self.stream is not None:
             self.stream.close()
+            rejection = getattr(self.stream, "last_fit_rejection", None)
+            if rejection is not None:
+                self.last_tracking_rejection = rejection
             self.diagnostics["best_fit_hypothesis_selections"] = self.stream.tracker.hypothesis_selections
+            self.diagnostics["best_fit_view_selections"] = self.stream.tracker.view_selections
+            self.diagnostics["last_view_candidates"] = {
+                name: fit.as_dict() for name, fit in self.stream.tracker.last_view_candidates}
             candidate = getattr(self.stream.tracker, "last_candidate_fit", None)
             if candidate is not None:
                 self.diagnostics["last_candidate_fit"] = candidate.as_dict()

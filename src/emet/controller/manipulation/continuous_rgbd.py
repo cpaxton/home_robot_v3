@@ -143,6 +143,9 @@ class ContinuousRgbdSource:
                 try:
                     fit = self.tracker.update(views, scene_epoch=self.tracker.scene_epoch)
                 except ObservationUnavailable as error:
+                    # Diagnostic replay only: rejected measurements never
+                    # replace the accepted track or renew its timestamp.
+                    self.last_fit_rejection = (getattr(previous.fit, "fit", None), tuple(sorted(views.items())), str(error))
                     if (str(error) not in {
                         "geometry_tracking_no_match", "geometry_tracking_unobservable",
                         "geometry_tracking_budget_exhausted", "moving_geometry_ambiguous",

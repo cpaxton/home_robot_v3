@@ -256,8 +256,10 @@ def _relative_position_error(frame):
     return pose_uncertainty_margin(np.linalg.norm(delta) + base, base, angle)
 
 
-def evaluate_lift(reference, frames, *, support_top_z, after, now=None):
+def evaluate_lift(reference, frames, *, support_top_z, after, now=None, retention_rotation_rad=.1):
     """Require separation and measured object/EE co-motion across fresh captures."""
+    if not np.isfinite(retention_rotation_rad) or not 0 < retention_rotation_rad <= .35:
+        raise ValueError('invalid_retention_rotation')
     now = time.monotonic() if now is None else now
     try:
         _frames(reference, frames, now=now, after=after, min_span_s=0.2)
@@ -294,7 +296,7 @@ def evaluate_lift(reference, frames, *, support_top_z, after, now=None):
             if (
                 np.linalg.norm(relative[:3, 3] - expected[:3, 3]) + error > 0.02
                 or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3]) + angular_error
-                > 0.1
+                > retention_rotation_rad
                 or frame.bounds()[0, 2] <= support_top_z + 0.02
                 or ee[2, 3] - initial_ee[2, 3] - ee_error < 0.04
                 or obj[2, 3] - initial[2, 3] - object_error < 0.04
@@ -303,7 +305,7 @@ def evaluate_lift(reference, frames, *, support_top_z, after, now=None):
                     np.linalg.norm(relative[:3, 3] - expected[:3, 3]) - error > 0.02
                     or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3])
                     - angular_error
-                    > 0.1
+                    > retention_rotation_rad
                     or frame.bounds()[1, 2] <= support_top_z + 0.02
                     or ee[2, 3] - initial_ee[2, 3] + ee_error < 0.04
                     or obj[2, 3] - initial[2, 3] + object_error < 0.04
@@ -369,13 +371,16 @@ class ObservedVisualVerifier:
     """Execution consumer of live frames and bounded stop-and-observe batches."""
     def __init__(
         self, *, object_ref, support_bounds, observe, collect, clock=time.monotonic,
-        observe_after=None, source_support_bounds=None,
+        observe_after=None, source_support_bounds=None, retention_rotation_rad=.1,
     ):
         self.object_ref, self.support_bounds = object_ref, bounds_array(support_bounds)
         self.source_support_top_z = (
             self.support_bounds[1, 2] if source_support_bounds is None else bounds_array(source_support_bounds)[1, 2]
         )
         self.observe, self.collect, self.clock = observe, collect, clock
+        if not np.isfinite(retention_rotation_rad) or not 0 < retention_rotation_rad <= .35:
+            raise ValueError('invalid_retention_rotation')
+        self.retention_rotation_rad = retention_rotation_rad
         self.observe_after = observe_after
         self.reference = self.lift_reference = None
         self.results = []
@@ -403,7 +408,7 @@ class ObservedVisualVerifier:
     def verify_lift(self, *, after):
         frames = tuple(self.collect(self.object_ref, after=after))
         result = evaluate_lift(self.reference, frames, support_top_z=self.source_support_top_z,
-                               after=after, now=self.clock())
+                               after=after, now=self.clock(), retention_rotation_rad=self.retention_rotation_rad)
         if result.satisfied:
             self.lift_reference = frames[-1]
         return self._record(result)

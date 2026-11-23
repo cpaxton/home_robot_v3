@@ -1,0 +1,293 @@
+{
+  "payload_prior": "shaker-prior.json",
+  "grounding": {
+    "object": {
+      "camera": "scene_alt",
+      "box": [
+        245,
+        545,
+        340,
+        670
+      ]
+    },
+    "source": {
+      "camera": "scene_alt",
+      "box": [
+        190,
+        500,
+        390,
+        800
+      ]
+    },
+    "destination": {
+      "camera": "wrist",
+      "box": [
+        575,
+        350,
+        870,
+        660
+      ]
+    }
+  },
+  "fingertips": [
+    "gripper0_right_finger1_pad_collision",
+    "gripper0_right_finger2_pad_collision",
+    "gripper0_right_finger1_collision",
+    "gripper0_right_finger2_collision"
+  ],
+  "grasps": [
+    {
+      "object_from_ee": [
+        [
+          -1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          -1,
+          0.025
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "approach_axis_ee": [
+        0,
+        0,
+        1
+      ],
+      "close_joints": [
+        [
+          "gripper0_right_finger_joint1",
+          0.012
+        ],
+        [
+          "gripper0_right_finger_joint2",
+          -0.012
+        ]
+      ],
+      "approach_m": 0.1,
+      "lift_m": 0.1,
+      "retreat_m": 0.235,
+      "world_aligned": true,
+      "transit_clearance_m": 0.12
+    }
+  ],
+  "calibration_id": "development-scan-only",
+  "support_margin_m": 0.005,
+  "payload_motion_error_m": 0.005,
+  "depth_margin_m": 0.003,
+  "resolution_m": 0.055,
+  "static_s": 300,
+  "workspace": [
+    [
+      0.1,
+      -1.2,
+      0.1
+    ],
+    [
+      2.0,
+      0.6,
+      1.8
+    ]
+  ],
+  "position_error_m": 0.005,
+  "rotation_error_rad": 0.03,
+  "alignment_error_m": 0.0,
+  "alignment_error_rad": 0.0,
+  "payload_axial_enclosure": [
+    0.023,
+    0.052
+  ],
+  "robot_geometry": {
+    "model_signature": "8cf1581ae4ca486911ffc2f834ce5c09add509bd479e50b2d9f5b46f0db35876",
+    "id": "simulation-robot-geometry-diagnostic",
+    "configuration_profile_id": "collision-mesh-outers-primitive-inners",
+    "ee_position_error_m": 0.001,
+    "ee_rotation_error_rad": 0.005,
+    "inner_solids": {
+      "mobilebase0_g0_col": {
+        "erosion_m": 0.001
+      },
+      "mobilebase0_fixed_support": {
+        "erosion_m": 0.001
+      },
+      "mobilebase0_g1_col": {
+        "erosion_m": 0.001
+      },
+      "mobilebase0_support": {
+        "erosion_m": 0.001
+      },
+      "gripper0_right_finger1_pad_collision": {
+        "erosion_m": 0.001
+      },
+      "gripper0_right_finger2_pad_collision": {
+        "erosion_m": 0.001
+      },
+      "mobilebase0_pedestal_feet_col": {
+        "erosion_m": 0.001
+      }
+    },
+    "outer_solids": {
+      "mobilebase0_g0_col": {
+        "error_m": 0.001
+      },
+      "mobilebase0_fixed_support": {
+        "error_m": 0.001
+      },
+      "mobilebase0_g1_col": {
+        "error_m": 0.001
+      },
+      "mobilebase0_support": {
+        "error_m": 0.001
+      },
+      "robot0_link0_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link1_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link2_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link3_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link4_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link5_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link6_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "robot0_link7_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "gripper0_right_hand_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "gripper0_right_finger1_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "gripper0_right_finger1_pad_collision": {
+        "error_m": 0.001
+      },
+      "gripper0_right_finger2_collision": {
+        "error_m": 0.001,
+        "convex_material_id": "native-collision-mesh-outer-hull"
+      },
+      "gripper0_right_finger2_pad_collision": {
+        "error_m": 0.001
+      },
+      "mobilebase0_pedestal_feet_col": {
+        "error_m": 0.001
+      }
+    },
+    "surface_tolerance_m": 0.03,
+    "surface_ray_association": true,
+    "collision_proxy_self_association": true
+  },
+  "tracking_max_starts": 1,
+  "tracking_max_points": 80,
+  "tracking_max_pixels": 310000,
+  "tracking_geometry_window_m": 0.015,
+  "tracking_reference_only": true,
+  "local_resolution_m": 0.002,
+  "contact_departure": true,
+  "depth_neighbor_support": true,
+  "simulation_allow_unknown": true,
+  "tracking_views": [
+    "scene",
+    "scene_alt",
+    "wrist"
+  ],
+  "approach_joint_routes": [],
+  "joint_planning_timeout_s": 60,
+  "simulation_clearance_slack_m": 0.002,
+  "transient_fit_rejections": 2,
+  "placement_yaw_degrees": [
+    180,
+    0,
+    90,
+    -90
+  ],
+  "simulation_contact_terminated_close": true,
+  "simulation_local_payload_contact": true,
+  "debug_planning": true,
+  "target_surface_association_m": 0.015,
+  "contact_departure_options": {
+    "new_contact_tolerance_m": 0.001,
+    "search_timeout_s": 30.0,
+    "slack_m": 0.005,
+    "maximum_travel_m": 0.08
+  },
+  "simulation_visual_self_association_m": 0.03,
+  "simulation_support_contact_tolerance_m": 0.005,
+  "ik_random_starts": 16,
+  "preplace_staging_offsets_m": [
+    [
+      0,
+      -0.15,
+      0
+    ],
+    [
+      0,
+      -0.2,
+      0
+    ],
+    [
+      0,
+      -0.25,
+      0
+    ]
+  ],
+  "tracking_single_view_fallback": true,
+  "tracking_max_update_s": 1.8,
+  "payload_prior_scale": 1.05,
+  "pregrasp_staging_offsets_m": [
+    [
+      0.2,
+      -0.4,
+      0
+    ],
+    [
+      0.3,
+      -0.35,
+      0
+    ]
+  ],
+  "cartesian_transport": true,
+  "planning_max_ik_calls": 512,
+  "simulation_ignore_environment": true,
+  "simulation_best_fit_pose": true,
+  "coalesce_execution_waypoints": true,
+  "reuse_validated_grasp_paths": true,
+  "simulation_best_fit_view": true,
+  "simulation_retention_rotation_rad": 0.2,
+  "execution_shortcut_angle_rad": 0.002,
+  "execution_shortcut_slide_m": 0.0002
+}

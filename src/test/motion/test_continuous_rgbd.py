@@ -234,6 +234,9 @@ def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence():
     assert not stream.poll_once()
     assert stream.snapshot().fit.capture.received_monotonic == 10.
     assert stream.processed_captures == 1 and stream.rejected_fit_captures == 1
+    _, rejected, reason = stream.last_fit_rejection
+    assert reason == 'geometry_tracking_no_match'
+    assert rejected[0][1].capture.earliest == 10.1
     clock[0] = 10.2
     assert stream.poll_once()
     assert stream.snapshot().fit.capture.received_monotonic == 10.2

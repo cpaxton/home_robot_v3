@@ -914,13 +914,14 @@ def test_recessed_destination_preserves_source_lift_height_during_transfer(syste
     assert candidate.place[0][0][2] - candidate.place[1][0][2] > .25
 
 
-def test_runtime_revalidation_checks_only_the_commanded_direct_segment(system, monkeypatch):
+@pytest.mark.parametrize('bounded_shortcut', [False, True])
+def test_runtime_revalidation_checks_only_the_commanded_direct_segment(system, monkeypatch, bounded_shortcut):
     from emet.controller.manipulation import physical_pick_place as native
 
     task = next(iter(system.adapter.tasks.values()))
     ex = system.adapter.refine(task, system.source.snapshot(task.object_ref, task.support_ref))
     q0 = ex.data.qpos[ex.qadr].copy()
-    q1 = q0 + [.01, 0., 0.]
+    q1 = q0 + [.004, 0., 0.]
     ex.approach_joint_routes = (np.array([q0, q0 + [.3, .3, .1]]),)
     original = native.plan_arm_joint_path
     checked = []
@@ -932,8 +933,13 @@ def test_runtime_revalidation_checks_only_the_commanded_direct_segment(system, m
         return original(*args, **kwargs)
 
     monkeypatch.setattr(native, 'plan_arm_joint_path', direct)
-    assert ex._execute_path('pregrasp', [q0, q1]).success
-    assert checked
+    path = [q0, q1]
+    if bounded_shortcut:
+        ex.coalesce_execution_waypoints = True
+        ex.execution_shortcut_deviation[:] = .0001
+        path.insert(1, q0 + [.002, .00005, 0.])
+    assert ex._execute_path('pregrasp', path).success
+    assert len(checked) == 1
 
 
 def test_linear_joint_tracking_cannot_treat_five_mm_lag_as_radians(system):
@@ -1262,3 +1268,43 @@ def test_cartesian_planning_initializes_clear_start_scope_and_restores_it_on_fai
         assert path is None and error
         assert ex._contact_clearance_scope is None
         np.testing.assert_array_equal(ex.data.qpos, before)
+
+
+def test_bounded_waypoint_chords_preserve_bends_and_every_intermediate_deviation():
+    from emet.controller.manipulation.physical_pick_place import coalesce_bounded_waypoints
+
+    path = [np.array([x, .0001*np.sin(x*20)]) for x in np.linspace(0., .2, 101)]
+    path.extend(np.array([.2, y]) for y in np.linspace(.0003, .01, 21))
+    maximum, deviation = np.array([.1, .005]), np.array([.002, .0002])
+    result = coalesce_bounded_waypoints(path, maximum, deviation)
+    assert len(result) < len(path)/5
+    np.testing.assert_array_equal(result[0], path[0])
+    np.testing.assert_array_equal(result[-1], path[-1])
+    start = 0
+    for first, last in zip(result[:-1], result[1:], strict=True):
+        end = next(i for i in range(start+1, len(path)) if path[i] is last)
+        assert np.all(np.abs(last-first) <= maximum)
+        delta = (last-first)/maximum
+        fractions = ((np.asarray(path[start:end+1])-first)/maximum) @ delta / (delta @ delta)
+        errors = np.asarray(path[start:end+1])-first-fractions[:, None]*(last-first)
+        assert np.all(np.abs(errors) <= deviation+1e-12)
+        start = end
+
+
+def test_attachment_calibration_covers_allowed_retention_motion_without_rebasing(system):
+    from emet.controller.task.tamp.observed_adapter import _PayloadEnvelope
+
+    task = next(iter(system.adapter.tasks.values()))
+    initial = system.source.snapshot(task.object_ref, task.support_ref)
+    ee = system.object_position + [0., 0., .025]
+    system.q[:3] = ee
+    ex = system.adapter.refine(task, initial)
+    ex.collision.provider = _PayloadEnvelope(lambda: system.source.snapshot(task.object_ref, task.support_ref),
+                                            initial, attachment_ee_positions=[ee])
+    ex.collision.set_payload(ex.model, ex.data, task.object_ref, ex.ee_body)
+    ex.payload_body = task.object_ref
+    system.object_position[2] -= .015
+    assert ex.payload_retained()
+    # The original attachment stays fixed: further drift is still rejected.
+    system.object_position[2] -= .02
+    assert not ex.payload_retained()

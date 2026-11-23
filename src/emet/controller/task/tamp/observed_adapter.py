@@ -129,7 +129,10 @@ class _PayloadEnvelope:
               else np.asarray(attachment_ee_positions, float).reshape(-1, 3))
         radius = np.linalg.norm(self.vertices, axis=1).max()
         lever = np.linalg.norm(frame.payload.pose.world_from_object[:3, 3]-ee, axis=1).max()+radius
-        self.lever_limit = lever+frame.position_error_m+attachment_tracking_error_m
+        # The calibration radius must cover the relative displacement already
+        # permitted by runtime retention. Otherwise a hidden few-mm lever gate
+        # rejects a payload before the declared 2 cm retention limit is tested.
+        self.lever_limit = lever+frame.position_error_m+attachment_tracking_error_m+.02
         self.robot_position = max(frame.robot_before.position_error_m, frame.robot_after.position_error_m)
         self.robot_rotation = max(frame.robot_before.rotation_error_rad, frame.robot_after.rotation_error_rad)
         # Per-capture EE error. Transport needs two captures; retention adds
@@ -532,6 +535,7 @@ class ObservedNativeAdapter:
 
                 verifier = ObservedVisualVerifier(object_ref=task.object_ref, support_bounds=target_bounds,
                     observe=observe_effect, collect=collect_effect, observe_after=observe_after, clock=self.clock,
+                    retention_rotation_rad=ex.payload_retention_rotation_rad,
                     # Use the same measured occlusion-bracketed footprint that
                     # admitted the resting object, not just the largest visible
                     # rectangle beside it.

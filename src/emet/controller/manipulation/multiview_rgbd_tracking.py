@@ -112,6 +112,7 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         component_policy="single_component",
         single_view_fallback=False,
         best_fit_hypothesis=False,
+        best_fit_view=False,
         **kwargs,
     ):
         if not isinstance(reference_view, str) or not reference_view:
@@ -127,6 +128,11 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             raise ValueError("invalid_single_view_fallback")
         if type(best_fit_hypothesis) is not bool:
             raise ValueError("invalid_best_fit_hypothesis")
+        if type(best_fit_view) is not bool or best_fit_view and not single_view_fallback:
+            raise ValueError("invalid_best_fit_view")
+        self.best_fit_view = best_fit_view
+        self.view_selections = 0
+        self.last_view_candidates = ()
         self.best_fit_hypothesis = best_fit_hypothesis
         self.hypothesis_selections = 0
         self.single_view_fallback = single_view_fallback
@@ -281,13 +287,18 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
             if not qualified:
                 raise error
             pose_centers = np.concatenate([entry[2].poses[:, :3, 3] for entry in qualified])
-            if np.linalg.norm(np.ptp(pose_centers, axis=0)) > .005:
-                raise ObservationUnavailable('moving_geometry_ambiguous') from error
+            self.last_view_candidates = tuple((name, candidate) for name, _, candidate in qualified)
+            centers_conflict = np.linalg.norm(np.ptp(pose_centers, axis=0)) > .005
             best = min(qualified, key=lambda entry: float(np.min(entry[2].rms_m)))
             representative = best[2].poses[0, :3, :3]
-            if any(shape_rotation_distance(self.model, representative, pose[:3, :3]) > .03
-                   for _, _, candidate in qualified for pose in candidate.poses):
-                raise ObservationUnavailable('moving_geometry_ambiguous') from error
+            rotations_conflict = any(shape_rotation_distance(self.model, representative, pose[:3, :3]) > .03
+                   for _, _, candidate in qualified for pose in candidate.poses)
+            if centers_conflict or rotations_conflict:
+                if not self.best_fit_view:
+                    raise ObservationUnavailable('moving_geometry_ambiguous') from error
+                self.view_selections += 1
+                rejected.extend((name, 'diagnostic_conflicting_view_not_selected')
+                                for name, _, _ in qualified if name != best[0])
             name, mask, fit = best
             rejected.extend((other, 'fusion_rejected_single_view_fallback')
                             for other, _ in masks if other != name and other not in {row[0] for row in rejected})

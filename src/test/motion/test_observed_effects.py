@@ -225,3 +225,21 @@ def test_simulator_passive_joint_truth_cannot_qualify_observed_robot_feedback():
     debug = replace(current, robot_before=replace(current.robot_before, source='simulator_robot_kinematics_debug'))
     with pytest.raises(RuntimeError, match='robot_feedback_unqualified'):
         debug.require(now=10.1)
+
+
+def test_explicit_lift_rotation_tolerance_preserves_height_and_comotion_checks():
+    before = frame(10.)
+    frames = [frame(t, obj=(0, 0, .13), ee=(0, 0, .13)) for t in (10.5, 10.8)]
+    rotated = []
+    for sample in frames:
+        pose = sample.payload.pose.world_from_object.copy()
+        pose[:3, :3] = Rotation.from_euler('y', .12).as_matrix()
+        rotated.append(replace(sample, payload=replace(sample.payload,
+            pose=replace(sample.payload.pose, world_from_object=pose))))
+    assert not evaluate_lift(before, rotated, support_top_z=0., after=10.4, now=11.).satisfied
+    assert evaluate_lift(before, rotated, support_top_z=0., after=10.4, now=11.,
+                         retention_rotation_rad=.2).satisfied
+    assert not evaluate_lift(before, rotated, support_top_z=.2, after=10.4, now=11.,
+                             retention_rotation_rad=.2).satisfied
+    with pytest.raises(ValueError, match='invalid_retention_rotation'):
+        evaluate_lift(before, rotated, support_top_z=0., after=10.4, now=11., retention_rotation_rad=.36)

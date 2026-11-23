@@ -426,10 +426,11 @@ def test_qualified_view_fallback_retains_capture_when_fused_partial_views_fail(m
         assert np.linalg.norm(result.fit.poses[0, :3, 3]) <= .003
 
 
-def test_view_fallback_rejects_independently_qualified_camera_pose_disagreement(monkeypatch):
+@pytest.mark.parametrize('best_view', [False, True])
+def test_view_fallback_rejects_independently_qualified_camera_pose_disagreement(monkeypatch, best_view):
     from emet.controller.manipulation import multiview_rgbd_tracking as native
 
-    track, clock = setup(single_view_fallback=True, max_starts=3, max_fit_points=100)
+    track, clock = setup(single_view_fallback=True, best_fit_view=best_view, max_starts=3, max_fit_points=100)
     cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
     clock[0] = 10.5
     head, mask = view(cap)
@@ -442,9 +443,16 @@ def test_view_fallback_rejects_independently_qualified_camera_pose_disagreement(
         return fit(points, *args, **kwargs)
 
     monkeypatch.setattr(native, 'fit_geometry', partial_only)
-    with pytest.raises(ObservationUnavailable, match='ambiguous'):
-        track.update({'head': head, 'wrist': wrist}, scene_epoch='scene')
-    assert track.latest is None
+    if not best_view:
+        with pytest.raises(ObservationUnavailable, match='ambiguous'):
+            track.update({'head': head, 'wrist': wrist}, scene_epoch='scene')
+        assert track.latest is None
+    else:
+        result = track.update({'head': head, 'wrist': wrist}, scene_epoch='scene')
+        assert result.capture is cap
+        assert track.view_selections == 1
+        assert {name for name, _ in track.last_view_candidates} == {'head', 'wrist'}
+        assert any(reason == 'diagnostic_conflicting_view_not_selected' for _, reason in track.last_view_rejections)
 
 
 @pytest.mark.parametrize('best_fit', [False, True])

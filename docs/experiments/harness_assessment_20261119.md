@@ -1404,3 +1404,55 @@ Validation for the native reset/capture/corridor follow-up: 556 integrated tests
 passed with `PYTHONMALLOC=malloc` (29.43 s), plus lint and diff checks. A default
 allocator repetition crashed in a native MuJoCo raycast test after earlier
 555-test success; retain that failure as an unresolved native runtime issue.
+
+The alternate-heading bypass control
+`logs/pandaomron-finish-native-heading-8rf0` sent 127 native actions and moved the
+end effector 0.640 m, with zero scored unintended contacts and zero two-pad lift.
+It stopped on conflicting camera pose estimates. The opt-in best-view diagnostic
+then sent 118 actions in `logs/pandaomron-finish-best-view-control-8ys8`, moved
+0.605 m with zero unintended contacts, and stopped on stale object evidence.
+It selected no conflicting-view override in that run. These controls remain
+incomplete and do not qualify environment planning. A subsequent trial reduces
+tracking from three fit starts/120 sampled points to one start/80 points while
+retaining the same evidence age checks. The best-view change passed 557 integrated
+tests with the diagnostic allocator (29.39 s).
+
+The smaller-budget tracking control
+`logs/pandaomron-finish-fast-tracking-control-CZwr` reached pregrasp, grasp, and
+native finger closure. It sent 155 native actions with no scored unintended
+contacts. There was no positive two-pad lift. Runtime retention stopped before
+lift on a 0.1127 rad uncertainty-inclusive angular residual versus 0.1 rad;
+translation was 17.1 mm versus 20 mm. The next explicitly assisted trial uses
+0.2 rad consistently for runtime retention and visual lift checks, without
+relaxing relative translation or lift/placement physics. It also records all
+command/measured endpoint events and proposes bounded joint-space shortcuts;
+these still require fresh direct-segment collision checks before commands.
+
+`logs/pandaomron-finish-retention-shortcut-gjXI` physically lifted the shaker
+**72.4 mm with both finger pads**, with zero unintended external/self contact
+frames. It sent 140 allowed actions; the observed executor stopped on
+`geometry_tracking_no_match` during lift, so there was no placement success.
+The saved wrist image shows the held shaker. The exact assisted profile is now
+`configs/eval/pandaomron_sink_assisted_lift_development.json`. The independent
+physics milestone must stay separate from an observed verified full task.
+Its motion records show 364 pregrasp samples reduced to 101 commands, 49 grasp
+samples to 19 commands, and 45 lift samples to 23 commands. A subsequent timing
+trial uses two small fitting starts and an explicit 20 mm torso command span;
+every resulting chord still receives adaptive collision revalidation. Defaults
+and recovery-prefix command resolution remain unchanged.
+
+The larger-slide trial `logs/pandaomron-finish-faster-slide-piIA` reduced pregrasp
+from 101 to 49 commands, grasp from 19 to 6, and lift from 23 to 5. It reached
+closure, then stopped on `payload_attachment_outside_calibration` before positive
+lift. The provider's lever radius omitted the same 20 mm relative-motion allowance
+that retention already permits. The corrected fixed calibration includes that
+allowance and propagates the larger radius into angular error; retention itself
+is not rebased or widened. A source-bound regression admits 15 mm relative drift
+and rejects subsequent drift past the original reference. Rejected tracking
+packets now retain original raw views, masks, seed poses and intervals for offline
+replay; they cannot become accepted evidence.
+
+Validation of the assisted-perception/checked-shortcut/calibration follow-up:
+561 integrated tests passed with `PYTHONMALLOC=malloc` (29.65 s), plus lint and
+diff checks. Earlier narrow adapter selections still encountered native MuJoCo
+segmentation faults; the diagnostic allocator does not establish crash immunity.
