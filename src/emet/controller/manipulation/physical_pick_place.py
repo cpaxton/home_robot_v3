@@ -1178,7 +1178,10 @@ class PhysicalPickPlaceExecutor:
         self.synchronize(self.data)
         try:
             initial_object_height = float(self._object_pose(object_gt_body)[2, 3])
-            self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
+            if isinstance(self.collision, ObservedNativeCollisionChecker):
+                self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body, capture_aligned=True)
+            else:
+                self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         except ObservationUnavailable as exc:
             return PhysicalMotionResult(False, str(exc), "grasp")
         self.payload_body = object_gt_body

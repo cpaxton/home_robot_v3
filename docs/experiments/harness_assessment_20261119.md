@@ -1456,3 +1456,14 @@ Validation of the assisted-perception/checked-shortcut/calibration follow-up:
 561 integrated tests passed with `PYTHONMALLOC=malloc` (29.65 s), plus lint and
 diff checks. Earlier narrow adapter selections still encountered native MuJoCo
 segmentation faults; the diagnostic allocator does not establish crash immunity.
+
+The next trial `logs/pandaomron-finish-attachment-bound-UMuA` stopped on a
+20.45 mm uncertainty-inclusive retention residual versus 20 mm. Investigation
+found a temporal mismatch: runtime retention combined a camera-derived object
+pose with newer servo tool feedback. `PayloadGeometryEvidence` now carries the
+capture-owned tool transform from the qualified visual frame. Runtime retention
+and actual attachment can compare paired observations, while hypothetical
+planning retains candidate tool poses. The 20 mm translation threshold remains
+unchanged. Source-bound regressions verify asynchronous feedback, true slip,
+stale evidence and planning separation. The integrated suite passed 563 tests
+with the diagnostic allocator (29.49 s), plus lint and diff checks.

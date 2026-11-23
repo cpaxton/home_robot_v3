@@ -495,3 +495,42 @@ def test_planning_snapshot_preserves_real_evidence_clock_and_restores_live_age_c
     assert checker._certify_live_clock is None
     assert checker.configuration_collides(model, data)
     assert checker.last_reason == 'scene_observation_stale'
+
+
+def test_retention_uses_capture_owned_tool_pose_instead_of_newer_servo_feedback():
+    model, data, checker, provider, evidence, clock, _ = rig()
+    captured = np.eye(4)
+    captured[:3, 3] = data.body('ee').xpos
+    evidence = replace(evidence, captured_world_from_ee=captured)
+    provider.observe_payload = lambda _: evidence
+    checker.set_payload(model, data, evidence.object_ref, 'ee', capture_aligned=True)
+    data.qpos[0] += .05  # Servo feedback is newer than the still-valid image.
+    mujoco.mj_forward(model, data)
+    assert checker.payload_retention_residual(model, data, evidence.object_ref)[0] == pytest.approx(0.)
+    new_pose = evidence.pose.world_from_object.copy()
+    new_pose[0, 3] += .05
+    new_ee = captured.copy()
+    new_ee[0, 3] += .05
+    evidence = replace(evidence, pose=replace(evidence.pose, world_from_object=new_pose), captured_world_from_ee=new_ee)
+    assert checker.payload_retention_residual(model, data, evidence.object_ref)[0] == pytest.approx(0.)
+    new_pose[1, 3] += .03
+    evidence = replace(evidence, pose=replace(evidence.pose, world_from_object=new_pose))
+    assert checker.payload_retention_residual(model, data, evidence.object_ref)[0] == pytest.approx(.03)
+    with pytest.raises(ValueError):
+        evidence.captured_world_from_ee.setflags(write=True)
+
+    clock[0] += 3.
+    with pytest.raises(ObservationUnavailable, match='stale'):
+        checker.payload_retention_residual(model, data, evidence.object_ref)
+
+
+def test_hypothetical_attachment_keeps_planned_pose_even_with_capture_owned_tool_pose():
+    model, data, checker, provider, evidence, *_ = rig()
+    captured = np.eye(4)
+    captured[:3, 3] = data.body('ee').xpos
+    provider.observe_payload = lambda _: replace(evidence, captured_world_from_ee=captured)
+    data.qpos[0] += .05
+    mujoco.mj_forward(model, data)
+    attach(model, data, checker)
+    np.testing.assert_allclose(checker.payload_transform[:3, 3],
+                               evidence.pose.world_from_object[:3, 3]-data.body('ee').xpos)

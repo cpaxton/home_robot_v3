@@ -215,3 +215,19 @@ Rejected tracking packets are retained for diagnostic replay only. The benchmark
 writes `tracking-rejection-NN.npz` (RGB, depth, world points, foreground masks and
 seed poses) and a JSON file with original acquisition intervals and the rejection
 reason. A rejected packet never replaces accepted evidence or refreshes its age.
+
+## Capture-aligned retention versus current control feedback
+
+`PayloadGeometryEvidence.captured_world_from_ee` optionally carries the tool pose
+from the same qualified observation as the object pose. The shared adapter supplies
+it from `VisualEffectFrame.robot_after`. Runtime retention compares object and tool
+from that capture, rather than subtracting a newer servo pose from older imagery.
+This is essential during motion: camera delivery latency can otherwise appear as
+payload slip. Both object and tool retain the observation's actual age.
+
+Actual post-closure attachment may explicitly use that capture-aligned transform.
+Hypothetical grasp/lift planning continues to use the candidate tool pose, so a
+capture of the robot at home cannot replace the planned grasp transform. Legacy
+providers without a capture-owned tool pose retain their original interface.
+Regression tests cover asynchronous servo movement, matching camera/tool motion,
+true relative slip, stale evidence, immutable transforms and hypothetical planning.

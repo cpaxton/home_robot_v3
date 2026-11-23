@@ -59,6 +59,9 @@ class PayloadGeometryEvidence:
     attachment_error_m: float = 0.0
     attachment_rotation_error_rad: float = 0.0
     attachment_lever_limit_m: float | None = None
+    # Optional robot pose from the SAME qualified capture as the object pose.
+    # Runtime retention must not mix camera geometry with newer servo feedback.
+    captured_world_from_ee: np.ndarray | None = None
 
     def __post_init__(self):
         # HeldObject validates finite positive extent; its EE naming is irrelevant
@@ -77,6 +80,10 @@ class PayloadGeometryEvidence:
         if self.attachment_lever_limit_m is not None and (
                 not np.isfinite(self.attachment_lever_limit_m) or self.attachment_lever_limit_m <= 0):
             raise ValueError('invalid_payload_geometry_evidence')
+        if self.captured_world_from_ee is not None:
+            captured = ObjectPoseEvidence(self.captured_world_from_ee, self.pose.received_monotonic,
+                                          self.pose.source, self.pose.observation_id).world_from_object
+            object.__setattr__(self, 'captured_world_from_ee', captured)
         # Shape records already carry their calibration bounds. Unique rigid
         # poses receive the enclosing visual frame's bounds at the adapter seam.
         object.__setattr__(self, 'position_error_m', max(self.position_error_m,
@@ -720,8 +727,11 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         mujoco.mj_copyData(self._probe, model, data)
         mujoco.mj_kinematics(model, self._probe)
         ee = self._probe.body(self.ee_body)
-        inverse = ee.xmat.reshape(3, 3).T
-        position = inverse @ (pose[:3, 3]-ee.xpos)
+        captured = evidence.captured_world_from_ee
+        ee_rotation = ee.xmat.reshape(3, 3) if captured is None else captured[:3, :3]
+        ee_position = ee.xpos if captured is None else captured[:3, 3]
+        inverse = ee_rotation.T
+        position = inverse @ (pose[:3, 3]-ee_position)
         rotation = inverse @ pose[:3, :3]
         current_vertices = evidence.vertices_reference @ rotation.T + position
         if (evidence.attachment_lever_limit_m is not None
@@ -753,7 +763,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         return np.stack((vertices.min(0)-self._payload_pose_error_m,
                          vertices.max(0)+self._payload_pose_error_m))
 
-    def set_payload(self, model, data, body, parent=None):
+    def set_payload(self, model, data, body, parent=None, *, capture_aligned=False):
         """``body`` is an opaque observed handle here, never a MuJoCo body name."""
         if model is not self._model:
             raise ValueError('Collision checker model mismatch')
@@ -795,9 +805,11 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         mujoco.mj_kinematics(model, self._probe)
         ee = self._probe.body(parent)
         ee_from_reference = np.eye(4)
-        rotation = ee.xmat.reshape(3, 3).T
+        captured = evidence.captured_world_from_ee if capture_aligned else None
+        rotation = (ee.xmat.reshape(3, 3) if captured is None else captured[:3, :3]).T
+        position = ee.xpos if captured is None else captured[:3, 3]
         ee_from_reference[:3, :3] = rotation @ world_from_reference[:3, :3]
-        ee_from_reference[:3, 3] = rotation @ (world_from_reference[:3, 3] - ee.xpos)
+        ee_from_reference[:3, 3] = rotation @ (world_from_reference[:3, 3] - position)
         vertices = evidence.vertices_reference @ ee_from_reference[:3, :3].T + ee_from_reference[:3, 3]
         if (evidence.attachment_lever_limit_m is not None
                 and np.linalg.norm(vertices, axis=1).max() > evidence.attachment_lever_limit_m):

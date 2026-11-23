@@ -157,7 +157,8 @@ class _PayloadEnvelope:
         return PayloadGeometryEvidence(a.object_ref, a.reference_id, a.revision, self.vertices, a.pose, a.construction,
             position_error_m=current.position_error_m, rotation_error_rad=current.rotation_error_rad,
             attachment_error_m=self.attachment_error, attachment_rotation_error_rad=self.attachment_rotation,
-            attachment_lever_limit_m=self.lever_limit)
+            attachment_lever_limit_m=self.lever_limit,
+            captured_world_from_ee=current.robot_after.world_from_ee)
 
 
 class _CommandBoundary:
