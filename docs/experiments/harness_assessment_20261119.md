@@ -1855,3 +1855,59 @@ registered no qualifying lift. None of these failures is relabeled successful
 by the relaxed transit gate. First-attempt and recovered full success both
 remain zero. The next gaps are fresh-view grasp/retention verification and
 recovery, source-support grounding reliability, and contact-aware lowering.
+
+
+### Fresh-view grasp checks and one regrasp (2026-11-23)
+
+The simulation diagnostic now asks the runtime VLM about current scene,
+alternate and wrist images after lift and before lowering. Responses are
+`held`, `not_held`, or `unknown`; images, requests, responses and measured finger
+positions are retained. A clear miss requires **both** a `not_held` visual
+estimate and near-closed Panda fingers (sum of absolute finger positions below
+2 mm). Occlusion alone and aperture alone do not stop the attempt. Neither
+these estimates nor the aperture threshold establish official task success.
+
+A clear miss allows one fresh-observation regrasp, with the same target and
+feedback about the physical failure. The retry receives the same robot-only
+model and no object CAD or simulator state. All previous execution receipts and
+model-call counts are preserved; recovered successes cannot become first-attempt
+successes. This is still scripted phase routing, not production CHAT routing.
+
+Preserved v7 (`logs/vlm-expansion-screen-20261123-v7`): 0/3 full transfers.
+Pear's after-lift wrist image clearly shows it between the pads; VLM said held.
+Before lowering it was back on the counter and both fingers were near their
+empty closure positions; VLM said not held. This triggered recovery instead
+of continuing the empty-hand placement. The first recovery then failed on an
+implementation bug: it looked for `robot-only.xml` in the child log directory.
+That failed result is retained; v8 explicitly reuses the original model path.
+Garlic exhausted surface proposals. Tongs triggered a regrasp, then exhausted
+surface proposals. The result does not demonstrate successful regrasp recovery.
+Regression tests cover multi-view uncertainty, malformed estimates, visual and
+finger agreement, and preservation of failed-attempt evidence/call counts.
+
+V8 (`logs/vlm-expansion-screen-20261123-v8`) also finished 0/3 transfers.
+Pear again lifted (7.67 cm two-pad maximum), was judged held after lift, then
+not held before lowering with fingers closed empty. Its fresh-observation retry
+loaded the shared robot-only model correctly and reached departure/staging,
+then stopped on native arrival before regrasp. Thus the model-path repair was
+exercised, but recovery still did not succeed. Garlic exhausted grounding
+proposals. Tongs exhausted proposals including a malformed JSON response.
+
+The raw batch's `physical_pick_passed=false` for pear exposed a reporting bug:
+scoring looked only at the last attempt's events and lost the earlier lift.
+The scorer now includes preserved prior-attempt lift events, while requiring
+completed execution and the unchanged physical task checks for transfer success.
+`attempt-history-rescore.json` records 1/3 physical picks and 0/3 transfers with
+SHA256 references to unchanged raw reports. Regression tests cover zero, small
+and qualifying prior lifts followed by an unsuccessful retry. No failed attempt
+is removed and no transfer result changes.
+
+These rounds demonstrate observed slip detection, not reliable grasp recovery
+or benchmark qualification. Better source-region grounding, return routing for
+regrasp and grasp retention remain the next blockers. The VLM and policy receive
+current RGB images and native finger feedback only; simulator object state
+remains confined to independent scoring.
+
+Final validation: **625 tests passed**; Ruff and whitespace checks clean.
+One CPU-only simulator ran at a time on six assigned cores. The local VLM
+used about 20.3 GB GPU memory with 3.8 GB free at the sampled checkpoint.

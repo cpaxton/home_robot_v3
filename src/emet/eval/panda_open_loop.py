@@ -93,7 +93,8 @@ def estimated_grasp_section(observations, selection, fraction):
 
 def score_diagnostic(diagnostic, physics, *, full_transfer):
     """Task success is distinct from diagnostic zero-contact statistics."""
-    lifted = 'lift' in diagnostic.get('events', []) and physics['lift_with_two_pads_m'] >= .04
+    attempts = [diagnostic, *diagnostic.get('prior_execution_attempts', [])]
+    lifted = any('lift' in attempt.get('events', []) for attempt in attempts) and physics['lift_with_two_pads_m'] >= .04
     picked = bool(lifted and (full_transfer or diagnostic.get('completed')))
     transferred = bool(diagnostic.get('completed') and lifted and physics['upstream_success']
                        and physics['basin_contains_tongs'] and physics['final_object_speed_mps'] < .02)
@@ -107,9 +108,10 @@ def score_diagnostic(diagnostic, physics, *, full_transfer):
 
 
 def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=None, object_name="salt shaker",
-             full_transfer=False, destination_name="sink"):
+             full_transfer=False, destination_name="sink", recovery_budget=1, recovery_feedback=None, robot_model_path=None):
     if (client.get_emet_session() or {}).get('runtime_kind') != 'robocasa_native':
         raise ValueError('simulation_diagnostic_only')
+    robot_model_path = robot_model_path or output/'robot-only.xml'
     profile = json.loads(profile_path.read_text())
     obs = client.get_observation()
     observations = {'scene': obs}
@@ -122,7 +124,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
 
     decision = None
     attempts = []
-    feedback = None
+    feedback = recovery_feedback
     for attempt in range(3 if model_endpoint else 1):
         attempt_output = output if attempt == 0 else output/f'vlm-recovery-{attempt}'
         attempt_output.mkdir(exist_ok=True)
@@ -166,7 +168,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         yaw = np.arctan2(closing[1], closing[0])
     rotation = np.array([[np.cos(yaw), np.sin(yaw), 0.],
                          [np.sin(yaw), -np.cos(yaw), 0.], [0., 0., -1.]])
-    model = mujoco.MjModel.from_xml_path(str(output/'robot-only.xml'))
+    model = mujoco.MjModel.from_xml_path(str(robot_model_path))
     data = mujoco.MjData(model)
     arm = get_robot_backend('pandaomron').bind_observed_arm(client, model)
     synchronize_pandaomron(obs, model, data)
@@ -232,7 +234,45 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         'grounding_attempts': attempts, 'environment_collision_checks': False,
         'target_world_m': target.tolist(), 'events': events,
         'instruction': f'Pick up {object_name} and place it in {destination_name}',
-        'full_transfer_requested': full_transfer}
+        'full_transfer_requested': full_transfer, 'execution_attempts': 1}
+
+    def check_grasp(stage):
+        from emet.eval.vlm_grasp_check import clearly_missed_grasp, query_grasp_state
+
+        fresh = client.get_observation()
+        views = {'scene': fresh.rgb, 'wrist': fresh.ee_rgb}
+        views.update({name: view['rgb'] for name, view in (fresh.auxiliary_rgbd_views or {}).items()})
+        arm.synchronize(data)
+        fingers = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
+        receipt['runtime_vlm_calls'] += 1
+        try:
+            estimate = query_grasp_state(views, endpoint=model_endpoint, model=model_name,
+                object_name=object_name, finger_positions=fingers, output=output/('grasp-check-'+stage))
+        except (ValueError, OSError) as error:
+            estimate = {'state': 'unknown', 'reason': str(error)}
+        missed = clearly_missed_grasp(estimate, fingers)
+        receipt.setdefault('grasp_checks', []).append({
+            'stage': stage, 'estimate': estimate, 'finger_positions': fingers, 'clear_miss': missed})
+        return missed
+
+    def recover_miss(stage):
+        receipt.update(completed=False, reason='observed_grasp_miss_'+stage)
+        if recovery_budget <= 0:
+            return
+        from emet.eval.vlm_grasp_check import merged_retry_receipt
+
+        retry_output = output/'execution-retry-1'
+        retry_output.mkdir(exist_ok=False)
+        run_pick(client, retry_output, profile_path, model_endpoint=model_endpoint, model_name=model_name,
+            object_name=object_name, full_transfer=full_transfer, destination_name=destination_name,
+            recovery_budget=recovery_budget-1, robot_model_path=robot_model_path, recovery_feedback=
+            'Previous physical attempt failed: fresh images show the object not held and fingers closed empty. '
+            'Reinspect its CURRENT position and revise the grasp center, direction or body height. '
+            'Do not repeat a stale grasp or substitute another target.')
+        retry = json.loads((retry_output/'open-loop-pick.json').read_text())
+        combined = merged_retry_receipt(dict(receipt), retry)
+        receipt.clear()
+        receipt.update(combined)
     try:
         client.open_gripper()
         home = data.body(arm.chain.ee_body).xpos.copy()
@@ -262,6 +302,9 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         receipt['gripper_after_lift'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
         carry_start = max(0, len(executed)-1)
         time.sleep(1.)
+        if model_endpoint and check_grasp('after_lift'):
+            recover_miss('after_lift')
+            return
         if full_transfer:
             landing = front_interior_floor(observations[selected.destination_camera], selected.destination_mask,
                 extra_observations=[o for name, o in observations.items() if name != selected.destination_camera])
@@ -276,6 +319,9 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
                     ('preplace', np.r_[place[:2], height]), ('place', place)]:
                 move(pos, rotation, approximate_waypoint=name == 'preplace')
                 record_event(name)
+                if name == 'preplace_front' and model_endpoint and check_grasp('before_lowering'):
+                    recover_miss('before_lowering')
+                    return
             receipt['gripper_before_release'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
             client.open_gripper()
             record_event('release')

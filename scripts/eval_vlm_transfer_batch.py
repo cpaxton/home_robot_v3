@@ -53,7 +53,7 @@ def main():
             raise ValueError('frozen_fixture_changed: '+case['id'])
     (args.output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     sources = ['scripts/eval_pandaomron_sink_agent.py', 'src/emet/eval/panda_open_loop.py',
-               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
+               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/eval/vlm_grasp_check.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
                'scripts/eval_vlm_transfer_batch.py']
     source_hashes = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in sources}
     (args.output/'source-hashes.json').write_text(json.dumps(source_hashes, indent=2)+'\n')
@@ -107,8 +107,11 @@ def main():
             result.update(task_passed=row['task_passed'], category=classify(row),
                 physical_pick_passed=row.get('physical_pick_passed', False),
                 grounding_attempts=len(attempts),
-                first_attempt_success=bool(row['task_passed'] and len(attempts) == 1),
-                recovered_success=bool(row['task_passed'] and len(attempts) > 1),
+                execution_attempts=row.get('diagnostic', {}).get('execution_attempts', 1),
+                first_attempt_success=bool(row['task_passed'] and len(attempts) == 1
+                    and row.get('diagnostic', {}).get('execution_attempts', 1) == 1),
+                recovered_success=bool(row['task_passed'] and (len(attempts) > 1
+                    or row.get('diagnostic', {}).get('execution_attempts', 1) > 1)),
                 reason=row.get('diagnostic', {}).get('reason'),
                 lift_m=row.get('physics', {}).get('lift_with_two_pads_m'),
                 touch_frames=row.get('physics', {}).get('unintended_touch_frames'),

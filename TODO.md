@@ -145,8 +145,12 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       frames; contact itself is not a task failure. Same-image left/right instructions produced separate
       depth-supported basin goals. This is scripted phase routing, not agent
       qualification or a held-out result. See `docs/testing/observed_manipulation_stack.md`.
+- [x] Add current-image grasp/retention checks after lift and before lowering,
+      with one bounded regrasp when visual evidence and native finger feedback
+      agree the hand is empty. Pear loss is detected; successful recovery and
+      production CHAT integration remain unqualified.
 - [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
-      pear/garlic/tongs development screens v1–v6 each scored 0/3 full transfers;
+      pear/garlic/tongs development screens v1–v8 each scored 0/3 full transfers;
       pear achieved 8.51 cm lift in v2 but slipped during carry. V6 passed the
       approach stop and lifted 7.52 cm, then stopped during lowering; retention
       through carry is unverified. Resolve arrival,
