@@ -190,11 +190,14 @@ class _CommandBoundary:
 class ObservedNativeAdapter:
     input_mode = 'observed'
 
-    def __init__(self, robot, *, source, refine, tasks, clock=time.monotonic, max_ik_calls=128, robot_name=''):
+    def __init__(self, robot, *, source, refine, tasks, clock=time.monotonic, max_ik_calls=128, robot_name='', execution_phase=None):
         if (not isinstance(robot_name, str) or source.input_mode != 'observed' or not callable(refine) or type(max_ik_calls) is not int
                 or not 6 <= max_ik_calls <= 2048 or not all(callable(getattr(source, name, None))
                 for name in ('snapshot', 'collect', 'current_revision', 'invalidate'))):
             raise ValueError('invalid_observed_native_provider')
+        from .execution_phase import ManipulationExecutionPhase
+
+        self.execution_phase = execution_phase or ManipulationExecutionPhase()
         self.robot, self.source, self.refine, self.clock = robot, source, refine, clock
         self.robot_name = robot_name.strip().casefold()
         self.namespace = uuid.uuid4().hex
@@ -243,7 +246,8 @@ class ObservedNativeAdapter:
     def _payload_scope(snapshot):
         payload = snapshot.frame.payload
         return {'geometry_source': snapshot.scene.source, 'payload_geometry_source': payload.construction,
-                'payload_pose_scope': ('declared_shape_equivalence' if isinstance(payload.pose, ShapePoseEvidence)
+                'payload_pose_scope': ('approximate_observed_box' if payload.construction == 'approximate_observed_box'
+                                       else 'declared_shape_equivalence' if isinstance(payload.pose, ShapePoseEvidence)
                                        else 'unique_rigid_pose')}
 
     def _failure(self, tool, reason, *, started=False, completed=(), phase='preflight'):
@@ -641,6 +645,14 @@ class ObservedNativeAdapter:
     @staticmethod
     def _require_same_initial(initial, current, *, allow_stricter_map=False):
         a, b = initial.frame.payload, current.frame.payload
+        approximate = a.construction == b.construction == "approximate_observed_box"
+        rotation_limit = .02
+        if approximate:
+            # Reference axes from partial depth are estimates, not measured
+            # object yaw. Permit small fit changes while bounding the induced
+            # motion of the padded geometry to 10 mm (and angle to 0.2 rad).
+            radius = float(np.linalg.norm(a.vertices_reference, axis=1).max())
+            rotation_limit = min(.2, .01 / max(radius, .001))
         map_matches = (initial.scene.source == current.scene.source
                        and initial.scene_revision == current.scene_revision
                        and initial.scene.geometry_digest == current.scene.geometry_digest)
@@ -663,7 +675,7 @@ class ObservedNativeAdapter:
                 or shape_identity(a.pose) != shape_identity(b.pose)
                 or not np.array_equal(a.vertices_reference, b.vertices_reference)
                 or np.linalg.norm(a.pose.world_from_object[:3, 3] - b.pose.world_from_object[:3, 3]) > .005
-                or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
+                or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > rotation_limit):
             logger.warning('Initial evidence changed: position_delta=%.5f rotation_delta=%.5f map_matches=%s source_bounds_match=%s destination_bounds_match=%s',
                 np.linalg.norm(a.pose.world_from_object[:3, 3]-b.pose.world_from_object[:3, 3]),
                 evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]),
@@ -681,10 +693,12 @@ class ObservedNativeAdapter:
             ex, task = plan.executor, plan.task
             original_robot, original_command = ex.robot, ex.command_joints
             original_gripper_command = ex.command_gripper_joints
+            self.execution_phase.begin_execution()
 
             def mark():
                 nonlocal started
                 started = True
+                self.execution_phase.command_dispatched()
 
             def command(q):
                 # Same possible-dispatch boundary as the gripper transport.
@@ -717,6 +731,8 @@ class ObservedNativeAdapter:
                         return self._failure('execute_pick_place_plan', result.message, started=started,
                                              completed=completed, phase=result.phase)
                     completed.append(phase)
+                    if phase == 'grasp':
+                        self.execution_phase.grasp_verified()
                 return response('execute_pick_place_plan', data=self._data(execution_started=started,
                     completed_ops=completed, failed_stage=None, measurements=[e.as_dict() for e in self.effects],
                     **self._payload_scope(plan.initial)))
@@ -730,6 +746,7 @@ class ObservedNativeAdapter:
                 self.effects = ex.visual_verifier.results.copy()
                 return self._failure('execute_pick_place_plan', str(exc), started=started, completed=completed, phase=phase)
             finally:
+                self.execution_phase.finish_execution(placement_verified=len(completed) == 2)
                 ex.robot, ex.command_joints = original_robot, original_command
                 ex.command_gripper_joints = original_gripper_command
                 if started:

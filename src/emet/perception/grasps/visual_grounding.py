@@ -125,7 +125,8 @@ def grounding_profile(decision, *, infer_support_from_depth=False, destination_b
             'box': decision['object'] if infer else decision[role],
         }
     return {'grounding': ground, 'local_support_estimation': True,
-            'destination_below_source': destination_below_source}
+            'destination_below_source': destination_below_source,
+            'grow_source_region': infer_support_from_depth}
 
 
 def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, estimate_grasp_site=False):

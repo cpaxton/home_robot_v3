@@ -95,7 +95,8 @@ class _BoundPayload:
         return self.source.snapshot(object_ref, self.task.support_ref).frame.payload
 
 
-def observed_arm_factory(*, robot_name, load_model, build_source, tasks, candidates, confirm_placement=None, configure_arm=None):
+def observed_arm_factory(*, robot_name, load_model, build_source, tasks, candidates, confirm_placement=None, configure_arm=None,
+                         grounder_factory=None, initial_payload_state='unknown'):
     """Bind a benchmark's measured source to its declared embodiment in CHAT."""
     from emet.robots import get_robot_backend
 
@@ -112,16 +113,25 @@ def observed_arm_factory(*, robot_name, load_model, build_source, tasks, candida
         arm = backend.bind_observed_arm(robot, model)
         if configure_arm is not None:
             arm = configure_arm(robot, arm)
+        from .execution_phase import ManipulationExecutionPhase
+
+        execution_phase = ManipulationExecutionPhase(initial_payload_state)
         source = build_source(robot, arm)
-        return build_observed_arm_adapter(
+        adapter = build_observed_arm_adapter(
             robot, robot_name=spec.name, arm=arm, source=source, tasks=tasks, candidates=candidates,
-            confirm_placement=confirm_placement,
+            confirm_placement=confirm_placement, execution_phase=execution_phase,
         )
+        if grounder_factory is not None:
+            install = getattr(source, 'set_grounder', None)
+            if not callable(install):
+                raise ValueError('runtime_grounding_source_unavailable')
+            install(grounder_factory(execution_phase.can_query))
+        return adapter
 
     return bind
 
 
-def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candidates, confirm_placement=None):
+def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candidates, confirm_placement=None, execution_phase=None):
     """Compose a native arm and measured scene source without a benchmark-specific tool."""
 
     def refine(task, snapshot, placement_region=None, request=None):
@@ -225,4 +235,4 @@ def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candida
 
     refine.supports_manipulation_request = True
     return ObservedNativeAdapter(robot, robot_name=robot_name, source=source, refine=refine, tasks=tasks,
-                                 max_ik_calls=getattr(source, "planning_max_ik_calls", 128))
+                                 max_ik_calls=getattr(source, "planning_max_ik_calls", 128), execution_phase=execution_phase)

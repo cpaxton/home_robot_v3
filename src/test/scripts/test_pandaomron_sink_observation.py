@@ -179,3 +179,17 @@ def test_joint_address_compatibility_preserves_free_ball_and_scalar_dimensions(j
         assert type(model.get_joint_qpos_addr('joint')) is int
     with pytest.raises(ValueError, match='missing joint'):
         model.get_joint_qpos_addr('absent')
+
+
+def test_transfer_scorer_uses_latest_public_execution_path():
+    from eval_pandaomron_sink_agent import score_transfer
+
+    physics = {'initial_success': False, 'upstream_success': True, 'basin_contains_tongs': True,
+        'lift_with_two_pads_m': .1, 'final_object_speed_mps': 0.,
+        'unintended_contact_frames': 0, 'unintended_self_contact_frames': 0}
+    ok = {'status': 'ok', 'code': 'ok'}
+    error = {'status': 'error', 'code': 'planning_failed'}
+    actions = ['{"forbidden": []}']
+    assert score_transfer(physics, {'pick_place': ok}, actions) == (True, True, True)
+    assert score_transfer(physics, {'pick_place': error, 'execute_pick_place_plan': ok}, actions)[2]
+    assert not score_transfer(physics, {'execute_pick_place_plan': ok, 'pick_place': error}, actions)[2]

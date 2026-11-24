@@ -82,3 +82,48 @@ def test_replay_refusal_does_not_make_an_extra_refinement_call(monkeypatch, tmp_
     row = report['results'][0]
     assert row['current'] == {'accepted': False, 'reason': 'vlm_grounding_unavailable'}
     assert calls == ['query']
+
+
+def test_support_growth_follows_measured_plane_without_crossing_world_gap():
+    from emet.controller.task.tamp.transfer_grounding import _grow_measured_plane
+
+    y, x = np.indices((20, 30))
+    world = np.stack((x*.002, y*.002, np.ones(x.shape)), axis=-1)
+    world[:, 15:, 0] += .2
+    seed = np.zeros(x.shape, bool)
+    seed[8:12, 5:8] = True
+    result = _grow_measured_plane(seed, world, 1.)
+    assert result[:, :15].all()
+    assert not result[:, 15:].any()
+    world[:, 7, 2] = np.nan
+    seed[:, 7:] = False
+    result = _grow_measured_plane(seed, world, 1.)
+    assert not result[:, 7:].any()
+
+
+def test_inferred_source_support_is_local_and_keeps_object_pixels_excluded():
+    from emet.controller.task.tamp.transfer_grounding import _grow_measured_plane
+
+    y, x = np.indices((100, 100))
+    world = np.stack((x*.01, y*.01, np.zeros(x.shape)), axis=-1)
+    seed = np.zeros(x.shape, bool)
+    seed[45:55, 45:55] = True
+    excluded = np.zeros_like(seed)
+    excluded[49:51, 49:51] = True
+    result = _grow_measured_plane(seed, world, 0., max_radius_m=.15, exclude=excluded)
+    assert result.sum() > seed.sum()
+    assert not result[excluded].any()
+    assert not result[:30].any() and not result[70:].any()
+
+
+def test_support_growth_does_not_absorb_neighboring_object_edge_returns():
+    from emet.controller.task.tamp.transfer_grounding import _grow_measured_plane
+
+    y, x = np.indices((20, 30))
+    world = np.stack((x*.002, y*.002, np.ones(x.shape)), axis=-1)
+    world[8:12, 12:16, 2] += .007
+    seed = np.zeros(x.shape, bool)
+    seed[5:8, 5:8] = True
+    result = _grow_measured_plane(seed, world, 1.)
+    assert result[5:8, 5:8].all()
+    assert not result[8:12, 12:16].any()

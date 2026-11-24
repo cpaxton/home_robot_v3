@@ -60,3 +60,33 @@ def test_explicit_best_fit_diagnostic_retains_candidates_and_does_not_renew_age(
     scene.clock = lambda: 13.
     with pytest.raises(ObservationUnavailable, match='object_observation_stale'):
         scene._pose(fit)
+
+
+def test_multiview_bootstrap_adds_only_local_matching_above_support_returns():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from emet.controller.manipulation.native_inputs import ObservationUnavailable
+    from emet.controller.task.tamp.live_transfer import _bootstrap_reference_masks
+
+    y, x = np.indices((12, 12))
+    world = np.stack((x*.002, y*.002, np.full(x.shape, .04)), axis=-1)
+    mask = np.zeros(x.shape, bool)
+    mask[2:10, 2:10] = True
+    appearance = np.ones(x.shape, bool)
+    def make(points, capture='same'):
+        return SimpleNamespace(world=points, depth=np.ones(x.shape), rgb=appearance,
+            capture=capture, robot_guard=None)
+    extra = world.copy()
+    extra[:3, :, 2] = 0.  # Measured support, not object.
+    extra[-2:, :, 0] += 1.  # Same appearance but a different distant object.
+    views = {'front': make(world), 'other': make(extra)}
+    masks = _bootstrap_reference_masks(views, 'front', mask, lambda rgb: rgb, np.zeros(3))
+    assert 'other' in masks
+    assert not masks['other'][:3].any()
+    assert not masks['other'][-2:].any()
+    assert np.array_equal(masks['front'], mask)
+    views['other'] = make(extra, capture='different')
+    with pytest.raises(ObservationUnavailable, match='capture_identity_mismatch'):
+        _bootstrap_reference_masks(views, 'front', mask, lambda rgb: rgb, np.zeros(3))

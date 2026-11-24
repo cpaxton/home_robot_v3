@@ -22,10 +22,10 @@ from emet.controller.task.tamp.transfer_grounding import select_transfer
 from emet.robots.pandaomron.observed import fixed_torso_arm, panda_sample_reader
 
 
-def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *, grounder=None):
+def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *, grounder_factory=None, initial_payload_state='unknown'):
     profile = json.loads(profile_path.read_text())
-    profile.setdefault('destination_below_source', grounder is None)
-    if grounder is not None and (profile.get('payload_prior') or profile.get('payload_axial_enclosure')):
+    profile.setdefault('destination_below_source', grounder_factory is None)
+    if grounder_factory is not None and (profile.get('payload_prior') or profile.get('payload_axial_enclosure')):
         raise ValueError('runtime_grounding_requires_no_object_cad')
     if profile.get("debug_planning"):
         logging.getLogger("emet.controller.task.tamp.observed_adapter").setLevel(logging.INFO)
@@ -105,7 +105,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
         )
         for entry in profile["grasps"]
     )
-    mode = ("runtime_observed_grounding" if grounder is not None else
+    mode = ("runtime_observed_grounding" if grounder_factory is not None else
             "diagnostic_pixel_regions" if any("box" in entry for entry in profile["grounding"].values()) else "semantic")
     lock_torso = profile.get("fixed_torso", False)
     if type(lock_torso) is not bool or lock_torso and (profile.get("approach_joint_routes") or profile.get("guarded_placement")):
@@ -138,14 +138,13 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
             ):
                 raise ObservationUnavailable("probe_unavailable")
         segment = None
-        if grounder is None and any("label" in role for role in profile["grounding"].values()):
+        if grounder_factory is None and any("label" in role for role in profile["grounding"].values()):
             from emet.mapping.scene_graph.processor import SceneGraphProcessor
 
             segment = SceneGraphProcessor(config_name="cpu_scene_graph", device="cpu").segment_current_view
         source = LiveTransferScene(
             arm=arm, task=task, read_sample=panda_sample_reader(robot, arm, profile),
             select=lambda sample, _task: select_transfer(sample, profile=profile, segment=segment),
-            grounder=grounder,
             payload_model=geometry,
             fingertip_geom_ids=tuple(arm.model.geom(name).id for name in profile["fingertips"]),
             profile=profile,
@@ -185,6 +184,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
         ),
         confirm_placement=confirm if probe is not None else None,
         configure_arm=fixed_torso_arm if lock_torso else None,
+        grounder_factory=grounder_factory, initial_payload_state=initial_payload_state,
     )
     if profile.get("simulation_ignore_environment") or profile.get("simulation_allow_unknown") or profile.get("approach_joint_routes") or slack or contact_close or local_payload or visual_self or best_fit or best_view or relaxed_retention or relaxed_fit or carry_prediction or relaxed_settling:
         native_factory = factory
@@ -219,6 +219,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
                 result.collision.simulation_support_contact_tolerance_m = support_tolerance
                 return result
 
+            diagnostic_refine.supports_manipulation_request = getattr(refine, 'supports_manipulation_request', False)
             adapter.refine = diagnostic_refine
             normal_data = adapter._data
             assistance = ["simulation_best_fit_pose"] if best_fit else []

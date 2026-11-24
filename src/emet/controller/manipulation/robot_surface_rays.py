@@ -12,7 +12,7 @@ from emet.motion.observed_solids import WorldSolid
 
 
 def measured_robot_surfaces(model, data, observations, *, tolerance_m=.015, known_material=None,
-                            collision_proxy_self_association=False, visual_surface_tolerance_m=.003):
+                            collision_proxy_self_association=False, visual_surface_tolerance_m=.003, pixel_masks=None):
     if not np.isfinite(tolerance_m) or not 0 <= tolerance_m <= .03:
         raise ValueError('invalid_robot_surface_tolerance')
     if not np.isfinite(visual_surface_tolerance_m) or not 0 <= visual_surface_tolerance_m <= .03:
@@ -25,9 +25,17 @@ def measured_robot_surfaces(model, data, observations, *, tolerance_m=.015, know
             mesh = (model.geom_type == mujoco.mjtGeom.mjGEOM_MESH) & ((model.geom_contype != 0) | (model.geom_conaffinity != 0))
         groups = np.zeros(6, dtype=np.uint8)
         groups[np.unique(model.geom_group[mesh])] = 1
-    for observation in observations:
+    observations = tuple(observations)
+    if pixel_masks is not None and len(pixel_masks) != len(observations):
+        raise ValueError('invalid_robot_surface_masks')
+    for index, observation in enumerate(observations):
         _, depth, world = capture_arrays(observation)
         valid = np.isfinite(depth) & (depth >= .1) & (depth <= 5.)
+        if pixel_masks is not None:
+            mask = np.asarray(pixel_masks[index])
+            if mask.dtype != bool or mask.shape != depth.shape:
+                raise ValueError('invalid_robot_surface_masks')
+            valid &= mask
         points = world[valid]
         if known_material is not None:
             primitive = known_material.matches_surface(points, point_error_m=tolerance_m)

@@ -155,3 +155,17 @@ def test_live_runtime_grounding_rejects_object_prior_before_source_startup():
         LiveTransferScene(arm=None, task=None, read_sample=None, select=None,
             payload_model=SimpleNamespace(construction='known_model_prior'),
             fingertip_geom_ids=(), profile={}, grounder=object())
+
+
+@pytest.mark.parametrize("role", ["source", "destination"])
+def test_inferred_support_seed_covers_grown_measurements_for_live_fitting(monkeypatch, tmp_path, role):
+    clock = [100.]
+    grounder, _ = resolver(monkeypatch, tmp_path, clock)
+    result = grounder.resolve(sample(100., 'reference'), lambda: sample(clock[0], 'fresh'),
+        SimpleNamespace(object_name='block', receptacle_name='basin'))
+    mask = getattr(result.selection, f"{role}_mask")
+    y, x = np.where(mask)
+    height, width = mask.shape
+    box = getattr(result.selection, f"{role}_seed")['box']
+    assert box[0] <= 1000*x.min()/width and box[2] >= 1000*(x.max()+1)/width
+    assert box[1] <= 1000*y.min()/height and box[3] >= 1000*(y.max()+1)/height

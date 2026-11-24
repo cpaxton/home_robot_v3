@@ -549,3 +549,20 @@ def test_joint_planner_cannot_ratchet_lift_below_measured_contact_floor():
             rng=np.random.default_rng(7),
         )
     assert not result.success and result.reason == "invalid_goal"
+
+
+def test_approximate_pickup_allows_partial_view_extent_change_without_freeing_contact():
+    background, original, _ = scene(backing=0.0)
+    patch = replace(original.patch, bounds=[[-.06, -.06, -.0001], [-.025, .06, .0001]])
+    contact = replace(original, patch=patch)
+    footprint = box().bounds
+    hypothesis = contact.pickup_observation_bounds(footprint, approximate=True)
+    changed = footprint.copy()
+    changed[1, 0] += .009
+    assert np.all(changed[:, :2] >= hypothesis[0, :2])
+    assert np.all(changed[:, :2] <= hypothesis[1, :2])
+    # The hypothesis neither expands the contact patch nor certifies lift.
+    np.testing.assert_array_equal(contact.patch.bounds, patch.bounds)
+    assert not query(admission(background), contact, phase="lift", floor=-.001).allowed
+    far = footprint + [1., 0., 0.]
+    assert contact.pickup_observation_bounds(far, approximate=True) is None

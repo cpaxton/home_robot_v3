@@ -526,7 +526,7 @@ def test_live_geometry_window_keeps_appearance_identity_near_gripper(monkeypatch
     scene.profile = {'tracking_geometry_window_m': .015, 'tracking_views': ['head']}
     scene.read_sample = lambda _: sample
     scene.epoch, scene.initial_capture_id = 'scene', 'first'
-    scene.initial_views, scene.samples = {}, {}
+    scene.initial_views, scene.samples, scene.diagnostics = {}, {}, {}
     scene.supports = [SimpleNamespace(patch=SimpleNamespace(plane=np.array([0., 0., 0.]),
         bounds=np.array([[1., 1., -.001], [2., 2., .001]])),
         measured_surface_bounds=np.array([[-.1, -.1, -.001], [.1, .1, .001]]) if witness_covers_object else
@@ -661,3 +661,27 @@ def test_carry_foreground_associates_actual_surface_instead_of_enclosure_interio
     assert not result.foreground_mask[55, 60]
     assert result.foreground_mask.sum() >= 25
     assert result.pose_prior is not None and result.capture is cap
+
+
+def test_live_tracking_excludes_capture_aligned_self_returns_with_object_appearance(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.controller.task.tamp import live_transfer as live
+
+    tracker, clock = setup()
+    cap = CaptureInterval('second', 10.3, 10.301, 10.31, 'clock')
+    measured, mask = view(cap)
+    # Simulate qualified self returns within the same appearance/search region.
+    material = SimpleNamespace(matches_surface=lambda points, **kwargs: points[:, 0] > 0.)
+    sample = SimpleNamespace(capture=cap, observations={'head': measured}, material=material)
+    scene = live.LiveTransferScene.__new__(live.LiveTransferScene)
+    scene.profile = {'tracking_geometry_window_m': .015, 'tracking_views': ['head'], 'depth_margin_m': .003}
+    scene.read_sample = lambda _: sample
+    scene.epoch, scene.initial_capture_id = 'scene', 'first'
+    scene.initial_views, scene.samples, scene.supports, scene.diagnostics = {}, {}, [], {}
+    scene.stream, scene.payload_model, scene.enclosure = SimpleNamespace(tracker=tracker), tracker.model, None
+    monkeypatch.setattr(live, 'synchronized_views', lambda sample: sample.observations)
+    result = scene._read_views()['head']
+    assert result.foreground_mask.sum() >= 25
+    assert not np.any(result.foreground_mask & (measured.world[..., 0] > 0.))
+    assert result.capture is cap

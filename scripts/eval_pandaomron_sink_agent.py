@@ -84,7 +84,8 @@ def score_transfer(physics, tool_results, actions):
         not physics['initial_success'] and physics['upstream_success'] and physics['basin_contains_tongs']
         and physics['lift_with_two_pads_m'] >= .05 and physics['final_object_speed_mps'] <= .01
         and not physics['unintended_contact_frames'] and not physics['unintended_self_contact_frames'])
-    receipt = tool_results.get('execute_pick_place_plan', {})
+    receipt = next((receipt for tool, receipt in reversed(list(tool_results.items()))
+                    if tool in {'pick_place', 'execute_pick_place_plan'}), {})
     observed = receipt.get('status') == 'ok' and receipt.get('code') == 'ok'
     native = bool(actions) and all(not json.loads(action).get('forbidden') for action in actions)
     return physical, observed, bool(physical and observed and native)
@@ -140,7 +141,7 @@ def scripted_model(output, turns):
             if match is not None and match[0] not in dispatched:
                 prompt, tool, arguments = match
                 dispatched.add(prompt)
-                if prompt != turns[-1][0] or (
+                if tool != 'plan_pick_place' or prompt != turns[-1][0] or (
                     last_plan_receipt and last_plan_receipt.get("recovery") == "replan"
                     and last_plan_receipt.get("data", {}).get("execution_started") is False
                     and not attempted_plans
@@ -153,7 +154,8 @@ def scripted_model(output, turns):
                 if isinstance(plan_ref, str) and plan_ref and plan_ref not in attempted_plans:
                     attempted_plans.add(plan_ref)
                     calls.append({"name": "execute_pick_place_plan", "arguments": {"plan_ref": plan_ref}})
-            completed = find_tool_receipt(request.get("messages", ()), 'execute_pick_place_plan') or {}
+            completed = (find_tool_receipt(request.get("messages", ()), 'pick_place')
+                         or find_tool_receipt(request.get("messages", ()), 'execute_pick_place_plan') or {})
             summary = ("The transfer completed and placement was verified." if completed.get('status') == 'ok'
                        else "The sink transfer is incomplete.")
             message = json.dumps({"tool_calls": calls, "message": "" if calls else summary})
@@ -573,6 +575,7 @@ def run(args, *, observed_native_factory=None):
             marker = f"[{tool}] [{tool}] "
             if line.startswith(marker):
                 receipt = json.loads(line[len(marker) :])
+                tool_results.pop(tool, None)
                 tool_results[tool] = receipt
                 tool_attempts.append({"tool": tool, "status": receipt["status"], "code": receipt["code"]})
     physical_passed, observed_passed, passed = score_transfer(physics, tool_results, actions)

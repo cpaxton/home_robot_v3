@@ -1425,3 +1425,75 @@ def test_grounding_failure_exposes_region_without_issuing_commands(system):
     assert outcome['data']['failed_region'] == 'destination'
     assert outcome['data']['execution_started'] is False
     assert not system.calls
+
+
+def test_query_guard_is_closed_during_native_dispatch_and_reopens_after_verified_place(system):
+    from emet.controller.task.tamp.execution_phase import ManipulationExecutionPhase
+
+    phase = ManipulationExecutionPhase('empty')
+    system.adapter.execution_phase = phase
+    original = system.adapter.refine
+    checks = []
+
+    def refine(*args, **kwargs):
+        ex = original(*args, **kwargs)
+        command = ex.command_joints
+
+        def guarded(q):
+            checks.append(phase.can_query())
+            return command(q)
+
+        ex.command_joints = guarded
+        return ex
+
+    system.adapter.refine = refine
+    result = plan(system)
+    assert result['status'] == 'ok' and phase.can_query()
+    outcome = json.loads(system.tools['execute_pick_place_plan'].func(plan_ref=result['data']['plan_ref']))
+    assert outcome['status'] == 'ok', outcome
+    assert checks and not any(checks)
+    assert phase.can_query()
+
+
+def test_unknown_dispatch_failure_keeps_model_query_guard_closed(system):
+    from emet.controller.task.tamp.execution_phase import ManipulationExecutionPhase
+
+    phase = ManipulationExecutionPhase('empty')
+    system.adapter.execution_phase = phase
+    original = system.adapter.refine
+
+    def refine(*args, **kwargs):
+        ex = original(*args, **kwargs)
+
+        def ambiguous(q):
+            raise TimeoutError('unknown transport result')
+
+        ex.command_joints = ambiguous
+        return ex
+
+    system.adapter.refine = refine
+    result = plan(system)
+    assert result['status'] == 'ok'
+    outcome = json.loads(system.tools['execute_pick_place_plan'].func(plan_ref=result['data']['plan_ref']))
+    assert outcome['status'] == 'partial'
+    assert not phase.can_query()
+    assert phase.snapshot()['payload_state'] == 'unknown'
+
+
+@pytest.mark.parametrize('approximate,angle,accepted', [
+    (False, .065, False), (True, .065, True), (True, .3, False),
+])
+def test_preplanning_view_change_bounds_approximate_rotation(system, approximate, angle, accepted):
+    first = system.source.snapshot('opaque', 'destination')
+    construction = 'approximate_observed_box' if approximate else 'known_model_prior'
+    payload = replace(first.frame.payload, construction=construction)
+    first = replace(first, frame=replace(first.frame, payload=payload))
+    pose = payload.pose.world_from_object.copy()
+    pose[:3, :3] = Rotation.from_euler('z', angle).as_matrix()
+    second = replace(first, frame=replace(first.frame, payload=replace(
+        payload, pose=replace(payload.pose, world_from_object=pose))))
+    if accepted:
+        ObservedNativeAdapter._require_same_initial(first, second)
+    else:
+        with pytest.raises(ObservationUnavailable, match='scene_changed_replan'):
+            ObservedNativeAdapter._require_same_initial(first, second)

@@ -38,6 +38,38 @@ def _tracking_interior(foreground):
     return eroded if eroded.sum() >= 25 else foreground
 
 
+def _bootstrap_reference_masks(views, camera, mask, appearance_mask, plane, *, padding_m=.01):
+    """Associate same-capture visible surfaces inside a local approximate box.
+
+    Extra views supply measured surfaces, never hidden-shape completion. Their
+    appearance, above-support depth and robot interference checks must agree.
+    """
+    reference = views[camera]
+    points = reference.world[mask]
+    low, high = points.min(0)-padding_m, points.max(0)+padding_m
+    masks = {camera: mask}
+    for name, view in views.items():
+        if name == camera:
+            continue
+        if view.capture != reference.capture:
+            raise ObservationUnavailable('capture_identity_mismatch')
+        foreground = np.isfinite(view.world).all(axis=-1) & (view.depth >= .1)
+        foreground &= np.all((view.world >= low) & (view.world <= high), axis=-1)
+        foreground &= appearance_mask(view.rgb)
+        height = view.world[..., :2] @ plane[:2]+plane[2]
+        foreground &= view.world[..., 2] > height+.008
+        foreground = _tracking_interior(foreground)
+        if foreground.sum() < 25:
+            continue
+        if view.robot_guard is not None:
+            try:
+                view.robot_guard.require_no_interference(foreground)
+            except ObservationUnavailable:
+                continue
+        masks[name] = foreground
+    return masks
+
+
 @dataclass(frozen=True)
 class TransferSelection:
     """Frame-bound foreground and two distinct planar support hypotheses."""
@@ -63,6 +95,7 @@ class TransferSample:
     query_robot_geometry: object
     robot_guards: dict
     qualify_surface: object | None = None
+    qualify_tracking_surfaces: object | None = None
 
 
 def synchronized_views(sample):
@@ -153,8 +186,20 @@ class LiveTransferScene:
             model_signature=self.signature, fingertip_geom_ids=fingertip_geom_ids, clock=clock,
             check_placement_surface=self.check_placement_surface,
         )
+        self.source.set_grounder = self.set_grounder
         if profile.get("simulation_rigid_carry_prediction", False):
             self.source.set_carry_prediction = self.set_carry_prediction
+
+    def set_grounder(self, grounder):
+        """Bind a phase-owned grounder before scene initialization."""
+        if self.stream is not None or self.initial_views is not None:
+            raise ValueError('grounding_source_already_initialized')
+        if not callable(getattr(grounder, 'resolve', None)):
+            raise ValueError('invalid_visual_grounder')
+        if (self.payload_model is not None
+                and getattr(self.payload_model, 'construction', None) != 'approximate_observed_box') or self.enclosure is not None:
+            raise ValueError('runtime_grounding_requires_no_object_cad')
+        self.grounder = grounder
 
     def set_carry_prediction(self, ee_from_object, close_configuration, *, measured_gripper=None):
         if not self.profile.get("simulation_rigid_carry_prediction", False):
@@ -212,6 +257,11 @@ class LiveTransferScene:
                 raise ValueError("invalid_tracking_geometry_window")
             radius = float(np.linalg.norm(self.payload_model.half_extents)) + allowance
             masks = {}
+            # Robot returns can share the object's appearance during approach.
+            # Use the capture-owned measured self-surface association already
+            # used by mapping, rather than fitting those returns as object data.
+            material = getattr(sample, 'material', None)
+            qualify_tracking = getattr(sample, 'qualify_tracking_surfaces', None)
             tracking_cameras = _tracking_cameras(self.profile, sample.observations)
             for name, view in views.items():
                 if name not in tracking_cameras:
@@ -221,6 +271,12 @@ class LiveTransferScene:
                 # A geometry window is only a search region. Gripper pixels
                 # inside it must not bypass the track's original appearance.
                 foreground &= self.stream.tracker.appearance_mask(view.rgb)
+                if material is not None and foreground.any():
+                    selected_pixels = np.flatnonzero(foreground)
+                    tracking_material = qualify_tracking({name: foreground}) if qualify_tracking is not None else material
+                    own = tracking_material.matches_surface(view.world.reshape(-1, 3)[selected_pixels],
+                        point_error_m=self.profile["depth_margin_m"])
+                    foreground.ravel()[selected_pixels[own]] = False
                 if self.enclosure is not None:
                     pose = fit.fit.poses[0] if prior is None else prior
                     local = (view.world - pose[:3, 3]) @ pose[:3, :3]
@@ -253,6 +309,21 @@ class LiveTransferScene:
                         (view.depth >= .1) & (np.linalg.norm(view.world[..., None, :] - centers, axis=-1).min(axis=-1) <= radius)
                     )) for name, view in views.items() if name in tracking_cameras},
                 }
+            # Retain association evidence even when registration rejects the
+            # packet; a failed fit otherwise loses the distinction between a
+            # bad semantic mask and newly visible measured surfaces.
+            pose = fit.fit.poses[0] if prior is None else prior
+            self.diagnostics["tracking_association"] = {
+                name: {
+                    "points": int(view.foreground_mask.sum()),
+                    "reference_distance_quantiles_m": np.quantile(
+                        self.payload_model.validation_distance(
+                            (view.world[view.foreground_mask] - pose[:3, 3]) @ pose[:3, :3]),
+                        [.5, .95, 1.],
+                    ).tolist(),
+                }
+                for name, view in masks.items()
+            }
             views = masks
         elif self.initial_views is not None and "box" in self.profile["grounding"]["object"]:
             # A measured stationary camera may reapply its diagnostic pixel ROI
@@ -350,13 +421,24 @@ class LiveTransferScene:
                     raise
                 mask = measured_mask
             backing = profile.get("support_backing", {}).get(ref, {})
-            supports.append(fit_transfer_support(
-                observation, mask, capture=capture, object_ref=self.task.object_ref, support_ref=ref,
-                scene_epoch=self.epoch, calibration_id=profile["calibration_id"],
-                measurement_margin_m=profile["support_margin_m"],
-                payload_motion_error_m=profile["payload_motion_error_m"],
-                backing_depth_m=backing.get("depth_m", 0.0), backing_prior_id=backing.get("id", ""),
-            ))
+            try:
+                supports.append(fit_transfer_support(
+                    observation, mask, capture=capture, object_ref=self.task.object_ref, support_ref=ref,
+                    scene_epoch=self.epoch, calibration_id=profile["calibration_id"],
+                    measurement_margin_m=profile["support_margin_m"],
+                    payload_motion_error_m=profile["payload_motion_error_m"],
+                    backing_depth_m=backing.get("depth_m", 0.0), backing_prior_id=backing.get("id", ""),
+                ))
+            except ObservationUnavailable as error:
+                points = views[camera].world[mask]
+                self.diagnostics['support_fit_failure'] = {
+                    'role': 'source' if ref == self.task.source_support_ref else 'destination',
+                    'point_count': int(len(points)),
+                    'bounds_m': [points.min(0).tolist(), points.max(0).tolist()] if len(points) else None,
+                    'reason': str(error)}
+                from .transfer_grounding import TransferGroundingUnavailable
+
+                raise TransferGroundingUnavailable(str(error), self.diagnostics['support_fit_failure']['role']) from error
             self.diagnostics["support_bounds_m"][ref] = supports[-1].patch.bounds.tolist()
             bounds = supports[-1].patch.bounds
             world = views[camera].world
@@ -385,29 +467,54 @@ class LiveTransferScene:
             seed_poses[:, :3, :3] = Rotation.from_euler("z", np.arange(8) * 45.0, degrees=True).as_matrix()
             seed_poses[:, :3, 3] = [*xy, z]
             initial_poses = seed_poses
-        tracker = MultiViewRgbdTracker(
-            self.payload_model, reference_view=selected.object_camera, reference=views[selected.object_camera],
-            mask=selected.object_mask, scene_epoch=self.epoch, object_ref=self.task.object_ref, clock=self.clock,
-            initial_poses=initial_poses,
-            max_starts=profile.get("tracking_max_starts", 6),
-            max_fit_points=profile.get("tracking_max_points", 180),
-            max_residual_m=profile.get("simulation_fit_residual_m", .003),
-            max_update_s=profile.get("tracking_max_update_s", 1.0), max_gap_s=2.0,
-            single_view_fallback=profile.get("tracking_single_view_fallback", False),
-            best_fit_hypothesis=profile.get("simulation_best_fit_pose", False),
-            best_fit_view=profile.get("simulation_best_fit_view", False),
-            max_pixels=profile.get("tracking_max_pixels", 100000),
-            component_policy=(
-                "complete_prior_union" if self.enclosure is not None and isinstance(self.payload_model, AxialMeshSurface)
-                else "single_component"
-            ),
-        )
+        def make_tracker():
+            return MultiViewRgbdTracker(
+                self.payload_model, reference_view=selected.object_camera, reference=views[selected.object_camera],
+                mask=selected.object_mask, scene_epoch=self.epoch, object_ref=self.task.object_ref, clock=self.clock,
+                initial_poses=initial_poses,
+                max_starts=profile.get("tracking_max_starts", 6),
+                max_fit_points=profile.get("tracking_max_points", 180),
+                # An approximate partial surface is not a rigid CAD model.
+                # Retain bounded measured-surface validation at 10 mm rather
+                # than imposing the exact-model 3 mm registration gate.
+                max_residual_m=(max(.01, profile.get("simulation_fit_residual_m", .003))
+                    if self.payload_model.construction == 'approximate_observed_box'
+                    else profile.get("simulation_fit_residual_m", .003)),
+                max_update_s=profile.get("tracking_max_update_s", 1.0), max_gap_s=2.0,
+                single_view_fallback=profile.get("tracking_single_view_fallback", False),
+                best_fit_hypothesis=profile.get("simulation_best_fit_pose", False),
+                best_fit_view=profile.get("simulation_best_fit_view", False),
+                max_pixels=profile.get("tracking_max_pixels", 100000),
+                component_policy=(
+                    "complete_prior_union" if self.enclosure is not None and isinstance(self.payload_model, AxialMeshSurface)
+                    else "single_component"
+                ),
+            )
+        tracker = make_tracker()
+        if self.payload_model.construction == 'approximate_observed_box':
+            reference_masks = _bootstrap_reference_masks(
+                views, selected.object_camera, selected.object_mask, tracker.appearance_mask, supports[0].patch.plane)
+            if len(reference_masks) > 1:
+                cloud = ObservedGeometry(capture.observation_id, 'synchronized_multiview', capture.earliest,
+                    np.concatenate([views[name].world[mask] for name, mask in reference_masks.items()]),
+                    profile['position_error_m'])
+                self.payload_model, reference = registration_surface(
+                    cloud, box_padding_m=profile.get('payload_box_padding_m', .01))
+                initial_poses = reference[None]
+                tracker = make_tracker()
+                for name, mask in reference_masks.items():
+                    labels[name][self.task.object_ref] = mask
+            self.diagnostics['reference_surface_pixels_by_view'] = {
+                name: int(mask.sum()) for name, mask in reference_masks.items()}
         fitted = self.clock()
         self.diagnostics["bootstrap_s"]["ground_and_fit"] = fitted - read_at
         self.supports = supports
         self.diagnostics["fit"] = tracker.latest.fit.as_dict()
+        self.diagnostics['tracking_residual_limit_m'] = tracker.max_residual_m
         pose = self._pose(tracker.latest.fit)
-        self.diagnostics["pose_scope"] = "axial_enclosure" if self.enclosure is not None else "unique_rigid_pose"
+        self.diagnostics["pose_scope"] = (
+            "approximate_observed_box" if self.payload_model.construction == 'approximate_observed_box'
+            else "axial_enclosure" if self.enclosure is not None else "unique_rigid_pose")
         self.diagnostics["world_from_payload"] = pose.world_from_object.tolist()
         self.assumption = StaticBackgroundAssumption(
             self.epoch, capture.earliest, capture.earliest + profile["static_s"], profile["calibration_id"],

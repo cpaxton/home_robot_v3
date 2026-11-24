@@ -102,6 +102,29 @@ def _depth_components(mask, world, *, max_neighbor_gap_m=.02):
     return result
 
 
+
+def _grow_measured_plane(seed, world, height, *, max_radius_m=None, exclude=None):
+    """Expand along measured neighboring returns, never across an unobserved gap."""
+    plane = np.isfinite(world).all(axis=-1) & (np.abs(world[..., 2]-height) <= .0028)
+    if exclude is not None:
+        plane &= ~exclude
+    if max_radius_m is not None:
+        if isinstance(max_radius_m, bool) or not np.isfinite(max_radius_m) or not .05 <= max_radius_m <= .7:
+            raise ValueError('invalid_source_support_radius')
+        points = world[seed & np.isfinite(world).all(axis=-1)]
+        if not len(points):
+            return np.zeros_like(seed)
+        center = np.median(points[:, :2], axis=0)
+        plane &= np.linalg.norm(world[..., :2]-center, axis=-1) <= max_radius_m
+    if not plane.any():
+        return np.zeros_like(seed)
+    components = _depth_components(plane, world)
+    ids, counts = np.unique(components[seed], return_counts=True)
+    counts[ids == 0] = 0
+    if not len(counts) or counts.max() == 0:
+        return np.zeros_like(seed)
+    return components == ids[counts.argmax()]
+
 def select_transfer(sample, *, profile, segment=None, grow_object_region=False, require_destination=True):
     ground = profile["grounding"]
     cameras = {
@@ -149,6 +172,13 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False, 
                 neighborhood, world[source_camera], max_height=top)
     else:
         source_seed, counter_height, source_mask = _seed_from_region('source',source_region, world[source_camera])
+    if profile.get('grow_source_region', False):
+        source_mask = _grow_measured_plane(source_mask, world[source_camera], counter_height,
+            max_radius_m=profile.get('source_support_radius_m', .3),
+            exclude=binary_dilation(masks['object'], iterations=2) if source_camera == object_camera else None)
+        if not source_mask.any():
+            raise TransferGroundingUnavailable('support_geometry_unknown', 'source')
+        source_seed = {**source_seed, 'box': _bounds(source_mask)}
     if require_destination:
         below = profile.get('destination_below_source', False)
         if type(below) is not bool:
@@ -159,13 +189,10 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False, 
         # Pickup diagnostics do not depend on observing a placement surface.
         dest_camera, dest_seed, dest_mask = source_camera, source_seed, source_mask.copy()
     if grow_object_region and require_destination:
-        floor_points = world[dest_camera]
-        plane = np.isfinite(floor_points).all(axis=-1) & (np.abs(floor_points[..., 2]-floor_height) <= .008)
-        components, _ = label(plane)
-        ids, counts = np.unique(components[dest_mask], return_counts=True)
-        counts[ids == 0] = 0
-        if counts.max() > 0:
-            dest_mask = components == ids[counts.argmax()]
+        dest_mask = _grow_measured_plane(dest_mask, world[dest_camera], floor_height)
+        if not dest_mask.any():
+            raise TransferGroundingUnavailable('support_geometry_unknown', 'destination')
+        dest_seed = {**dest_seed, 'box': _bounds(dest_mask)}
     # A segmented pickup candidate needs depth above the selected counter.
     object_mask = masks["object"] & (world[object_camera][..., 2] > counter_height + .008)
     if grow_object_region:
@@ -177,7 +204,14 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False, 
         # Do not grow an object hint through the entire scene merely because
         # the robot, cabinets and walls touch in the image's above-plane mask.
         # This is a local observed patch, not a complete object reconstruction.
-        eligible &= binary_dilation(masks['object'], iterations=12)
+        eligible &= binary_dilation(masks['object'], iterations=30)
+        seed_points = world[object_camera][object_mask]
+        if len(seed_points):
+            # Bound completion in metric space as well as the image. A narrow
+            # coarse box must not truncate the reference and then reject the
+            # same object's visible edge during the first tracking update.
+            center = np.median(seed_points, axis=0)
+            eligible &= np.linalg.norm(world[object_camera]-center, axis=-1) <= .15
         grown = _depth_components(eligible, world[object_camera])
         ids, overlaps = np.unique(grown[object_mask], return_counts=True)
         overlaps, ids = overlaps[ids != 0], ids[ids != 0]

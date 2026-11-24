@@ -161,6 +161,7 @@ def panda_sample_reader(robot, arm, profile):
         material = None
         query = None
         qualify_surface = None
+        qualify_tracking_surfaces = None
         if calibration is not None:
             geometry_id, bounds_id = calibration["id"], calibration["configuration_profile_id"]
             sample = replace(
@@ -206,6 +207,21 @@ def panda_sample_reader(robot, arm, profile):
                     )
                     return replace(captured_material, measured_surface_points=points)
 
+                def qualify_tracking_surfaces(masks):
+                    # Apply identical self-association to tracking candidates
+                    # only. Full-frame ray qualification takes over a second;
+                    # it belongs to mapping, not the real-time pose stream.
+                    selected = tuple(observations[name] for name in masks)
+                    points = measured_robot_surfaces(
+                        arm.model, captured_data, selected,
+                        tolerance_m=calibration.get("surface_tolerance_m", .015),
+                        known_material=captured_material,
+                        collision_proxy_self_association=calibration.get("collision_proxy_self_association", False),
+                        visual_surface_tolerance_m=profile.get("simulation_visual_self_association_m", .003),
+                        pixel_masks=tuple(masks.values()),
+                    )
+                    return replace(captured_material, measured_surface_points=points)
+
             def query(model, candidate, geom_id):
                 name = model.geom(geom_id).name
                 configured = calibration["outer_solids"].get(name)
@@ -221,7 +237,7 @@ def panda_sample_reader(robot, arm, profile):
         return TransferSample(
             capture, observations,
             sample, replace(sample, received_monotonic=capture.latest), material, query, {},
-            qualify_surface,
+            qualify_surface, qualify_tracking_surfaces,
         )
 
     return read

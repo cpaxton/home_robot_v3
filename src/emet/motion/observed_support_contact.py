@@ -196,7 +196,12 @@ class ObservedSupportContact:
             delta = np.maximum(np.maximum(xy[0]-world[:, :2], world[:, :2]-xy[1]), 0.)
             if np.count_nonzero(np.linalg.norm(delta, axis=1) <= nearby_m) < 4:
                 return None
-            low, high = xy + np.array([[-.005], [.005]])
+            # Partial-view extents change as another camera contributes
+            # visible surfaces. A 5 mm footprint reserve incorrectly treated
+            # that change as loss of support. Keep the resting hypothesis
+            # local to the same 35 mm measured-support neighborhood; this
+            # does not expand collision/contact admission or placement bounds.
+            low, high = xy + np.array([[-.02], [.02]])
             corners = np.array([[low[0], low[1]], [high[0], high[1]]])
             height = corners @ self.patch.plane[:2] + self.patch.plane[2]
             return np.array([[*low, height.min()-margin], [*high, height.max()+margin]])

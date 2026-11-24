@@ -53,8 +53,9 @@ constitute observation evidence or authorization.
   object/source/destination failures without changing the public reason code.
 - Read-only native Panda/Qwen smoke admitted fresh geometry in 3.7 seconds,
   with no actor command calls. This tests live grounding, not full agent task
-  success. Default application startup still needs the phase-owned grounder
-  binding before the old diagnostic route can be removed.
+  success. The common observed-arm factory now binds the grounder to controller-owned
+  phase/payload state; application startup still needs to supply that factory
+  and a measured or reset-derived empty-payload state.
 
 ## Remaining implementation, in order
 
@@ -83,3 +84,56 @@ Keep all infrastructure failures, refusals, physical retries, observed
 verification and independent official scores distinct. Existing diagnostic
 successes do not qualify shared-agent execution. No live qualification runs
 have been performed for this refactor yet.
+
+### Public-tool native integration (2026-11-24, ongoing)
+
+The shared observed-arm factory now owns a payload/phase gate. Visual model
+queries require idle, known-empty state. Dispatch marks payload state unknown;
+verified grasp marks held, and verified placement restores empty. A failed
+dispatch never silently restores empty. Benchmark reset supplies the known-empty
+initial state for the native controls. This is not model-provided evidence.
+
+The Panda runner can now dispatch a single canonical `pick_place` via the real
+CHAT registry and score its receipt. An earlier scripted-turn bug suppressed
+single-turn calls; earlier execution scoring only recognized `execute_plan`.
+Neither fix changes physical success criteria.
+
+Native controls are retained under
+`logs/shared-harness-public-transfer-20261124/pear-v*/`. They use scripted outer
+tool selection and live Qwen visual grounding, no object CAD or saved semantic
+regions. They retain the development profile's explicitly reported simulation
+assists. They are integration controls, not model-only benchmark scores.
+
+The trials exposed three separate issues: small source rings could not supply
+a fully measured support patch; plane growth admitted object-edge returns; and
+a partial-view reference could reject newly visible surfaces before motion.
+Source growth now stays on a local, connected measured plane, excludes object
+pixels, and retains its full region when fitting support. Approximate pickup
+hypotheses allow 20 mm of footprint change while requiring nearby measured
+support; collision/contact patches and final-placement checks are unchanged.
+Tracking records per-view point counts and reference-distance quantiles even
+when registration fails. No complete shared-agent transfer is qualified yet.
+
+The canonical native control reached actor motion in `pear-v10`: 27 commands,
+maximum end-effector displacement about 0.70 m, zero recorded unintended
+contacts, then a tracking refusal during pregrasp. No pickup or transfer was
+verified. The source now builds its approximate registration reference from
+local, appearance-consistent, above-plane returns in synchronized cameras;
+this addresses reference-camera occlusion without CAD completion. Approximate
+preplanning rotation changes are bounded by 10 mm of geometry displacement
+and 0.2 rad; exact geometry keeps its previous rotation bound. Native validation
+of this camera handoff remains required before claiming pickup success.
+
+Measured self-surface association now also filters object tracking. The native
+binding provides candidate-pixel qualification separately from full-frame map
+qualification, avoiding a measured 1.4–1.6 second tracking stall. Approximate
+registration uses a recorded 10 mm residual floor and explicit estimated pose
+scope; exact-model policy is unchanged. Native controls and failure witnesses
+are summarized in `docs/experiments/shared_public_tool_transfer_20261124.md`.
+
+Latest native control (`pear-v15`) certified all six route phases and moved
+0.701 m through 27 commands, but again lost rigid-reference correspondence
+during pregrasp. Pickup remains unverified. The next integration item is to
+separate approximate task geometry from mandatory continuous rigid registration
+and use observed action-boundary verification. Wider fit tolerance alone did
+not solve camera handoff; do not count these controls as task successes.

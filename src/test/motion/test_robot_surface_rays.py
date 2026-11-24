@@ -102,3 +102,24 @@ def test_visual_triangle_matching_recovers_occluded_self_without_absorbing_obsta
         tolerance_m=.03, visual_surface_tolerance_m=.03)) == 25
     with pytest.raises(ValueError, match='invalid_visual_surface_tolerance'):
         measured_robot_surfaces(model, data, [obs], visual_surface_tolerance_m=.031)
+
+
+def test_candidate_only_surface_qualification_matches_full_frame_subset():
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+        <geom type="box" pos="0 0 1" size=".3 .3 .1"/>
+        </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    depth = np.full((21, 21), .91)
+    depth[10, 10] = .85
+    obs = SimpleNamespace(rgb=np.zeros((21, 21, 3), np.uint8), depth=depth,
+        camera_K=np.array([[100., 0., 10.], [0., 100., 10.], [0., 0., 1.]]), camera_pose=np.eye(4))
+    mask = np.zeros(depth.shape, bool)
+    mask[8:13, 8:13] = True
+    full = measured_robot_surfaces(model, data, [obs])
+    selected = measured_robot_surfaces(model, data, [obs], pixel_masks=[mask])
+    assert len(selected) == 24  # The nearer obstacle remains excluded.
+    assert all(np.any(np.all(full == point, axis=1)) for point in selected)
+    for masks in ([], [np.zeros((2, 2), bool)], [np.zeros(depth.shape, int)]):
+        with pytest.raises(ValueError, match='invalid_robot_surface_masks'):
+            measured_robot_surfaces(model, data, [obs], pixel_masks=masks)
