@@ -95,7 +95,7 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
     return decision
 
 
-def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output):
+def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, estimate_grasp_site=False):
     """Refine a coarse semantic region in a magnified current-image crop."""
     output.mkdir(parents=True, exist_ok=True)
     height, width = rgb.shape[:2]
@@ -119,9 +119,14 @@ def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output):
     crop.save(buffer, format='PNG')
     prompt = (f'Locate the {object_name} in this magnified image. Ignore the white robot. '
         'Use the numbered grid: x right, y down, normalized 0..1000. '
-        'Return ONLY {"object":[x0,y0,x1,y1]} tightly enclosing the target object. '
+        'Choose a solid grasp site, avoiding holes, thin tips and unstable crowns. Choose a body height below the crown and close across the narrow dimension. Return ONLY JSON: {"object":[x0,y0,x1,y1],"grasp_point":[x,y],"grasp_yaw_degrees":angle,"grasp_height_fraction":fraction}. object encloses the whole target; grasp_point is the chosen solid site in this crop. angle is closing direction clockwise from image right (0..360); fraction is height from bottom (0) to top (1). '
         'If it is absent or ambiguous return {"unavailable":"reason"}. No explanation.')
-    payload = {'model': model, 'temperature': 0, 'max_tokens': 128,
+    if not estimate_grasp_site:
+        prompt = (f'Locate the {object_name} in this magnified image. Ignore the white robot. '
+            'Use the numbered grid: x right, y down, normalized 0..1000. '
+            'Return ONLY {"object":[x0,y0,x1,y1]} tightly enclosing the target object. '
+            'If it is absent or ambiguous return {"unavailable":"reason"}. No explanation.')
+    payload = {'model': model, 'temperature': 0, 'max_tokens': 256,
         'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt},
             {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,'+
                 base64.b64encode(buffer.getvalue()).decode()}}]}]}
@@ -139,5 +144,21 @@ def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output):
     coords = np.asarray(refined['object'], float).reshape(2, 2)/1000
     mapped = ((low+coords*(high-low))/[width, height]*1000).reshape(4).tolist()
     result = {**decision, 'object': mapped, 'coarse_object': decision['object']}
+    if 'grasp_point' in refined:
+        point = np.asarray(refined['grasp_point'], float)
+        if point.shape != (2,) or not np.isfinite(point).all() or np.any((point < 0) | (point > 1000)):
+            raise ValueError('invalid_vlm_grasp_point')
+        result['grasp_point'] = ((low+point/1000*(high-low))/[width, height]*1000).tolist()
+    if 'grasp_height_fraction' in refined:
+        fraction = float(refined['grasp_height_fraction'])
+        if not np.isfinite(fraction) or not 0 <= fraction <= 1:
+            raise ValueError('invalid_vlm_grasp_height')
+        result['grasp_height_fraction'] = fraction
+    if 'grasp_yaw_degrees' in refined:
+        yaw = float(refined['grasp_yaw_degrees'])
+        if not np.isfinite(yaw) or not 0 <= yaw <= 360:
+            raise ValueError('invalid_vlm_grasp_yaw')
+        direction = np.array([np.cos(np.deg2rad(yaw)), np.sin(np.deg2rad(yaw))])*(high-low)/[640, 480]
+        result['grasp_yaw_degrees'] = float(np.rad2deg(np.arctan2(direction[1], direction[0])) % 360)
     (output/'decision.json').write_text(json.dumps(result, indent=2)+'\n')
     return result

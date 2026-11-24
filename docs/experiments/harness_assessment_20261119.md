@@ -1973,3 +1973,75 @@ Validation: **629 integrated tests passed** (30.17 s), plus four targeted
 replay/depth tests after the replay failure-handler repair. Ruff and whitespace
 checks passed. The pickup screen used one CPU-only simulator at a time on six
 assigned cores; the local VLM retained about 4.7 GB GPU headroom after the run.
+
+
+### VLM grasp-site and paced-lift experiments (2026-11-23)
+
+The magnified crop query can optionally estimate a solid grasp point, body
+height and closing direction, rather than inheriting the initial whole-object
+center and direction. Crop points and directions are transformed back to the
+calibrated image, including anisotropic crop-resize scaling for angles. The
+chosen site selects a local measured body section; full observed object extent
+is retained separately for placement. Sites too far from the observed object
+return feedback for a bounded re-estimate. Recovery prompts include prior
+site/height/direction estimates, so the model can reconsider them. No object
+CAD, asset identifier or exact object pose is supplied to this policy.
+
+Frozen-image replay `logs/vlm-grasp-site-replay-20261123-v1` produced depth-backed
+local sites for all three objects, with lower heights and different directions.
+This is grounding evidence only. The physical v10 screen
+(`logs/vlm-isolated-pick-20261123-v10/report.json`) finished **0/3 completed
+pickups**, despite **2/3 qualifying physical lifts**: pear 7.74 cm and garlic
+6.78 cm. Both lost the object before the post-lift check; their retries failed.
+Garlic's lift is new relative to v9, but pear regressed from v9's completed
+pickup. Tongs had no qualifying lift and its retry became ambiguous.
+
+The final code keeps this behavior opt-in through
+`configs/eval/pandaomron_vlm_grasp_site_development.json`; the existing profile
+continues to request bbox-only refinement. The v10 source snapshot preserves
+its unconditional experimental prompt, before adding this switch.
+
+V11 uses the same three fixtures and an explicit experimental profile with a
+4 cm site neighborhood (instead of 2 cm) and lift command pacing of 5 cm/s.
+The wider neighborhood tests whether a small patch centered on a camera-facing
+return was biasing grasp XY. Paced lift uses 5 mm Cartesian substeps and tighter
+IK convergence; it waits between substeps rather than rapidly sending position
+jumps. This is command pacing, not a proven bound on physical speed or
+acceleration. Default transit behavior is unchanged. These two changes are
+combined development hypotheses, not a causal ablation.
+
+V11 (`logs/vlm-isolated-pick-20261123-v11`) initially reported 3/3 pickups under
+the peak-lift scorer. Final trace inspection exposed an overclaim: garlic
+lifted 8.40 cm but fell back to the counter after the policy's check. Its VLM
+said not held while the sampled fingers were still occupied, so the agreement
+rule did not trigger recovery. Tongs' VLM also said not held, but in that case
+the final evaluator trace retained two pad contacts and 9.34 cm elevation.
+These mixed results show why neither VLM judgment nor aperture alone establishes
+retention. A successful motion sequence and historical peak lift are insufficient.
+
+The evaluator now distinguishes a qualifying peak lift from retained pickup.
+For this Panda diagnostic, retention requires the final sample to remain at
+least 4 cm elevated with both pad contacts, and at least 90% of the last
+half-second window to meet that condition (with at least 0.4 s of coverage).
+Full transfers do not require a final grasp after release. These independent
+object/contact measurements are never passed to the policy. Empty/short traces,
+one-pad contact, low elevation and a terminal drop fail regression cases.
+
+`retention-rescore.json` derives **2/3 retained pickups** from preserved v11
+traces and records hashes of unchanged raw score/trace files:
+
+| Fixture | Peak lift | Retained pickup | Attempt outcome |
+| --- | --- | --- | --- |
+| Pear | 8.54 cm | yes | One failed execution, then successful regrasp; 152 touch frames across episode. |
+| Garlic | 8.40 cm | no | First execution lifted, then dropped; no recorded contacts. |
+| Tongs | 9.34 cm | yes | First execution; no recorded contacts. |
+
+The raw 3/3 result is retained as a historical scoring error, not qualification.
+No full transfers ran in these isolation rounds. Next steps are repeated
+retention trials, a short paced carry test, and only then combined placement.
+The VLM grasp-site and paced-lift settings remain an explicit development
+profile, not a claimed general default.
+
+Final validation: **637 integrated tests passed** (27.88 s); Ruff and
+whitespace checks clean. One simulator ran at a time on six assigned CPU cores.
+The local VLM had about 3.9 GB GPU headroom at the sampled checkpoint.

@@ -209,13 +209,43 @@ def test_magnified_crop_coordinates_map_back_to_current_camera(monkeypatch, tmp_
     from emet.eval.vlm_pick_hint import refine_object_hint
 
     def reply(request, timeout):
-        return io.BytesIO(json.dumps({'choices': [{'message': {'content': '{"object":[250,250,750,750]}'}}]}).encode())
+        return io.BytesIO(json.dumps({'choices': [{'message': {'content': '{"object":[250,250,750,750],"grasp_point":[500,500],"grasp_yaw_degrees":45,"grasp_height_fraction":0.3}'}}]}).encode())
 
     monkeypatch.setattr('urllib.request.urlopen', reply)
     original = {'camera': 'scene', 'object': [450, 450, 550, 550], 'grasp_yaw_degrees': 90}
     result = refine_object_hint(np.zeros((480, 640, 3), np.uint8), original,
-        endpoint='http://test/v1', model='test', object_name='garlic', output=tmp_path)
+        endpoint='http://test/v1', model='test', object_name='garlic', output=tmp_path, estimate_grasp_site=True)
     assert result['camera'] == 'scene'
     np.testing.assert_allclose(result['object'], [425, 425, 575, 575])
     assert result['coarse_object'] == original['object']
+    np.testing.assert_allclose(result['grasp_point'], [500, 500])
+    assert result['grasp_yaw_degrees'] == pytest.approx(45.)
+    assert result['grasp_height_fraction'] == .3
     assert (tmp_path/'crop-grid.png').exists()
+    wide = refine_object_hint(np.zeros((480, 640, 3), np.uint8),
+        {**original, 'object': [100, 450, 900, 550]}, endpoint='http://test/v1',
+        model='test', object_name='garlic', output=tmp_path/'wide', estimate_grasp_site=True)
+    assert wide['grasp_yaw_degrees'] == pytest.approx(np.rad2deg(np.arctan2(144/480, 640/640)))
+
+
+def test_vlm_grasp_site_selects_local_solid_section_without_changing_payload_extent(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.eval.panda_open_loop import estimated_grasp_section
+
+    y, x = np.indices((10, 40))
+    world = np.stack((x*.004, y*.002, np.full(x.shape, .95)), axis=-1)
+    world[8:, :, 2] = .9
+    mask = np.zeros(x.shape, bool)
+    mask[:8] = True
+    selection = SimpleNamespace(object_camera='scene', source_camera='scene',
+        object_mask=mask, source_mask=~mask)
+    views = {'scene': SimpleNamespace(world=world)}
+    monkeypatch.setattr('emet.eval.panda_open_loop.capture_arrays', lambda obs: (None, None, obs.world))
+    left_cloud, left = estimated_grasp_section(views, selection, .3, grasp_point=[125, 400])
+    right_cloud, right = estimated_grasp_section(views, selection, .3, grasp_point=[875, 400])
+    assert right[0]-left[0] > .1
+    np.testing.assert_array_equal(left_cloud, right_cloud)
+    assert len(left_cloud) == mask.sum()
+    with pytest.raises(ValueError, match='grasp_site_not_on_observed_object'):
+        estimated_grasp_section(views, selection, .3, grasp_point=[2000, 400])

@@ -67,7 +67,7 @@ def front_interior_floor(observation, mask, *, extra_observations=()):
     return np.median(points[chosen], axis=0)
 
 
-def estimated_grasp_section(observations, selection, fraction):
+def estimated_grasp_section(observations, selection, fraction, *, grasp_point=None, site_radius_m=.02):
     """Fuse local object returns and center the body section requested by the VLM."""
     reference = observations[selection.object_camera]
     points = capture_arrays(reference)[2][selection.object_mask]
@@ -83,24 +83,39 @@ def estimated_grasp_section(observations, selection, fraction):
                  & (cloud[..., 2] > support_z+.006))
         pieces.append(cloud[valid])
     points = np.concatenate(pieces)
+    object_points = points
+    if grasp_point is not None:
+        y, x = np.where(selection.object_mask)
+        pixels = np.asarray(grasp_point, float)/1000*np.array(selection.object_mask.shape[::-1])
+        distances = np.hypot(x-pixels[0], y-pixels[1])
+        nearest = int(np.argmin(distances))
+        if distances[nearest] > .05*np.hypot(*selection.object_mask.shape):
+            raise ValueError('grasp_site_not_on_observed_object')
+        seed = capture_arrays(reference)[2][y[nearest], x[nearest]]
+        local = points[np.linalg.norm(points[:, :2]-seed[:2], axis=1) <= site_radius_m]
+        if len(local) < 5:
+            raise ValueError('grasp_site_geometry_unavailable')
+        points = local
     height = points[:, 2].min()+fraction*np.ptp(points[:, 2])
     section = points[np.abs(points[:, 2]-height) <= max(.005, .2*np.ptp(points[:, 2]))]
     if len(section) < 5:
         raise ValueError('grasp_section_unavailable')
     xy = (section[:, :2].min(0)+section[:, :2].max(0))/2
-    return points, np.r_[xy, height]
+    return object_points, np.r_[xy, height]
 
 
 def score_diagnostic(diagnostic, physics, *, full_transfer):
     """Task success is distinct from diagnostic zero-contact statistics."""
     attempts = [diagnostic, *diagnostic.get('prior_execution_attempts', [])]
     lifted = any('lift' in attempt.get('events', []) for attempt in attempts) and physics['lift_with_two_pads_m'] >= .04
-    picked = bool(lifted and (full_transfer or diagnostic.get('completed')))
+    retained = bool(lifted and physics.get('retained_pickup', False))
+    picked = bool(lifted and (full_transfer or (diagnostic.get('completed') and retained)))
     transferred = bool(diagnostic.get('completed') and lifted and physics['upstream_success']
                        and physics['basin_contains_tongs'] and physics['final_object_speed_mps'] < .02)
     zero_contact = not any(physics[k] for k in ('unintended_contact_frames',
         'unintended_touch_frames', 'unintended_self_contact_frames'))
     return {'pick_passed': picked, 'physical_pick_passed': bool(lifted),
+            'retained_pick_passed': retained if not full_transfer else None,
             'physical_transfer_passed': transferred if full_transfer else None,
             'clean_transfer_passed': transferred and zero_contact if full_transfer else None,
             'zero_contact': zero_contact,
@@ -141,13 +156,20 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
                 model_calls += 1
                 decision = refine_object_hint(observations[decision.get('camera', 'scene_alt')].rgb, decision,
                     endpoint=model_endpoint, model=model_name, object_name=object_name,
-                    output=attempt_output/'object-refinement')
+                    output=attempt_output/'object-refinement',
+                    estimate_grasp_site=profile.get('vlm_grasp_site_estimates', False))
                 profile['grounding'] = {role: {'camera': (decision.get(role+'_camera', decision.get('camera', 'scene_alt'))
                     if role != 'object' else decision.get('camera', 'scene_alt')), 'box': decision[role]}
                                         for role in ('object', 'source', 'destination')}
                 profile['visual_hint_source'] = 'runtime_vlm'
                 profile['local_support_estimation'] = True
             selected = select_transfer(sample, profile=profile, grow_object_region=decision is not None, require_destination=full_transfer)
+            points = capture_arrays(observations[selected.object_camera])[2][selected.object_mask]
+            target = top_down_target(points)
+            if decision:
+                points, target = estimated_grasp_section(observations, selected,
+                    float(decision.get('grasp_height_fraction', .5)), grasp_point=decision.get('grasp_point'),
+                    site_radius_m=float(profile.get('grasp_site_radius_m', .02)))
             attempts.append({'attempt': attempt+1, 'accepted': True})
             break
         except (ValueError, ObservationUnavailable) as error:
@@ -160,11 +182,6 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             'vlm_used': bool(model_endpoint), 'object_cad': False,
         }, indent=2)+'\n')
         return
-    points = capture_arrays(observations[selected.object_camera])[2][selected.object_mask]
-    target = top_down_target(points)
-    if decision:
-        points, target = estimated_grasp_section(observations, selected,
-            float(decision.get('grasp_height_fraction', .5)))
     yaw = np.pi
     if decision:
         image_yaw = np.deg2rad(decision['grasp_yaw_degrees'])
@@ -193,16 +210,19 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         events.append(name)
         (output/'open-loop-progress.json').write_text(json.dumps(events)+'\n')
 
-    def move(position, orientation, *, approximate_waypoint=False, position_tolerance_m=.008, transit=False):
+    def move(position, orientation, *, approximate_waypoint=False, position_tolerance_m=.008, transit=False, command_speed_mps=None):
         arm.synchronize(data)
         origin = data.body(arm.chain.ee_body).xpos.copy()
-        for fraction in np.linspace(0., 1., max(2, int(np.ceil(np.linalg.norm(position-origin)/.02)))+1)[1:]:
+        step_m = .005 if command_speed_mps else .02
+        previous_waypoint = origin
+        for fraction in np.linspace(0., 1., max(2, int(np.ceil(np.linalg.norm(position-origin)/step_m)))+1)[1:]:
+            segment_started = time.monotonic()
             arm.synchronize(data)
             start = data.qpos[addresses].copy()
             waypoint = origin+(position-origin)*fraction
             result = solve_pose_ik(model, data, ee_body=arm.chain.ee_body,
                 joint_names=arm.chain.joint_names, target_pos=waypoint,
-                target_rotation=orientation, tol_m=.005, tol_rad=.05)
+                target_rotation=orientation, tol_m=.002 if command_speed_mps else .005, tol_rad=.05)
             if not result.success:
                 raise RuntimeError('open_loop_ik_failed')
             goal = data.qpos[addresses].copy()
@@ -228,9 +248,15 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
                     receipt['last_motion_error'] = arrival
                     raise RuntimeError('open_loop_arrival_failed')
                 executed.append(data.qpos[addresses].copy())
+            if command_speed_mps:
+                duration = float(np.linalg.norm(waypoint-previous_waypoint))/command_speed_mps
+                time.sleep(max(0., duration-(time.monotonic()-segment_started)))
+            previous_waypoint = waypoint
 
     receipt = {'mode': 'one_shot_depth_open_loop_transfer' if full_transfer else 'one_shot_depth_open_loop_pick',
-        'object_cad': False, 'grasp_center_method': 'multi_view_height_section' if decision else 'visible_top_band_xy',
+        'object_cad': False, 'grasp_center_method': ('vlm_local_site_height_section' if decision.get('grasp_point') else 'multi_view_height_section') if decision else 'visible_top_band_xy',
+        'grasp_point_image': decision.get('grasp_point') if decision else None,
+        'grasp_site_radius_m': float(profile.get('grasp_site_radius_m', .02)),
         'camera': selected.object_camera,
         'grasp_height_fraction': decision.get('grasp_height_fraction', .5) if decision else None,
         'approach': decision.get('approach', 'from_viewer') if decision else 'legacy_staging',
@@ -275,7 +301,9 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             recovery_budget=recovery_budget-1, robot_model_path=robot_model_path, recovery_feedback=
             'Previous physical attempt failed: fresh images show the object not held and fingers closed empty. '
             'Reinspect its CURRENT position and revise the grasp center, direction or body height. '
-            'Do not repeat a stale grasp or substitute another target.')
+            'Do not repeat a stale grasp or substitute another target. Prior estimates: '+json.dumps({
+                key: decision.get(key) for key in ('grasp_point', 'grasp_yaw_degrees', 'grasp_height_fraction')})+
+            '. Reconsider the solid grasp site and side engagement using the fresh images.')
         retry = json.loads((retry_output/'open-loop-pick.json').read_text())
         combined = merged_retry_receipt(dict(receipt), retry)
         receipt.clear()
@@ -304,7 +332,12 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         record_event('close')
         arm.synchronize(data)
         receipt['gripper_after_close'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
-        move(target+[0, 0, .1], rotation)
+        lift_speed = profile.get('lift_command_speed_mps')
+        if lift_speed is not None and (not np.isfinite(lift_speed) or not 0 < lift_speed <= .2):
+            raise ValueError('invalid_lift_command_speed')
+        receipt['lift_command_speed_mps'] = lift_speed
+        move(target+[0, 0, .1], rotation, command_speed_mps=lift_speed,
+             position_tolerance_m=.005 if lift_speed else .008)
         record_event('lift')
         receipt['gripper_after_lift'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
         carry_start = max(0, len(executed)-1)

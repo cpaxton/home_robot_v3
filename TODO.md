@@ -154,6 +154,12 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       and source-height consistency remove concrete grounding errors. The v9
       pickup-only screen passed 1/3 (pear, 7.29 cm lift); garlic/tongs still miss
       grasps, and tongs retry localization remains fallible.
+- [x] Test optional VLM grasp-site/height/direction estimates with paced native
+      lift. V11 achieved 3/3 peak lifts but only 2/3 retained pickups: pear after
+      regrasp and tongs first attempt. Garlic dropped. Corrected evaluator
+      distinguishes retained pickup from peak lift; raw reports remain intact.
+- [ ] Repeat retained-pick trials and qualify a short paced carry before
+      recombining placement; VLM/aperture disagreement and late drops remain.
 - [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
       pear/garlic/tongs development screens v1–v8 each scored 0/3 full transfers;
       pear achieved 8.51 cm lift in v2 but slipped during carry. V6 passed the

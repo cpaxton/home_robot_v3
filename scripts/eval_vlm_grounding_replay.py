@@ -31,7 +31,7 @@ def evaluate_decision(views, decision, *, pick_only=False):
         if role != 'object' else decision.get('camera', 'scene_alt'), 'box': decision[role]}
         for role in ('object', 'source', 'destination')}}
     selected = select_transfer(sample, profile=profile, grow_object_region=True, require_destination=not pick_only)
-    points, target = estimated_grasp_section(views, selected, decision.get('grasp_height_fraction', .5))
+    points, target = estimated_grasp_section(views, selected, decision.get('grasp_height_fraction', .5), grasp_point=decision.get('grasp_point'))
     source = capture_arrays(views[selected.source_camera])[2][selected.source_mask]
     return {'accepted': True, 'target_world_m': target.tolist(), 'object_points': len(points),
             'source_height_m': float(np.median(source[:, 2])), 'semantic_identity_verified': False}
@@ -44,6 +44,7 @@ def main():
     parser.add_argument('--endpoint')
     parser.add_argument('--decisions-from', type=Path, help='Replay recorded VLM estimates without making model calls')
     parser.add_argument('--pick-only', action='store_true')
+    parser.add_argument('--grasp-site', action='store_true', help='Ask the crop VLM for a grasp site, height and direction')
     parser.add_argument('--refine', action='store_true')
     parser.add_argument('--model', default='Qwen/Qwen3.5-9B')
     args = parser.parse_args()
@@ -83,7 +84,7 @@ def main():
                 model_calls += 1
                 decision = refine_object_hint(views[decision.get('camera', 'scene_alt')].rgb, decision,
                     endpoint=args.endpoint, model=args.model, object_name=case['spec']['object_name'],
-                    output=output/'refinement')
+                    output=output/'refinement', estimate_grasp_site=args.grasp_site)
             (output/'vlm-decision.json').write_text(json.dumps(decision, indent=2)+'\n')
             row['current'] = {**evaluate_decision(views, decision, pick_only=args.pick_only), 'decision': decision}
         except (ValueError, ObservationUnavailable) as error:

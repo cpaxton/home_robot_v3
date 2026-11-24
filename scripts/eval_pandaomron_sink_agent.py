@@ -296,6 +296,9 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
                     np.linalg.norm(control.live.qvel[control.model.jnt_dofadr[control.object_joint] :][:3])
                 ),
             }
+            from emet.eval.grasp_retention_score import pickup_retention
+
+            verdict.update(pickup_retention(samples, float(before[2])))
             (output / "physics-trace.json").write_text(json.dumps(samples) + "\n")
             (output / "physics.json").write_text(json.dumps(verdict, indent=2) + "\n")
         server.stop()
