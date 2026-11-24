@@ -66,7 +66,7 @@ def test_front_floor_uses_measured_interior_away_from_back_edge():
     assert fused[1] < partial[1]-.04
 
 
-@pytest.mark.parametrize('failure', [None, 'unfinished', 'no_lift', 'official_failure', 'outside', 'moving'])
+@pytest.mark.parametrize('failure', [None, 'unfinished', 'no_lift', 'official_failure', 'box_overhang', 'moving'])
 def test_contacts_do_not_override_task_success_but_completion_still_matters(failure):
     from emet.eval.panda_open_loop import score_diagnostic
 
@@ -80,12 +80,15 @@ def test_contacts_do_not_override_task_success_but_completion_still_matters(fail
         physics['lift_with_two_pads_m'] = 0.
     elif failure == 'official_failure':
         physics['upstream_success'] = False
-    elif failure == 'outside':
+    elif failure == 'box_overhang':
         physics['basin_contains_tongs'] = False
     elif failure == 'moving':
         physics['final_object_speed_mps'] = .1
     score = score_diagnostic(diagnostic, physics, full_transfer=True)
-    assert score['task_passed'] is (failure is None)
+    assert score['task_passed'] is (failure in (None, 'box_overhang'))
+    assert score['strict_box_transfer_passed'] is (failure is None)
+    assert score['whole_box_contained'] is (failure != 'box_overhang')
+    assert score['scoring_version'] == 2
     assert not score['zero_contact']
     assert not score['clean_transfer_passed']
 

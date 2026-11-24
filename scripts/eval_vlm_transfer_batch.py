@@ -113,6 +113,9 @@ def main():
             row = json.loads(score.read_text())
             attempts = row.get('diagnostic', {}).get('grounding_attempts', [])
             result.update(task_passed=row['task_passed'], category=classify(row),
+                scoring_version=row.get('scoring_version', 1),
+                strict_box_transfer_passed=row.get('strict_box_transfer_passed'),
+                whole_box_contained=row.get('whole_box_contained'),
                 physical_pick_passed=row.get('physical_pick_passed', False),
                 retained_pick_passed=row.get('retained_pick_passed'), carry_passed=row.get('carry_passed'),
                 grounding_attempts=len(attempts),

@@ -228,3 +228,22 @@ proposals. The tool should preflight and recover whole motion sequences rather
 than require the VLM to predict IK feasibility from an image. Test that on new
 fixtures before adding a heavier object pose tracker or assuming the model needs
 exact object CAD.
+
+
+## Scoring clarification after the comparison
+
+Scoring version 2 separates the benchmark result from full registration-box
+containment. The pinned RoboCasa `PickPlaceCounterToSink._check_success` calls
+`obj_inside_of(..., partial_check=True)` and requires the gripper to be far away.
+Our extra predicate instead requires every rotated registration-box corner's
+horizontal coordinates to fit inside a single basin, with no margin. Empty box
+corners can extend beyond an irregular object's actual shape. The two criteria
+are intentionally different; a strict-box failure alone does not establish that
+the physical object escaped the sink, nor prove that its whole shape fits.
+
+New `task_passed` and `physical_transfer_passed` use official success plus
+verified lift, completed execution and settling. `strict_box_transfer_passed`
+preserves the old additional requirement, while `whole_box_contained` reports
+that geometry predicate separately. Contact diagnostics remain independent.
+Historical raw score files above are unchanged; the matched 6/6 versus 1/6
+official results were already computed and reported before this change.

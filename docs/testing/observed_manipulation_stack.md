@@ -434,3 +434,10 @@ unchanged. This is simulation diagnostic routing with environment collision
 certification bypassed, not production CHAT or hardware qualification. Keep
 long-hold retention, official benchmark success and the additional full-box
 containment diagnostic separate in reported results.
+
+
+Native diagnostic scoring version 2 uses the official benchmark predicate plus
+verified lift, completed execution and settling for `task_passed`. The stricter
+registration-box check is reported as `strict_box_transfer_passed` and
+`whole_box_contained`; it no longer overrides benchmark task success. Historical
+version-1 receipts remain unchanged.

@@ -124,19 +124,22 @@ def estimated_grasp_section(observations, selection, fraction, *, grasp_point=No
 
 
 def score_diagnostic(diagnostic, physics, *, full_transfer):
-    """Task success is distinct from diagnostic zero-contact statistics."""
+    """Benchmark task success is separate from whole-box and contact diagnostics."""
     attempts = [diagnostic, *diagnostic.get('prior_execution_attempts', [])]
     lifted = any('lift' in attempt.get('events', []) for attempt in attempts) and physics['lift_with_two_pads_m'] >= .04
     retained = bool(lifted and physics.get('retained_pickup', False))
     picked = bool(lifted and (full_transfer or (diagnostic.get('completed') and retained)))
     transferred = bool(diagnostic.get('completed') and lifted and physics['upstream_success']
-                       and physics['basin_contains_tongs'] and physics['final_object_speed_mps'] < .02)
+                       and physics['final_object_speed_mps'] < .02)
+    strict_transfer = bool(transferred and physics['basin_contains_tongs'])
     zero_contact = not any(physics[k] for k in ('unintended_contact_frames',
         'unintended_touch_frames', 'unintended_self_contact_frames'))
     carry = bool(picked and 'short_carry' in diagnostic.get('events', []) and physics.get('short_carry_passed', False))
-    return {'pick_passed': picked, 'carry_passed': carry if diagnostic.get('short_carry_requested') else None, 'physical_pick_passed': bool(lifted),
+    return {'scoring_version': 2, 'pick_passed': picked, 'carry_passed': carry if diagnostic.get('short_carry_requested') else None, 'physical_pick_passed': bool(lifted),
             'retained_pick_passed': retained if not full_transfer else None,
             'physical_transfer_passed': transferred if full_transfer else None,
+            'strict_box_transfer_passed': strict_transfer if full_transfer else None,
+            'whole_box_contained': bool(physics['basin_contains_tongs']) if full_transfer else None,
             'clean_transfer_passed': transferred and zero_contact if full_transfer else None,
             'zero_contact': zero_contact,
             'task_passed': transferred if full_transfer else (carry if diagnostic.get('short_carry_requested') else picked)}
