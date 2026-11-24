@@ -149,6 +149,11 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       with one bounded regrasp when visual evidence and native finger feedback
       agree the hand is empty. Pear loss is detected; successful recovery and
       production CHAT integration remain unqualified.
+- [x] Isolate pickup from placement grounding and add saved-RGBD replay.
+      Compact localization, magnified crop refinement, local depth components
+      and source-height consistency remove concrete grounding errors. The v9
+      pickup-only screen passed 1/3 (pear, 7.29 cm lift); garlic/tongs still miss
+      grasps, and tongs retry localization remains fallible.
 - [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
       pear/garlic/tongs development screens v1–v8 each scored 0/3 full transfers;
       pear achieved 8.51 cm lift in v2 but slipped during carry. V6 passed the

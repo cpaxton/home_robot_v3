@@ -119,6 +119,7 @@ def test_failed_grounding_can_adapt_twice_without_actuating(monkeypatch, tmp_pat
             raise AssertionError('must not actuate with invalid grounding')
 
     monkeypatch.setattr('emet.eval.vlm_pick_hint.query_pick_hint', query)
+    monkeypatch.setattr('emet.eval.vlm_pick_hint.refine_object_hint', lambda image, decision, **kwargs: decision)
     monkeypatch.setattr('emet.eval.panda_open_loop.select_transfer', reject)
     profile = tmp_path/'profile.json'
     profile.write_text('{}')
@@ -202,3 +203,19 @@ def test_vlm_supports_independent_surface_views(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match='invalid_vlm_camera_choice'):
         query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
                          output=tmp_path, views=views)
+
+
+def test_magnified_crop_coordinates_map_back_to_current_camera(monkeypatch, tmp_path):
+    from emet.eval.vlm_pick_hint import refine_object_hint
+
+    def reply(request, timeout):
+        return io.BytesIO(json.dumps({'choices': [{'message': {'content': '{"object":[250,250,750,750]}'}}]}).encode())
+
+    monkeypatch.setattr('urllib.request.urlopen', reply)
+    original = {'camera': 'scene', 'object': [450, 450, 550, 550], 'grasp_yaw_degrees': 90}
+    result = refine_object_hint(np.zeros((480, 640, 3), np.uint8), original,
+        endpoint='http://test/v1', model='test', object_name='garlic', output=tmp_path)
+    assert result['camera'] == 'scene'
+    np.testing.assert_allclose(result['object'], [425, 425, 575, 575])
+    assert result['coarse_object'] == original['object']
+    assert (tmp_path/'crop-grid.png').exists()

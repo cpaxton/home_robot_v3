@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Expansion development retry v8 on the frozen first-screen fixtures; not the 20-case qualification set",
+  "scope": "Isolated pickup development screen v9; no placement qualification",
   "model": "Qwen/Qwen3.5-9B",
   "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
   "destination": "the visible interior floor of the sink",
@@ -50,6 +50,6 @@
     }
   ],
   "policy_note": "Runtime VLM estimates camera, image regions, grasp direction/height and approach; bounded pre-motion re-estimation is allowed. First attempts and recovered success are reported separately.",
-  "base_source_revision": "dadf9d30",
-  "previous_batch": "vlm-expansion-screen-20261123-v7"
+  "base_source_revision": "0596070d",
+  "previous_batch": "vlm-expansion-screen-20261123-v8"
 }

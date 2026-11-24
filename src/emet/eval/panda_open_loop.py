@@ -125,22 +125,29 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
     decision = None
     attempts = []
     feedback = recovery_feedback
+    model_calls = 0
     for attempt in range(3 if model_endpoint else 1):
         attempt_output = output if attempt == 0 else output/f'vlm-recovery-{attempt}'
         attempt_output.mkdir(exist_ok=True)
         try:
             if model_endpoint:
-                from emet.eval.vlm_pick_hint import query_pick_hint
+                from emet.eval.vlm_pick_hint import query_pick_hint, refine_object_hint
 
+                model_calls += 1
                 decision = query_pick_hint(observations['scene_alt'].rgb, endpoint=model_endpoint,
                     model=model_name, object_name=object_name, output=attempt_output,
                     destination_name=destination_name, feedback=feedback,
                     views={name: view.rgb for name, view in observations.items()})
+                model_calls += 1
+                decision = refine_object_hint(observations[decision.get('camera', 'scene_alt')].rgb, decision,
+                    endpoint=model_endpoint, model=model_name, object_name=object_name,
+                    output=attempt_output/'object-refinement')
                 profile['grounding'] = {role: {'camera': (decision.get(role+'_camera', decision.get('camera', 'scene_alt'))
                     if role != 'object' else decision.get('camera', 'scene_alt')), 'box': decision[role]}
                                         for role in ('object', 'source', 'destination')}
                 profile['visual_hint_source'] = 'runtime_vlm'
-            selected = select_transfer(sample, profile=profile, grow_object_region=decision is not None)
+                profile['local_support_estimation'] = True
+            selected = select_transfer(sample, profile=profile, grow_object_region=decision is not None, require_destination=full_transfer)
             attempts.append({'attempt': attempt+1, 'accepted': True})
             break
         except (ValueError, ObservationUnavailable) as error:
@@ -149,7 +156,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
     else:
         (output/'open-loop-pick.json').write_text(json.dumps({
             'completed': False, 'events': [], 'reason': feedback, 'grounding_attempts': attempts,
-            'runtime_vlm_calls': len(attempts) if model_endpoint else 0,
+            'runtime_vlm_calls': model_calls,
             'vlm_used': bool(model_endpoint), 'object_cad': False,
         }, indent=2)+'\n')
         return
@@ -230,7 +237,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         'continuous_object_tracking': False,
         'grounding': 'runtime_vlm_regions' if decision else 'diagnostic_image_regions',
         'vlm_used': decision is not None, 'visual_hint_source': profile.get('visual_hint_source', 'diagnostic_regions'),
-        'runtime_vlm_calls': len(attempts) if model_endpoint else 0,
+        'runtime_vlm_calls': model_calls,
         'grounding_attempts': attempts, 'environment_collision_checks': False,
         'target_world_m': target.tolist(), 'events': events,
         'instruction': f'Pick up {object_name} and place it in {destination_name}',

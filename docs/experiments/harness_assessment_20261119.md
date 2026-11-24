@@ -1911,3 +1911,65 @@ remains confined to independent scoring.
 Final validation: **625 tests passed**; Ruff and whitespace checks clean.
 One CPU-only simulator ran at a time on six assigned cores. The local VLM
 used about 20.3 GB GPU memory with 3.8 GB free at the sampled checkpoint.
+
+
+### Grounding isolation and pickup-only screen (2026-11-23)
+
+Saved-image inspection identified two concrete failures upstream of control.
+Garlic's proposed source patch selected robot material at 1.42 m while object
+returns were around 0.94 m. Image-connected above-counter growth could absorb
+robot/cabinet surfaces: the exploratory compact-prompt replay produced a
+485,197-point candidate. Acceptance by that geometry code was not correct
+semantic localization.
+
+Runtime VLM hints now use a shorter response schema (no long explanation) and
+a second magnified crop query. Crop coordinates map back to the original
+calibrated image. No CAD or exact object pose is used. Source estimation cannot
+select a support above the observed target; if the semantic source patch fails,
+it searches measured counter geometry next to the object hint. This fallback
+is enabled explicitly in the diagnostic. Object growth remains near the hint
+and separates image neighbors at 20 mm world-space depth discontinuities. If
+a hint overlaps several surfaces, a dominant seed overlap may select one;
+comparable competing overlaps remain ambiguous. These are local observed
+patches, not claims of complete object extent. The prior mask-equality test
+now checks retained target overlap, correct measured height and sink exclusion
+instead: shifting a coarse hint may produce different valid partial patches.
+
+`scripts/eval_vlm_grounding_replay.py` loads only recorded calibrated RGBD and
+semantic instructions. It supports both new model calls and replay of recorded
+estimates with sensor/decision hashes and policy source hashes. Geometry
+acceptance is explicitly not semantic-identity verification or physical success.
+`logs/vlm-grounding-isolation-20261123-final/report.json` records the final frozen
+pickup replay. Refined garlic grounding produced [0.6931, -0.5808, 0.9503] m
+and 587 local object returns instead of an object spanning robot/cabinets.
+Pear and tongs also produced pickup candidates; this does not qualify placement.
+Exploratory v1–v6 logs are retained, including the initial replay exception.
+V5 also exposed an extra refinement call in its error handler; that script bug
+is fixed and covered by a refusal-path test. Do not use its old model-call
+counts as a controlled cost comparison. The final recorded-decision replay
+makes zero model calls and requires no running simulator.
+
+Pickup-only execution no longer requires a qualified destination floor; full
+transfers still do. This removes an unrelated sink-visibility dependency from
+a lift test. `logs/vlm-isolated-pick-20261123-v9/report.json` finished **1/3
+physical pickup successes**:
+
+- Pear: first execution passed; 7.29 cm two-pad lift, no scored contacts.
+- Garlic: initial grounding reached the visible garlic; fingers opened about
+  16 mm around it at closure but closed empty during lift. The retry also
+  missed. No qualifying two-pad lift was measured.
+- Tongs: first grounding reached the tongs but closure/lift missed. The fresh
+  retry selected a wrong elevated region despite crop refinement and also
+  missed. No qualifying lift was measured.
+
+Both failed cases reached native motion and were detected by the fresh-view
+gripper check. Thus initial grounding improved, but localization is still
+fallible after motion, and correct initial grounding does not establish a
+retained grasp. No new full-transfer success or retention-during-carry result
+is claimed. Next work is grasp-site/height selection and return routing, with
+short pickup trials before combining them with carry and placement again.
+
+Validation: **629 integrated tests passed** (30.17 s), plus four targeted
+replay/depth tests after the replay failure-handler repair. Ruff and whitespace
+checks passed. The pickup screen used one CPU-only simulator at a time on six
+assigned cores; the local VLM retained about 4.7 GB GPU headroom after the run.

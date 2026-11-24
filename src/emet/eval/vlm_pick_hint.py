@@ -18,24 +18,20 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
         raise ValueError('no_vlm_views')
     Image.fromarray(rgb).save(output/'vlm-input.png')
     prompt = (
-        f'Pick up the {object_name} on the counter and place it in {destination_name}. '
-        'Object names are approximate semantic descriptions, not exact asset classes. '
-        'Consider common synonyms and visually related subtypes; describe the candidate you select. '
-        'Do not reject solely because its visual subtype differs. If multiple plausible targets remain, say unavailable. '
-        f'Available cameras: {list(available)}. Choose the best object camera; source_camera and destination_camera may independently select clearer views. '
-        'Avoid mistaking the white robot for a surface or object; prefer another view if it occludes the target. '
-        'Use the labeled coordinate grid: x increases right, y increases down. '
-        'Select generous but specific image regions, normalized to 0..1000 xyxy, object in camera, source in source_camera, destination in destination_camera. '
-        f'object: target; source: nearby counter beside it, NOT the object; destination: visible floor of {destination_name}. '
-        'For the top-down parallel-jaw pick, estimate grasp_yaw_degrees (0..360): '
-        'finger-closing direction clockwise from image right, not a world-frame robot angle. '
-        'Estimate grasp_height_fraction (0 bottom to 1 top of the observed object). '
-        'Prefer a broad stable body section, not stems or thin tips. Close across the narrow dimension of long objects. '
-        'Choose approach direct for an unobstructed reach or from_viewer to route in front of the counter. '
-        'Return JSON only: {"camera":"scene_alt","source_camera":"scene","destination_camera":"scene_alt","object":[x0,y0,x1,y1],'
-        '"source":[x0,y0,x1,y1],"destination":[x0,y0,x1,y1],'
-        '"grasp_yaw_degrees":180,"grasp_height_fraction":0.5,"approach":"from_viewer","reason":"brief explanation"}. '
-        'If the target or required surfaces cannot be identified, return {"unavailable":"reason"}.'
+        f'Pick up the {object_name} and place it in {destination_name}. '
+        f'The images are different cameras: {list(available)}. '
+        'Find the requested object, not the white robot. Names may describe related visual subtypes. '
+        'Use the labeled grid: x increases right, y down; boxes are [x0,y0,x1,y1] normalized 0..1000. '
+        'camera: clearest object view. object: tight box around the actual object. '
+        'source_camera and source: view and box of flat counter BESIDE the object, excluding the object and robot. '
+        'destination_camera and destination: view and box of visible sink interior floor. '
+        'Each box belongs to its named camera. They must not be copies of the object box. '
+        'grasp_yaw_degrees: finger-closing direction clockwise from image right; close across the narrow dimension. '
+        'grasp_height_fraction: 0 bottom, 1 top; choose a stable body section. '
+        'approach: direct or from_viewer. '
+        'Return ONLY compact JSON with these keys: camera, object, source_camera, source, '
+        'destination_camera, destination, grasp_yaw_degrees, grasp_height_fraction, approach. '
+        'No explanation. If the target is absent or ambiguous return {"unavailable":"brief reason"}.'
     )
     if feedback:
         prompt += (' Previous proposal feedback: '+str(feedback)+
@@ -97,3 +93,51 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
         raise ValueError('invalid_vlm_approach')
     (output/'vlm-decision.json').write_text(json.dumps(decision, indent=2)+'\n')
     return decision
+
+
+def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output):
+    """Refine a coarse semantic region in a magnified current-image crop."""
+    output.mkdir(parents=True, exist_ok=True)
+    height, width = rgb.shape[:2]
+    box = np.asarray(decision['object'], float)/1000
+    center = (box[:2]+box[2:])/2
+    half = np.maximum((box[2:]-box[:2])*1.5, .15)
+    low = np.floor(np.maximum(0, center-half)*[width, height]).astype(int)
+    high = np.ceil(np.minimum(1, center+half)*[width, height]).astype(int)
+    crop = Image.fromarray(rgb).crop((*low, *high))
+    crop.save(output/'crop-raw.png')
+    crop = crop.resize((640, 480))
+    draw = ImageDraw.Draw(crop)
+    for value in range(100, 1000, 100):
+        x, y = round(640*value/1000), round(480*value/1000)
+        draw.line((x, 0, x, 480), fill=(100, 160, 170))
+        draw.line((0, y, 640, y), fill=(100, 160, 170))
+        draw.text((x+2, 2), str(value), fill='yellow', stroke_width=1, stroke_fill='black')
+        draw.text((2, y+2), str(value), fill='yellow', stroke_width=1, stroke_fill='black')
+    crop.save(output/'crop-grid.png')
+    buffer = io.BytesIO()
+    crop.save(buffer, format='PNG')
+    prompt = (f'Locate the {object_name} in this magnified image. Ignore the white robot. '
+        'Use the numbered grid: x right, y down, normalized 0..1000. '
+        'Return ONLY {"object":[x0,y0,x1,y1]} tightly enclosing the target object. '
+        'If it is absent or ambiguous return {"unavailable":"reason"}. No explanation.')
+    payload = {'model': model, 'temperature': 0, 'max_tokens': 128,
+        'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt},
+            {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,'+
+                base64.b64encode(buffer.getvalue()).decode()}}]}]}
+    (output/'request.json').write_text(json.dumps(payload)+'\n')
+    request = urllib.request.Request(endpoint.rstrip('/')+'/chat/completions',
+        data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(request, timeout=90) as response:
+        reply = json.load(response)
+    (output/'response.json').write_text(json.dumps(reply, indent=2)+'\n')
+    text = reply['choices'][0]['message']['content']
+    refined, _ = json.JSONDecoder().raw_decode(text[text.find('{'):])
+    if 'unavailable' in refined:
+        raise ValueError('vlm_refinement_unavailable: '+str(refined['unavailable']))
+    GroundingHint('current-crop', decision.get('camera', 'scene_alt'), tuple(refined['object']), 'object')
+    coords = np.asarray(refined['object'], float).reshape(2, 2)/1000
+    mapped = ((low+coords*(high-low))/[width, height]*1000).reshape(4).tolist()
+    result = {**decision, 'object': mapped, 'coarse_object': decision['object']}
+    (output/'decision.json').write_text(json.dumps(result, indent=2)+'\n')
+    return result

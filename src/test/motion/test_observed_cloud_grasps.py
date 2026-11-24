@@ -131,7 +131,12 @@ def test_image_hints_to_depth_grasps_to_native_frame_without_object_model():
     assert not grown.object_mask[:, 55:].any()  # Destination must not join target.
     profile['grounding']['object']['box'] = [280, 300, 300, 340]
     snapped = select_transfer(sample, profile=profile, grow_object_region=True)
-    assert np.array_equal(snapped.object_mask, grown.object_mask)
+    # Local growth can produce different partial patches from shifted hints;
+    # both must remain on the same target, without absorbing the sink.
+    assert snapped.object_mask.sum() > 35
+    assert (snapped.object_mask & grown.object_mask).sum() > 35
+    assert not snapped.object_mask[:, 55:].any()
+    assert np.allclose(depth[snapped.object_mask], .92)
     profile['grounding']['object']['box'] = [800, 0, 900, 100]
     with pytest.raises(ObservationUnavailable, match='transfer_grounding_unavailable'):
         select_transfer(sample, profile=profile, grow_object_region=True)

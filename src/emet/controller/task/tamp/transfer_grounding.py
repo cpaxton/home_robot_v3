@@ -5,6 +5,8 @@
 
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion, label
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 
@@ -65,7 +67,25 @@ def _box_mask(box, image_shape):
     return mask
 
 
-def select_transfer(sample, *, profile, segment=None, grow_object_region=False):
+def _depth_components(mask, world, *, max_neighbor_gap_m=.02):
+    """Label neighboring observed surfaces without bridging image depth jumps."""
+    indices = np.full(mask.shape, -1, dtype=np.int32)
+    indices[mask] = np.arange(mask.sum())
+    rows, columns = [], []
+    for left, right in ((np.s_[:-1, :], np.s_[1:, :]), (np.s_[:, :-1], np.s_[:, 1:])):
+        adjacent = mask[left] & mask[right]
+        adjacent &= np.linalg.norm(world[left]-world[right], axis=-1) <= max_neighbor_gap_m
+        rows.append(indices[left][adjacent])
+        columns.append(indices[right][adjacent])
+    graph = coo_matrix((np.ones(sum(len(r) for r in rows)),
+        (np.concatenate(rows), np.concatenate(columns))), shape=(int(mask.sum()), int(mask.sum())))
+    _, components = connected_components(graph, directed=False)
+    result = np.zeros(mask.shape, dtype=np.int32)
+    result[mask] = components+1
+    return result
+
+
+def select_transfer(sample, *, profile, segment=None, grow_object_region=False, require_destination=True):
     ground = profile["grounding"]
     cameras = {
         role: ground[role]["camera"] for role in ("object", "source", "destination")
@@ -94,9 +114,30 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False):
         source_region = binary_dilation(source_region, iterations=12)
         if source_camera == object_camera:
             source_region &= ~binary_dilation(masks['object'], iterations=2)
-    source_seed, counter_height, source_mask = _seed_from_support(source_region, world[source_camera])
-    dest_seed, floor_height, dest_mask = _seed_from_support(masks["destination"], world[dest_camera], max_height=counter_height - .025)
-    if grow_object_region:
+    if profile.get('local_support_estimation'):
+        object_points = world[object_camera][masks['object']]
+        if len(object_points) < 25:
+            raise ObservationUnavailable('transfer_grounding_unavailable')
+        # A support cannot be above the selected object. If the semantic support
+        # patch was on the robot, estimate support from measured pixels nearby.
+        top = float(np.quantile(object_points[:, 2], .9))+.005
+        try:
+            source_seed, counter_height, source_mask = _seed_from_support(
+                source_region, world[source_camera], max_height=top)
+        except ObservationUnavailable:
+            neighborhood = binary_dilation(masks['object'], iterations=30)
+            neighborhood &= ~binary_dilation(masks['object'], iterations=2)
+            source_camera = object_camera
+            source_seed, counter_height, source_mask = _seed_from_support(
+                neighborhood, world[source_camera], max_height=top)
+    else:
+        source_seed, counter_height, source_mask = _seed_from_support(source_region, world[source_camera])
+    if require_destination:
+        dest_seed, floor_height, dest_mask = _seed_from_support(masks["destination"], world[dest_camera], max_height=counter_height - .025)
+    else:
+        # Pickup diagnostics do not depend on observing a placement surface.
+        dest_camera, dest_seed, dest_mask = source_camera, source_seed, source_mask.copy()
+    if grow_object_region and require_destination:
         floor_points = world[dest_camera]
         plane = np.isfinite(floor_points).all(axis=-1) & (np.abs(floor_points[..., 2]-floor_height) <= .008)
         components, _ = label(plane)
@@ -112,9 +153,18 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False):
         depth = np.asarray(sample.observations[object_camera].depth)
         eligible = (np.isfinite(world[object_camera]).all(axis=-1) & (depth >= .1)
                     & (world[object_camera][..., 2] > counter_height + .008))
-        grown, _ = label(eligible)
-        ids = np.unique(grown[object_mask])
-        ids = ids[ids != 0]
+        # Do not grow an object hint through the entire scene merely because
+        # the robot, cabinets and walls touch in the image's above-plane mask.
+        # This is a local observed patch, not a complete object reconstruction.
+        eligible &= binary_dilation(masks['object'], iterations=12)
+        grown = _depth_components(eligible, world[object_camera])
+        ids, overlaps = np.unique(grown[object_mask], return_counts=True)
+        overlaps, ids = overlaps[ids != 0], ids[ids != 0]
+        if len(ids) > 1:
+            order = np.argsort(-overlaps)
+            if overlaps[order[0]] < 1.5*overlaps[order[1]]:
+                raise ObservationUnavailable('ambiguous_object')
+            ids = ids[order[:1]]
         if not len(ids) and masks['object'].any():
             # VLM coordinates are coarse hints. Snap only to a nearby, clearly
             # preferred measured component, never an arbitrary scene object.

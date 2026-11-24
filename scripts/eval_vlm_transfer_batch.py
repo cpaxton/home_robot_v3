@@ -38,6 +38,7 @@ def main():
     parser.add_argument('manifest', type=Path)
     parser.add_argument('fixture_root', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--pick-only', action='store_true', help='Isolate pickup without requiring or executing placement')
     parser.add_argument('--endpoint', required=True)
     parser.add_argument('--sim-pythonpath', required=True)
     parser.add_argument('--profile', type=Path, default=Path('configs/eval/pandaomron_vlm_one_shot_development.json'))
@@ -80,7 +81,8 @@ def main():
             '--case', case['case'], '--case-spec', str(spec.resolve()),
             '--scene-camera', 'right', '--port-offset', str(args.port_offset+index*20),
             '--diagnostic-torso-offset-m', '.002', '--sim-pythonpath', args.sim_pythonpath,
-            '--observed-profile', str(frozen_profile.resolve()), '--open-loop-transfer',
+            '--observed-profile', str(frozen_profile.resolve()),
+            '--open-loop-pick' if args.pick_only else '--open-loop-transfer',
             '--open-loop-object-description', case['spec']['object_name'],
             '--open-loop-destination', manifest['destination'], '--model-endpoint', args.endpoint,
             '--model', manifest['model']]
@@ -120,7 +122,7 @@ def main():
             result.update(task_passed=False, category='infrastructure_or_unreported',
                           reason='No scored receipt; inspect retained stdout and server logs')
         results.append(result)
-        (args.output/'report.json').write_text(json.dumps({'scope': manifest['scope'],
+        (args.output/'report.json').write_text(json.dumps({'scope': manifest['scope'], 'pick_only': args.pick_only,
             'completed': len(results), 'total': len(manifest['cases']), 'results': results}, indent=2)+'\n')
         print(json.dumps(result), flush=True)
     return 0 if all(row['task_passed'] for row in results) else 1
