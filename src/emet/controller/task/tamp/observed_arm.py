@@ -124,7 +124,7 @@ def observed_arm_factory(*, robot_name, load_model, build_source, tasks, candida
 def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candidates, confirm_placement=None):
     """Compose a native arm and measured scene source without a benchmark-specific tool."""
 
-    def refine(task, snapshot, placement_region=None):
+    def refine(task, snapshot, placement_region=None, request=None):
         if snapshot.admission is None:
             raise ObservationUnavailable("robot_material_geometry_unavailable")
         if snapshot.target_contact is None:
@@ -136,6 +136,11 @@ def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candida
             raise ObservationUnavailable("no_observed_transfer_candidate")
         if len(options) > 16 or any(not isinstance(option, TransferCandidate) for option in options):
             raise ValueError("invalid_transfer_candidate")
+        if request is not None and request.hints.get('approach'):
+            from .candidate_guidance import guide_approach
+
+            options = guide_approach(options, request.hints['approach'],
+                observation_id=snapshot.frame.capture.observation_id)
         opening = arm.chain.gripper_open_configuration
         if not opening:
             raise ObservationUnavailable("unsupported_gripper_open_geometry")
@@ -218,5 +223,6 @@ def build_observed_arm_adapter(robot, *, robot_name, arm, source, tasks, candida
             )
         return executor
 
+    refine.supports_manipulation_request = True
     return ObservedNativeAdapter(robot, robot_name=robot_name, source=source, refine=refine, tasks=tasks,
                                  max_ik_calls=getattr(source, "planning_max_ik_calls", 128))

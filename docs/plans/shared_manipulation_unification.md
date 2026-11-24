@@ -18,6 +18,13 @@ constitute observation evidence or authorization.
   dispatch them through an adapter's `plan_request` method when available.
   Unsupported options explicitly refuse before motion; they never fall through
   to legacy execution. Empty optional dictionaries preserve names-only behavior.
+- The shared observed-arm factory now applies capture-bound world-frame approach
+  direction/distance guidance to transfer candidates before the existing route
+  certification. Direction-only and distance-only hints retain the unspecified
+  native value. These are preferred pregrasp targets; strict approach refuses
+  until a path-direction guarantee is implemented. Live observation-ID binding
+  also remains required before advertising these options. Other hint groups and protected-object constraints still refuse
+  explicitly. No live qualification or general hinted grasp support is claimed.
 - Advanced metadata advertisement remains deferred until the shared adapter
   implements the options. No physical hints implementation is claimed here.
 

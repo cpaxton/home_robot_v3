@@ -53,6 +53,7 @@ PLACEMENT_CODES = frozenset({
 })
 # Exact public task/provider reasons, shared by session errors and receipts.
 TASK_FAILURE_CODES = frozenset({
+    "manipulation_options_unsupported", "invalid_manipulation_hint", "stale_manipulation_hint", "strict_approach_unavailable",
     "task_motion_planning_failed", "task_motion_budget_exhausted",
     "task_feasibility_failed", "stale_task_plan", "task_precondition_failed",
     "task_execution_failed", "task_provider_failed", "protected_goal_regression", "scene_identity_changed",

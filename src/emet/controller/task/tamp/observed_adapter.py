@@ -409,7 +409,25 @@ class ObservedNativeAdapter:
             ex.collision.restore_payload(payload)
             mujoco.mj_kinematics(ex.model, ex.data)
 
-    def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
+    def plan_request(self, request, *, task_ref='', placement_region=None):
+        """Resolve supported options before entering the normal certified planner."""
+        from .manipulation_request import ManipulationRequest
+
+        if not isinstance(request, ManipulationRequest):
+            return response('plan_pick_place', code='invalid_manipulation_hint')
+        if request.hint_mode == 'strict' and request.hints.get('approach'):
+            return response('plan_pick_place', code='strict_approach_unavailable',
+                data={'execution_started': False})
+        unsupported = set(request.hints)-{'approach'}
+        if request.constraints.get('protected_objects'):
+            unsupported.add('protected_objects')
+        if unsupported or not getattr(getattr(self, 'refine', None), 'supports_manipulation_request', False):
+            return response('plan_pick_place', code='manipulation_options_unsupported',
+                data={'execution_started': False, 'unsupported_options': sorted(unsupported)})
+        return self.plan(task_ref, request.object_name, request.receptacle_name,
+                         placement_region, request=request)
+
+    def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None, *, request=None):
         with self.lock:
             self.effects = []
             try:
@@ -452,8 +470,11 @@ class ObservedNativeAdapter:
                 if region is not None and (np.any(region[0] < initial.support_bounds[0, :2])
                                            or np.any(region[1] > initial.support_bounds[1, :2])):
                     return self._failure('plan_pick_place', 'placement_region_unavailable')
-                ex = (self.refine(task, initial, placement_region=region) if region is not None
-                      else self.refine(task, initial))
+                if request is not None:
+                    ex = self.refine(task, initial, placement_region=region, request=request)
+                else:
+                    ex = (self.refine(task, initial, placement_region=region) if region is not None
+                          else self.refine(task, initial))
                 if (not isinstance(ex, PhysicalPickPlaceExecutor) or ex.input_mode != 'observed'
                         or ex.robot is not self.robot or ex.use_sim_time
                         or not isinstance(ex.collision, ObservedNativeCollisionChecker)
@@ -554,6 +575,7 @@ class ObservedNativeAdapter:
                 self.plans[ref] = ObservedStoredPlan(task, initial, initial_joints, ex)
                 return response('plan_pick_place', data=self._data(plan_ref=ref, planned_ops=['grasp', 'place'],
                     completed_ops=[], execution_started=False, planning_ik_calls=ex.ik_solver_calls,
+                    guidance={'hint_mode': request.hint_mode, 'applied': request.hints, 'adjustments': [], 'constraints': request.constraints} if request else None,
                     placement_strategy='verify_at_hover' if ex.release_refiner is not None else 'visual',
                     **self._payload_scope(initial)))
             except (ObservationUnavailable, ValueError, RuntimeError, TimeoutError) as exc:
