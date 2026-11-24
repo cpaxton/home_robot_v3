@@ -4,6 +4,7 @@
 import base64
 import io
 import json
+import os
 import urllib.request
 
 import numpy as np
@@ -65,7 +66,7 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
     (output/'vlm-request.json').write_text(json.dumps(payload)+'\n')
     request = urllib.request.Request(endpoint.rstrip('/')+'/chat/completions',
         data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(request, timeout=90) as response:
+    with urllib.request.urlopen(request, timeout=float(os.environ.get("EMET_VLM_REQUEST_TIMEOUT_S", "90"))) as response:
         reply = json.load(response)
     (output/'vlm-response.json').write_text(json.dumps(reply, indent=2)+'\n')
     text = reply['choices'][0]['message']['content'].strip()
@@ -106,12 +107,14 @@ def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, e
     high = np.ceil(np.minimum(1, center+half)*[width, height]).astype(int)
     crop = Image.fromarray(rgb).crop((*low, *high))
     crop.save(output/'crop-raw.png')
-    crop = crop.resize((640, 480))
+    scale = min(640/crop.width, 480/crop.height)
+    crop = crop.resize((round(crop.width*scale), round(crop.height*scale)))
+    display_width, display_height = crop.size
     draw = ImageDraw.Draw(crop)
     for value in range(100, 1000, 100):
-        x, y = round(640*value/1000), round(480*value/1000)
-        draw.line((x, 0, x, 480), fill=(100, 160, 170))
-        draw.line((0, y, 640, y), fill=(100, 160, 170))
+        x, y = round(display_width*value/1000), round(display_height*value/1000)
+        draw.line((x, 0, x, display_height), fill=(100, 160, 170))
+        draw.line((0, y, display_width, y), fill=(100, 160, 170))
         draw.text((x+2, 2), str(value), fill='yellow', stroke_width=1, stroke_fill='black')
         draw.text((2, y+2), str(value), fill='yellow', stroke_width=1, stroke_fill='black')
     crop.save(output/'crop-grid.png')
@@ -133,7 +136,7 @@ def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, e
     (output/'request.json').write_text(json.dumps(payload)+'\n')
     request = urllib.request.Request(endpoint.rstrip('/')+'/chat/completions',
         data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(request, timeout=90) as response:
+    with urllib.request.urlopen(request, timeout=float(os.environ.get("EMET_VLM_REQUEST_TIMEOUT_S", "90"))) as response:
         reply = json.load(response)
     (output/'response.json').write_text(json.dumps(reply, indent=2)+'\n')
     text = reply['choices'][0]['message']['content']
@@ -158,7 +161,7 @@ def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, e
         yaw = float(refined['grasp_yaw_degrees'])
         if not np.isfinite(yaw) or not 0 <= yaw <= 360:
             raise ValueError('invalid_vlm_grasp_yaw')
-        direction = np.array([np.cos(np.deg2rad(yaw)), np.sin(np.deg2rad(yaw))])*(high-low)/[640, 480]
+        direction = np.array([np.cos(np.deg2rad(yaw)), np.sin(np.deg2rad(yaw))])*(high-low)/[display_width, display_height]
         result['grasp_yaw_degrees'] = float(np.rad2deg(np.arctan2(direction[1], direction[0])) % 360)
     (output/'decision.json').write_text(json.dumps(result, indent=2)+'\n')
     return result

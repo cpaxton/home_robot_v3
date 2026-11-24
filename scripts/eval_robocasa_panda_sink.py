@@ -184,7 +184,10 @@ class Control:
                     self.fixture_offsets_restored.append(f"{name}.{attr}")
         self.fixture_joints = json.loads((fixture / "fixture-joints.json").read_text())
         for name, q in self.fixture_joints.items():
-            self.initial[self.model.joint(name).qposadr[0]] = q
+            joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            if joint_id < 0:
+                raise ValueError(f'fixture joint missing from native model: {name}')
+            self.initial[int(self.model.jnt_qposadr[joint_id])] = q
 
     def reset_stance(self, x, y, yaw, torso):
         m, d = self.model, self.live

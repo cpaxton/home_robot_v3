@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "scope": "Explicit infrastructure-only retry of unscored Qwen pear r2 startup; original crash preserved",
+  "model": "Qwen/Qwen3.5-9B",
+  "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "destination": "the visible interior floor of the sink",
+  "wall_limit_s": 600,
+  "cases": [
+    {
+      "id": "pear-layout1-seed0-r2",
+      "fixture": "PickPlaceCounterToSink-held_out-0",
+      "case": "expansion-pear",
+      "fixture_sha256": "6da36a4b3ffa0a16f36ae1f3fd7bda184798912bf51052572e094b6b49c70303",
+      "spec": {
+        "layout": 1,
+        "style": 1,
+        "seed": 0,
+        "object_name": "pear",
+        "target_asset": "objaverse/pear/pear_13",
+        "evaluation_split": "expansion_development_retry"
+      }
+    }
+  ],
+  "policy_note": "Runtime VLM estimates camera, image regions, grasp direction/height and approach; bounded pre-motion re-estimation is allowed. First attempts and recovered success are reported separately.",
+  "base_source_revision": "2693a3cc",
+  "previous_batch": "codex-tool-trials-20261124/atomic-transfer-region-verification"
+}

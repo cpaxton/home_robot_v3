@@ -70,3 +70,15 @@ def test_failed_retry_does_not_erase_prior_physical_pick_or_claim_transfer(lift_
     score = score_diagnostic(diagnostic, physics, full_transfer=True)
     assert score['physical_pick_passed'] is (lift_m >= .04)
     assert not score['task_passed'] and not score['physical_transfer_passed']
+
+
+@pytest.mark.parametrize(('before', 'after', 'changed'), [
+    ({'a': .01, 'b': -.01}, {'a': .0005, 'b': -.0005}, True),
+    ({'a': .01, 'b': -.01}, {'a': .009, 'b': -.009}, False),
+    ({'a': .0005, 'b': -.0005}, {'a': .0005, 'b': -.0005}, False),
+    ({}, {}, False),
+])
+def test_stale_visual_estimate_detects_finger_transition_without_declaring_task_success(before, after, changed):
+    from emet.eval.vlm_grasp_check import grip_changed_while_observing
+
+    assert grip_changed_while_observing(before, after) is changed

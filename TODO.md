@@ -163,8 +163,28 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       including a separate infrastructure retry. One pear carry passed with
       10.18 cm object motion and terminal two-pad retention, zero contacts.
       These are development results, not repeatability qualification.
-- [ ] Qualify repeated retained pickup and short paced carry before
-      recombining placement; VLM/aperture disagreement and late drops remain.
+- [x] Use Codex as an interactive visual supervisor through the same camera/JSON
+      interface to distinguish tool defects from configured Qwen failures.
+      Initial Codex retained pickup was 0/3; repaired crops, camera geometry,
+      wrist interpolation and endpoint verification reached 2/3 repeatedly.
+      Atomic full-transfer development passed pear and garlic; tongs still
+      needs reliable retention/recovery. Preserve all failed rounds and manual
+      gateway timeouts. See [tool assessment](docs/experiments/codex_tool_assessment_20261124.md).
+- [x] Complete a frozen-tool Codex/Qwen full-transfer comparison. On two
+      restarts each of pear/garlic/tongs, Codex passed 6/6 official full tasks
+      versus Qwen3.5-9B 1/6; qualifying physical pickups were 6/6 versus 3/6.
+      Extra full-box containment yields 4/6 versus 0/6. One Qwen startup crash
+      was preserved and retried separately. Source/profile/fixture hashes match.
+      See [tool assessment](docs/experiments/codex_tool_assessment_20261124.md).
+- [ ] Simplify multi-view region construction into separate object/destination
+      queries, refine rough grasp proposals with measured depth, and return
+      role-specific geometry/whole-route recovery feedback. Freeze an unfamiliar
+      scene comparison; Codex's development history is not a zero-shot control.
+      Native monitored execution avoids loaded model pauses; long holds and
+      production CHAT integration remain separately unqualified.
+- [ ] Qualify long loaded holds and interrupted carry separately from atomic
+      transfer. Native monitored execution avoids loaded inference pauses;
+      successful fast transfer does not resolve late drops during long holds.
 - [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
       pear/garlic/tongs development screens v1–v8 each scored 0/3 full transfers;
       pear achieved 8.51 cm lift in v2 but slipped during carry. V6 passed the

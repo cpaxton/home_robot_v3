@@ -16,5 +16,7 @@
   ],
   "vlm_grasp_site_estimates": true,
   "grasp_site_radius_m": 0.04,
-  "lift_command_speed_mps": 0.05
+  "lift_command_speed_mps": 0.05,
+  "grasp_position_tolerance_m": 0.002,
+  "grasp_ik_tolerance_m": 0.0003
 }

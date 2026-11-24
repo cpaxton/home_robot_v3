@@ -413,3 +413,24 @@ therefore reports `task_passed` separately from `zero_contact` and the historica
 `clean_transfer_passed` statistic. Contacts remain telemetry. Incomplete execution,
 missing lift, wrong containment, an unsuccessful official predicate or an unsettled
 object still fails the task score. Preserve older raw scores when rescoring policy.
+
+### Codex-supervised tool assessment
+
+The [2026-11-24 assessment](../experiments/codex_tool_assessment_20261124.md)
+uses `scripts/codex_observation_gateway.py` to expose the same image/text requests
+and JSON decisions as the local VLM service. It does not issue robot commands.
+`src/emet/eval/native_pose_targets.py` supplies aspect-correct image/plane
+conversions, gradual wrist rotation and known-hand support bounds. The native
+waiter can verify the requested Cartesian grasp endpoint instead of accepting
+joint arrival alone. Crop refinement preserves aspect ratio; floor-plane growth
+preserves the selected semantic placement region.
+
+The opt-in `pandaomron_atomic_transfer_tolerant_development.json` profile plans
+visually before grasp and runs loaded motion with native grip monitoring,
+without blocking loaded inference calls. It uses a 2 mm grasp-command arrival
+tolerance and releases above an observed open sink. Source-counter height is a
+sink-rim proxy in this development mode. Physics and gripper force limits remain
+unchanged. This is simulation diagnostic routing with environment collision
+certification bypassed, not production CHAT or hardware qualification. Keep
+long-hold retention, official benchmark success and the additional full-box
+containment diagnostic separate in reported results.

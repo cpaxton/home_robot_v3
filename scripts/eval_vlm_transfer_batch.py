@@ -56,8 +56,8 @@ def main():
         if digest != case['fixture_sha256']:
             raise ValueError('frozen_fixture_changed: '+case['id'])
     (args.output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
-    sources = ['scripts/eval_pandaomron_sink_agent.py', 'src/emet/eval/panda_open_loop.py',
-               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/eval/vlm_grasp_check.py', 'src/emet/eval/grasp_retention_score.py',
+    sources = ['scripts/eval_robocasa_panda_sink.py', 'scripts/eval_pandaomron_sink_agent.py', 'src/emet/eval/panda_open_loop.py',
+               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/eval/native_pose_targets.py', 'src/emet/eval/vlm_grasp_check.py', 'src/emet/eval/grasp_retention_score.py',
                'src/emet/simulation/pandaomron_environment.py', 'src/emet/eval/short_carry_probe.py', 'src/emet/eval/short_carry_score.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
                'scripts/eval_vlm_transfer_batch.py']
     source_hashes = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in sources}

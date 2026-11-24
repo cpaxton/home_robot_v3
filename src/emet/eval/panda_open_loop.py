@@ -11,6 +11,12 @@ import numpy as np
 from emet.controller.task.tamp.observed_capture import capture_arrays
 from emet.controller.task.tamp.transfer_grounding import select_transfer
 from emet.eval.native_goal_wait import wait_for_native_goal
+from emet.eval.native_pose_targets import (
+    hand_lowest_offset,
+    horizontal_image_direction,
+    image_point_at_height,
+    pose_waypoints,
+)
 from emet.motion.mujoco_arm_ik import solve_pose_ik
 from emet.robots import get_robot_backend
 from emet.robots.pandaomron.observed import synchronize_pandaomron
@@ -67,6 +73,17 @@ def front_interior_floor(observation, mask, *, extra_observations=()):
     return np.median(points[chosen], axis=0)
 
 
+def interior_floor_center(observation, mask, *, image_point=None):
+    """Choose measured floor near the semantic goal, or its bounds center."""
+    points = capture_arrays(observation)[2][mask]
+    if len(points) < 25:
+        raise ValueError('destination_geometry_unavailable')
+    center = (points[:, :2].min(0)+points[:, :2].max(0))/2
+    if image_point is not None:
+        center = image_point_at_height(observation, image_point, float(np.median(points[:, 2])))[:2]
+    return points[np.argmin(np.linalg.norm(points[:, :2]-center, axis=1))].copy()
+
+
 def estimated_grasp_section(observations, selection, fraction, *, grasp_point=None, site_radius_m=.02):
     """Fuse local object returns and center the body section requested by the VLM."""
     reference = observations[selection.object_camera]
@@ -101,6 +118,8 @@ def estimated_grasp_section(observations, selection, fraction, *, grasp_point=No
     if len(section) < 5:
         raise ValueError('grasp_section_unavailable')
     xy = (section[:, :2].min(0)+section[:, :2].max(0))/2
+    if grasp_point is not None:
+        xy = image_point_at_height(reference, grasp_point, height)[:2]
     return object_points, np.r_[xy, height]
 
 
@@ -185,11 +204,11 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         return
     yaw = np.pi
     if decision:
-        image_yaw = np.deg2rad(decision['grasp_yaw_degrees'])
-        closing = observations[selected.object_camera].camera_pose[:3, :3] @ np.array(
-            [np.cos(image_yaw), np.sin(image_yaw), 0.])
-        if np.linalg.norm(closing[:2]) < .1:
-            raise ValueError('vlm_grasp_direction_not_horizontal')
+        ys, xs = np.where(selected.object_mask)
+        h, w = selected.object_mask.shape
+        image_point = decision.get('grasp_point', [float(xs.mean()/w*1000), float(ys.mean()/h*1000)])
+        closing = horizontal_image_direction(observations[selected.object_camera], image_point,
+            decision['grasp_yaw_degrees'], target[2])
         yaw = np.arctan2(closing[1], closing[0])
     rotation = np.array([[np.cos(yaw), np.sin(yaw), 0.],
                          [np.sin(yaw), -np.cos(yaw), 0.], [0., 0., -1.]])
@@ -203,36 +222,69 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         pad_centers = np.array([data.geom(f'gripper0_right_finger{i}_pad_collision').xpos for i in (1, 2)])
         pad_local = (pad_centers.mean(axis=0)-ee.xpos) @ ee.xmat.reshape(3, 3)
         target[2] -= (rotation @ pad_local)[2]
+    # Closing directions are unoriented: evaluate both equivalent Panda hand poses.
+    choices = []
+    for half_turn in (False, True):
+        candidate = rotation @ np.diag([-1., -1., 1.]) if half_turn else rotation
+        scratch = mujoco.MjData(model)
+        scratch.qpos[:] = data.qpos
+        result = solve_pose_ik(model, scratch, ee_body=arm.chain.ee_body, joint_names=arm.chain.joint_names,
+            target_pos=target+[0, 0, .1], target_rotation=candidate, tol_m=.005, tol_rad=.05)
+        cost = float(np.linalg.norm((scratch.qpos[addresses]-data.qpos[addresses])/np.r_[np.full(7, .1), .02]))
+        choices.append((not result.success, cost, half_turn, candidate))
+    choices.sort(key=lambda entry: (entry[0], entry[1]))
+    _, _, chosen_half_turn, rotation = choices[0]
+    support_points = capture_arrays(observations[selected.source_camera])[2][selected.source_mask]
+    support_height = float(np.median(support_points[:, 2]))
+    hand_bottom = hand_lowest_offset(model, data, arm.chain.ee_body,
+        [f'gripper0_right_finger{i}{suffix}' for i in (1, 2) for suffix in ('_collision', '_pad_collision')], rotation)
+    requested_grasp_z = float(target[2])
+    target[2] = max(target[2], support_height-hand_bottom)
+    if decision and decision.get('grasp_point'):
+        offset = rotation @ pad_local
+        center = image_point_at_height(observations[selected.object_camera], decision['grasp_point'], target[2]+offset[2])
+        target[:2] = center[:2]-offset[:2]
     limits = np.array([model.joint(n).range for n in arm.chain.joint_names])
     events = []
     executed = []
+    grip_watch = {'enabled': False}
 
     def record_event(name):
         events.append(name)
         (output/'open-loop-progress.json').write_text(json.dumps(events)+'\n')
 
-    def move(position, orientation, *, approximate_waypoint=False, position_tolerance_m=.008, transit=False, command_speed_mps=None):
+    def move(position, orientation, *, approximate_waypoint=False, position_tolerance_m=.008, transit=False, command_speed_mps=None, precise_endpoint=False):
         arm.synchronize(data)
         origin = data.body(arm.chain.ee_body).xpos.copy()
+        origin_rotation = data.body(arm.chain.ee_body).xmat.reshape(3, 3).copy()
         step_m = .005 if command_speed_mps else .02
         previous_waypoint = origin
-        for fraction in np.linspace(0., 1., max(2, int(np.ceil(np.linalg.norm(position-origin)/step_m)))+1)[1:]:
+        path = list(pose_waypoints(origin, origin_rotation, position, orientation, step_m=step_m))
+        for waypoint_index, (waypoint, waypoint_rotation) in enumerate(path):
             segment_started = time.monotonic()
             arm.synchronize(data)
+            opening = sum(abs(float(data.joint(n).qpos[0])) for n in arm.gripper_control_joint_names)
+            if grip_watch['enabled'] and opening < .002:
+                arm.command_joints(np.clip(data.qpos[addresses], limits[:, 0], limits[:, 1]))
+                raise RuntimeError('native_grasp_lost')
             start = data.qpos[addresses].copy()
-            waypoint = origin+(position-origin)*fraction
             result = solve_pose_ik(model, data, ee_body=arm.chain.ee_body,
                 joint_names=arm.chain.joint_names, target_pos=waypoint,
-                target_rotation=orientation, tol_m=.002 if command_speed_mps else .005, tol_rad=.05)
+                target_rotation=waypoint_rotation, tol_m=float(profile.get('grasp_ik_tolerance_m', .0015)) if precise_endpoint else (.002 if command_speed_mps else .005), tol_rad=.05)
             if not result.success:
                 raise RuntimeError('open_loop_ik_failed')
             goal = data.qpos[addresses].copy()
             steps = max(1, int(np.ceil(np.max(np.abs(goal-start)/np.r_[np.full(7, .1), .02]))))
-            for q in np.linspace(start, goal, steps+1)[1:]:
+            for command_index, q in enumerate(np.linspace(start, goal, steps+1)[1:]):
                 q = np.clip(q, limits[:, 0], limits[:, 1])
+                endpoint = precise_endpoint and waypoint_index == len(path)-1 and command_index == steps-1
                 arrival = wait_for_native_goal(arm, model, data, addresses, limits, q,
                     position_tolerance_m=position_tolerance_m,
-                    rotation_tolerance_rad=.2 if transit else .1, max_corrections=0 if transit else 3)
+                    rotation_tolerance_rad=.2 if transit else .1, max_corrections=0 if transit else 3,
+                    task_position=position if endpoint else None, task_rotation=orientation if endpoint else None,
+                    require_task_pose=endpoint)
+                if endpoint:
+                    receipt['grasp_arrival'] = arrival
                 if arrival['corrections']:
                     receipt.setdefault('servo_corrections', []).append(arrival)
                 if not arrival['arrived']:
@@ -255,8 +307,13 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             previous_waypoint = waypoint
 
     receipt = {'mode': 'one_shot_depth_open_loop_transfer' if full_transfer else 'one_shot_depth_open_loop_pick',
-        'object_cad': False, 'grasp_center_method': ('vlm_local_site_height_section' if decision.get('grasp_point') else 'multi_view_height_section') if decision else 'visible_top_band_xy',
+        'object_cad': False, 'grasp_center_method': ('vlm_ray_height_plane' if decision.get('grasp_point') else 'multi_view_height_section') if decision else 'visible_top_band_xy',
         'grasp_point_image': decision.get('grasp_point') if decision else None,
+        'grasp_half_turn_selected': chosen_half_turn,
+        'support_hand_height_adjustment_m': float(target[2]-requested_grasp_z),
+        'hand_lowest_offset_m': hand_bottom,
+        'grasp_orientation_ik': [{'success': not entry[0], 'joint_step_cost': entry[1], 'half_turn': entry[2]} for entry in choices],
+        'approach_orientation': 'interpolated', 'image_direction_grounding': 'horizontal_plane_backprojection',
         'grasp_site_radius_m': float(profile.get('grasp_site_radius_m', .02)),
         'camera': selected.object_camera,
         'grasp_height_fraction': decision.get('grasp_height_fraction', .5) if decision else None,
@@ -268,10 +325,11 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         'grounding_attempts': attempts, 'environment_collision_checks': False,
         'target_world_m': target.tolist(), 'events': events,
         'instruction': f'Pick up {object_name} and place it in {destination_name}',
+        'loaded_visual_checks': profile.get('loaded_visual_checks', True),
         'full_transfer_requested': full_transfer, 'execution_attempts': 1, 'short_carry_requested': carry_probe}
 
-    def check_grasp(stage):
-        from emet.eval.vlm_grasp_check import clearly_missed_grasp, query_grasp_state
+    def check_grasp(stage, reinspection=0, feedback=None):
+        from emet.eval.vlm_grasp_check import clearly_missed_grasp, grip_changed_while_observing, query_grasp_state
 
         fresh = client.get_observation()
         views = {'scene': fresh.rgb, 'wrist': fresh.ee_rgb}
@@ -282,7 +340,8 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         receipt['runtime_vlm_calls'] += 1
         try:
             estimate = query_grasp_state(views, endpoint=model_endpoint, model=model_name,
-                object_name=object_name, finger_positions=fingers, output=output/('grasp-check-'+stage))
+                object_name=object_name, finger_positions=fingers,
+                output=output/('grasp-check-'+stage+(f'-reinspect-{reinspection}' if reinspection else '')), feedback=feedback)
         except (ValueError, OSError) as error:
             estimate = {'state': 'unknown', 'reason': str(error)}
         # Model inference takes time; use current encoder feedback for action.
@@ -291,7 +350,13 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         missed = clearly_missed_grasp(estimate, fingers)
         receipt.setdefault('grasp_checks', []).append({
             'stage': stage, 'estimate': estimate, 'finger_positions': fingers,
-            'finger_positions_at_capture': capture_fingers, 'clear_miss': missed})
+            'finger_positions_at_capture': capture_fingers, 'clear_miss': missed, 'reinspection': reinspection})
+        if not missed and reinspection == 0 and grip_changed_while_observing(capture_fingers, fingers):
+            receipt['grasp_checks'][-1]['reinspection_reason'] = 'finger_closure_changed_during_inference'
+            return check_grasp(stage, reinspection=1, feedback=
+                'The hand changed from occupied to near-closed while the previous image was being interpreted. '
+                'This is a newer observation; reassess whether the object is still held. '
+                'Previous visual estimate: '+json.dumps(estimate))
         return missed
 
     def recover_miss(stage):
@@ -305,7 +370,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         run_pick(client, retry_output, profile_path, model_endpoint=model_endpoint, model_name=model_name,
             object_name=object_name, full_transfer=full_transfer, destination_name=destination_name,
             recovery_budget=recovery_budget-1, robot_model_path=robot_model_path, carry_probe=carry_probe, recovery_feedback=
-            'Previous physical attempt failed: fresh images show the object not held and fingers closed empty. '
+            'Previous physical attempt did not retain the object: visual inspection or native finger feedback found an empty grip. '
             'Reinspect its CURRENT position and revise the grasp center, direction or body height. '
             'Do not repeat a stale grasp or substitute another target. Prior estimates: '+json.dumps({
                 key: decision.get(key) for key in ('grasp_point', 'grasp_yaw_degrees', 'grasp_height_fraction')})+
@@ -329,8 +394,8 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             route = [('departure', home+offset, current_rotation),
                      ('staging', target+[0, 0, .1]+offset, rotation), *route]
         for name, pos, rot in route:
-            move(pos, rot, position_tolerance_m=.04 if name in {'departure', 'staging'} else .008,
-                 transit=name in {'departure', 'staging'})
+            move(pos, rot, position_tolerance_m=float(profile.get('grasp_position_tolerance_m', .003)) if name == 'grasp' else (.04 if name in {'departure', 'staging'} else .008),
+                 transit=name in {'departure', 'staging'}, precise_endpoint=name == 'grasp')
             record_event(name)
         close = dict(profile['grasps'][0]['close_joints'])
         client.command_gripper_joints([close[name] for name in arm.gripper_control_joint_names])
@@ -338,6 +403,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         record_event('close')
         arm.synchronize(data)
         receipt['gripper_after_close'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
+        grip_watch['enabled'] = sum(abs(v) for v in receipt['gripper_after_close'].values()) >= .004
         lift_speed = profile.get('lift_command_speed_mps')
         if lift_speed is not None and (not np.isfinite(lift_speed) or not 0 < lift_speed <= .2):
             raise ValueError('invalid_lift_command_speed')
@@ -348,7 +414,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         receipt['gripper_after_lift'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
         carry_start = max(0, len(executed)-1)
         time.sleep(1.)
-        if model_endpoint and check_grasp('after_lift'):
+        if model_endpoint and profile.get('loaded_visual_checks', True) and check_grasp('after_lift'):
             recover_miss('after_lift')
             return
         if carry_probe:
@@ -362,27 +428,43 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
             move(carry_goal, rotation, command_speed_mps=.05, position_tolerance_m=.005)
             record_event('short_carry')
             time.sleep(1.)
-            if model_endpoint and check_grasp('after_short_carry'):
+            if model_endpoint and profile.get('loaded_visual_checks', True) and check_grasp('after_short_carry'):
                 recover_miss('after_short_carry')
                 return
         if full_transfer:
-            landing = front_interior_floor(observations[selected.destination_camera], selected.destination_mask,
-                extra_observations=[o for name, o in observations.items() if name != selected.destination_camera])
+            release_above = profile.get('placement_mode') == 'release_above_open_container'
+            if release_above:
+                goal_pixel = np.asarray(decision['destination'], float).reshape(2, 2).mean(0) if decision else None
+                landing = interior_floor_center(observations[selected.destination_camera], selected.destination_mask, image_point=goal_pixel)
+            else:
+                landing = front_interior_floor(observations[selected.destination_camera], selected.destination_mask,
+                    extra_observations=[o for name, o in observations.items() if name != selected.destination_camera])
             tool_bottom = target[2]-points[:, 2].min()
             place = landing + [0., 0., tool_bottom+.005]
             counter = capture_arrays(observations[selected.source_camera])[2][selected.source_mask]
             height = float(np.median(counter[:, 2])+tool_bottom+.08)
+            if release_above:
+                place[2] = float(np.median(counter[:, 2])+tool_bottom+.05)
+            receipt['placement_mode'] = profile.get('placement_mode', 'lower_to_floor')
+            receipt['placement_goal_method'] = 'measured_floor_nearest_semantic_region' if release_above and decision else 'measured_floor_geometry'
+            transport_speed = profile.get('transport_command_speed_mps')
+            receipt['transport_command_speed_mps'] = transport_speed
+            front = observations['scene'].camera_pose[:2, 3]-place[:2]
+            if np.linalg.norm(front) < .05:
+                front = observations['scene'].camera_pose[:2, 1]
+            front = front/np.linalg.norm(front)*.15
             receipt['place_world_m'] = place.tolist()
             # Simple measured-height transport corridor, no object registration.
             for name, pos in [('carry_height', np.r_[target[:2], height]),
-                    ('preplace_front', np.r_[place[:2]+[0., -.15], height]),
+                    ('preplace_front', np.r_[place[:2]+front, height]),
                     ('preplace', np.r_[place[:2], height]), ('place', place)]:
-                move(pos, rotation, approximate_waypoint=name == 'preplace')
+                move(pos, rotation, approximate_waypoint=name == 'preplace', command_speed_mps=transport_speed)
                 record_event(name)
-                if name == 'preplace_front' and model_endpoint and check_grasp('before_lowering'):
+                if name == 'preplace_front' and model_endpoint and profile.get('loaded_visual_checks', True) and check_grasp('before_lowering'):
                     recover_miss('before_lowering')
                     return
             receipt['gripper_before_release'] = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
+            grip_watch['enabled'] = False
             client.open_gripper()
             record_event('release')
             # Retrace measured transport configurations rather than asking IK
@@ -403,5 +485,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         receipt['completed'] = True
     except Exception as exc:
         receipt.update(completed=False, reason=str(exc))
+        if str(exc) == 'native_grasp_lost':
+            recover_miss('native_motion')
     finally:
         (output/'open-loop-pick.json').write_text(json.dumps(receipt, indent=2)+'\n')

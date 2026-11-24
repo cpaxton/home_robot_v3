@@ -9,7 +9,7 @@ import pytest
 from emet.eval.native_goal_wait import wait_for_native_goal
 
 
-@pytest.mark.parametrize('behavior', ['biased', 'blocked', 'accurate', 'transit', 'uncompensated'])
+@pytest.mark.parametrize('behavior', ['biased', 'blocked', 'accurate', 'transit', 'uncompensated', 'wrong_pose'])
 def test_native_arrival_corrects_bias_but_does_not_accept_blocked_motion(monkeypatch, behavior):
     nested = '<body name="tool"><geom type="sphere" size=".01" mass=".1"/></body>'
     for i in reversed(range(8)):
@@ -40,8 +40,10 @@ def test_native_arrival_corrects_bias_but_does_not_accept_blocked_motion(monkeyp
         options['max_corrections'] = 0
     if behavior == 'transit':
         options.update(position_tolerance_m=.04, rotation_tolerance_rad=.2)
+    if behavior == 'wrong_pose':
+        options.update(require_task_pose=True, task_position=np.array([100., 0., 0.]))
     result = wait_for_native_goal(arm, model, data, np.arange(8), limits, goal, **options)
-    assert result['arrived'] is (behavior not in {'blocked', 'uncompensated'})
+    assert result['arrived'] is (behavior not in {'blocked', 'uncompensated', 'wrong_pose'})
     if behavior in {'accurate', 'transit', 'uncompensated'}:
         assert len(commands) == 1 and result['corrections'] == []
     else:

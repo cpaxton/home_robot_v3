@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "scope": "Codex full native transfer verification preserving semantic placement region; three development fixtures",
+  "model": "codex-interactive",
+  "model_revision": "current Codex session; interactive decisions recorded in local gateway",
+  "destination": "the visible interior floor of the sink",
+  "wall_limit_s": 600,
+  "cases": [
+    {
+      "id": "tongs-layout11-control",
+      "fixture": "PickPlaceCounterToSink-development-0",
+      "case": "development-tongs",
+      "fixture_sha256": "a03883ea2871ac48f04d3b78e5933a2b0250b9c541e17789d0367e44d447a3d1",
+      "spec": {
+        "layout": 11,
+        "style": 11,
+        "seed": 0,
+        "object_name": "tongs",
+        "target_asset": "lightwheel/tongs/Tongs010",
+        "evaluation_split": "development_control"
+      }
+    }
+  ],
+  "policy_note": "Runtime VLM estimates camera, image regions, grasp direction/height and approach; bounded pre-motion re-estimation is allowed. First attempts and recovered success are reported separately.",
+  "base_source_revision": "2693a3cc",
+  "previous_batch": "codex-tool-trials-20261124/atomic-transfer-verification"
+}

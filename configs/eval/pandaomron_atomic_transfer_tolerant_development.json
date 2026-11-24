@@ -1,0 +1,25 @@
+{
+  "description": "Simulation-only atomic observed pick/place; unchanged native physics and force limits. Visual supervision before grasp; native grip monitoring during loaded motion. Grasp endpoint arrival uses a 2 mm command tolerance; scene geometry remains approximate.",
+  "grasps": [
+    {
+      "close_joints": [
+        [
+          "gripper0_right_finger_joint1",
+          0.0
+        ],
+        [
+          "gripper0_right_finger_joint2",
+          0.0
+        ]
+      ]
+    }
+  ],
+  "vlm_grasp_site_estimates": true,
+  "grasp_site_radius_m": 0.04,
+  "lift_command_speed_mps": 0.05,
+  "grasp_position_tolerance_m": 0.002,
+  "grasp_ik_tolerance_m": 0.0003,
+  "loaded_visual_checks": false,
+  "placement_mode": "release_above_open_container",
+  "transport_command_speed_mps": 0.12
+}

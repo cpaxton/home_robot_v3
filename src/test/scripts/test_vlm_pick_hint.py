@@ -225,7 +225,11 @@ def test_magnified_crop_coordinates_map_back_to_current_camera(monkeypatch, tmp_
     wide = refine_object_hint(np.zeros((480, 640, 3), np.uint8),
         {**original, 'object': [100, 450, 900, 550]}, endpoint='http://test/v1',
         model='test', object_name='garlic', output=tmp_path/'wide', estimate_grasp_site=True)
-    assert wide['grasp_yaw_degrees'] == pytest.approx(np.rad2deg(np.arctan2(144/480, 640/640)))
+    assert wide['grasp_yaw_degrees'] == pytest.approx(45.)
+    from PIL import Image
+
+    with Image.open(tmp_path/'wide'/'crop-grid.png') as image:
+        assert image.width/image.height == pytest.approx(640/144)
 
 
 def test_vlm_grasp_site_selects_local_solid_section_without_changing_payload_extent(monkeypatch):
@@ -240,7 +244,10 @@ def test_vlm_grasp_site_selects_local_solid_section_without_changing_payload_ext
     mask[:8] = True
     selection = SimpleNamespace(object_camera='scene', source_camera='scene',
         object_mask=mask, source_mask=~mask)
-    views = {'scene': SimpleNamespace(world=world)}
+    pose = np.diag([1., -1., -1., 1.])
+    pose[:3, 3] = [0., .02, 1.95]
+    views = {'scene': SimpleNamespace(world=world, depth=np.ones(x.shape),
+        camera_K=np.diag([250., 500., 1.]), camera_pose=pose)}
     monkeypatch.setattr('emet.eval.panda_open_loop.capture_arrays', lambda obs: (None, None, obs.world))
     left_cloud, left = estimated_grasp_section(views, selection, .3, grasp_point=[125, 400])
     right_cloud, right = estimated_grasp_section(views, selection, .3, grasp_point=[875, 400])
@@ -249,3 +256,34 @@ def test_vlm_grasp_site_selects_local_solid_section_without_changing_payload_ext
     assert len(left_cloud) == mask.sum()
     with pytest.raises(ValueError, match='grasp_site_not_on_observed_object'):
         estimated_grasp_section(views, selection, .3, grasp_point=[2000, 400])
+
+
+def test_container_center_is_a_measured_floor_point_even_with_a_central_hole(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.eval.panda_open_loop import interior_floor_center
+
+    y, x = np.indices((30, 40))
+    world = np.stack((x*.005, y*.005, np.full(x.shape, .7)), axis=-1)
+    mask = np.ones(x.shape, bool)
+    mask[12:18, 17:23] = False
+    monkeypatch.setattr('emet.eval.panda_open_loop.capture_arrays', lambda obs: (None, None, world))
+    point = interior_floor_center(SimpleNamespace(), mask)
+    assert np.any(np.all(world[mask] == point, axis=1))
+    assert np.linalg.norm(point[:2]-[.0975, .0725]) < .03
+    assert point[2] == .7
+
+
+def test_destination_plane_growth_preserves_semantic_goal(monkeypatch):
+    from types import SimpleNamespace
+
+    import emet.eval.panda_open_loop as picker
+
+    y, x = np.mgrid[:20, :20]
+    points = np.stack((x*.01, y*.01, np.zeros_like(x)), -1)
+    mask = np.ones((20, 20), bool)
+    monkeypatch.setattr(picker, 'capture_arrays', lambda obs: (None, None, points))
+    monkeypatch.setattr(picker, 'image_point_at_height', lambda obs, pixel, height: np.array([.03, .14, height]))
+    point = picker.interior_floor_center(SimpleNamespace(), mask, image_point=[200, 700])
+    np.testing.assert_allclose(point, [.03, .14, 0.])
+    assert np.linalg.norm(point[:2]-[.095, .095]) > .07
