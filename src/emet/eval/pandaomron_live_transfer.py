@@ -22,8 +22,11 @@ from emet.controller.task.tamp.transfer_grounding import select_transfer
 from emet.robots.pandaomron.observed import fixed_torso_arm, panda_sample_reader
 
 
-def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
+def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *, grounder=None):
     profile = json.loads(profile_path.read_text())
+    profile.setdefault('destination_below_source', grounder is None)
+    if grounder is not None and (profile.get('payload_prior') or profile.get('payload_axial_enclosure')):
+        raise ValueError('runtime_grounding_requires_no_object_cad')
     if profile.get("debug_planning"):
         logging.getLogger("emet.controller.task.tamp.observed_adapter").setLevel(logging.INFO)
         logging.getLogger("emet.controller.manipulation.physical_pick_place").setLevel(logging.INFO)
@@ -102,7 +105,8 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
         )
         for entry in profile["grasps"]
     )
-    mode = "diagnostic_pixel_regions" if any("box" in entry for entry in profile["grounding"].values()) else "semantic"
+    mode = ("runtime_observed_grounding" if grounder is not None else
+            "diagnostic_pixel_regions" if any("box" in entry for entry in profile["grounding"].values()) else "semantic")
     lock_torso = profile.get("fixed_torso", False)
     if type(lock_torso) is not bool or lock_torso and (profile.get("approach_joint_routes") or profile.get("guarded_placement")):
         raise ValueError("invalid_fixed_torso_profile")
@@ -134,13 +138,14 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner):
             ):
                 raise ObservationUnavailable("probe_unavailable")
         segment = None
-        if any("label" in role for role in profile["grounding"].values()):
+        if grounder is None and any("label" in role for role in profile["grounding"].values()):
             from emet.mapping.scene_graph.processor import SceneGraphProcessor
 
             segment = SceneGraphProcessor(config_name="cpu_scene_graph", device="cpu").segment_current_view
         source = LiveTransferScene(
             arm=arm, task=task, read_sample=panda_sample_reader(robot, arm, profile),
             select=lambda sample, _task: select_transfer(sample, profile=profile, segment=segment),
+            grounder=grounder,
             payload_model=geometry,
             fingertip_geom_ids=tuple(arm.model.geom(name).id for name in profile["fingertips"]),
             profile=profile,

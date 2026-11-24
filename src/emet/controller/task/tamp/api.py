@@ -55,6 +55,8 @@ PLACEMENT_CODES = frozenset({
 })
 # Exact public task/provider reasons, shared by session errors and receipts.
 TASK_FAILURE_CODES = frozenset({
+    "visual_query_phase_unavailable", "visual_grounding_service_unavailable",
+    "grounding_view_changed", "grounding_object_changed", "invalid_visual_grounding_response",
     "manipulation_options_unsupported", "invalid_manipulation_hint", "stale_manipulation_hint", "strict_approach_unavailable",
     "task_motion_planning_failed", "task_motion_budget_exhausted",
     "task_feasibility_failed", "stale_task_plan", "task_precondition_failed",

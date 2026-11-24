@@ -321,3 +321,23 @@ def test_simple_grounding_omits_support_prediction_but_keeps_legacy_schema(monke
     with pytest.raises(KeyError, match='source'):
         query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
             output=tmp_path, views={'scene': rgb, 'wrist': rgb})
+
+
+def test_shared_grounding_only_request_does_not_require_unused_grasp_estimates(monkeypatch, tmp_path):
+    captured = []
+    decision = {'camera': 'front', 'object': [100, 100, 300, 400],
+                'destination_camera': 'front', 'destination': [500, 300, 900, 900]}
+
+    def reply(request, timeout):
+        captured.append(json.loads(request.data))
+        return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(decision)}}]}).encode())
+
+    monkeypatch.setattr('urllib.request.urlopen', reply)
+    rgb = np.zeros((20, 30, 3), np.uint8)
+    result = query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='block',
+        output=tmp_path, views={'front': rgb}, infer_support_from_depth=True, estimate_grasp=False)
+    prompt = captured[0]['messages'][0]['content'][0]['text']
+    assert 'grasp_yaw_degrees' not in prompt
+    assert 'grasp_height_fraction' not in prompt
+    assert 'source_camera' not in prompt
+    assert result == decision

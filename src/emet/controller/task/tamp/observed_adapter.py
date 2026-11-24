@@ -610,6 +610,8 @@ class ObservedNativeAdapter:
             except (ObservationUnavailable, ValueError, RuntimeError, TimeoutError) as exc:
                 logger.exception('Observed transfer planning did not complete')
                 result = self._failure('plan_pick_place', str(exc))
+                if getattr(exc, 'region_role', None) in {'object', 'source', 'destination'}:
+                    result['data']['failed_region'] = exc.region_role
                 if isinstance(exc, ObservationUnavailable) and str(exc) in {
                     'geometry_tracking_no_match', 'geometry_tracking_budget_exhausted',
                     'moving_tracking_time_budget_exhausted', 'moving_tracking_lost_reinitialize',

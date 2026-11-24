@@ -35,7 +35,7 @@ def test_support_estimate_rejects_robot_patch_above_object_and_uses_local_counte
     monkeypatch.setattr('emet.controller.task.tamp.transfer_grounding.capture_arrays',
         lambda obs: (None, np.ones((120, 120)), world))
     sample = SimpleNamespace(capture=SimpleNamespace(observation_id='test'), observations={'scene': observation})
-    profile = {'local_support_estimation': True, 'grounding': {
+    profile = {'local_support_estimation': True, 'destination_below_source': True, 'grounding': {
         'object': {'camera': 'scene', 'box': [375, 375, 550, 540]},
         'source': {'camera': 'scene', 'box': [50, 50, 230, 230]},
         'destination': {'camera': 'scene', 'box': [700, 700, 940, 940]}}}

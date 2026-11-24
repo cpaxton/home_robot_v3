@@ -1411,3 +1411,17 @@ def test_geometry_representation_change_invalidates_plan_before_motion(system):
     assert outcome['status'] == 'error'
     assert outcome['code'] == 'scene_changed_replan'
     assert system.calls == []
+
+
+def test_grounding_failure_exposes_region_without_issuing_commands(system):
+    from emet.controller.task.tamp.transfer_grounding import TransferGroundingUnavailable
+
+    def unavailable(*args, **kwargs):
+        raise TransferGroundingUnavailable('support_geometry_unknown', 'destination')
+
+    system.source.snapshot = unavailable
+    outcome = plan(system)
+    assert outcome['code'] == 'support_geometry_unknown'
+    assert outcome['data']['failed_region'] == 'destination'
+    assert outcome['data']['execution_started'] is False
+    assert not system.calls

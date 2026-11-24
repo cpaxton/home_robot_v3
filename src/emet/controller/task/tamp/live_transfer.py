@@ -109,10 +109,16 @@ class LiveTransferScene:
     """
 
     def __init__(
-        self, *, arm, task, read_sample, select, payload_model, fingertip_geom_ids, profile, clock=time.monotonic,
+        self, *, arm, task, read_sample, select, payload_model, fingertip_geom_ids, profile, clock=time.monotonic, grounder=None,
     ):
+        if grounder is not None and (
+            payload_model is not None and getattr(payload_model, 'construction', None) != 'approximate_observed_box'
+            or profile.get('payload_axial_enclosure') is not None
+        ):
+            raise ValueError('runtime_grounding_requires_no_object_cad')
         self.arm, self.task, self.read_sample, self.select = arm, task, read_sample, select
         self.payload_model, self.profile, self.clock = payload_model, profile, clock
+        self.grounder = grounder
         self.target_surface_association_m = float(profile.get("target_surface_association_m", .008))
         if not np.isfinite(self.target_surface_association_m) or not 0 <= self.target_surface_association_m <= .03:
             raise ValueError("invalid_target_surface_association")
@@ -292,14 +298,32 @@ class LiveTransferScene:
         ):
             raise ValueError("unknown_space_override_requires_simulator")
         read_at = self.clock()
-        selected = self.select(sample, self.task)
+        capture_read_s = read_at-started
+        grounding_s = 0.
+        if getattr(self, 'grounder', None) is not None:
+            def read_fresh():
+                packets = self._read_views()
+                if not packets:
+                    raise ObservationUnavailable('observation_unavailable')
+                return self.samples[next(iter(packets.values())).capture.observation_id]
+
+            resolution = self.grounder.resolve(sample, read_fresh, self.task)
+            grounding_s = self.clock()-read_at
+            read_at = self.clock()
+            sample, selected = resolution.sample, resolution.selection
+            self.profile.update(resolution.profile)
+            capture = sample.capture
+            views = synchronized_views(sample)
+        else:
+            selected = self.select(sample, self.task)
         if selected.capture_id != capture.observation_id:
             raise ObservationUnavailable("capture_identity_mismatch")
         profile = self.profile
         self.diagnostics = {
             "capture_id": capture.observation_id, "foreground_points": int(selected.object_mask.sum()),
             "support_bounds_m": {},
-            "bootstrap_s": {"capture_read": read_at - started, "camera_age_at_read": read_at - capture.earliest},
+            "bootstrap_s": {"capture_read": capture_read_s, "grounding": grounding_s,
+                            "camera_age_at_read": read_at - capture.earliest},
             "local_collision_resolution_m": profile.get("local_resolution_m"),
             "robot_surface_tolerance_m": profile.get("robot_geometry", {}).get("surface_tolerance_m", 0.),
             "collision_proxy_self_association": profile.get("robot_geometry", {}).get("collision_proxy_self_association", False),

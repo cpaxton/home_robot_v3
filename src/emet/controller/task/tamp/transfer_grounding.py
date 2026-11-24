@@ -55,6 +55,23 @@ def _seed_from_support(mask, world, *, max_height=None):
     raise ObservationUnavailable("support_geometry_unknown")
 
 
+
+class TransferGroundingUnavailable(ObservationUnavailable):
+    """Keep the public reason code while identifying the region to revise."""
+
+    def __init__(self, reason, region_role):
+        if region_role not in {'object', 'source', 'destination'}:
+            raise ValueError('invalid_grounding_region_role')
+        super().__init__(reason)
+        self.region_role = region_role
+
+
+def _seed_from_region(role, mask, world, **kwargs):
+    try:
+        return _seed_from_support(mask, world, **kwargs)
+    except ObservationUnavailable as error:
+        raise TransferGroundingUnavailable(str(error), role) from error
+
 def _box_mask(box, image_shape):
     h, w = image_shape
     limits = np.asarray(box, dtype=int)
@@ -117,23 +134,27 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False, 
     if profile.get('local_support_estimation'):
         object_points = world[object_camera][masks['object']]
         if len(object_points) < 25:
-            raise ObservationUnavailable('transfer_grounding_unavailable')
+            raise TransferGroundingUnavailable('transfer_grounding_unavailable', 'object')
         # A support cannot be above the selected object. If the semantic support
         # patch was on the robot, estimate support from measured pixels nearby.
         top = float(np.quantile(object_points[:, 2], .9))+.005
         try:
-            source_seed, counter_height, source_mask = _seed_from_support(
+            source_seed, counter_height, source_mask = _seed_from_region('source',
                 source_region, world[source_camera], max_height=top)
         except ObservationUnavailable:
             neighborhood = binary_dilation(masks['object'], iterations=30)
             neighborhood &= ~binary_dilation(masks['object'], iterations=2)
             source_camera = object_camera
-            source_seed, counter_height, source_mask = _seed_from_support(
+            source_seed, counter_height, source_mask = _seed_from_region('source',
                 neighborhood, world[source_camera], max_height=top)
     else:
-        source_seed, counter_height, source_mask = _seed_from_support(source_region, world[source_camera])
+        source_seed, counter_height, source_mask = _seed_from_region('source',source_region, world[source_camera])
     if require_destination:
-        dest_seed, floor_height, dest_mask = _seed_from_support(masks["destination"], world[dest_camera], max_height=counter_height - .025)
+        below = profile.get('destination_below_source', False)
+        if type(below) is not bool:
+            raise ValueError('invalid_destination_height_constraint')
+        dest_seed, floor_height, dest_mask = _seed_from_region('destination',masks["destination"], world[dest_camera],
+            max_height=counter_height-.025 if below else None)
     else:
         # Pickup diagnostics do not depend on observing a placement surface.
         dest_camera, dest_seed, dest_mask = source_camera, source_seed, source_mask.copy()
@@ -187,10 +208,10 @@ def select_transfer(sample, *, profile, segment=None, grow_object_region=False, 
     sizes[0] = 0
     viable = np.flatnonzero(sizes >= 25)
     if len(viable) != 1:
-        raise ObservationUnavailable("transfer_grounding_unavailable" if not len(viable) else "ambiguous_object")
+        raise TransferGroundingUnavailable("transfer_grounding_unavailable" if not len(viable) else "ambiguous_object", 'object')
     object_mask = binary_erosion(components == viable[0])
     if object_mask.sum() < 35:
-        raise ObservationUnavailable("transfer_grounding_unavailable")
+        raise TransferGroundingUnavailable("transfer_grounding_unavailable", 'object')
     return TransferSelection(
         object_camera, object_mask, source_camera, source_seed, dest_camera, dest_seed,
         sample.capture.observation_id, source_mask, dest_mask,

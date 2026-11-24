@@ -41,6 +41,21 @@ constitute observation evidence or authorization.
   evidence. This does not implement the live surface provider or remove remaining
   payload tracking requirements.
 
+- Visual grounding now lives in shared perception, with compatibility imports
+  for old evaluation callers. The shared live scene can consume model proposals,
+  acquire fresh RGB-D after inference, revalidate view/object association and
+  build its support geometry from the new capture. An explicit phase callback
+  must permit model queries; known loaded/unknown phases can refuse them.
+- Shared runtime grounding asks for object and destination regions only. It
+  infers support locally and imposes no universal lower-destination assumption,
+  supporting below-source, same-table and higher surfaces. Legacy sink profiles
+  retain their explicit lower-destination requirement. Retry feedback identifies
+  object/source/destination failures without changing the public reason code.
+- Read-only native Panda/Qwen smoke admitted fresh geometry in 3.7 seconds,
+  with no actor command calls. This tests live grounding, not full agent task
+  success. Default application startup still needs the phase-owned grounder
+  binding before the old diagnostic route can be removed.
+
 ## Remaining implementation, in order
 
 1. Implement the request in the shared observed adapter. Define observation/frame
