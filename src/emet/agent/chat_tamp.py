@@ -155,17 +155,40 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
         object_name: str = "",
         receptacle_name: str = "",
         placement_region: list[list[float]] | None = None,
+        hints: dict | None = None,
+        hint_mode: str = "prefer",
+        constraints: dict | None = None,
     ) -> dict:
         """Build a cached one-shot primitive plan without actuation; return versioned JSON."""
         from emet.controller.task.tamp.agent_bridge import store_agent_plan
 
+        hints = None if isinstance(hints, dict) and not hints else hints
+        constraints = None if isinstance(constraints, dict) and not constraints else constraints
         if _tamp_manip_mode() == "physical":
             error = _native_input_gate()
-            return (
-                response("plan_pick_place", code=error)
-                if error
-                else _native_adapter().plan(task_ref, object_name, receptacle_name, placement_region)
-            )
+            if error:
+                return response("plan_pick_place", code=error)
+            adapter = _native_adapter()
+            if hints is not None or constraints is not None or hint_mode != "prefer":
+                from emet.controller.task.tamp.manipulation_request import ManipulationRequest
+
+                if task_ref:
+                    task = adapter.tasks.get(task_ref)
+                    if task is None:
+                        return response("plan_pick_place", code="unknown_task_ref")
+                    object_name = object_name or task.object_name
+                    receptacle_name = receptacle_name or task.receptacle_name
+                request = ManipulationRequest.parse(object_name, receptacle_name,
+                    hints=hints, hint_mode=hint_mode, constraints=constraints)
+                planner = getattr(adapter, "plan_request", None)
+                if not callable(planner):
+                    return response("plan_pick_place", code="manipulation_options_unsupported",
+                        data={"execution_started": False, "unsupported_options": sorted(
+                            [*request.hints, *request.constraints, *(["strict_hints"] if hint_mode == "strict" else [])])})
+                return planner(request, task_ref=task_ref, placement_region=placement_region)
+            return adapter.plan(task_ref, object_name, receptacle_name, placement_region)
+        if hints is not None or constraints is not None or hint_mode != "prefer":
+            return response("plan_pick_place", code="manipulation_options_unsupported", data={"execution_started": False})
         if placement_region is not None:
             return response("plan_pick_place", code="placement_region_unsupported")
         build = _build_tamp_plan(
@@ -194,15 +217,18 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
         return execute_stored_agent_plan_result(robot, context, str(plan_ref))
 
     @json_tool
-    def pick_place(object_name: str, receptacle_name: str) -> dict:
+    def pick_place(object_name: str, receptacle_name: str, hints: dict | None = None,
+                   hint_mode: str = "prefer", constraints: dict | None = None) -> dict:
         """Plan and execute via the configured manipulation adapter, retaining partial outcomes."""
-        if _tamp_manip_mode() == "physical":
-            error = _native_input_gate()
-            if error:
-                return response("pick_place", code=error)
-            adapter = _native_adapter()
-            planned = adapter.plan(object_name=object_name, receptacle_name=receptacle_name)
-            result = adapter.execute(planned["data"]["plan_ref"]) if planned["status"] == "ok" else planned
+        hints = None if isinstance(hints, dict) and not hints else hints
+        constraints = None if isinstance(constraints, dict) and not constraints else constraints
+        if _tamp_manip_mode() == "physical" or hints is not None or constraints is not None or hint_mode != "prefer":
+            import json
+
+            planned = json.loads(plan_pick_place(object_name=object_name, receptacle_name=receptacle_name,
+                hints=hints, hint_mode=hint_mode, constraints=constraints))
+            result = (json.loads(execute_pick_place_plan(planned["data"]["plan_ref"]))
+                      if planned["status"] == "ok" else planned)
             return {**result, "tool": "pick_place"}
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
