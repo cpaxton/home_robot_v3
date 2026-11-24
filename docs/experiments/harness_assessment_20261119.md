@@ -2045,3 +2045,76 @@ profile, not a claimed general default.
 Final validation: **637 integrated tests passed** (27.88 s); Ruff and
 whitespace checks clean. One simulator ran at a time on six assigned CPU cores.
 The local VLM had about 3.9 GB GPU headroom at the sampled checkpoint.
+
+
+### Retention repeat and short-carry follow-up (2026-11-23)
+
+Repeat v12 uses the unchanged v11 policy/profile and the same three development
+fixtures. Pear's first repeat failed at simulator startup with native exit -4
+before binding the socket; it has no scored task receipt and remains an
+infrastructure failure, not a manipulation miss. The server log stops after
+controller configuration, without a Python traceback. Garlic ran and failed
+to retain a pickup. This already limits any reliability claim from v11.
+The infrastructure case is eligible for a separately recorded retry; scored
+grasp misses are not erased.
+
+The next diagnostic is a 10 cm horizontal carry toward the fixed calibrated
+scene observer, preserving measured lift height. It uses robot encoders and
+camera calibration, not simulator object state. Pickup and transport results
+must remain distinct. Terminal retention alone is insufficient for a carry
+claim: evaluator-only evidence must also show horizontal object motion.
+
+V12 completed with scored failures for garlic/tongs plus the unscored pear
+startup failure. The separate unchanged-policy pear infrastructure retry
+(`logs/vlm-retained-pick-20261123-v12-infra-retry`) passed first execution,
+retaining an 8.82 cm two-pad lift without contacts. Considering that explicit
+retry, the repeat has **1/3 scored retained pickups**, not a repeat of v11's
+2/3 result. Both original startup failures and scored grasp misses remain.
+
+The short-carry mode adds a 10 cm camera-relative horizontal goal at measured
+height, paced at 5 cm/s. It records requested and measured tool goals and checks
+fresh views after transport. Native finger feedback is resampled after model
+inference; the capture-time sample is retained separately. Carry scoring
+requires completed carry motion, terminal retained pickup and at least 5 cm
+net horizontal object displacement with both pads. This 5 cm acceptance gate
+allows ordinary progress/rotation error; it does not relabel a stationary
+pickup as transport. Simulator object measurements remain evaluator-only.
+
+Initial v13 (`logs/vlm-short-carry-20261123-v13`) did not produce a carry
+success: pear failed startup, garlic could not localize its target in a crop,
+and tongs missed a grasp before its retry became ambiguous. This does not
+establish carry failure for a securely held object.
+
+The enabled fault handler localized pear's native SIGILL to Robosuite's
+`MjModel.get_joint_qpos_addr` scalar comparison against a MuJoCo enum while
+RoboCasa updated stove state during initial settling. A small standalone
+NumPy/enum comparison loop did not reproduce the crash. Native Panda setup
+now uses a localized Python-integer implementation of the same position and
+velocity joint-address lookup, preserving free/ball/hinge/slide dimensions.
+This avoids that NumPy/pybind comparison path; the root native cause is not
+proven. Address dimension/name-error tests cover the compatibility change,
+and fault handling is enabled by default for these evaluation subprocesses.
+The changed environment module is now included in frozen batch source hashes.
+
+The explicit pear infrastructure retry after that compatibility change
+(`logs/vlm-short-carry-20261123-v13-infra-retry/report.json`) **passed**:
+
+- Requested 10 cm horizontal tool motion; independent object motion was
+  **10.18 cm horizontally**, with a terminal two-pad grasp.
+- Peak lift 9.21 cm, terminal two-pad elevation 8.68 cm; final speed 0.00051 m/s.
+- Zero scored external, touch or self-contact frames.
+- One execution, after one pre-motion localization retry. Both after-lift
+  and after-carry VLM estimates said held, agreeing with independent scoring.
+
+This is one successful development carry, not a full transfer or qualification
+result. The native startup change has a successful retry, not a demonstrated
+causal diagnosis. Grounding consistency, retained pickup reliability and
+longer transport/placement remain open.
+
+Additional validation: three sequential cold-process pear fixture reset/settle
+probes passed after the compatibility change
+(`logs/panda-startup-scalar-compat-20261123/report.json`). This supports the
+workaround operationally without proving the native crash cause. **651
+integrated tests passed** (29.14 s), with Ruff and whitespace checks clean.
+One simulator ran at a time on six assigned CPU cores; the local VLM had
+about 3.8 GB GPU headroom at the sampled checkpoint.

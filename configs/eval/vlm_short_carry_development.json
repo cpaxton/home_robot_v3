@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "scope": "Short paced carry development screen v13; 10 cm carry, no placement qualification",
+  "model": "Qwen/Qwen3.5-9B",
+  "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "destination": "the visible interior floor of the sink",
+  "wall_limit_s": 600,
+  "cases": [
+    {
+      "id": "pear-layout1-seed0",
+      "fixture": "PickPlaceCounterToSink-held_out-0",
+      "case": "expansion-pear",
+      "fixture_sha256": "6da36a4b3ffa0a16f36ae1f3fd7bda184798912bf51052572e094b6b49c70303",
+      "spec": {
+        "layout": 1,
+        "style": 1,
+        "seed": 0,
+        "object_name": "pear",
+        "target_asset": "objaverse/pear/pear_13",
+        "evaluation_split": "expansion_development_retry"
+      }
+    },
+    {
+      "id": "garlic-layout1-seed2",
+      "fixture": "PickPlaceCounterToSink-held_out-2",
+      "case": "expansion-garlic",
+      "spec": {
+        "layout": 1,
+        "style": 1,
+        "seed": 2,
+        "object_name": "garlic",
+        "target_asset": "objaverse/garlic/garlic_5",
+        "evaluation_split": "expansion_development_retry"
+      },
+      "fixture_sha256": "487237d8d2e9b7259ce4c3c3a180d852c87ced4b89fbe6c4e367880801a2a9b8"
+    },
+    {
+      "id": "tongs-layout11-control",
+      "fixture": "PickPlaceCounterToSink-development-0",
+      "case": "development-tongs",
+      "fixture_sha256": "a03883ea2871ac48f04d3b78e5933a2b0250b9c541e17789d0367e44d447a3d1",
+      "spec": {
+        "layout": 11,
+        "style": 11,
+        "seed": 0,
+        "object_name": "tongs",
+        "target_asset": "lightwheel/tongs/Tongs010",
+        "evaluation_split": "development_control"
+      }
+    }
+  ],
+  "policy_note": "Runtime VLM estimates camera, image regions, grasp direction/height and approach; bounded pre-motion re-estimation is allowed. First attempts and recovered success are reported separately.",
+  "base_source_revision": "bcbc9545",
+  "previous_batch": "vlm-retained-pick-20261123-v12"
+}

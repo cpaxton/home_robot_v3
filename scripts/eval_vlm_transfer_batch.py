@@ -38,12 +38,15 @@ def main():
     parser.add_argument('manifest', type=Path)
     parser.add_argument('fixture_root', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--carry-probe', action='store_true', help='Isolate pickup and a short carry, without placement')
     parser.add_argument('--pick-only', action='store_true', help='Isolate pickup without requiring or executing placement')
     parser.add_argument('--endpoint', required=True)
     parser.add_argument('--sim-pythonpath', required=True)
     parser.add_argument('--profile', type=Path, default=Path('configs/eval/pandaomron_vlm_one_shot_development.json'))
     parser.add_argument('--port-offset', type=int, default=6920)
     args = parser.parse_args()
+    if args.carry_probe:
+        args.pick_only = True
     manifest = json.loads(args.manifest.read_text())
     args.output.mkdir(parents=True, exist_ok=False)
     # Validate every input before starting any simulation or model request.
@@ -54,7 +57,8 @@ def main():
             raise ValueError('frozen_fixture_changed: '+case['id'])
     (args.output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     sources = ['scripts/eval_pandaomron_sink_agent.py', 'src/emet/eval/panda_open_loop.py',
-               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/eval/vlm_grasp_check.py', 'src/emet/eval/grasp_retention_score.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
+               'src/emet/eval/vlm_pick_hint.py', 'src/emet/eval/native_goal_wait.py', 'src/emet/eval/vlm_grasp_check.py', 'src/emet/eval/grasp_retention_score.py',
+               'src/emet/simulation/pandaomron_environment.py', 'src/emet/eval/short_carry_probe.py', 'src/emet/eval/short_carry_score.py', 'src/emet/controller/task/tamp/transfer_grounding.py',
                'scripts/eval_vlm_transfer_batch.py']
     source_hashes = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in sources}
     (args.output/'source-hashes.json').write_text(json.dumps(source_hashes, indent=2)+'\n')
@@ -67,7 +71,7 @@ def main():
     results = []
     env = {**os.environ, 'PYTHONPATH': 'src:scripts', 'CUDA_VISIBLE_DEVICES': '',
            'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1',
-           'LP_NUM_THREADS': '2', 'PYTHONMALLOC': 'malloc', 'NUMBA_DISABLE_JIT': '1',
+           'LP_NUM_THREADS': '2', 'PYTHONFAULTHANDLER': '1', 'PYTHONMALLOC': 'malloc', 'NUMBA_DISABLE_JIT': '1',
            'MUJOCO_GL': 'egl', 'EGL_PLATFORM': 'surfaceless', 'LIBGL_ALWAYS_SOFTWARE': '1'}
     for index, case in enumerate(manifest['cases']):
         if any(hashlib.sha256(Path(name).read_bytes()).hexdigest() != digest
@@ -86,6 +90,8 @@ def main():
             '--open-loop-object-description', case['spec']['object_name'],
             '--open-loop-destination', manifest['destination'], '--model-endpoint', args.endpoint,
             '--model', manifest['model']]
+        if args.carry_probe:
+            command.append('--open-loop-carry-probe')
         started = time.monotonic()
         with (args.output/(case['id']+'.stdout.log')).open('w') as log:
             proc = popen_session(command, env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -108,7 +114,7 @@ def main():
             attempts = row.get('diagnostic', {}).get('grounding_attempts', [])
             result.update(task_passed=row['task_passed'], category=classify(row),
                 physical_pick_passed=row.get('physical_pick_passed', False),
-                retained_pick_passed=row.get('retained_pick_passed'),
+                retained_pick_passed=row.get('retained_pick_passed'), carry_passed=row.get('carry_passed'),
                 grounding_attempts=len(attempts),
                 execution_attempts=row.get('diagnostic', {}).get('execution_attempts', 1),
                 first_attempt_success=bool(row['task_passed'] and len(attempts) == 1
@@ -123,7 +129,7 @@ def main():
             result.update(task_passed=False, category='infrastructure_or_unreported',
                           reason='No scored receipt; inspect retained stdout and server logs')
         results.append(result)
-        (args.output/'report.json').write_text(json.dumps({'scope': manifest['scope'], 'pick_only': args.pick_only,
+        (args.output/'report.json').write_text(json.dumps({'scope': manifest['scope'], 'pick_only': args.pick_only, 'carry_probe': args.carry_probe,
             'completed': len(results), 'total': len(manifest['cases']), 'results': results}, indent=2)+'\n')
         print(json.dumps(result), flush=True)
     return 0 if all(row['task_passed'] for row in results) else 1

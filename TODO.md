@@ -158,7 +158,12 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       lift. V11 achieved 3/3 peak lifts but only 2/3 retained pickups: pear after
       regrasp and tongs first attempt. Garlic dropped. Corrected evaluator
       distinguishes retained pickup from peak lift; raw reports remain intact.
-- [ ] Repeat retained-pick trials and qualify a short paced carry before
+- [x] Repeat the three retained-pick development fixtures and implement a
+      short paced carry diagnostic. Repeat yielded 1/3 retained pickups
+      including a separate infrastructure retry. One pear carry passed with
+      10.18 cm object motion and terminal two-pad retention, zero contacts.
+      These are development results, not repeatability qualification.
+- [ ] Qualify repeated retained pickup and short paced carry before
       recombining placement; VLM/aperture disagreement and late drops remain.
 - [ ] Stabilize VLM-adaptive transfer beyond the tuned grinder fixture. Frozen
       pear/garlic/tongs development screens v1–v8 each scored 0/3 full transfers;

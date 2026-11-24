@@ -153,3 +153,29 @@ def test_initial_settle_holds_measured_robot_posture_and_opens_gripper():
         assert action[-1] == -1.
     with pytest.raises(ValueError, match='invalid_initial_settle_steps'):
         settle_absolute_environment(env, steps=-1)
+
+
+@pytest.mark.parametrize(('joint_type', 'position', 'velocity'), [
+    (0, (7, 14), (6, 12)), (1, (7, 11), (6, 9)), (2, 7, 6), (3, 7, 6),
+])
+def test_joint_address_compatibility_preserves_free_ball_and_scalar_dimensions(joint_type, position, velocity):
+    from emet.simulation.pandaomron_environment import python_joint_addresses
+
+    class Model:
+        jnt_type = np.array([joint_type], dtype=np.int32)
+        jnt_qposadr = np.array([7], dtype=np.int32)
+        jnt_dofadr = np.array([6], dtype=np.int32)
+
+        def joint_name2id(self, name):
+            if name != 'joint':
+                raise ValueError('missing joint')
+            return 0
+
+    python_joint_addresses(Model)
+    model = Model()
+    assert model.get_joint_qpos_addr('joint') == position
+    assert model.get_joint_qvel_addr('joint') == velocity
+    if isinstance(position, int):
+        assert type(model.get_joint_qpos_addr('joint')) is int
+    with pytest.raises(ValueError, match='missing joint'):
+        model.get_joint_qpos_addr('absent')

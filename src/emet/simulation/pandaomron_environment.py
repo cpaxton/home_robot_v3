@@ -88,11 +88,40 @@ def preserve_absolute_reset_posture(env):
 CONTROL_HZ = 20
 
 
+def python_joint_addresses(model_class=None):
+    """Avoid NumPy/pybind enum equality in native joint-address lookup.
+
+    Preserve Robosuite's scalar/tuple address API using Python integer types.
+    The native evaluator has trapped in its scalar enum comparison at startup.
+    """
+    import mujoco
+
+    if model_class is None:
+        from robosuite.utils.binding_utils import MjModel
+
+        model_class = MjModel
+    dimensions = {int(mujoco.mjtJoint.mjJNT_FREE): (7, 6),
+                  int(mujoco.mjtJoint.mjJNT_BALL): (4, 3),
+                  int(mujoco.mjtJoint.mjJNT_SLIDE): (1, 1),
+                  int(mujoco.mjtJoint.mjJNT_HINGE): (1, 1)}
+
+    def address(model, name, *, velocity):
+        joint = model.joint_name2id(name)
+        kind = int(model.jnt_type[joint])
+        start = int((model.jnt_dofadr if velocity else model.jnt_qposadr)[joint])
+        size = dimensions[kind][int(velocity)]
+        return start if size == 1 else (start, start+size)
+
+    model_class.get_joint_qpos_addr = lambda self, name: address(self, name, velocity=False)
+    model_class.get_joint_qvel_addr = lambda self, name: address(self, name, velocity=True)
+
+
 def make_pandaomron_environment(*, task, layout, style, seed):
     import robocasa  # noqa: F401  (registers environments with robosuite)
     import robosuite
     from robosuite.controllers import load_composite_controller_config, load_part_controller_config
 
+    python_joint_addresses()
     config = load_composite_controller_config(robot="PandaOmron")
     config["body_parts"]["right"] = {
         **load_part_controller_config(default_controller="JOINT_POSITION"),

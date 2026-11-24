@@ -114,16 +114,17 @@ def score_diagnostic(diagnostic, physics, *, full_transfer):
                        and physics['basin_contains_tongs'] and physics['final_object_speed_mps'] < .02)
     zero_contact = not any(physics[k] for k in ('unintended_contact_frames',
         'unintended_touch_frames', 'unintended_self_contact_frames'))
-    return {'pick_passed': picked, 'physical_pick_passed': bool(lifted),
+    carry = bool(picked and 'short_carry' in diagnostic.get('events', []) and physics.get('short_carry_passed', False))
+    return {'pick_passed': picked, 'carry_passed': carry if diagnostic.get('short_carry_requested') else None, 'physical_pick_passed': bool(lifted),
             'retained_pick_passed': retained if not full_transfer else None,
             'physical_transfer_passed': transferred if full_transfer else None,
             'clean_transfer_passed': transferred and zero_contact if full_transfer else None,
             'zero_contact': zero_contact,
-            'task_passed': transferred if full_transfer else picked}
+            'task_passed': transferred if full_transfer else (carry if diagnostic.get('short_carry_requested') else picked)}
 
 
 def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=None, object_name="salt shaker",
-             full_transfer=False, destination_name="sink", recovery_budget=1, recovery_feedback=None, robot_model_path=None):
+             full_transfer=False, destination_name="sink", recovery_budget=1, recovery_feedback=None, robot_model_path=None, carry_probe=False):
     if (client.get_emet_session() or {}).get('runtime_kind') != 'robocasa_native':
         raise ValueError('simulation_diagnostic_only')
     robot_model_path = robot_model_path or output/'robot-only.xml'
@@ -267,7 +268,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         'grounding_attempts': attempts, 'environment_collision_checks': False,
         'target_world_m': target.tolist(), 'events': events,
         'instruction': f'Pick up {object_name} and place it in {destination_name}',
-        'full_transfer_requested': full_transfer, 'execution_attempts': 1}
+        'full_transfer_requested': full_transfer, 'execution_attempts': 1, 'short_carry_requested': carry_probe}
 
     def check_grasp(stage):
         from emet.eval.vlm_grasp_check import clearly_missed_grasp, query_grasp_state
@@ -277,15 +278,20 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         views.update({name: view['rgb'] for name, view in (fresh.auxiliary_rgbd_views or {}).items()})
         arm.synchronize(data)
         fingers = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
+        capture_fingers = dict(fingers)
         receipt['runtime_vlm_calls'] += 1
         try:
             estimate = query_grasp_state(views, endpoint=model_endpoint, model=model_name,
                 object_name=object_name, finger_positions=fingers, output=output/('grasp-check-'+stage))
         except (ValueError, OSError) as error:
             estimate = {'state': 'unknown', 'reason': str(error)}
+        # Model inference takes time; use current encoder feedback for action.
+        arm.synchronize(data)
+        fingers = {n: float(data.joint(n).qpos[0]) for n in arm.gripper_control_joint_names}
         missed = clearly_missed_grasp(estimate, fingers)
         receipt.setdefault('grasp_checks', []).append({
-            'stage': stage, 'estimate': estimate, 'finger_positions': fingers, 'clear_miss': missed})
+            'stage': stage, 'estimate': estimate, 'finger_positions': fingers,
+            'finger_positions_at_capture': capture_fingers, 'clear_miss': missed})
         return missed
 
     def recover_miss(stage):
@@ -298,7 +304,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         retry_output.mkdir(exist_ok=False)
         run_pick(client, retry_output, profile_path, model_endpoint=model_endpoint, model_name=model_name,
             object_name=object_name, full_transfer=full_transfer, destination_name=destination_name,
-            recovery_budget=recovery_budget-1, robot_model_path=robot_model_path, recovery_feedback=
+            recovery_budget=recovery_budget-1, robot_model_path=robot_model_path, carry_probe=carry_probe, recovery_feedback=
             'Previous physical attempt failed: fresh images show the object not held and fingers closed empty. '
             'Reinspect its CURRENT position and revise the grasp center, direction or body height. '
             'Do not repeat a stale grasp or substitute another target. Prior estimates: '+json.dumps({
@@ -345,6 +351,20 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         if model_endpoint and check_grasp('after_lift'):
             recover_miss('after_lift')
             return
+        if carry_probe:
+            from emet.eval.short_carry_probe import short_carry_goal
+
+            arm.synchronize(data)
+            carry_origin = data.body(arm.chain.ee_body).xpos.copy()
+            carry_goal = short_carry_goal(carry_origin, observations['scene'].camera_pose)
+            receipt['short_carry_origin_m'] = carry_origin.tolist()
+            receipt['short_carry_goal_m'] = carry_goal.tolist()
+            move(carry_goal, rotation, command_speed_mps=.05, position_tolerance_m=.005)
+            record_event('short_carry')
+            time.sleep(1.)
+            if model_endpoint and check_grasp('after_short_carry'):
+                recover_miss('after_short_carry')
+                return
         if full_transfer:
             landing = front_interior_floor(observations[selected.destination_camera], selected.destination_mask,
                 extra_observations=[o for name, o in observations.items() if name != selected.destination_camera])

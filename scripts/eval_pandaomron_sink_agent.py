@@ -299,6 +299,9 @@ def serve_fixture(fixture, output, port_offset, case, scene_camera, probe_calibr
             from emet.eval.grasp_retention_score import pickup_retention
 
             verdict.update(pickup_retention(samples, float(before[2])))
+            from emet.eval.short_carry_score import short_carry_evidence
+
+            verdict.update(short_carry_evidence(samples, verdict["retained_pickup"]))
             (output / "physics-trace.json").write_text(json.dumps(samples) + "\n")
             (output / "physics.json").write_text(json.dumps(verdict, indent=2) + "\n")
         server.stop()
@@ -475,7 +478,8 @@ def run(args, *, observed_native_factory=None):
                     run_pick(client, output, args.observed_profile, model_endpoint=args.model_endpoint,
                              model_name=args.model, object_name=getattr(args, 'open_loop_object_description', None) or object_name,
                              full_transfer=getattr(args, 'open_loop_transfer', False),
-                             destination_name=getattr(args, 'open_loop_destination', 'sink'))
+                             destination_name=getattr(args, 'open_loop_destination', 'sink'),
+                             carry_probe=getattr(args, 'open_loop_carry_probe', False))
                 else:
                     if args.model_endpoint:
                         with recorded_chat_gateway(args.model_endpoint, output / "model-requests") as endpoint:
@@ -622,6 +626,7 @@ if __name__ == "__main__":
     parser.add_argument("--open-loop-transfer", action="store_true", help="Extend the one-shot pick diagnostic through release and retreat.")
     parser.add_argument("--open-loop-destination", default="sink", help="Natural-language destination for runtime VLM grounding.")
     parser.add_argument("--open-loop-object-description", help="Explicit natural-language target description for the diagnostic.")
+    parser.add_argument("--open-loop-carry-probe", action="store_true", help="Extend isolated pickup with a paced 10 cm horizontal carry.")
     parser.add_argument("--open-loop-pick", action="store_true", help="Simulation-only one-shot depth pick diagnostic.")
     parser.add_argument("--serve-fixture", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -633,6 +638,10 @@ if __name__ == "__main__":
         CASES[args.case] = spec
     if args.case not in CASES:
         parser.error('unknown case; supply a frozen --case-spec')
+    if args.open_loop_carry_probe:
+        if args.open_loop_transfer:
+            parser.error("carry probe and full transfer are separate diagnostics")
+        args.open_loop_pick = True
     if args.open_loop_transfer:
         args.open_loop_pick = True
     if args.open_loop_pick and args.observed_profile is None:
