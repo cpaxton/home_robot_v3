@@ -69,3 +69,23 @@ def test_hand_support_offset_uses_known_hand_geometry_not_object_geometry():
     assert abs(hand_lowest_offset(model, data, 'ee', ['finger'], np.eye(3))+.07) < 1e-10
     flipped = Rotation.from_euler('x', 180, degrees=True).as_matrix()
     assert abs(hand_lowest_offset(model, data, 'ee', ['finger'], flipped)-.01) < 1e-10
+
+
+def test_shared_cartesian_sweep_preserves_existing_native_planner_sampling():
+    from scipy.spatial.transform import Slerp
+
+    from emet.motion.observed_pose_targets import pose_waypoints as shared_waypoints
+
+    start = np.array([.1, .2, .3])
+    end = start + [.04, .01, .02]
+    r0 = Rotation.from_euler('xy', [.2, -.3]).as_matrix()
+    r1 = Rotation.from_euler('xyz', [-.1, .4, .2]).as_matrix()
+    rotations = Rotation.from_matrix([r0, r1])
+    angle = (rotations[0].inv()*rotations[1]).magnitude()
+    count = max(1, int(np.ceil(np.linalg.norm(end-start)/.02)), int(np.ceil(angle/.1)))
+    expected = Slerp([0., 1.], rotations)
+    actual = list(shared_waypoints(start, r0, end, r1, min_steps=1))
+    assert len(actual) == count
+    for (position, rotation), fraction in zip(actual, np.linspace(0., 1., count+1)[1:], strict=True):
+        np.testing.assert_allclose(position, start+(end-start)*fraction)
+        np.testing.assert_allclose(rotation, expected(fraction).as_matrix(), atol=1e-10)

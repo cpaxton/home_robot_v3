@@ -34,8 +34,11 @@ def box_corners(bounds):
     return (lo + hi) / 2 + CORNERS * (hi - lo) / 2
 
 
+from emet.motion.geometry_sources import OBSERVED_SCENE_SOURCES
+
+
 class PlacementScene:
-    """World-frame obstacle boxes, from GT bounds or occupied 3D voxels.
+    """World-frame obstacle boxes, from GT bounds or bounded observed geometry.
 
     The caller must segment the held object out of scene occupancy. No geometric
     crop or receptacle exemption is applied: those would also erase obstacles.
@@ -49,7 +52,7 @@ class PlacementScene:
             raise ValueError("Expected N x 2 x 3 boxes")
         if not np.isfinite(boxes).all() or np.any(boxes[:, 0] > boxes[:, 1]):
             raise ValueError("Invalid obstacle bounds")
-        if source not in {"observed_voxels", "ground_truth"}:
+        if source not in OBSERVED_SCENE_SOURCES | {"ground_truth"}:
             raise ValueError("Unsupported geometry source")
         self.boxes = boxes
         self.boxes.setflags(write=False)

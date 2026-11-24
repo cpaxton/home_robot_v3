@@ -534,3 +534,21 @@ def test_hypothetical_attachment_keeps_planned_pose_even_with_capture_owned_tool
     attach(model, data, checker)
     np.testing.assert_allclose(checker.payload_transform[:3, 3],
                                evidence.pose.world_from_object[:3, 3]-data.body('ee').xpos)
+
+
+@pytest.mark.parametrize('representation', ['observed_voxels', 'observed_surface_bounds'])
+def test_observed_representations_keep_unknown_space_blocked(representation):
+    model, data, checker, *_ = rig(source=representation, known_free=lambda bounds: False)
+    assert checker.geometry_source == representation
+    assert checker.configuration_collides(model, data)
+
+
+@pytest.mark.parametrize('representation', ['observed_voxels', 'observed_surface_bounds'])
+def test_bounded_surface_geometry_uses_same_native_executor(representation):
+    model, data, checker, *_ = rig(source=representation)
+    robot = SimpleNamespace()
+    executor = PhysicalPickPlaceExecutor(robot, model=model, data=data,
+        ee_body='ee', joint_names=['x'], collision=checker, object_pose_provider=checker,
+        input_mode='observed', synchronize=lambda data: None, command_joints=lambda q: True)
+    assert executor.input_mode == 'observed'
+    assert not checker.configuration_collides(model, data)

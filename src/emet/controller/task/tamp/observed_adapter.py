@@ -32,7 +32,7 @@ from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_
 from emet.motion.observed_admission import ObservedMaterialAdmission
 from emet.motion.observed_contact import ObservedTargetContact
 from emet.motion.observed_support_contact import ObservedSupportContact
-from emet.motion.placement_geometry import PlacementScene, bounds_array
+from emet.motion.placement_geometry import OBSERVED_SCENE_SOURCES, PlacementScene, bounds_array
 
 from .api import failure_code, response
 
@@ -64,7 +64,7 @@ class ObservedNativeSnapshot:
 
     def __post_init__(self):
         bounds = bounds_array(self.support_bounds)
-        if (not self.scene_revision or self.scene.source != 'observed_voxels'
+        if (not self.scene_revision or self.scene.source not in OBSERVED_SCENE_SOURCES
                 or self.scene.workspace is None or not callable(self.scene.known_free)):
             raise ValueError('observed_scene_unavailable')
         bounds = np.frombuffer(bounds.tobytes(), dtype=bounds.dtype).reshape(2, 3)
@@ -214,6 +214,7 @@ class ObservedNativeAdapter:
         self.max_ik_calls = max_ik_calls
         self.effects = []
         self._model_signature = None
+        self._hint_observations = {}
 
     def bind_regions(self, regions, *, robot_profile_id, reset_id):
         """Explicitly bind the same observed primitives to multi-step task search."""
@@ -230,17 +231,18 @@ class ObservedNativeAdapter:
             self.task_session.invalidate()
         with self.lock:
             self.plans.clear()
+            self._hint_observations.clear()
             self.source.invalidate()
 
     @staticmethod
     def _data(**extra):
         return {'mode': 'physical', 'inputs': 'observed', 'assistance': [], 'base_motion': 'stationary',
-                'geometry_source': 'observed_voxels', 'collision_scope': 'sampled_arm_and_payload', **extra}
+                'geometry_source': 'observed_geometry', 'collision_scope': 'sampled_arm_and_payload', **extra}
 
     @staticmethod
     def _payload_scope(snapshot):
         payload = snapshot.frame.payload
-        return {'payload_geometry_source': payload.construction,
+        return {'geometry_source': snapshot.scene.source, 'payload_geometry_source': payload.construction,
                 'payload_pose_scope': ('declared_shape_equivalence' if isinstance(payload.pose, ShapePoseEvidence)
                                        else 'unique_rigid_pose')}
 
@@ -276,10 +278,16 @@ class ObservedNativeAdapter:
                     return self._failure('scene_tasks', 'native_robot_unsupported')
                 rows = []
                 for ref, task in self.tasks.items():
-                    self._observe(task)
+                    snapshot = self._observe(task)
                     if object_filter.casefold() in task.object_name.casefold():
+                        obs_id = snapshot.frame.capture.observation_id
+                        key = (task.object_ref, task.support_ref, obs_id)
+                        if len(self._hint_observations) >= 32 and key not in self._hint_observations:
+                            self._hint_observations.pop(next(iter(self._hint_observations)))
+                        self._hint_observations.setdefault(key, snapshot)
                         rows.append({'task_ref': ref, 'object_name': task.object_name,
-                                     'receptacle_name': task.receptacle_name})
+                                     'receptacle_name': task.receptacle_name,
+                                     'observation_id': obs_id, 'frame_id': 'world'})
                 return response('scene_tasks', data=self._data(tasks=rows, discovery_only=False,
                     planning_available=True, execution_available=True,
                     execution_scope='injected_observed_native_provider'))
@@ -288,6 +296,8 @@ class ObservedNativeAdapter:
 
     def _refresh_checker(self, ex, task, *, allow_scene_change=True):
         snapshot = self._observe(task)
+        if snapshot.scene.source != ex.collision.geometry_source:
+            raise ObservationUnavailable('background_scene_changed')
         previous_admission = ex.collision.admission
         if ((previous_admission is None) != (snapshot.admission is None)
                 or (previous_admission is not None
@@ -467,6 +477,24 @@ class ObservedNativeAdapter:
                 # only reduce clearance and the observed task remains bound.
                 self._require_same_initial(initial, current, allow_stricter_map=True)
                 initial = current
+                requested_guidance = request
+                if request is not None and request.hints.get('approach'):
+                    from copy import deepcopy
+                    from dataclasses import replace
+
+                    hint = request.hints['approach']
+                    if hint.get('frame_id') != 'world':
+                        raise ValueError('invalid_manipulation_hint')
+                    key = (task.object_ref, task.support_ref, hint.get('observation_id'))
+                    reference = self._hint_observations.get(key)
+                    if reference is None or not 0 <= self.clock()-reference.frame.capture.received_monotonic <= 120.:
+                        raise ObservationUnavailable('stale_manipulation_hint')
+                    # Old semantic references never renew motion evidence. Fresh
+                    # snapshots above must independently preserve the scene binding.
+                    self._require_same_initial(reference, initial, allow_stricter_map=True)
+                    hints = deepcopy(request.hints)
+                    hints['approach']['observation_id'] = initial.frame.capture.observation_id
+                    request = replace(request, hints=hints)
                 if region is not None and (np.any(region[0] < initial.support_bounds[0, :2])
                                            or np.any(region[1] > initial.support_bounds[1, :2])):
                     return self._failure('plan_pick_place', 'placement_region_unavailable')
@@ -575,7 +603,8 @@ class ObservedNativeAdapter:
                 self.plans[ref] = ObservedStoredPlan(task, initial, initial_joints, ex)
                 return response('plan_pick_place', data=self._data(plan_ref=ref, planned_ops=['grasp', 'place'],
                     completed_ops=[], execution_started=False, planning_ik_calls=ex.ik_solver_calls,
-                    guidance={'hint_mode': request.hint_mode, 'applied': request.hints, 'adjustments': [], 'constraints': request.constraints} if request else None,
+                    guidance={'hint_mode': request.hint_mode, 'requested': requested_guidance.hints, 'applied': requested_guidance.hints,
+                              'reference_revalidated': bool(request.hints.get('approach')), 'adjustments': [], 'constraints': request.constraints} if request else None,
                     placement_strategy='verify_at_hover' if ex.release_refiner is not None else 'visual',
                     **self._payload_scope(initial)))
             except (ObservationUnavailable, ValueError, RuntimeError, TimeoutError) as exc:
@@ -590,6 +619,7 @@ class ObservedNativeAdapter:
                     # track and its handles; the next request must ground a new
                     # scene from fresh measurements. Never do this on execution.
                     self.plans.clear()
+                    self._hint_observations.clear()
                     try:
                         self.source.invalidate()
                     except (ValueError, RuntimeError, TimeoutError):
@@ -609,9 +639,11 @@ class ObservedNativeAdapter:
     @staticmethod
     def _require_same_initial(initial, current, *, allow_stricter_map=False):
         a, b = initial.frame.payload, current.frame.payload
-        map_matches = (initial.scene_revision == current.scene_revision
+        map_matches = (initial.scene.source == current.scene.source
+                       and initial.scene_revision == current.scene_revision
                        and initial.scene.geometry_digest == current.scene.geometry_digest)
-        if not map_matches and allow_stricter_map and initial.admission is not None and current.admission is not None:
+        if (not map_matches and initial.scene.source == current.scene.source
+                and allow_stricter_map and initial.admission is not None and current.admission is not None):
             map_matches = current.admission.background.is_conservative_update_of(initial.admission.background)
         if ((initial.admission is None) != (current.admission is None)
                 or (initial.admission is not None and (
@@ -698,6 +730,8 @@ class ObservedNativeAdapter:
             finally:
                 ex.robot, ex.command_joints = original_robot, original_command
                 ex.command_gripper_joints = original_gripper_command
+                if started:
+                    self._hint_observations.clear()
                 if started and len(completed) < 2:
                     hold = getattr(original_robot, 'hold_position', None)
                     if callable(hold):

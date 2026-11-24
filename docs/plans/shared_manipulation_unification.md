@@ -22,11 +22,24 @@ constitute observation evidence or authorization.
   direction/distance guidance to transfer candidates before the existing route
   certification. Direction-only and distance-only hints retain the unspecified
   native value. These are preferred pregrasp targets; strict approach refuses
-  until a path-direction guarantee is implemented. Live observation-ID binding
-  also remains required before advertising these options. Other hint groups and protected-object constraints still refuse
+  until a path-direction guarantee is implemented. Discovery references are
+  task-bound, revalidated against fresh captures, capped at 120 seconds and
+  discarded after motion. Other hint groups and protected-object constraints still refuse
   explicitly. No live qualification or general hinted grasp support is claimed.
 - Advanced metadata advertisement remains deferred until the shared adapter
   implements the options. No physical hints implementation is claimed here.
+
+- Shared Cartesian motion and the diagnostic now use one pose-waypoint generator.
+  The legacy executor's sampling is preserved and compared against its prior SO(3)
+  interpolation in a regression test. Evaluation imports remain compatibility
+  shims; no second interpolation implementation remains.
+- Observed scene contracts now accept bounded surface geometry in addition to
+  voxels, through the same collision checker and physical executor. Both require
+  known-free workspace evidence. A source representation change invalidates a
+  stored plan before motion; ground truth remains excluded from observed mode.
+  Public-tool integration tests exercise both representations with synthetic
+  evidence. This does not implement the live surface provider or remove remaining
+  payload tracking requirements.
 
 ## Remaining implementation, in order
 

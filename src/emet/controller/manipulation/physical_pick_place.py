@@ -17,13 +17,14 @@ from dataclasses import dataclass, replace
 
 import mujoco
 import numpy as np
-from scipy.spatial.transform import Rotation, Slerp
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable, read_object_pose
 from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker
 from emet.core.zmq_protocol import motion_wait_timeout_scale, read_sim_to_real_ratio
 from emet.motion.arm_rrt import ContactClearancePath, DeparturePath, joint_limits_from_model, plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
+from emet.motion.observed_pose_targets import pose_waypoints
+from emet.motion.placement_geometry import OBSERVED_SCENE_SOURCES
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class PhysicalPickPlaceExecutor:
         if input_mode == "observed":
             if object_pose_provider is None or object_pose_provider.input_mode != "observed":
                 raise ValueError("observed_object_provider_required")
-            if getattr(collision, "geometry_source", None) != "observed_voxels":
+            if getattr(collision, "geometry_source", None) not in OBSERVED_SCENE_SOURCES:
                 raise ValueError("observed_collision_provider_required")
             if isinstance(collision, ObservedNativeCollisionChecker) and object_pose_provider is not collision:
                 raise ValueError("observed_object_provider_mismatch")
@@ -389,23 +390,20 @@ class PhysicalPickPlaceExecutor:
                     hold_orientation = len(positions) > 1 and (waypoint_index == 0 or
                         rotate_at_destination and waypoint_index < len(positions)-1)
                     waypoint_rotation = initial_rotation if hold_orientation else rotation
-                    rotations = Rotation.from_matrix([initial_rotation, waypoint_rotation])
-                    sweep = Slerp([0., 1.], rotations)
-                    angle = (rotations[0].inv()*rotations[1]).magnitude()
-                    count = max(1, int(np.ceil(np.linalg.norm(destination-origin)/.02)), int(np.ceil(angle/.1)))
-                    for fraction in np.linspace(0., 1., count+1)[1:]:
+                    for waypoint, target_rotation in pose_waypoints(origin, initial_rotation,
+                            destination, waypoint_rotation, min_steps=1):
                         if self.ik_call_budget is not None and self.ik_solver_calls >= self.ik_call_budget:
                             return None, 'no_plan_within_budget'
                         before = self.data.qpos.copy()
                         self.ik_solver_calls += 1
                         pose = solve_pose_ik(self.model, self.data, ee_body=self.ee_body,
-                            joint_names=self.joint_names, target_pos=origin+(destination-origin)*fraction,
-                            target_rotation=sweep(fraction).as_matrix(), coupled_groups=self.coupled_groups,
+                            joint_names=self.joint_names, target_pos=waypoint,
+                            target_rotation=target_rotation, coupled_groups=self.coupled_groups,
                             joint_limit_margins=self.joint_limit_margins, tol_m=self.position_tolerance_m,
                             tol_rad=self.orientation_tolerance_rad)
                         if not pose.success:
                             logger.info('Cartesian IK rejected at %s: position_error=%.4f rotation_error=%.4f',
-                                (origin+(destination-origin)*fraction).tolist(), pose.pos_error_m, pose.orientation_error_rad)
+                                waypoint.tolist(), pose.pos_error_m, pose.orientation_error_rad)
                             return None, 'cartesian_ik_failed'
                         goal = self.data.qpos[self.qadr].copy()
                         if np.any(goal < low) or np.any(goal > high):
@@ -419,7 +417,7 @@ class PhysicalPickPlaceExecutor:
                             max_time_s=min(self.joint_planning_timeout_s, 10.))
                         if not segment.success:
                             logger.info("Cartesian segment rejected at %s: link=%s surface=%s contacts=%s",
-                                (origin+(destination-origin)*fraction).tolist(),
+                                waypoint.tolist(),
                                 getattr(self.collision, 'last_blocked_geom', None),
                                 getattr(getattr(self.collision, 'local_scene', None), 'last_collision', None),
                                 getattr(getattr(self.collision, 'self_collision', None), 'last_contacts', ()))

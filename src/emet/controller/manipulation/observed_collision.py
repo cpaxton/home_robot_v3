@@ -27,6 +27,7 @@ from emet.motion.observed_contact import CONTACT_PHASES, MOTION_PHASES, Observed
 from emet.motion.observed_solids import WorldSolid
 from emet.motion.observed_support_contact import ObservedSupportContact
 from emet.motion.placement_geometry import (
+    OBSERVED_SCENE_SOURCES,
     HeldObject,
     PlacementCollisionChecker,
     PlacementScene,
@@ -146,7 +147,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                  current_revision, received_monotonic: float, contact_bodies=(),
                  margin_m=.005, max_age_s=2., clock=time.monotonic, admission=None, target_contact=None,
                  support_contact=None, source_support_contact=_SAME_SUPPORT):
-        if (scene.source != 'observed_voxels' or scene.workspace is None
+        if (scene.source not in OBSERVED_SCENE_SOURCES or scene.workspace is None
                 or not callable(scene.known_free)):
             raise ValueError('observed_known_free_workspace_required')
         if payload_provider.input_mode != 'observed':
@@ -158,6 +159,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                          payload=None, contact_bodies=contact_bodies, margin_m=margin_m)
         if any(int(model.geom_bodyid[g]) not in self.robot_ids for g in range(model.ngeom)):
             raise ValueError('observed_robot_only_model_required')
+        self.geometry_source = scene.source
         self.provider = payload_provider
         self.scene_revision, self.current_revision = scene_revision, current_revision
         self.received_monotonic, self.max_age_s, self.clock = received_monotonic, max_age_s, clock

@@ -34,7 +34,7 @@ from emet.motion.placement_geometry import PlacementScene, box_corners
 
 
 @pytest.fixture
-def system(monkeypatch):
+def system(monkeypatch, request):
     import time
 
     clock = [100.]
@@ -55,7 +55,7 @@ def system(monkeypatch):
     state = SimpleNamespace(holding=False, drop=False, revision='scene:1', invalid=False,
                             missing=False, collect_unknown=False, generation=0, shape_model=None,
                             shape_calibration='test-only', shape_tilt=0.)
-    scene = PlacementScene([], source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
+    scene = PlacementScene([], source=getattr(request, 'param', 'observed_voxels'), workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
     vertices = box_corners([[-.02]*3, [.02]*3])
 
     def robot_pose():
@@ -1328,3 +1328,86 @@ def test_placement_can_choose_both_support_axes_with_full_footprint_inside(syste
     for invalid in ((), ((0., .51),), ((np.nan, 0.),), ((0.,),)):
         with pytest.raises(ValueError, match='invalid_placement_position_fractions'):
             candidates_from_supports(snapshot, (grasp,), position_fractions=invalid)
+
+
+def test_discovered_approach_reference_rebinds_to_fresh_planning_capture(system):
+    from emet.controller.task.tamp.candidate_guidance import guide_approach
+    from emet.controller.task.tamp.observed_arm import TransferCandidate
+
+    original = system.adapter.refine
+    seen = []
+
+    def refine(task, snapshot, placement_region=None, request=None):
+        ex = original(task, snapshot, placement_region)
+        if request is not None:
+            option = TransferCandidate(tuple(ex.grasp_targets), tuple(ex.place_targets), (('opening', 0.),))
+            guided, = guide_approach((option,), request.hints['approach'],
+                observation_id=snapshot.frame.capture.observation_id)
+            ex.grasp_targets = list(guided.grasp)
+            seen.append(request.hints['approach']['observation_id'])
+        return ex
+
+    refine.supports_manipulation_request = True
+    system.adapter.refine = refine
+    discovery = json.loads(system.tools['scene_tasks'].func())
+    ref = discovery['data']['tasks'][0]['observation_id']
+    result = json.loads(system.tools['plan_pick_place'].func(object_name='block', receptacle_name='counter',
+        hints={'approach': {'frame_id': 'world', 'observation_id': ref,
+                            'direction_world': [0, 0, -1], 'distance_m': .08}}))
+    assert result['status'] == 'ok', result
+    assert seen and seen[0] != ref
+    assert result['data']['guidance']['requested']['approach']['observation_id'] == ref
+    assert result['data']['guidance']['reference_revalidated'] is True
+    assert system.calls == []
+    executed = json.loads(system.tools['execute_pick_place_plan'].func(plan_ref=result['data']['plan_ref']))
+    assert executed['status'] == 'ok', executed
+    assert not system.adapter._hint_observations
+
+
+def test_historical_approach_reference_does_not_refresh_its_age(system):
+    discovery = json.loads(system.tools['scene_tasks'].func())
+    ref = discovery['data']['tasks'][0]['observation_id']
+    # A request-capable refiner must not be called for an expired reference.
+    original = system.adapter.refine
+
+    def refine(*args, **kwargs):
+        raise AssertionError('expired reference reached candidate generation')
+
+    refine.supports_manipulation_request = True
+    system.adapter.refine = refine
+    system.clock[0] += 121.
+    result = json.loads(system.tools['pick_place'].func('block', 'counter', hints={'approach': {
+        'frame_id': 'world', 'observation_id': ref, 'direction_world': [0, 0, -1]}}))
+    assert result['code'] == 'stale_manipulation_hint'
+    assert system.calls == []
+    system.adapter.refine = original
+
+
+@pytest.mark.parametrize('system', ['observed_surface_bounds'], indirect=True)
+def test_public_tool_transfer_accepts_bounded_observed_surfaces(system):
+    result = plan(system)
+    assert result['status'] == 'ok', result
+    assert result['data']['geometry_source'] == 'observed_surface_bounds'
+    assert system.calls == []
+    outcome = json.loads(system.tools['execute_pick_place_plan'].func(plan_ref=result['data']['plan_ref']))
+    assert outcome['status'] == 'ok', outcome
+    assert outcome['data']['geometry_source'] == 'observed_surface_bounds'
+
+
+@pytest.mark.parametrize('system', ['observed_surface_bounds'], indirect=True)
+def test_geometry_representation_change_invalidates_plan_before_motion(system):
+    result = plan(system)
+    assert result['status'] == 'ok', result
+    snapshot = system.source.snapshot
+
+    def changed(obj, support):
+        original = snapshot(obj, support)
+        scene = PlacementScene(original.scene.boxes, source='observed_voxels',
+            workspace=original.scene.workspace, known_free=original.scene.known_free)
+        return replace(original, scene=scene)
+
+    system.source.snapshot = changed
+    outcome = json.loads(system.tools['execute_pick_place_plan'].func(plan_ref=result['data']['plan_ref']))
+    assert outcome['status'] == 'error'
+    assert outcome['code'] == 'scene_changed_replan'
+    assert system.calls == []

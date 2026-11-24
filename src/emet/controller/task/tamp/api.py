@@ -8,6 +8,8 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from emet.motion.geometry_sources import OBSERVED_SCENE_SOURCES
+
 SCHEMA_VERSION = 1
 
 
@@ -104,7 +106,7 @@ def placement_evidence(executor) -> dict[str, Any]:
         source = getattr(search, "geometry_source", None)
         scope = getattr(search, "collision_scope", None)
         evidence["placement_search"] = {
-            "geometry_source": source if source in {"ground_truth", "observed_voxels"} else None,
+            "geometry_source": source if source in OBSERVED_SCENE_SOURCES | {"ground_truth"} else None,
             "collision_scope": scope if scope == "sampled_arm_and_payload;base_endpoint_only" else None,
             "solutions": len(getattr(search, "paths", [])),
             "rejections": counts,

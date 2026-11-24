@@ -11,13 +11,13 @@ import numpy as np
 from emet.controller.task.tamp.observed_capture import capture_arrays
 from emet.controller.task.tamp.transfer_grounding import select_transfer
 from emet.eval.native_goal_wait import wait_for_native_goal
-from emet.eval.native_pose_targets import (
+from emet.motion.mujoco_arm_ik import solve_pose_ik
+from emet.motion.observed_pose_targets import (
     hand_lowest_offset,
     horizontal_image_direction,
     image_point_at_height,
     pose_waypoints,
 )
-from emet.motion.mujoco_arm_ik import solve_pose_ik
 from emet.robots import get_robot_backend
 from emet.robots.pandaomron.observed import synchronize_pandaomron
 
