@@ -290,3 +290,34 @@ def test_destination_plane_growth_preserves_semantic_goal(monkeypatch):
     point = picker.interior_floor_center(SimpleNamespace(), mask, image_point=[200, 700])
     np.testing.assert_allclose(point, [.03, .14, 0.])
     assert np.linalg.norm(point[:2]-[.095, .095]) > .07
+
+
+def test_simple_grounding_omits_support_prediction_but_keeps_legacy_schema(monkeypatch, tmp_path):
+    from emet.eval.vlm_pick_hint import grounding_profile
+
+    captured = []
+    decision = {'camera': 'wrist', 'object': [100, 100, 300, 400],
+                'destination_camera': 'scene', 'destination': [500, 300, 900, 900],
+                'grasp_yaw_degrees': 90}
+
+    def reply(request, timeout):
+        captured.append(json.loads(request.data))
+        return io.BytesIO(json.dumps({'choices': [{'message': {'content': json.dumps(decision)}}]}).encode())
+
+    monkeypatch.setattr('urllib.request.urlopen', reply)
+    rgb = np.zeros((20, 30, 3), np.uint8)
+    result = query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
+        output=tmp_path, views={'scene': rgb, 'wrist': rgb}, infer_support_from_depth=True)
+    prompt = captured[0]['messages'][0]['content'][0]['text']
+    assert 'source_camera' not in prompt and 'counter BESIDE' not in prompt
+    assert 'support from measured depth' in prompt
+    assert result == decision and 'source' not in result
+    profile = grounding_profile(result, infer_support_from_depth=True)
+    assert profile['grounding']['source'] == profile['grounding']['object']
+    assert profile['grounding']['source']['camera'] == 'wrist'
+    assert profile['grounding']['destination']['camera'] == 'scene'
+    assert profile['local_support_estimation']
+    # Legacy callers still require an explicitly predicted support region.
+    with pytest.raises(KeyError, match='source'):
+        query_pick_hint(rgb, endpoint='http://test/v1', model='test', object_name='pear',
+            output=tmp_path, views={'scene': rgb, 'wrist': rgb})

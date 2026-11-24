@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 from emet.perception.grasps.observed import GroundingHint
 
 
-def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_name="sink", feedback=None, views=None):
+def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_name="sink", feedback=None, views=None, infer_support_from_depth=False):
     available = {'scene_alt': rgb} if views is None else views
     if not available:
         raise ValueError('no_vlm_views')
@@ -34,6 +34,12 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
         'destination_camera, destination, grasp_yaw_degrees, grasp_height_fraction, approach. '
         'No explanation. If the target is absent or ambiguous return {"unavailable":"brief reason"}.'
     )
+    if infer_support_from_depth:
+        prompt = prompt.replace(
+            'source_camera and source: view and box of flat counter BESIDE the object, excluding the object and robot. ',
+            'The tool estimates nearby support from measured depth; do not predict a support region. ')
+        prompt = prompt.replace('They must not be copies of the object box. ', 'The destination must differ from the object region. ')
+        prompt = prompt.replace('camera, object, source_camera, source, ', 'camera, object, ')
     if feedback:
         prompt += (' Previous proposal feedback: '+str(feedback)+
                    '. Reinspect the images and adapt the regions or grasp estimate. '
@@ -79,7 +85,7 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
     camera = decision.get('camera', 'scene_alt')
     if camera not in available:
         raise ValueError('invalid_vlm_camera_choice')
-    for role in ('object', 'source', 'destination'):
+    for role in (('object', 'destination') if infer_support_from_depth else ('object', 'source', 'destination')):
         role_camera = decision.get(role+'_camera', camera) if role != 'object' else camera
         if role_camera not in available:
             raise ValueError('invalid_vlm_camera_choice')
@@ -94,6 +100,24 @@ def query_pick_hint(rgb, *, endpoint, model, object_name, output, destination_na
         raise ValueError('invalid_vlm_approach')
     (output/'vlm-decision.json').write_text(json.dumps(decision, indent=2)+'\n')
     return decision
+
+
+def grounding_profile(decision, *, infer_support_from_depth=False):
+    """Bind semantic regions; an object seed lets depth estimate local support.
+
+    With region growth the source seed becomes a ring around the object mask,
+    excluding object pixels. This reuses local support estimation, not a VLM
+    claim that the object region itself is a support surface.
+    """
+    camera = decision.get('camera', 'scene_alt')
+    ground = {}
+    for role in ('object', 'source', 'destination'):
+        infer = role == 'source' and infer_support_from_depth
+        ground[role] = {
+            'camera': camera if role == 'object' or infer else decision.get(role+'_camera', camera),
+            'box': decision['object'] if infer else decision[role],
+        }
+    return {'grounding': ground, 'local_support_estimation': True}
 
 
 def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, estimate_grasp_site=False):

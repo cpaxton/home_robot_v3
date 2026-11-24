@@ -169,23 +169,22 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         attempt_output.mkdir(exist_ok=True)
         try:
             if model_endpoint:
-                from emet.eval.vlm_pick_hint import query_pick_hint, refine_object_hint
+                from emet.eval.vlm_pick_hint import grounding_profile, query_pick_hint, refine_object_hint
 
                 model_calls += 1
                 decision = query_pick_hint(observations['scene_alt'].rgb, endpoint=model_endpoint,
                     model=model_name, object_name=object_name, output=attempt_output,
                     destination_name=destination_name, feedback=feedback,
-                    views={name: view.rgb for name, view in observations.items()})
+                    views={name: view.rgb for name, view in observations.items()},
+                    infer_support_from_depth=profile.get('infer_support_from_depth', False))
                 model_calls += 1
                 decision = refine_object_hint(observations[decision.get('camera', 'scene_alt')].rgb, decision,
                     endpoint=model_endpoint, model=model_name, object_name=object_name,
                     output=attempt_output/'object-refinement',
                     estimate_grasp_site=profile.get('vlm_grasp_site_estimates', False))
-                profile['grounding'] = {role: {'camera': (decision.get(role+'_camera', decision.get('camera', 'scene_alt'))
-                    if role != 'object' else decision.get('camera', 'scene_alt')), 'box': decision[role]}
-                                        for role in ('object', 'source', 'destination')}
+                profile.update(grounding_profile(decision,
+                    infer_support_from_depth=profile.get('infer_support_from_depth', False)))
                 profile['visual_hint_source'] = 'runtime_vlm'
-                profile['local_support_estimation'] = True
             selected = select_transfer(sample, profile=profile, grow_object_region=decision is not None, require_destination=full_transfer)
             points = capture_arrays(observations[selected.object_camera])[2][selected.object_mask]
             target = top_down_target(points)
@@ -321,6 +320,7 @@ def run_pick(client, output, profile_path, *, model_endpoint=None, model_name=No
         'camera': selected.object_camera,
         'grasp_height_fraction': decision.get('grasp_height_fraction', .5) if decision else None,
         'approach': decision.get('approach', 'from_viewer') if decision else 'legacy_staging',
+        'source_support_method': 'local_depth_neighborhood' if profile.get('infer_support_from_depth') else 'semantic_region_with_local_depth_fallback',
         'continuous_object_tracking': False,
         'grounding': 'runtime_vlm_regions' if decision else 'diagnostic_image_regions',
         'vlm_used': decision is not None, 'visual_hint_source': profile.get('visual_hint_source', 'diagnostic_regions'),

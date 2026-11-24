@@ -176,10 +176,14 @@ scripted controls, model trials, assisted trials and hardware results labeled.
       Extra full-box containment yields 4/6 versus 0/6. One Qwen startup crash
       was preserved and retried separately. Source/profile/fixture hashes match.
       See [tool assessment](docs/experiments/codex_tool_assessment_20261124.md).
-- [ ] Simplify multi-view region construction into separate object/destination
-      queries, refine rough grasp proposals with measured depth, and return
-      role-specific geometry/whole-route recovery feedback. Freeze an unfamiliar
-      scene comparison; Codex's development history is not a zero-shot control.
+- [x] Add opt-in simpler Panda grounding: remove support-box prediction and
+      reuse nearby measured-depth support estimation, with no additional VLM
+      calls. Six recorded RGB-D cases retain identical grasp targets. Existing
+      benchmark profiles and other runner paths remain unchanged.
+- [ ] Compare Qwen full tasks on the simpler profile, refine rough grasp proposals
+      with measured depth, and improve role-specific geometry/whole-route recovery
+      feedback. Freeze an unfamiliar scene comparison; Codex's development history
+      is not a zero-shot control.
       Native monitored execution avoids loaded model pauses; long holds and
       production CHAT integration remain separately unqualified.
 - [ ] Qualify long loaded holds and interrupted carry separately from atomic

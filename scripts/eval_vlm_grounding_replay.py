@@ -13,7 +13,7 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.task.tamp.observed_capture import capture_arrays
 from emet.controller.task.tamp.transfer_grounding import select_transfer
 from emet.eval.panda_open_loop import estimated_grasp_section
-from emet.eval.vlm_pick_hint import query_pick_hint, refine_object_hint
+from emet.eval.vlm_pick_hint import grounding_profile, query_pick_hint, refine_object_hint
 
 
 def load_views(sensor):
@@ -27,9 +27,7 @@ def load_views(sensor):
 
 def evaluate_decision(views, decision, *, pick_only=False):
     sample = SimpleNamespace(capture=SimpleNamespace(observation_id='frozen-replay'), observations=views)
-    profile = {'local_support_estimation': True, 'grounding': {role: {'camera': decision.get(role+'_camera', decision.get('camera', 'scene_alt'))
-        if role != 'object' else decision.get('camera', 'scene_alt'), 'box': decision[role]}
-        for role in ('object', 'source', 'destination')}}
+    profile = grounding_profile(decision, infer_support_from_depth='source' not in decision)
     selected = select_transfer(sample, profile=profile, grow_object_region=True, require_destination=not pick_only)
     points, target = estimated_grasp_section(views, selected, decision.get('grasp_height_fraction', .5), grasp_point=decision.get('grasp_point'))
     source = capture_arrays(views[selected.source_camera])[2][selected.source_mask]
@@ -44,6 +42,7 @@ def main():
     parser.add_argument('--endpoint')
     parser.add_argument('--decisions-from', type=Path, help='Replay recorded VLM estimates without making model calls')
     parser.add_argument('--pick-only', action='store_true')
+    parser.add_argument('--infer-support-from-depth', action='store_true', help='Omit support-box prediction; infer nearby support from measured depth')
     parser.add_argument('--grasp-site', action='store_true', help='Ask the crop VLM for a grasp site, height and direction')
     parser.add_argument('--refine', action='store_true')
     parser.add_argument('--model', default='Qwen/Qwen3.5-9B')
@@ -79,7 +78,8 @@ def main():
                 model_calls += 1
                 decision = query_pick_hint(views['scene_alt'].rgb, endpoint=args.endpoint, model=args.model,
                     object_name=case['spec']['object_name'], output=output, destination_name=manifest['destination'],
-                    views={name: view.rgb for name, view in views.items()})
+                    views={name: view.rgb for name, view in views.items()},
+                    infer_support_from_depth=args.infer_support_from_depth)
             if args.refine:
                 model_calls += 1
                 decision = refine_object_hint(views[decision.get('camera', 'scene_alt')].rgb, decision,

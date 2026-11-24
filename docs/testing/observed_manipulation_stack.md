@@ -441,3 +441,22 @@ verified lift, completed execution and settling for `task_passed`. The stricter
 registration-box check is reported as `strict_box_transfer_passed` and
 `whole_box_contained`; it no longer overrides benchmark task success. Historical
 version-1 receipts remain unchanged.
+
+### Optional simpler support grounding
+
+`configs/eval/pandaomron_simple_grounding_development.json` sets
+`infer_support_from_depth=true`. The VLM predicts object and destination regions;
+it does not predict a support box. The existing depth estimator selects nearby
+support from an object-excluding image neighborhood. Crop refinement, motion,
+placement and scoring remain the same, with no additional model calls.
+
+This is opt-in for Panda sink diagnostics. Existing profiles retain their
+previous query schema. Production CHAT, Stretch/navigation and other benchmark
+runners do not call this query path. Replay supports
+`--infer-support-from-depth` for a future matched model ablation. On six recorded
+Codex RGB-D cases, removing the support hints preserved grounding admission and
+produced identical grasp targets. Evidence is in repository-root
+`logs/codex-tool-trials-20261124/simple-grounding-support-replay.json`.
+This is geometry replay, not a new Qwen physical-success measurement. Nearby
+support must be visible and approximately horizontal; articulated and cluttered
+support surfaces need their own evaluation before wider use.
