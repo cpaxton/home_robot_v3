@@ -66,6 +66,12 @@ except ModuleNotFoundError as exc:
 ARM_COMMAND_TOPIC = "/mars/arm/commands"
 ARM_STATUS_TOPIC = "/mars/arm/status"
 
+# Innate's manipulation server subscribes to the arm command topic to cache
+# commands for LeRobot readback. It is the one ordinary receiver permitted during
+# isolated recovery; any other subscriber blocks recovery admission. Verified
+# against Innate 0.8.0; if a future release renames this node, update both names.
+LE_ROBOT_READBACK_NODE = ("manipulation_server", "/")
+
 _TF_BASE_FRAMES = (ODOM_FRAME, MAP_FRAME, "base_footprint", "base_link")
 
 
@@ -83,6 +89,7 @@ class InnateMarsRosInterface(Node):
         self._arm_status = None
         self._published_arm_limits = None
         self._arm_applied = None
+        self._warned_arm_status_fields = False
         self._joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 
         self._odom_pose = None
@@ -177,8 +184,22 @@ class InnateMarsRosInterface(Node):
             return self._published_arm_limits
 
     def _arm_status_callback(self, msg: ArmStatus):
+        # mars_msgs (Innate 0.8.0) and maurice_msgs (0.5.1) both expose is_ok and
+        # is_torque_enabled. Fail closed if either field is missing rather than
+        # assuming health from an unrecognized message shape.
+        ok = getattr(msg, "is_ok", None)
+        torque_enabled = getattr(msg, "is_torque_enabled", None)
+        if ok is None or torque_enabled is None:
+            if not self._warned_arm_status_fields:
+                self._warned_arm_status_fields = True
+                self.get_logger().warning(
+                    "ArmStatus message is missing is_ok/is_torque_enabled; arm health treated as unavailable"
+                )
+            healthy = False
+        else:
+            healthy = bool(ok) and bool(torque_enabled)
         with self._js_lock:
-            self._arm_status = (time.monotonic(), msg.is_ok and msg.is_torque_enabled)
+            self._arm_status = (time.monotonic(), healthy)
 
     def _arm_applied_callback(self, msg: JointState):
         positions = dict(zip(msg.name, msg.position, strict=False))
@@ -220,7 +241,7 @@ class InnateMarsRosInterface(Node):
     def verify_arm_recovery_path(self, *, native=False):
         subscribers = self.get_subscriptions_info_by_topic(ARM_COMMAND_TOPIC)
         # Innate's manipulation server caches commands for LeRobot readback.
-        if any((sub.node_name, sub.node_namespace) != ("manipulation_server", "/") for sub in subscribers):
+        if any((sub.node_name, sub.node_namespace) != LE_ROBOT_READBACK_NODE for sub in subscribers):
             raise RuntimeError("An ordinary Mars arm command receiver is still active")
         states = self.get_publishers_info_by_topic(ARM_STATE_TOPIC)
         statuses = self.get_publishers_info_by_topic(ARM_STATUS_TOPIC)

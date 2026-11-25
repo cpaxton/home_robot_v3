@@ -489,6 +489,11 @@ def baseline_action(control):
         # tolerance even after the arm reaches its final joint reference.
         deadband = min(deadband, control.profile.ee_position_tolerance * 0.25)
     w = 2.5 * (bearing if distance > deadband else yaw_error)
+    # Pushing against an obstacle blocks forward motion but not rotation. Chasing
+    # the bearing in that state spins the base in place and leaves a large yaw to
+    # recover on retreat. Hold the current heading while the base is obstructed.
+    if control.obstruction[0]:
+        w = 0.0
     if distance <= deadband:
         v = 0
     arm = (control.goal.arm - control.targets) / (control.profile.max_joint_speed * control.profile.control_dt)

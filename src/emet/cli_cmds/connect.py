@@ -412,11 +412,17 @@ def mars_start_cmd(
 @click.option("--username", "--user", "-u", "user", default=None, help="SSH user")
 @click.option("--password", "-p", default=None, help="SSH password (or EMET_ROBOT_PASSWORD)")
 @click.option("--connection", "-c", "connection_name", default=None, help="Saved connection profile")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Stop without releasing the Innate native arm session (skips the hold/release check)",
+)
 def mars_stop_cmd(
     host: str | None,
     user: str | None,
     password: str | None,
     connection_name: str | None,
+    force: bool,
 ) -> None:
     """Stop innate_mars_bridge on the robot."""
     from emet.mars import resolve_mars_target, stop_bridge_on_robot
@@ -427,7 +433,7 @@ def mars_stop_cmd(
         password=password,
         connection_name=connection_name,
     )
-    stop_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir)
+    stop_bridge_on_robot(host, user, password, workspace=workspace, emet_dir=emet_dir, force=force)
 
 
 @mars_cmd.command("status", short_help="Show bridge process and ZMQ ports on robot")

@@ -98,6 +98,7 @@ class MarsBridgeStatus:
     ros_log_lines: list[str] = field(default_factory=list)
     ssh_exit_code: int = 0
     camera: MarsCameraHealth | None = None
+    arm_probe_code: int | None = None
 
     @property
     def process_running(self) -> bool:
@@ -457,11 +458,15 @@ def _arm_startup_probe_command(workspace: str, emet_dir: str, *, release_native:
     setup = remote_path(workspace.rstrip("/") + "/install/setup.zsh")
     core = remote_path(emet_dir.rstrip("/") + "/emet_core")
     emet = remote_path(emet_dir.rstrip("/") + "/src")
+    bridge_env = remote_path(emet_dir.rstrip("/") + "/bridge_env.sh")
     args = "release_native=True" if release_native else ""
     return shlex.join(
         [
             "zsh",
             "-c",
+            # Match the bridge launch environment: bridge_env.sh first, then ROS/DDS
+            # and the workspace, with PYTHONPATH as a fallback when bridge_env is absent.
+            f"source {bridge_env} 2>/dev/null || export PYTHONPATH={core}:{emet}:\"$PYTHONPATH\"; "
             "source /opt/ros/humble/setup.zsh && "
             f"source {setup} && {INNATE_DDS_SETUP} && "
             f'export PYTHONPATH={core}:{emet}:"$PYTHONPATH" && '
@@ -476,7 +481,7 @@ def _bridge_stream_probe_command(wait_s: float) -> str:
 import time
 import zmq
 
-ports = {4401: "observation", 4403: "state", 4404: "servo"}
+ports = {4401: "observations", 4403: "state", 4404: "servo"}
 with zmq.Context() as context:
     poller = zmq.Poller()
     sockets = {}
@@ -515,7 +520,7 @@ def start_bridge_on_robot(
     metadata_only_obs: bool = False,
     wait_s: float = 35.0,
 ) -> None:
-    """Start the bridge and verify its streams and arm readiness."""
+    """Start the bridge and verify its telemetry streams."""
     launch_line = _remote_bridge_launch_cmd(
         workspace=workspace,
         emet_dir=emet_dir,
@@ -543,18 +548,26 @@ def start_bridge_on_robot(
         code = _ssh_run(host, user, password, _bridge_stream_probe_command(wait_s), check=False)
         if code != 0:
             raise SystemExit(f"Mars bridge did not serve telemetry within {wait_s:g}s. Check emet mars status.")
-        code = _ssh_run(host, user, password, _arm_startup_probe_command(workspace, emet_dir), check=False)
-        if code == 2:
-            note(style("Mars arm control blocked. The bridge is available for observations.", fg="yellow"))
-        elif code not in (0, 3):
-            note(style("Mars arm readiness could not be verified.", fg="yellow"))
+
+
+def _report_arm_probe(code: int) -> None:
+    """Summarize the arm startup probe exit code for the operator."""
+    if code == 2:
+        note(style("Mars arm control blocked. The bridge is available for observations.", fg="yellow"))
+    elif code not in (0, 3):
+        note(style("Mars arm readiness could not be verified.", fg="yellow"))
 
 
 def stop_bridge_on_robot(
     host: str, user: str, password: str | None, *,
     workspace: str = DEFAULT_INNATE_WORKSPACE, emet_dir: str = DEFAULT_EMET_DIR,
+    force: bool = False,
 ) -> None:
-    release = _arm_startup_probe_command(workspace, emet_dir, release_native=True)
+    # Innate 0.8.0's native arm session must be released before the bridge is torn
+    # down, or its powered hold could be left unconfirmed. If release cannot be
+    # confirmed, keep the bridge running and let the operator decide, unless --force
+    # explicitly accepts tearing down an unconfirmed hold.
+    release = "true" if force else _arm_startup_probe_command(workspace, emet_dir, release_native=True)
     remote = (
         f"{release} || exit $?; "
         f"{_kill_bridge_remote()}; "
@@ -562,7 +575,12 @@ def stop_bridge_on_robot(
         "echo bridge stopped"
     )
     note(f"Stopping bridge on {user}@{host}…")
-    _ssh_run(host, user, password, remote, check=True)
+    code = _ssh_run(host, user, password, remote, check=False)
+    if code != 0:
+        raise SystemExit(
+            "Native arm release was not confirmed, so the bridge was left running. "
+            "Resolve the Innate native session and retry, or use --force to stop without releasing."
+        )
     print(style("Bridge stopped.", fg="green"))
 
 
@@ -587,7 +605,10 @@ def bridge_status_on_robot(
         show_next_steps=show_next_steps,
     )
     if status.process_running:
-        _ssh_run(host, user, password, _arm_startup_probe_command(workspace, emet_dir), check=False)
+        status.arm_probe_code = _ssh_run(
+            host, user, password, _arm_startup_probe_command(workspace, emet_dir), check=False
+        )
+        _report_arm_probe(status.arm_probe_code)
     return status
 
 
