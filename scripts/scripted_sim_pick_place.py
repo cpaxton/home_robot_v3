@@ -60,6 +60,15 @@ def _placement_pos(robot: Any, body: str) -> np.ndarray | None:
     return np.asarray(pl[body]["pos"], dtype=np.float64).reshape(3)
 
 
+def _placement_entry(robot: Any, body: str) -> dict[str, Any] | None:
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+
+    pl = read_sim_object_placements(robot.get_emet_session())
+    if not pl or body not in pl:
+        return None
+    return pl[body]
+
+
 def _resolve_body(robot: Any, query: str) -> str | None:
     from emet.simulation.sim_manipulation import resolve_sim_object_body
 
@@ -541,12 +550,26 @@ def main() -> int:
             if delta < 0.04:
                 print("FAIL: object barely moved; check object/receptacle queries.", file=sys.stderr)
                 ok = False
+            entry = _placement_entry(robot, receptacle_body) if receptacle_body else None
+            inside_bounds = False
+            if entry is not None:
+                bounds = np.asarray(entry.get("bounds"), dtype=np.float64)
+                if bounds.shape == (2, 3) and np.isfinite(bounds).all():
+                    # Allow one object radius of center margin; basins and
+                    # shelves put the support surface below the fixture center.
+                    margin = 0.10
+                    inside_bounds = bool(
+                        np.all(after >= bounds[0] - margin) and np.all(after <= bounds[1] + margin)
+                    )
+                    print(
+                        f"receptacle_bounds={bounds.tolist()} inside={inside_bounds}"
+                    )
             if receptacle_pos is not None:
                 placement_error = float(np.linalg.norm(after - receptacle_pos))
                 print(f"placement_error_m={placement_error:.4f}")
                 # Fixture centers can sit well above a basin/shelf support
                 # surface; the execute tool's release verification is primary.
-                if placement_error > float(gt_placement_tolerance_m):
+                if not inside_bounds and placement_error > float(gt_placement_tolerance_m):
                     print("FAIL: object is not near the selected receptacle.", file=sys.stderr)
                     ok = False
             if ok:
