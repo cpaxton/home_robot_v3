@@ -81,9 +81,7 @@ def synthetic_obstacle_target(
     boxes: list[tuple[np.ndarray, np.ndarray]] = []
     for _ in range(n):
         size = np.asarray(rng.uniform(obstacle_size[0], obstacle_size[1], size=3), dtype=np.float64)
-        center = np.asarray(
-            [rng.uniform(lo[i] + size[i] / 2, hi[i] - size[i] / 2) for i in range(3)], dtype=np.float64
-        )
+        center = np.asarray([rng.uniform(lo[i] + size[i] / 2, hi[i] - size[i] / 2) for i in range(3)], dtype=np.float64)
         bmin, bmax = center - size / 2, center + size / 2
         boxes.append((bmin, bmax))
         for x in range(shape[0]):

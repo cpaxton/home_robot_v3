@@ -60,22 +60,28 @@ The script is `scripts/validate_innate_torque_adapter.py`. It:
 
 | Check | Result |
 |---|---|
-| Adapter vs direct torque, max over all 5 arm joints | position delta `0.0026` rad; velocity delta `0.0083` rad/s |
-| Adapter vs direct torque, joint4 | `0.49335` vs `0.49591` rad; delta `0.0026` rad |
-| Applied torque | `0.4601`–`0.4634` vs `0.5` N*m (sim sag/backlash/PD residual) |
+| Adapter vs direct torque, max over all 5 arm joints | position delta `0.0024` rad; velocity delta `0.0062` rad/s |
+| Adapter vs direct torque, joint4 | `0.49589` vs `0.49589` rad; delta `0.00002` rad |
+| Applied torque | `0.5` vs `0.5` N*m at the plant substep |
+| Gain mismatch (2x `kp_eff`) | joint4 `0.46795` vs `0.49589`; delta `0.0279` rad |
 | Hardware-like torque clip | commanded `2.0` N*m at a `2.0` limit |
 | Position lead at clip | `0.002` rad, within `max_lead=0.05` |
-| Gravity-feedforward home drift | `0.0015` rad max |
-| Contact after wrist torque | cube–`robot_link61_pad4` force `3.16` N, contact detected |
+| Oracle gravity-feedforward home drift (plumbing; not model quality) | `0.0015` rad max |
+| Gripper-pad contact before/after wrist torque | `4.34` N / `3.65` N, pad contact remains |
 | Gripper position under contact | `-0.0857` rad (target `-0.6`; cube stops the jaw) |
 | Mars action layout | 1 arm × 5 joints + 1 gripper = 8 values |
 | Failures | none |
 
 The adapter/direct difference is expected: the sim's PD uses a velocity term,
 structural sag, and joint backlash, while the adapter is model-based
-feedforward. The `kd_eff * qd` term brings the two within a few milliradians;
-the remaining gap is the plant-model mismatch that a real bench identification
-must reduce.
+feedforward. Running the adapter at the plant substep (not once per 10 ms)
+makes the applied torque match exactly; the remaining position gap is the
+plant-model mismatch that a real bench identification must reduce. A gain
+mismatch of 2x in `kp_eff` produces a `0.028 rad` endpoint error, so bench
+identification is not optional.
+
+The gravity check uses the plant's own `qfrc_bias`; it proves the feedforward
+plumbing, not the quality of a learned/identified gravity model.
 
 ## What this establishes
 

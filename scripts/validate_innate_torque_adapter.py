@@ -86,8 +86,7 @@ def _profile(sim_profile: bool):
         # Hardware-like bounds: the actual numbers are bench placeholders, but
         # this exercises the same clipping path the robot-side adapter uses.
         joints = tuple(
-            replace(joint, kp_eff=1000.0, kd_eff=1.0, max_lead=0.05, torque_limit=2.0)
-            for joint in group.joints
+            replace(joint, kp_eff=1000.0, kd_eff=1.0, max_lead=0.05, torque_limit=2.0) for joint in group.joints
         )
     return replace(profile, joint_groups=(replace(group, joints=joints),))
 
@@ -161,28 +160,29 @@ class _TorqueMars:
         return TorqueMars(*args, **kwargs)
 
 
-def _run_adapter(sim, profile, *, joint_index: int, torque: float, steps: int, gravity=None):
+def _run_adapter(sim, profile, *, joint_index: int, torque: float, seconds: float, gravity=None):
     from emet.controller.manipulation.torque_adapter import PositionServoAdapter
 
     adapter = PositionServoAdapter(profile, gravity_torques=gravity)
     group = profile.joint_group("primary_arm")
-    for _ in range(steps):
+    dt = float(sim.model.opt.timestep)
+    for _ in range(max(1, int(seconds / dt))):
         command = adapter.command(
             _action(profile, joint_index=joint_index, torque=torque),
             _observation(sim, profile),
         )
         for name in group.joint_names:
             sim.set_joint_target(name, command.joint_positions[name])
-        sim.step(0.01)
+        sim.step(dt)
 
 
-def _run_direct(sim, profile, *, joint_index: int, torque: float, steps: int):
+def _run_direct(sim, profile, *, joint_index: int, torque: float, seconds: float):
     group = profile.joint_group("primary_arm")
     target = group.joint_names[joint_index]
-    for _ in range(steps):
-        for name in group.joint_names:
-            sim.set_joint_torque(name, torque if name == target else 0.0)
-        sim.step(0.01)
+    dt = float(sim.model.opt.timestep)
+    for _ in range(max(1, int(seconds / dt))):
+        sim.set_joint_torque(target, torque)
+        sim.step(dt)
 
 
 def _contact_forces(sim) -> list[dict]:
@@ -205,6 +205,15 @@ def _contact_forces(sim) -> list[dict]:
             }
         )
     return out
+
+
+def _pad_contact_force(contacts: list[dict]) -> float:
+    """Sum only gripper-pad contacts; cube-ground contacts do not count."""
+    return sum(
+        contact["force_n"]
+        for contact in contacts
+        if any("link61_pad" in name or "link62_pad" in name for name in contact["geoms"])
+    )
 
 
 def _setup_contact(sim) -> None:
@@ -230,9 +239,7 @@ def main() -> int:
 
     sim_dir = args.innate_sim.expanduser().resolve()
     if not (sim_dir / "assets").is_dir():
-        raise SystemExit(
-            f"{sim_dir}/assets is missing. From the innate-os checkout run `./innate-sim assets`."
-        )
+        raise SystemExit(f"{sim_dir}/assets is missing. From the innate-os checkout run `./innate-sim assets`.")
     _install_emet_import_stubs()
     _import_innate(sim_dir)
 
@@ -253,10 +260,10 @@ def main() -> int:
     for index, name in enumerate(group.joint_names):
         adapter_sim = VirtualMars()
         adapter_sim.step(0.2)
-        _run_adapter(adapter_sim, profile, joint_index=index, torque=0.5, steps=50)
+        _run_adapter(adapter_sim, profile, joint_index=index, torque=0.5, seconds=0.5)
         direct_sim = _TorqueMars()
         direct_sim.step(0.2)
-        _run_direct(direct_sim, profile, joint_index=index, torque=0.5, steps=50)
+        _run_direct(direct_sim, profile, joint_index=index, torque=0.5, seconds=0.5)
         a = _observation(adapter_sim, profile).arm("primary")
         d = _observation(direct_sim, profile).arm("primary")
         adapter_tau = adapter_sim.data.qfrc_applied[adapter_sim._joints[name][1]]
@@ -286,6 +293,27 @@ def main() -> int:
     if max_qd_delta > 0.03:
         failures.append(f"adapter/direct velocity differs by {max_qd_delta:.4f} rad/s (> 0.03)")
 
+    # 1b. Gain mismatch: the same command with kp_eff 2x the plant's value.
+    mismatched_joints = tuple(
+        replace(joint, kp_eff=(joint.kp_eff or 1.0) * 2.0) if joint.name == "joint4" else joint
+        for joint in group.joints
+    )
+    mismatched_profile = replace(
+        profile,
+        joint_groups=(replace(group, joints=mismatched_joints),),
+    )
+    mismatch_sim = VirtualMars()
+    mismatch_sim.step(0.2)
+    _run_adapter(mismatch_sim, mismatched_profile, joint_index=3, torque=0.5, seconds=0.5)
+    mismatch_q4 = _observation(mismatch_sim, mismatched_profile).arm("primary").joint_position[3]
+    direct_q4 = next(item["direct_q"] for item in per_joint if item["joint"] == "joint4")
+    report["gain_mismatch"] = {
+        "kp_eff_scale": 2.0,
+        "adapter_q4": mismatch_q4,
+        "nominal_direct_q4": direct_q4,
+        "q4_delta": abs(mismatch_q4 - direct_q4),
+    }
+
     # 2. Hardware-like clipping.
     hardware_adapter = PositionServoAdapter(hardware_profile)
     hardware_obs = _observation(adapter_sim, hardware_profile)
@@ -300,7 +328,10 @@ def main() -> int:
         "torque_limit": hardware_profile.joint_group("primary_arm").joints[3].torque_limit,
         "max_lead": hardware_profile.joint_group("primary_arm").joints[3].max_lead,
     }
-    if abs(command.commanded_torques["joint4"]) > 2.0 + 1e-9:
+    if (
+        abs(command.commanded_torques["joint4"])
+        > hardware_profile.joint_group("primary_arm").joints[3].torque_limit + 1e-9
+    ):
         failures.append("commanded torque exceeded the 2.0 N*m validation limit")
     if lead > 0.05 + 1e-9:
         failures.append("position lead exceeded max_lead")
@@ -309,10 +340,11 @@ def main() -> int:
     gravity_sim = VirtualMars()
     gravity_sim.step(0.2)
     start = np.array([gravity_sim.encoder_positions()[name] for name in group.joint_names])
-    gravity = lambda _obs: {
-        name: float(gravity_sim.data.qfrc_bias[gravity_sim._joints[name][1]]) for name in group.joint_names
-    }
-    _run_adapter(gravity_sim, profile, joint_index=3, torque=0.0, steps=100, gravity=gravity)
+
+    def gravity(_obs):
+        return {name: float(gravity_sim.data.qfrc_bias[gravity_sim._joints[name][1]]) for name in group.joint_names}
+
+    _run_adapter(gravity_sim, profile, joint_index=3, torque=0.0, seconds=1.0, gravity=gravity)
     end = np.array([gravity_sim.encoder_positions()[name] for name in group.joint_names])
     drift = float(np.max(np.abs(end - start)))
     report["gravity_hold"] = {"max_joint_drift_rad": drift}
@@ -323,16 +355,20 @@ def main() -> int:
     contact_sim = VirtualMars()
     _setup_contact(contact_sim)
     before = _contact_forces(contact_sim)
-    _run_adapter(contact_sim, profile, joint_index=3, torque=0.2, steps=100)
+    _run_adapter(contact_sim, profile, joint_index=3, torque=0.2, seconds=0.2)
     after = _contact_forces(contact_sim)
+    before_pad = _pad_contact_force(before)
+    after_pad = _pad_contact_force(after)
     report["contact"] = {
+        "pad_force_before_n": before_pad,
+        "pad_force_after_n": after_pad,
         "before": before,
         "after": after,
         "gripper_position": float(contact_sim.joint_positions()["joint6"]),
         "cube_pose": contact_sim.object_poses().get("cube"),
     }
-    if not after:
-        failures.append("no cube contact was measured after the torque command")
+    if before_pad <= 0.0 or after_pad <= 0.0:
+        failures.append("gripper pad did not remain in contact with the cube")
 
     # 5. Multi-arm schema / vector layout.
     vector = action_vector(_action(profile), profile)
@@ -342,7 +378,7 @@ def main() -> int:
         "arm_dof": len(group.joints),
         "gripper_dof": profile.arm("primary").gripper.dof,
         "action_dim": int(vector.size),
-        "rebuilt_arms": list(rebuilt.arm_names) if hasattr(rebuilt, "arm_names") else [a.name for a in rebuilt.arms],
+        "rebuilt_arms": [a.name for a in rebuilt.arms],
     }
     if vector.size != 8:
         failures.append(f"Mars action vector should be 8, got {vector.size}")

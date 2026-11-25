@@ -17,8 +17,11 @@ from emet.controller.manipulation.wbc_contract import (
     ArmObservation,
     GripperCommand,
     GripperObservation,
+    ReachSpec,
     WbcAction,
     WbcObservation,
+    clamp_action,
+    reach_reward,
 )
 from emet.controller.manipulation.wbc_profiles import example_mars_profile, example_sourccey_profile
 
@@ -31,7 +34,6 @@ def _profile_with_actuator(**changes):
 
 
 def _mars_action(profile, torques):
-    arm = profile.arm("primary")
     return WbcAction(
         base_velocity=(0.1, 0.0),
         arms=(
@@ -44,7 +46,7 @@ def _mars_action(profile, torques):
     )
 
 
-def _mars_observation(profile, q=0.0, qd=0.0):
+def _mars_observation(profile, q=0.0, qd=0.0, ee_pose=None, ee_target=None, target_mask=(True, True)):
     group = profile.joint_group("primary_arm")
     return WbcObservation(
         base_pose=(0.0, 0.0, 0.0),
@@ -54,6 +56,9 @@ def _mars_observation(profile, q=0.0, qd=0.0):
                 name="primary",
                 joint_position=(q,) * len(group.joints),
                 joint_velocity=(qd,) * len(group.joints),
+                ee_pose=ee_pose or (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0),
+                ee_target=ee_target,
+                target_mask=target_mask,
                 gripper=GripperObservation(position=(0.0,)),
             ),
         ),
@@ -78,6 +83,7 @@ def test_torque_limit_and_current_limit_clip():
         torque_constant=0.1,
         current_limit=1.0,
         gear_ratio=1.0,
+        control_mode="current_position",
     )
     adapter = PositionServoAdapter(profile)
     command = adapter.command(_mars_action(profile, (10.0, 0.0, 0.0, 0.0, 0.0)), _mars_observation(profile))
@@ -193,3 +199,137 @@ def test_dual_arm_adapter_commands_all_groups():
     }
     assert command.joint_positions["lift"] == pytest.approx(0.001)  # 0.2 / 200
     assert set(command.grippers) == {"left", "right"}
+
+
+def test_clamp_action_clips_base_torque_and_gripper():
+    profile = example_mars_profile()
+    action = WbcAction(
+        base_velocity=(99.0, -99.0),
+        arms=(
+            ArmAction(
+                name="primary",
+                joint_torques=(99.0,) * 5,
+                gripper=GripperCommand(values=(99.0,)),
+            ),
+        ),
+    )
+    clamped = clamp_action(action, profile)
+    assert clamped.base_velocity == (0.5, -1.0)
+    assert all(abs(tau) <= 1.5 for tau in clamped.arm("primary").joint_torques)
+    assert clamped.arm("primary").gripper.values == (0.85,)
+    # The raw action is unchanged.
+    assert action.base_velocity == (99.0, -99.0)
+
+
+def test_adapter_clips_base_velocity_and_reports_clipped():
+    profile = example_mars_profile()
+    adapter = PositionServoAdapter(profile)
+    command = adapter.command(
+        WbcAction(
+            base_velocity=(99.0, -99.0),
+            arms=(ArmAction(name="primary", joint_torques=(0.0,) * 5, gripper=GripperCommand(values=(0.0,))),),
+        ),
+        _mars_observation(profile),
+    )
+    assert command.base_velocity == (0.5, -1.0)
+    assert command.clipped is True
+
+
+def test_current_limit_without_torque_constant_fails_closed():
+    profile = _profile_with_actuator(
+        current_limit=1.0,
+        torque_constant=None,
+        control_mode="current_position",
+    )
+    with pytest.raises(ValueError, match="current_limit"):
+        PositionServoAdapter(profile)
+
+
+def test_true_torque_mode_requires_a_torque_adapter():
+    profile = _profile_with_actuator(control_mode="torque")
+    with pytest.raises(ValueError, match="true torque"):
+        PositionServoAdapter(profile)
+
+
+def test_position_mode_does_not_emit_current_limits():
+    profile = _profile_with_actuator(
+        current_limit=1.0,
+        torque_constant=0.1,
+        control_mode="position",
+    )
+    command = PositionServoAdapter(profile).command(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(profile),
+    )
+    assert command.current_limits == {}
+
+
+def test_negative_torque_produces_negative_lead():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    command = PositionServoAdapter(profile).command(
+        _mars_action(profile, (0.0, 0.0, 0.0, 0.0, -0.5)),
+        _mars_observation(profile),
+    )
+    assert command.joint_positions["joint5"] < 0.0
+
+
+def test_lead_is_clipped_by_position_limit():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.2)
+    group = profile.joint_group("primary_arm")
+    joints = list(group.joints)
+    joints[0] = replace(joints[0], position_limit=(0.0, 0.01))
+    profile = replace(profile, joint_groups=(replace(group, joints=tuple(joints)),))
+    command = PositionServoAdapter(profile).command(
+        _mars_action(profile, (1.0, 0.0, 0.0, 0.0, 0.0)),
+        _mars_observation(profile, q=0.009),
+    )
+    assert command.joint_positions["joint1"] == pytest.approx(0.01)
+
+
+def test_callable_feedforward_must_return_mapping():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    adapter = PositionServoAdapter(profile, gravity_torques=lambda _obs: [1.0])
+    with pytest.raises(ValueError, match="must return a mapping"):
+        adapter.command(_mars_action(profile, (0.0,) * 5), _mars_observation(profile))
+
+
+def test_reward_rejects_all_zero_active_weights():
+    profile = example_mars_profile()
+    target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    with pytest.raises(ValueError, match="positive weight"):
+        reach_reward(
+            _mars_action(profile, (0.0,) * 5),
+            _mars_observation(profile, ee_target=target),
+            profile=profile,
+            spec=ReachSpec(arm_weights=(0.0,)),
+        )
+
+
+def test_target_mask_ignores_unconstrained_position_or_orientation():
+    profile = example_mars_profile()
+    position_target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    same_position_wrong_orientation = (0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0)
+    _, components = reach_reward(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(
+            profile,
+            ee_pose=same_position_wrong_orientation,
+            ee_target=position_target,
+            target_mask=(True, False),
+        ),
+        profile=profile,
+    )
+    assert components["success"] == 1.0
+
+    wrong_position_same_orientation = (0.1, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    _, components = reach_reward(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(
+            profile,
+            ee_pose=wrong_position_same_orientation,
+            ee_target=position_target,
+            target_mask=(False, True),
+        ),
+        profile=profile,
+    )
+    assert components["success"] == 1.0

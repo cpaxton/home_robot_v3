@@ -192,6 +192,41 @@ def test_observation_requires_all_profile_arms():
         incomplete.validate(profile)
 
 
+def test_observation_rejects_nonfinite_base_twist():
+    profile = example_mars_profile()
+    obs = _observation(profile)
+    with pytest.raises(ValueError, match="base_twist"):
+        WbcObservation(
+            base_pose=obs.base_pose,
+            base_twist=(float("nan"), 0.0),
+            arms=obs.arms,
+            occupancy=obs.occupancy,
+            torso=obs.torso,
+        )
+
+
+def test_observation_rejects_wrong_torso_name():
+    profile = example_rby1_profile()
+    obs = _observation(profile)
+    wrong = JointGroupObservation(name="not_torso", position=(0.0,) * 4, velocity=(0.0,) * 4)
+    with pytest.raises(ValueError, match="torso observation name"):
+        WbcObservation(
+            base_pose=obs.base_pose,
+            base_twist=obs.base_twist,
+            arms=obs.arms,
+            occupancy=obs.occupancy,
+            torso=wrong,
+        ).validate(profile)
+
+
+def test_mars_profile_declares_actuator_control_modes():
+    profile = example_mars_profile()
+    group = profile.joint_group("primary_arm")
+    assert group.joints[0].control_mode == "position"
+    assert group.joints[3].control_mode == "current_position"
+    assert group.joints[4].control_mode == "current_position"
+
+
 def test_reach_reward_single_arm_success_and_collision():
     profile = example_mars_profile()
     target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)

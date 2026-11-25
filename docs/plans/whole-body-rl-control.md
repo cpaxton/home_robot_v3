@@ -89,7 +89,18 @@ WbcAction:
 
 - `d_base` is 2 for planar, 3 for holonomic, 0 for fixed.
 - Gripper commands are separate from arm torques. A parallel jaw has one value;
-  a multi-finger hand can have several.
+  a multi-finger hand can have several. `GripperSpec.command_limits` supplies
+  the executor-level command bounds; if absent, the gripper channel is passed
+  through and the servo/executor owns its limit.
+- `JointSpec.control_mode` records the actuator capability:
+  `position`, `current_position`, or `torque`. `PositionServoAdapter` accepts
+  the first two and rejects `torque`; a true torque backend must provide its own
+  adapter.
+- `clamp_action(action, profile)` is the shared base/torque/gripper safety clamp.
+  Every adapter calls it before mapping to hardware; it is not optional.
+- The head group is **observed-only** in this schema. It has no action channel
+  and is excluded from `controlled_joint_names`, so a head feedforward torque
+  is rejected rather than silently ignored.
 - `action_vector(action, profile)` flattens in **base, torso, arms (profile
   order), per-arm gripper** order. `action_from_vector` reverses it.
 - The policy never sees joint-name strings; the training loop uses the profile
@@ -261,6 +272,8 @@ research-only.
 
 Torque actions require tighter constraints than velocity actions:
 
+- `clamp_action` is the mandatory action-boundary clip for base velocity,
+  per-joint torque, and gripper command limits; adapters may only tighten it;
 - per-joint torque and current limits, plus a total power/thermal budget;
 - position-target lead (`max_lead`) and joint-limit clipping;
 - torque-rate limiting;
@@ -291,6 +304,19 @@ that the current XL430/XC430 shoulder and elbow joints have no current control;
 they can realize a position-servo impedance adapter but not true joint torque.
 The wrist and gripper are current-capable. Do not present the Mars adapter as
 full-arm torque control.
+
+## Relationship to the existing whole-body stack
+
+The existing `src/emet/rl/manipulation/whole_body_*` code is the older
+gain/velocity tracker: it emits seven motion outputs, consumes pose targets,
+and has its own `test_whole_body_v2.py`. That stack remains the free-space
+baseline and is not redefined here.
+
+This document/schema is the new **torque contract**: a multi-arm, per-arm
+action/observation API with an actuator adapter boundary. It currently has
+contract/adapter tests and the external innate-os smoke test, not a training
+consumer. When a training loop adopts it, the two stacks should be compared on
+the same held-out cases rather than merged by name.
 
 ## Open questions
 

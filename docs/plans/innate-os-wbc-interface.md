@@ -260,12 +260,12 @@ external checkout and never vendors it. See
 
 Current smoke result:
 
-- adapter-driven motion is within `0.0026 rad` and `0.0083 rad/s` of direct
+- adapter-driven motion is within `0.0024 rad` and `0.0062 rad/s` of direct
   torque across all five arm joints for a 0.5 N*m step;
 - a hardware-like 2 N*m torque limit and 0.05 rad position lead clip correctly;
 - gravity-feedforward home drift is `0.0015 rad`;
-- a cube–gripper pad contact remains measurable (`3.16 N`) while a wrist torque
-  is applied;
+- a cube–gripper pad contact remains measurable (`3.65 N` after) while a wrist
+  torque is applied;
 - the Mars action vector is `1 arm × 5 joints + 1 gripper = 8`.
 
 This validates the mapping and the contact telemetry, not full-arm torque or

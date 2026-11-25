@@ -25,6 +25,7 @@ import math
 from emet.controller.manipulation.wbc_contract import (
     ArmSpec,
     BaseSpec,
+    ControlMode,
     EmbodimentProfile,
     GripperSpec,
     JointGroupSpec,
@@ -44,6 +45,7 @@ def _joint(
     kp_eff: float,
     max_lead: float,
     kind: JointKind = "revolute",
+    control_mode: ControlMode = "position",
 ) -> JointSpec:
     return JointSpec(
         name=name,
@@ -51,6 +53,7 @@ def _joint(
         velocity_limit=velocity_limit,
         torque_limit=torque_limit,
         kind=kind,
+        control_mode=control_mode,
         kp_eff=kp_eff,
         max_lead=max_lead,
     )
@@ -97,6 +100,7 @@ def example_mars_profile() -> EmbodimentProfile:
                 torque_limit=1.5,
                 kp_eff=1000.0,
                 max_lead=0.05,
+                control_mode="current_position",
             ),
             _joint(
                 "joint5",
@@ -105,6 +109,7 @@ def example_mars_profile() -> EmbodimentProfile:
                 torque_limit=1.5,
                 kp_eff=1000.0,
                 max_lead=0.05,
+                control_mode="current_position",
             ),
         ),
     )
@@ -117,7 +122,11 @@ def example_mars_profile() -> EmbodimentProfile:
                 name="primary",
                 joint_group="primary_arm",
                 ee_link="ee_link",
-                gripper=GripperSpec(name="primary_gripper", joint_names=("joint6",)),
+                gripper=GripperSpec(
+                    name="primary_gripper",
+                    joint_names=("joint6",),
+                    command_limits=((-0.6, 0.85),),
+                ),
             ),
         ),
         metadata=(("limits_source", _EXAMPLE), ("robot", "innate_mars")),

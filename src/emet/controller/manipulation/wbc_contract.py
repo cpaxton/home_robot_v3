@@ -26,8 +26,8 @@ See ``docs/plans/whole-body-rl-control.md``.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Any, Literal
+from dataclasses import dataclass, replace
+from typing import Any, Literal, cast
 
 import numpy as np
 
@@ -42,6 +42,7 @@ JointKind = Literal["revolute", "prismatic"]
 GroupRole = Literal["arm", "torso", "head"]
 BaseKind = Literal["planar", "holonomic", "fixed"]
 GripperMode = Literal["position", "force", "velocity"]
+ControlMode = Literal["position", "current_position", "torque"]
 
 
 def _require_finite(value: float, name: str, *, positive: bool = False, nonnegative: bool = False) -> None:
@@ -77,6 +78,7 @@ class JointSpec:
     velocity_limit: float
     torque_limit: float
     kind: JointKind = "revolute"
+    control_mode: ControlMode = "position"
     kp_eff: float | None = None  # effective position-loop stiffness, N*m/rad
     kd_eff: float | None = None  # effective damping, N*m*s/rad
     torque_constant: float | None = None  # N*m/A at the motor
@@ -89,6 +91,8 @@ class JointSpec:
             raise ValueError("joint name must be a non-empty string")
         if self.kind not in ("revolute", "prismatic"):
             raise ValueError(f"unknown joint kind: {self.kind!r}")
+        if self.control_mode not in ("position", "current_position", "torque"):
+            raise ValueError(f"unknown control mode: {self.control_mode!r}")
         lo, hi = self.position_limit
         _require_finite(lo, f"{self.name}.position_limit[0]")
         _require_finite(hi, f"{self.name}.position_limit[1]")
@@ -138,6 +142,10 @@ class BaseSpec:
 
     ``planar`` is (vx, omega) for a differential-drive base; ``holonomic`` is
     (vx, vy, omega) for a swerve/omni base; ``fixed`` has no base action.
+
+    ``acceleration_limits`` are executor-owned. ``clamp_action`` and the
+    position-servo adapter clip the velocity envelope only; the robot-side
+    command stream owns slew/acceleration limits.
     """
 
     name: str = "base"
@@ -179,6 +187,9 @@ class GripperSpec:
     joint_names: tuple[str, ...]
     command_mode: GripperMode = "position"
     force_limit: float | None = None
+    # Per-joint command bounds. None means the gripper command is passed through
+    # (the executor/servo remains responsible for its own limit).
+    command_limits: tuple[tuple[float, float], ...] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name:
@@ -189,6 +200,14 @@ class GripperSpec:
             raise ValueError(f"unknown gripper command mode: {self.command_mode!r}")
         if self.force_limit is not None:
             _require_finite(self.force_limit, f"{self.name}.force_limit", positive=True)
+        if self.command_limits is not None:
+            if len(self.command_limits) != len(self.joint_names):
+                raise ValueError(f"{self.name}.command_limits must match gripper DOF")
+            for i, (lo, hi) in enumerate(self.command_limits):
+                _require_finite(lo, f"{self.name}.command_limits[{i}][0]")
+                _require_finite(hi, f"{self.name}.command_limits[{i}][1]")
+                if lo >= hi:
+                    raise ValueError(f"{self.name}.command_limits[{i}] must be increasing")
 
     @property
     def dof(self) -> int:
@@ -431,6 +450,8 @@ class WbcObservation:
             raise ValueError(f"unsupported observation schema version: {self.schema_version}")
         if len(self.base_pose) != BASE_POSE_DIM or not all(math.isfinite(float(v)) for v in self.base_pose):
             raise ValueError("base_pose must contain three finite values")
+        if not all(math.isfinite(float(v)) for v in self.base_twist):
+            raise ValueError("base_twist contains a non-finite value")
         if not self.arms:
             raise ValueError("observation must contain at least one arm")
         names = [a.name for a in self.arms]
@@ -448,7 +469,7 @@ class WbcObservation:
         raise KeyError(f"unknown arm observation: {name!r}")
 
     def validate(self, profile: EmbodimentProfile) -> None:
-        if set(a.name for a in self.arms) != set(profile.arm_names):
+        if {a.name for a in self.arms} != set(profile.arm_names):
             raise ValueError(
                 f"observation arms {sorted(a.name for a in self.arms)} do not match profile {sorted(profile.arm_names)}"
             )
@@ -472,6 +493,8 @@ class WbcObservation:
         else:
             if self.torso is None:
                 raise ValueError(f"observation is missing torso group {profile.torso.name!r}")
+            if self.torso.name != profile.torso.name:
+                raise ValueError(f"torso observation name {self.torso.name!r} != profile {profile.torso.name!r}")
             _require_vector(self.torso.position, len(profile.torso.joints), f"{self.torso.name}.position")
             _require_vector(self.torso.velocity, len(profile.torso.joints), f"{self.torso.name}.velocity")
             if self.torso.torque:
@@ -479,6 +502,8 @@ class WbcObservation:
         if self.head is not None:
             if profile.head is None:
                 raise ValueError("observation has head state but the profile has no head")
+            if self.head.name != profile.head.name:
+                raise ValueError(f"head observation name {self.head.name!r} != profile {profile.head.name!r}")
             _require_vector(self.head.position, len(profile.head.joints), f"{self.head.name}.position")
             _require_vector(self.head.velocity, len(profile.head.joints), f"{self.head.name}.velocity")
             if self.head.torque:
@@ -620,7 +645,7 @@ class WbcAction:
         raise KeyError(f"unknown arm action: {name!r}")
 
     def validate(self, profile: EmbodimentProfile) -> None:
-        if set(a.name for a in self.arms) != set(profile.arm_names):
+        if {a.name for a in self.arms} != set(profile.arm_names):
             raise ValueError(
                 f"action arms {sorted(a.name for a in self.arms)} do not match profile {sorted(profile.arm_names)}"
             )
@@ -677,7 +702,7 @@ class WbcAction:
                     if a.get("gripper") is None
                     else GripperCommand(
                         values=tuple(float(x) for x in a["gripper"]["values"]),
-                        mode=str(a["gripper"].get("mode", "position")),
+                        mode=cast(GripperMode, a["gripper"].get("mode", "position")),
                     ),
                 )
                 for a in d["arms"]
@@ -729,6 +754,46 @@ def action_from_vector(vector: np.ndarray | tuple[float, ...], profile: Embodime
             offset += m
         arms.append(ArmAction(name=arm_spec.name, joint_torques=torques, gripper=gripper))
     return WbcAction(base_velocity=base, arms=tuple(arms), torso_torques=torso)
+
+
+def clamp_action(action: WbcAction, profile: EmbodimentProfile) -> WbcAction:
+    """Clip a policy action to profile-level base/torque/gripper limits.
+
+    This is the shared action-boundary safety clamp. Every actuator adapter
+    should call it before mapping to hardware so a raw policy output cannot
+    exceed the robot's declared envelope. Actuator-specific limits (current,
+    position lead, thermal derating) remain the adapter/executor's job.
+    """
+    action.validate(profile)
+    base_velocity = tuple(
+        float(np.clip(value, -limit, limit))
+        for value, limit in zip(action.base_velocity, profile.base.velocity_limits, strict=True)
+    )
+    torso = (
+        tuple(
+            float(np.clip(torque, -joint.torque_limit, joint.torque_limit))
+            for joint, torque in zip(profile.torso.joints, action.torso_torques, strict=True)
+        )
+        if profile.torso is not None
+        else ()
+    )
+    arms = []
+    for arm_spec in profile.arms:
+        arm_action = action.arm(arm_spec.name)
+        group = profile.joint_group(arm_spec.joint_group)
+        torques = tuple(
+            float(np.clip(torque, -joint.torque_limit, joint.torque_limit))
+            for joint, torque in zip(group.joints, arm_action.joint_torques, strict=True)
+        )
+        gripper = arm_action.gripper
+        if gripper is not None and arm_spec.gripper is not None and arm_spec.gripper.command_limits is not None:
+            values = tuple(
+                float(np.clip(value, low, high))
+                for value, (low, high) in zip(gripper.values, arm_spec.gripper.command_limits, strict=True)
+            )
+            gripper = replace(gripper, values=values)
+        arms.append(replace(arm_action, joint_torques=torques, gripper=gripper))
+    return replace(action, base_velocity=base_velocity, torso_torques=torso, arms=tuple(arms))
 
 
 @dataclass(frozen=True)
@@ -820,36 +885,38 @@ def reach_reward(
         raise ValueError("reach_reward requires at least one arm with ee_target")
 
     weight_sum = sum(weights[profile.arm_names.index(name)] for name in active)
-    pos_err = sum(weights[profile.arm_names.index(name)] * pos_terms[name] for name in active) / max(weight_sum, 1e-12)
-    quat_err = sum(
-        weights[profile.arm_names.index(name)] * quat_terms[name] for name in active
-    ) / max(weight_sum, 1e-12)
+    if weight_sum <= 0:
+        raise ValueError("active arm_weights must contain a positive weight")
+    pos_err = sum(weights[profile.arm_names.index(name)] * pos_terms[name] for name in active) / weight_sum
+    quat_err = sum(weights[profile.arm_names.index(name)] * quat_terms[name] for name in active) / weight_sum
 
     action_norm_sq = 0.0
     for i, value in enumerate(action.base_velocity):
         action_norm_sq += (value / profile.base.velocity_limits[i]) ** 2
     if profile.torso is not None:
-        for joint, tau in zip(profile.torso.joints, action.torso_torques):
+        for joint, tau in zip(profile.torso.joints, action.torso_torques, strict=True):
             action_norm_sq += (tau / joint.torque_limit) ** 2
     for arm_spec in profile.arms:
         group = profile.joint_group(arm_spec.joint_group)
         arm_action = action.arm(arm_spec.name)
-        for joint, tau in zip(group.joints, arm_action.joint_torques):
+        for joint, tau in zip(group.joints, arm_action.joint_torques, strict=True):
             action_norm_sq += (tau / joint.torque_limit) ** 2
 
     jerk = 0.0
     if prev_action is not None:
         prev_action.validate(profile)
-        if set(a.name for a in prev_action.arms) != set(profile.arm_names):
+        if {a.name for a in prev_action.arms} != set(profile.arm_names):
             raise ValueError("prev_action arms do not match the profile")
         if profile.torso is not None:
-            for joint, tau, prev in zip(profile.torso.joints, action.torso_torques, prev_action.torso_torques):
+            for joint, tau, prev in zip(
+                profile.torso.joints, action.torso_torques, prev_action.torso_torques, strict=True
+            ):
                 jerk += ((tau - prev) / joint.torque_limit) ** 2
         for arm_spec in profile.arms:
             group = profile.joint_group(arm_spec.joint_group)
             arm_action = action.arm(arm_spec.name)
             prev_arm = prev_action.arm(arm_spec.name)
-            for joint, tau, prev in zip(group.joints, arm_action.joint_torques, prev_arm.joint_torques):
+            for joint, tau, prev in zip(group.joints, arm_action.joint_torques, prev_arm.joint_torques, strict=True):
                 jerk += ((tau - prev) / joint.torque_limit) ** 2
 
     success = all(successes.values()) if spec.success_mode == "all" else any(successes.values())
@@ -890,9 +957,11 @@ __all__ = [
     "JointSpec",
     "ReachSpec",
     "SCHEMA_VERSION",
+    "ControlMode",
     "WbcAction",
     "WbcObservation",
     "action_from_vector",
     "action_vector",
+    "clamp_action",
     "reach_reward",
 ]

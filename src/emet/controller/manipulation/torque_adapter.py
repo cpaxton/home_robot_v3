@@ -31,6 +31,7 @@ from emet.controller.manipulation.wbc_contract import (
     JointSpec,
     WbcAction,
     WbcObservation,
+    clamp_action,
 )
 
 
@@ -43,6 +44,7 @@ class ServoCommand:
     current_limits: dict[str, float] = field(default_factory=dict)
     commanded_torques: dict[str, float] = field(default_factory=dict)
     grippers: dict[str, GripperCommand] = field(default_factory=dict)
+    clipped: bool = False
 
     def __post_init__(self) -> None:
         if not all(np.isfinite(float(v)) for v in self.base_velocity):
@@ -79,7 +81,8 @@ class PositionServoAdapter:
     not datasheet PID values. ``kd_eff * qd`` compensates the servo's own
     velocity damping so the policy's torque is the net requested torque.
     ``max_lead`` bounds the position error the policy can request, which is
-    the primary safety limit.
+    the primary safety limit. Base velocity is clipped to the profile envelope;
+    base acceleration remains the executor/robot-side stream's responsibility.
     """
 
     def __init__(
@@ -98,10 +101,24 @@ class PositionServoAdapter:
                 extra = set(source) - known
                 if extra:
                     raise ValueError(f"feedforward torques reference unknown joints: {sorted(extra)}")
+        for group in profile.joint_groups:
+            for joint in group.joints:
+                if joint.control_mode == "torque":
+                    raise ValueError(
+                        f"{joint.name} declares true torque control; use a torque adapter, not PositionServoAdapter"
+                    )
+                if joint.current_limit is not None and (joint.torque_constant is None or joint.torque_constant <= 0):
+                    raise ValueError(
+                        f"{joint.name} declares current_limit but no positive torque_constant; "
+                        "the current limit cannot be enforced"
+                    )
 
     def command(self, action: WbcAction, observation: WbcObservation) -> ServoCommand:
         action.validate(self.profile)
         observation.validate(self.profile)
+        clipped_action = clamp_action(action, self.profile)
+        clipped = clipped_action != action
+        action = clipped_action
         gravity = self._resolve(self._gravity, observation, "gravity_torques")
         friction = self._resolve(self._friction, observation, "friction_torques")
         positions: dict[str, float] = {}
@@ -112,7 +129,11 @@ class PositionServoAdapter:
             if torso_obs is None:
                 raise ValueError("observation is missing the torso group required by the profile")
             for joint, tau, q, qd in zip(
-                self.profile.torso.joints, action.torso_torques, torso_obs.position, torso_obs.velocity
+                self.profile.torso.joints,
+                action.torso_torques,
+                torso_obs.position,
+                torso_obs.velocity,
+                strict=True,
             ):
                 self._joint(joint, tau, q, qd, gravity, friction, positions, currents, torques)
         for arm_spec in self.profile.arms:
@@ -120,7 +141,11 @@ class PositionServoAdapter:
             arm_obs = observation.arm(arm_spec.name)
             arm_action = action.arm(arm_spec.name)
             for joint, tau, q, qd in zip(
-                group.joints, arm_action.joint_torques, arm_obs.joint_position, arm_obs.joint_velocity
+                group.joints,
+                arm_action.joint_torques,
+                arm_obs.joint_position,
+                arm_obs.joint_velocity,
+                strict=True,
             ):
                 self._joint(joint, tau, q, qd, gravity, friction, positions, currents, torques)
 
@@ -135,6 +160,7 @@ class PositionServoAdapter:
             current_limits=currents,
             commanded_torques=torques,
             grippers=grippers,
+            clipped=clipped,
         )
 
     def _resolve(
@@ -179,7 +205,8 @@ class PositionServoAdapter:
         total = float(np.clip(total, -joint.torque_limit, joint.torque_limit))
 
         current_limit = joint.current_limit
-        if current_limit is not None and joint.torque_constant is not None:
+        has_current_command = joint.control_mode != "position" and current_limit is not None
+        if has_current_command and joint.torque_constant is not None:
             torque_at_current_limit = current_limit * joint.torque_constant * joint.gear_ratio
             total = float(np.clip(total, -torque_at_current_limit, torque_at_current_limit))
 
@@ -187,9 +214,9 @@ class PositionServoAdapter:
         lo, hi = joint.position_limit
         positions[joint.name] = float(np.clip(q + lead, lo, hi))
         torques[joint.name] = total
-        if joint.torque_constant is not None:
+        if has_current_command and joint.torque_constant is not None:
             current = abs(total) / (joint.torque_constant * joint.gear_ratio)
-            currents[joint.name] = float(min(current, current_limit) if current_limit is not None else current)
+            currents[joint.name] = float(min(current, current_limit))
 
 
 __all__ = ["ActuatorAdapter", "PositionServoAdapter", "ServoCommand"]
