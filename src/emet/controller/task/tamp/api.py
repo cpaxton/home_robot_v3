@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import functools
 import json
 import math
@@ -203,7 +204,45 @@ def plan_data(plan, mode: str | None, plan_ref: str | None = None) -> dict[str, 
         "completed_ops": list(plan.completed_ops) if plan else [],
         "failed_stage": plan.failed_op if plan else None,
         "measurements": getattr(plan, "measurements", None) if plan else None,
+        "refusal": getattr(plan, "refusal", None) if plan else None,
     }
+
+
+def refusal_from_teleport_collision(message: str) -> dict[str, Any] | None:
+    """Extract a semantic-only refusal from a teleport-collision error string.
+
+    The bridge reports penetrating contacts as ``teleport_endpoint_collision:
+    [{'bodies': [...], 'distance_m': <negative>}, ...]``. Returns the deepest
+    penetration as ``margin_m`` (negative = how far inside) with
+    ``relax_allowed: False`` — a teleport endpoint overlap is a hard
+    infeasibility, not a clearance near-miss. Body identities are not exposed.
+    Returns ``None`` when the message is not a teleport-collision refusal.
+    """
+    marker = "teleport_endpoint_collision:"
+    text = str(message)
+    idx = text.find(marker)
+    if idx < 0:
+        return None
+    rest = text[idx + len(marker):].strip()
+    contacts: list[Any] | None = None
+    try:
+        parsed = ast.literal_eval(rest)
+        if isinstance(parsed, list):
+            contacts = parsed
+    except (ValueError, SyntaxError):
+        contacts = None
+    refusal: dict[str, Any] = {
+        "code": "teleport_collision",
+        "refused": True,
+        "threshold_m": None,
+        "margin_m": None,
+        "relax_allowed": False,
+    }
+    if contacts:
+        dists = [float(c["distance_m"]) for c in contacts if isinstance(c, dict) and "distance_m" in c]
+        if dists:
+            refusal["margin_m"] = min(dists)
+    return refusal
 
 
 def failure_code(message: str) -> str:
@@ -257,7 +296,7 @@ def failure_code(message: str) -> str:
             ("joint_bounds", "joint_bounds"),
             ("collision", "collision"),
             ("tracking_failed", "tracking_timeout"),
-            ("ik_failed", "ik_failed"),
+            ("ik_failed", "unreachable"),
             ("planning_failed", "planning_failed"),
             ("gripper_close_path_failed", "planning_failed"),
             ("verify_failed", "verification_failed"),
@@ -300,5 +339,7 @@ def failure_code(message: str) -> str:
         "provide_task_ref_or_object_and_receptacle",
         "planner_error",
         "approach_failed",
+        "unreachable",
+        "grounding_unavailable",
     }
     return next((part for part in reversed(parts) if part in allowed), "operation_failed")

@@ -184,6 +184,10 @@ class KinematicPickPlaceExecutor:
         self.last_plan_waypoints: list[np.ndarray] = []
         self.last_ee_path_world: list[np.ndarray] = []
         self.last_targets: dict[str, np.ndarray] = {}
+        # Graded-conservatism / RL-WBC replay: observed EE + joint trace for the last
+        # motion attempt, plus a structured failure record when it does not reach.
+        self._motion_trace: list[dict[str, Any]] = []
+        self.last_attempt: dict[str, Any] = {}
 
     def _scaled_dt(self, dt: float) -> float:
         from emet.core.zmq_protocol import motion_wait_timeout_scale, read_sim_to_real_ratio
@@ -442,6 +446,7 @@ class KinematicPickPlaceExecutor:
                     or not np.isclose(np.linalg.det(target_rotation), 1)):
                 raise ValueError("Rigid target rotation required")
         observed = None
+        trace: list[dict[str, Any]] = []
         while True:
             if self._sync_qpos_from_robot():
                 observed = np.asarray(self._data.body(self.ee_body).xpos).copy()
@@ -454,10 +459,16 @@ class KinematicPickPlaceExecutor:
                 observed = None
                 error = float('inf')
                 orientation_error = float('inf') if target_rotation is not None else 0.0
+            trace.append({
+                "ee_xyz": None if observed is None else observed.tolist(),
+                "qpos": self._current_arm_qpos(),
+                "error_m": error if np.isfinite(error) else None,
+            })
             accepted = error <= self.ik_tol_m and orientation_error <= .1
             if accepted or time.monotonic() >= deadline:
                 break
             time.sleep(.05)
+        self._motion_trace = trace
         self.last_ee_verification = {
             'target_xyz': np.asarray(target).tolist(),
             'observed_xyz': None if observed is None else observed.tolist(),
@@ -493,6 +504,30 @@ class KinematicPickPlaceExecutor:
             'planned_q': None if command is None else np.asarray(command).tolist(),
             'server_targets': [by_joint.get(name) for name in self.joint_names],
             'state_step': state.get('step') if isinstance(state, dict) else None,
+        }
+
+    def _current_arm_qpos(self) -> list[float]:
+        """Observed arm/torso joint positions (after a qpos sync)."""
+        from emet.motion.mujoco_arm_ik import joint_qpos_addrs
+
+        model = getattr(self, "_model", None)
+        data = getattr(self, "_data", None)
+        joints = getattr(self, "joint_names", None)
+        if model is None or data is None or not joints:
+            return []
+        return [float(data.qpos[a]) for a in joint_qpos_addrs(model, joints)]
+
+    def _set_last_attempt(self, target: np.ndarray, reached: bool, error_m: float) -> None:
+        """Structured record of the last motion attempt (success or failure), for RL-WBC replay."""
+        waypoints = getattr(self, "last_plan_waypoints", []) or []
+        self.last_attempt = {
+            "target_xyz": np.asarray(target, dtype=np.float64).tolist(),
+            "reached": bool(reached),
+            "error_m": float(error_m) if np.isfinite(error_m) else None,
+            "failure_mode": self._last_motion_failure,
+            "joint_names": list(getattr(self, "joint_names", []) or []),
+            "planned_waypoints": [np.asarray(w, dtype=np.float64).tolist() for w in waypoints],
+            "trace": list(self._motion_trace),
         }
 
     def _stage_failure(self, stage: str) -> str:
@@ -550,6 +585,8 @@ class KinematicPickPlaceExecutor:
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
         self._last_motion_failure = None
         self.last_ee_verification = None
+        self._motion_trace = []
+        self.last_attempt = {}
         assert self._model is not None and self._data is not None
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
 
@@ -558,6 +595,7 @@ class KinematicPickPlaceExecutor:
         # Contact may have prevented that posture from being reached.
         if not self._sync_qpos_from_robot():
             self._last_motion_failure = self._last_motion_failure or 'missing_joint_state'
+            self._set_last_attempt(target_xyz_world, False, float("inf"))
             return False, float('inf')
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         seeds = []
@@ -578,6 +616,7 @@ class KinematicPickPlaceExecutor:
         )
         if not result.success:
             self._last_motion_failure = 'ik_failed'
+            self._set_last_attempt(target_xyz_world, False, result.pos_error_m)
             return False, result.pos_error_m
         q1 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
         plan = plan_arm_joint_path(
@@ -600,6 +639,7 @@ class KinematicPickPlaceExecutor:
                 f"KinematicPickPlace: path plan failed planner={plan.planner!r} "
                 f"reason={plan.reason!r} detail={getattr(plan, 'detail', None)!r}"
             )
+            self._set_last_attempt(target_xyz_world, False, result.pos_error_m)
             return False, result.pos_error_m
         logger.info(f"KinematicPickPlace: path via {plan.planner} n_waypoints={len(plan.waypoints)}")
         self.last_plan_waypoints = [np.asarray(w, dtype=np.float64).copy() for w in plan.waypoints]
@@ -613,12 +653,19 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(q)
             self._sleep(self.traj_dt)
         if plan.waypoints:
-            self._stream_arm_q(plan.waypoints[-1])
-            self._sleep(max(0.25, self.traj_dt * 3))
+            final_q = plan.waypoints[-1]
+            # The torso base pitch carries the whole arm; a single send + short sleep
+            # loses to PD lag (observed torso1 barely moves from home). Re-command the
+            # final posture for a bounded settle, like _command_home_posture.
+            deadline = time.time() + max(0.5, self.traj_dt * 10)
+            while time.time() < deadline:
+                self._stream_arm_q(final_q)
+                self._sleep(0.05)
         self._last_cmd_q = q1.copy()
         reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
         if not reached:
             self._last_motion_failure = self._last_motion_failure or 'tracking_failed'
+        self._set_last_attempt(target_xyz_world, reached, measured_error)
         return reached, measured_error
 
     def _placements(self) -> dict[str, dict[str, Any]] | None:

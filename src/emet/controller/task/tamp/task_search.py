@@ -13,6 +13,7 @@ Grasp branches are ranked by offline position-IK feasibility before execution.
 from __future__ import annotations
 
 import copy
+import os
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -37,6 +38,8 @@ class TaskPlan:
     steps: list[TaskPlanStep]
     object_body: str
     receptacle_body: str | None
+    object_query: str = ""
+    receptacle_query: str = ""
     chosen_grasp_index: int | None = None
     grasp_scores: list[tuple[int, float, bool]] = field(default_factory=list)
     expanded_nodes: list[str] = field(default_factory=list)
@@ -50,6 +53,8 @@ class TaskPlan:
     execution_mode: str | None = None
     diagnostics: list[dict[str, Any]] = field(default_factory=list)
     measurements: list[dict[str, Any]] = field(default_factory=list)
+    # Semantic-only refusal (graded conservatism), e.g. teleport collision margin.
+    refusal: dict[str, Any] | None = None
 
 
 def approach_yaw_for_mode(mode: str = "front", arm: str = "left") -> float:
@@ -232,6 +237,8 @@ def plan_pick_place(
             steps=[],
             object_body=object_gt_body,
             receptacle_body=receptacle_gt_body,
+            object_query=object_query,
+            receptacle_query=receptacle_query,
             success=False,
             message="object_not_in_gt",
             expanded_nodes=expanded,
@@ -247,17 +254,33 @@ def plan_pick_place(
     state = getattr(robot, '_state', None)
     use_scene_query = isinstance(state, dict) and state.get('sim_base_pose_query') is True
     if use_scene_query and approach_pose is None:
-        poses = approach_candidates_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
+        # A single 0.55 m ring sits inside counters and islands. Try larger
+        # standoffs too; IK ranking below rejects poses the arm cannot reach.
+        radii = (float(approach_standoff_m), float(approach_standoff_m) + 0.10,
+                 float(approach_standoff_m) + 0.20, float(approach_standoff_m) + 0.30,
+                 float(approach_standoff_m) + 0.40)
+        poses = []
+        for radius in radii:
+            poses.extend(approach_candidates_for_object_xy(
+                obj_xy, standoff=radius, mode=mode, arm=arm, count=8))
+        logger.info(f'TAMP approach search: {len(poses)} candidates over radii={radii}')
     clear = [True] * len(poses)
     if use_scene_query:
         try:
-            evidence = robot.check_base_poses(poses)
-            clear = evidence['clear']
-            if len(clear) != len(poses) or any(type(value) is not bool for value in clear):
-                raise ValueError('invalid clearance response')
+            clear = []
+            # The command protocol bounds a clearance query to 32 endpoints.
+            for start in range(0, len(poses), 32):
+                batch = poses[start:start + 32]
+                evidence = robot.check_base_poses(batch)
+                batch_clear = evidence['clear']
+                if len(batch_clear) != len(batch) or any(type(value) is not bool for value in batch_clear):
+                    raise ValueError('invalid clearance response')
+                clear.extend(batch_clear)
+            logger.info(f'TAMP approach search: clear={sum(clear)}/{len(clear)}')
         except (RuntimeError, TimeoutError, ValueError, KeyError) as exc:
-            return TaskPlan([], object_gt_body, receptacle_gt_body, success=False,
-                            message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
+            return TaskPlan([], object_gt_body, receptacle_gt_body,
+                            object_query=object_query, receptacle_query=receptacle_query,
+                            success=False, message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
@@ -307,6 +330,8 @@ def plan_pick_place(
             steps=[],
             object_body=object_gt_body,
             receptacle_body=receptacle_gt_body,
+            object_query=object_query,
+            receptacle_query=receptacle_query,
             grasp_scores=scores,
             success=False,
             message=failure_reason,
@@ -339,6 +364,8 @@ def plan_pick_place(
         steps=steps,
         object_body=object_gt_body,
         receptacle_body=receptacle_gt_body,
+        object_query=object_query,
+        receptacle_query=receptacle_query,
         chosen_grasp_index=int(chosen),
         grasp_scores=scores,
         expanded_nodes=expanded,
@@ -419,8 +446,42 @@ def execute_task_plan(
         plan.failed_op = op
         _measure(op)
         plan.message = code
+        # Persist the failed motion attempt (EE target, observed trajectory, failure
+        # mode) for offline RL-WBC replay; the agent-facing result stays a summary.
+        attempt = getattr(executor, "last_attempt", None)
+        if isinstance(attempt, dict) and attempt:
+            from emet.controller.manipulation.failure_record import (
+                record_manip_attempt,
+                record_scenario,
+                scenario_from_attempt,
+            )
+
+            context = {
+                "op": op,
+                "object_query": plan.object_query,
+                "receptacle_query": plan.receptacle_query,
+                "failure_mode": attempt.get("failure_mode"),
+                "message": code,
+            }
+            if os.environ.get("EMET_GT_TEACHER", "").strip().lower() in {"1", "true", "yes"}:
+                context["privileged"] = True
+                context["object_body"] = plan.object_body
+                context["receptacle_body"] = plan.receptacle_body
+            record_manip_attempt(attempt, context=context)
+            # Also seed the ever-growing case library for RL-WBC (scenario record).
+            record_scenario(scenario_from_attempt(attempt, context=context))
+            plan.diagnostics.append({"phase": op, "attempt": attempt})
         logger.warning(f"TAMP execute failed op={op}: {code}")
         return plan
+
+    def _capture_refusal(exc: BaseException) -> None:
+        """Attach a semantic-only refusal (e.g. teleport collision margin) if present."""
+        from emet.controller.task.tamp.api import refusal_from_teleport_collision
+
+        if plan.refusal is None:
+            refusal = refusal_from_teleport_collision(str(exc))
+            if refusal is not None:
+                plan.refusal = refusal
 
     for step in plan.steps:
         op = step.op
@@ -450,6 +511,7 @@ def execute_task_plan(
                 if not isinstance(success, (bool, np.bool_)) or not success:
                     return _fail(op, "approach_failed:" + str(getattr(result, "reason", getattr(result, "message", "movement_not_confirmed"))))
             except Exception as exc:
+                _capture_refusal(exc)
                 return _fail(op, f"approach_failed:{type(exc).__name__}:{exc}")
         elif op == "grasp":
             gi = int(args["grasp_index"])
@@ -492,6 +554,7 @@ def execute_task_plan(
                     # Preserve private command/receipt detail for diagnosis without
                     # leaking simulator identities into the agent-facing response.
                     logger.warning(f"TAMP place execution exception: {type(exc).__name__}: {exc}")
+                    _capture_refusal(exc)
                     return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not result.success:
                     return _fail(op, f"place_failed:{result.message}")
@@ -509,6 +572,7 @@ def execute_task_plan(
                     # Preserve private command/receipt detail for diagnosis without
                     # leaking simulator identities into the agent-facing response.
                     logger.warning(f"TAMP place execution exception: {type(exc).__name__}: {exc}")
+                    _capture_refusal(exc)
                     return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not ok:
                     return _fail(op, "teleport_place_failed")

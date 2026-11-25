@@ -98,6 +98,7 @@ def plan_clear_clutter(
     seed: int | None = None,
     robot_move_goal: Any = None,
     clearance_m: float = 0.22,
+    min_clearance_m: float | None = None,
     reference: bool = False,
     strict_navigation: bool = False,
     bin_body_override: str | None = None,
@@ -290,6 +291,7 @@ def plan_clear_clutter(
             clearance_m=clearance_m,
             robot_move_goal=robot_move_goal,
             strict_geometry=strict_navigation,
+            min_clearance_m=min_clearance_m,
         )
 
     n_total = int(len(objects))
@@ -326,6 +328,20 @@ def plan_clear_clutter(
     }
     if nav_probe_after is not None:
         out["nav_probe_after"] = nav_probe_after
+        if mode == "nav_goal" and not nav_path_open:
+            from emet.eval.tamp_clutter import relaxed_clearance_m
+
+            margin = nav_probe_after.get("margin")
+            margin_m = float(margin["margin_m"]) if isinstance(margin, dict) else None
+            relaxed = relaxed_clearance_m(clearance_m, min_clearance_m, margin_m=margin_m)
+            out["nav_refusal"] = {
+                "code": "clearance",
+                "refused": True,
+                "threshold_m": float(clearance_m),
+                "margin_m": margin_m,
+                "relax_allowed": relaxed is not None,
+                "relaxed_clearance_m": float(relaxed) if relaxed is not None else None,
+            }
     return out
 
 
@@ -338,6 +354,7 @@ def nav_to_landmark_if_clear(
     clearance_m: float,
     robot_move_goal: Any = None,
     strict_geometry: bool = False,
+    min_clearance_m: float | None = None,
 ) -> tuple[bool, bool, bool, dict[str, Any] | None]:
     """Snap to the landmark only if an 8-connected route around disks exists.
 
@@ -345,13 +362,28 @@ def nav_to_landmark_if_clear(
     reachable if a path exists around leftover clutter + furniture disks.
     ``move_base_to`` is still a teleport snap; the probe is the reachability
     gate, not a curved follower.
+
+    ``min_clearance_m`` (optional) is the graded-conservatism floor: it does **not**
+    auto-relax here — it only annotates a refusal with ``relax_allowed`` /
+    ``relaxed_clearance_m`` so the caller (agent) can choose to re-run at the floor.
     """
     from emet.eval.tamp_clutter import (
         bodies_near_xy,
         nav_path_open_around_disks,
         placement_obstacle_disks,
+        relaxed_clearance_m,
     )
     from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+
+    relaxed = relaxed_clearance_m(clearance_m, min_clearance_m)
+
+    def _with_relax(p: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(p, dict):
+            return p
+        p["relax_allowed"] = relaxed is not None
+        if relaxed is not None:
+            p["relaxed_clearance_m"] = float(relaxed)
+        return p
 
     target = _clamp_xy(goal_xy)
     here = _world_base_xy(robot)
@@ -381,7 +413,7 @@ def nav_to_landmark_if_clear(
             "clutter nav refused: no 8-connected route to landmark "
             f"around {len(disks)} obstacle disks (blocked={not path_open})"
         )
-        return False, False, False, probe
+        return False, False, False, _with_relax(probe)
     try:
         ok = robot.move_base_to(
             np.array([float(target[0]), float(target[1]), 0.0], dtype=np.float64),
@@ -391,10 +423,10 @@ def nav_to_landmark_if_clear(
         if not ok:
             # Client refused (e.g. >12 m from navigation_origin) — not an exception.
             logger.warning("clutter nav refused by client (move_base_to returned False)")
-            return False, False, True, probe
+            return False, False, True, _with_relax(probe)
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"clutter nav to goal failed: {exc}")
-        return False, False, True, probe
+        return False, False, True, _with_relax(probe)
     if robot_move_goal is not None:
         achieved = _clamp_xy(robot_move_goal)
     else:

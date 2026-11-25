@@ -1,5 +1,6 @@
 """Lift diagnostics reject displaced lifts and require measured arm arrival."""
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 
@@ -70,3 +71,41 @@ def test_tracking_evidence_distinguishes_unapplied_command_from_joint_error():
     assert evidence['observed_q'] == [.2]
     ex._last_motion_failure = 'tracking_failed'
     assert ex._stage_failure('pregrasp') == 'pregrasp_tracking_failed'
+
+def test_final_posture_is_recommanded_until_the_torso_settles(monkeypatch):
+    """A single final send loses the heavy torso to PD lag; the executor must hold it."""
+    import emet.controller.manipulation.kinematic_pick_place as kpp
+    import emet.motion.mujoco_arm_ik as arm_ik
+
+    clock = {"now": 0.0}
+    monkeypatch.setattr(kpp.time, "time", lambda: clock["now"])
+    monkeypatch.setattr(arm_ik, "joint_qpos_addrs", lambda model, joints: list(range(len(joints))))
+    monkeypatch.setattr(kpp, "solve_position_ik_multiseed",
+                        lambda *a, **k: SimpleNamespace(success=True, pos_error_m=0.0))
+    final_q = np.array([-0.25, 0.4])
+    monkeypatch.setattr(kpp, "plan_arm_joint_path",
+                        lambda *a, **k: SimpleNamespace(success=True, planner="linear", detail=None,
+                                                        waypoints=[np.zeros(2), final_q]))
+
+    ex = object.__new__(KinematicPickPlaceExecutor)
+    ex._model, ex._data = object(), SimpleNamespace(qpos=np.zeros(2))
+    ex.joint_names = ("torso_joint1", "arm")
+    ex.ee_body = "tool"
+    ex.ik_tol_m, ex.ik_max_iters, ex.traj_dt, ex.traj_steps = 0.01, 1, 0.05, 2
+    ex.manip_planner, ex.rrt_max_iter, ex._collision, ex.visualizer = "linear", 1, None, None
+    ex._last_cmd_q = None
+    ex._sync_qpos_from_robot = lambda: True
+    ex._sleep = lambda seconds: clock.__setitem__("now", clock["now"] + seconds)
+    ex._stream_arm_q = Mock()
+    ex._fk_ee_path = lambda waypoints: []
+    ex._wait_measured_ee = Mock(return_value=(True, 0.0))
+
+    reached, error = ex._plan_and_execute_ee(np.array([0.0, 0.0, 0.8]))
+
+    assert reached and error == 0.0
+    # Two waypoints plus at least one full hold cycle (0.5 s at 0.05 s per send).
+    assert ex._stream_arm_q.call_count > 2
+    for call in ex._stream_arm_q.call_args_list[2:]:
+        np.testing.assert_allclose(call.args[0], final_q)
+    ex._wait_measured_ee.assert_called_once()
+    assert ex.last_attempt["reached"] is True

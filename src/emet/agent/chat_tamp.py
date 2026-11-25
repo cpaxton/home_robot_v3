@@ -10,10 +10,14 @@ The existing TAMP APIs own plan handles, revalidation and physical execution.
 
 from __future__ import annotations
 
+import logging
+
 from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+
+_logger = logging.getLogger(__name__)
 
 
 def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]]:
@@ -119,6 +123,34 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
                 live_sim=False,
                 reason="unknown_task_ref",
             )
+        if selected is not None and selected.semantic_only:
+            from emet.controller.task.tamp.agent_bridge import (
+                gt_teacher_enabled,
+                privileged_task_from_semantic,
+            )
+
+            if not gt_teacher_enabled():
+                return AgentPlanBuild(
+                    task=selected,
+                    plan=None,
+                    mode=None,
+                    live_sim=True,
+                    reason="grounding_unavailable",
+                )
+            robot = _tamp_robot()
+            session = robot.get_emet_session() if robot is not None and hasattr(robot, "get_emet_session") else None
+            from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+
+            privileged = privileged_task_from_semantic(selected, read_sim_object_placements(session) or {})
+            if privileged is None:
+                return AgentPlanBuild(
+                    task=selected,
+                    plan=None,
+                    mode=None,
+                    live_sim=True,
+                    reason="grounding_unavailable",
+                )
+            selected = privileged
         if selected is not None:
             return build_agent_pick_place_plan(
                 _tamp_robot(),
@@ -146,6 +178,11 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
     def _format_tamp_plan(plan_ref: str, build: Any) -> dict:
         plan = build.plan
         if plan is None or not plan.success or build.task is None:
+            _logger.warning(
+                "plan_pick_place failed: reason=%r diagnostics=%r",
+                build.reason,
+                getattr(plan, "diagnostics", None),
+            )
             return response("plan_pick_place", code=failure_code(build.reason or "planner_error"))
         return response("plan_pick_place", data=plan_data(plan, build.mode, plan_ref))
 
@@ -262,7 +299,10 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
             return response("scene_tasks", code=native_error)
         if _tamp_manip_mode() == "physical":
             return _native_adapter().discover(object_filter, robot)
-        from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
+        from emet.controller.task.tamp.agent_bridge import (
+            robocasa_pick_place_task,
+            stable_scene_task_refs,
+        )
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
             emit_tasks,
@@ -281,15 +321,58 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
             robot_obj.get_emet_session() if robot_obj is not None and hasattr(robot_obj, "get_emet_session") else None
         )
         live_sim = isinstance(session, dict) and bool(session.get("is_simulation"))
+        from emet.controller.task.tamp.agent_bridge import robot_session_key
+
+        session_key = robot_session_key(robot_obj)
+
+        # RoboCasa has no iTHOR-style task catalog; the active PickPlace task lives
+        # in the simulator session. Resolve it to semantic object/receptacle names
+        # and keep body identities private (same handle contract as the iTHOR path).
+        robocasa_task = robocasa_pick_place_task((session or {}).get("environment"))
+        if robocasa_task is not None:
+            filt = (object_filter or "").strip().lower()
+            matches = (
+                not filt
+                or filt in str(robocasa_task.object).lower()
+                or filt in str(robocasa_task.goal_recep).lower()
+            )
+            task_refs = (
+                stable_scene_task_refs(
+                    context, [robocasa_task], None, session_key=session_key, semantic=True
+                )
+                if matches
+                else []
+            )
+            if not matches:
+                stable_scene_task_refs(context, [], None, session_key=session_key, semantic=True)
+            from emet.simulation.articulation import articulation_access
+
+            return response(
+                "scene_tasks",
+                data={
+                    "tasks": [
+                        {
+                            "task_ref": ref.ref,
+                            "object_name": ref.object_query,
+                            "receptacle_name": ref.receptacle_query,
+                            "start_receptacle": ref.start_receptacle,
+                            "access": articulation_access(session if live_sim else {}, ref.receptacle_body or ""),
+                        }
+                        for ref in task_refs
+                    ],
+                    "pickable_categories": [robocasa_task.object],
+                    "receptacle_categories": [robocasa_task.goal_recep],
+                    "reachability": None,
+                    "reachability_status": "not_requested",
+                },
+            )
         if live_sim:
             from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
 
             placements = read_sim_object_placements(session) or {}
         else:
             placements = {}
-        from emet.controller.task.tamp.agent_bridge import robot_session_key
 
-        session_key = robot_session_key(robot_obj)
         active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
         candidates = (
             [active_metadata]
@@ -350,7 +433,7 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
                         "object_name": ref.object_query,
                         "receptacle_name": ref.receptacle_query,
                         "start_receptacle": ref.start_receptacle,
-                        "access": articulation_access(session if live_sim else {}, ref.receptacle_body),
+                        "access": articulation_access(session if live_sim else {}, ref.receptacle_body or ""),
                     }
                     for ref in task_refs
                 ],

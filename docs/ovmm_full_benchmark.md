@@ -49,6 +49,16 @@ optional targeted OVMM smoke),
 references; Stretch agentic find is slow due to head sweeps),
 `robocasa_floor_find_only_explore` (find-only explore; very slow on Stretch).
 
+**rby1 counter kinematic row** (`robocasa_rby1_counter_to_cab_mcts`, `manip_mode: mcts`):
+the counter-height grasp that previously failed `pregrasp_tracking_failed`. Run it after
+the torso-settle change to revalidate; the floor row below does not exercise it.
+
+```bash
+ITEMS=counter-smoke ./scripts/run_tamp_agent_tools_gate.sh
+# or: uv run python scripts/eval_tamp_floor.py \
+#       --episode-id robocasa_rby1_counter_to_cab_mcts --all-episodes
+```
+
 **Sourccey kinematic row** (`robocasa_sourccey_counter_to_cab_mcts`, `manip_mode: mcts`):
 the updated official `sourccey-hardware` arm URDF reaches table/counter height but its
 workspace bottoms out around z≈0.36 m, so floor objects are out of reach — use the

@@ -246,7 +246,8 @@ def test_rejection_evidence_keeps_collision_when_later_ik_fails(native):
     result = call('plan_pick_place', object_name='blue', receptacle_name='table')
     assert result['code'] == 'no_plan_within_budget'
     assert result['data']['planning_rejections']['pregrasp:collision'] == 1
-    assert result['data']['planning_rejections']['pregrasp:ik_failed'] > 0
+    # Public failure codes map ik_failed -> unreachable; the diagnostic bucket follows.
+    assert result['data']['planning_rejections']['pregrasp:unreachable'] > 0
     assert 'private_detail' not in json.dumps(result)
 
 

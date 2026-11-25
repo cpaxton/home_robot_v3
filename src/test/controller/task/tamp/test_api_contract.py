@@ -8,7 +8,14 @@ import pytest
 
 from emet.agent.tools import get_tools
 from emet.controller.task.tamp import agent_bridge as bridge
-from emet.controller.task.tamp.api import TAMP_TOOLS, json_tool, response
+from emet.controller.task.tamp.api import (
+    TAMP_TOOLS,
+    failure_code,
+    json_tool,
+    plan_data,
+    refusal_from_teleport_collision,
+    response,
+)
 from emet.controller.task.tamp.task_search import TaskPlan, TaskPlanStep
 
 
@@ -166,7 +173,7 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     from emet.controller.task.tamp import task_search
 
     robot = Robot()
-    robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * 15}
+    robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * (len(poses) - 1)}
     seen = []
     executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool",
                                joint_names=["arm"], pregrasp_standoff_m=.18, lift_m=.22,
@@ -185,7 +192,7 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     assert result.mode == "kinematic"
     assert result.plan.success, result.reason
     np.testing.assert_allclose(
-        result.plan.steps[0].args["xyt"], task_search.approach_candidates_for_object_xy([0, 0])[2]
+        result.plan.steps[0].args["xyt"], task_search.approach_candidates_for_object_xy([0, 0], count=8)[2]
     )
 
 
@@ -476,3 +483,279 @@ def test_unsupported_adapter_does_not_ignore_placement_region():
 def test_verification_evidence_rejects_private_or_malformed_values(value):
     from emet.controller.task.tamp.api import VerificationFailure
     assert VerificationFailure.from_data(value) is None
+
+
+def test_robocasa_pick_place_task_is_semantic():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    task = robocasa_pick_place_task(
+        {
+            "kind": "robocasa",
+            "task": "PickPlaceCounterToCabinet",
+            "object_category": "sugar_cube",
+        }
+    )
+    assert task is not None
+    assert (task.object, task.start_recep, task.goal_recep) == ("sugar_cube", "counter", "cab")
+    assert not hasattr(task, "object_gt_body")
+    assert not hasattr(task, "goal_gt_body")
+
+
+def test_robocasa_task_tokens_are_vocabulary_only():
+    from emet.controller.task.tamp.agent_bridge import _robocasa_task_tokens_semantic
+
+    assert _robocasa_task_tokens_semantic("PickPlaceCounterToStove") == ("Counter", "Stove")
+    assert _robocasa_task_tokens_semantic("PickPlaceStoveToCounter") == ("Stove", "Counter")
+    assert _robocasa_task_tokens_semantic("PickPlaceToasterToCounter") == ("Toaster", "Counter")
+    assert _robocasa_task_tokens_semantic("PickPlaceCounterToToasterOven") == ("Counter", "ToasterOven")
+    assert _robocasa_task_tokens_semantic("PickPlaceToasterOvenToCounter") == ("ToasterOven", "Counter")
+
+
+def test_robocasa_pick_place_task_requires_semantic_object_category():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    assert robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}) is None
+    assert robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "object_category": ""}
+    ) is None
+
+
+def test_robocasa_pick_place_task_none_for_non_robocasa_or_non_pickplace():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    assert robocasa_pick_place_task(None) is None
+    assert robocasa_pick_place_task({"kind": "molmospaces"}) is None
+    assert robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "OpenCabinet", "object_category": "mug"}
+    ) is None
+
+
+def test_build_semantic_task_refs_has_no_bodies():
+    from emet.controller.task.tamp.agent_bridge import (
+        build_semantic_task_refs,
+        robocasa_pick_place_task,
+    )
+
+    task = robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "object_category": "mug"}
+    )
+    refs = build_semantic_task_refs([task])
+    assert len(refs) == 1
+    ref = refs[0]
+    assert ref.object_body is None and ref.receptacle_body is None
+    assert ref.semantic_only is True
+    assert ref.task_name == "PickPlaceCounterToCabinet"
+
+
+def test_privileged_task_from_semantic_resolves_gt_for_teacher():
+    from emet.controller.task.tamp.agent_bridge import (
+        build_semantic_task_refs,
+        privileged_task_from_semantic,
+        robocasa_pick_place_task,
+    )
+
+    task = robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "object_category": "sugar_cube"}
+    )
+    ref = build_semantic_task_refs([task])[0]
+    privileged = privileged_task_from_semantic(
+        ref,
+        {
+            "obj_main": {"cat": "sugar_cube"},
+            "counter_main": {"cat": "counter"},
+            "cab_main": {"cat": "cab"},
+        },
+    )
+    assert privileged is not None
+    assert privileged.object_body == "obj_main"
+    assert privileged.receptacle_body == "cab_main"
+    assert privileged.privileged is True
+
+
+class _RobocasaRobot:
+    def __init__(self, task: str, object_category: str, placements: dict):
+        self._task = task
+        self._object_category = object_category
+        self._placements = placements
+        self._state = {"command_protocol": {"version": 2, "server_boot_id": "boot"}}
+
+    def get_emet_session(self):
+        return {
+            "is_simulation": True,
+            "environment": {
+                "kind": "robocasa",
+                "task": self._task,
+                "object_category": self._object_category,
+                "style": 1,
+                "layout": 1,
+            },
+            "sim_object_placements": self._placements,
+        }
+
+
+def test_scene_tasks_robocasa_is_semantic_and_never_reads_gt(monkeypatch):
+    import emet.memory.graph_eqa.sim_ground_truth_graph as gt
+    from emet.agent.chat_tamp import build_tamp_handlers
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("RoboCasa assessment must not read GT placements")
+
+    monkeypatch.setattr(gt, "read_sim_object_placements", _fail)
+    placements = {
+        "obj_main": {"cat": "sugar_cube", "pos": [0.0, 0.0, 0.8]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
+    }
+    handlers = build_tamp_handlers(
+        {"robot": _RobocasaRobot("PickPlaceCounterToCabinet", "sugar_cube", placements)}
+    )
+    data = decoded(handlers["scene_tasks"]())["data"]
+    assert data["pickable_categories"] == ["sugar_cube"]
+    assert data["receptacle_categories"] == ["cab"]
+    assert len(data["tasks"]) == 1
+    task = data["tasks"][0]
+    assert task["object_name"] == "sugar_cube"
+    assert task["receptacle_name"] == "cab"
+    assert task["start_receptacle"] == "counter"
+    assert task["task_ref"].startswith("task:")
+    assert "obj_main" not in json.dumps(data)
+
+    filtered = decoded(handlers["scene_tasks"](object_filter="banana"))["data"]
+    assert filtered["tasks"] == []
+
+
+def test_semantic_plan_returns_grounding_unavailable_without_teacher(monkeypatch):
+    from emet.agent.chat_tamp import build_tamp_handlers
+
+    monkeypatch.delenv("EMET_GT_TEACHER", raising=False)
+    placements = {"obj_main": {"cat": "sugar_cube", "pos": [0.0, 0.0, 0.8]}}
+    handlers = build_tamp_handlers(
+        {"robot": _RobocasaRobot("PickPlaceCounterToCabinet", "sugar_cube", placements)}
+    )
+    task_ref = decoded(handlers["scene_tasks"]())["data"]["tasks"][0]["task_ref"]
+    result = decoded(handlers["plan_pick_place"](task_ref=task_ref))
+    assert result["status"] == "error"
+    assert result["code"] == "grounding_unavailable"
+
+
+def test_failure_code_maps_ik_failed_to_unreachable():
+    assert failure_code("grasp_failed:pregrasp_ik_failed") == "unreachable"
+    assert failure_code("grasp_failed:pregrasp_tracking_failed") == "tracking_timeout"
+    assert failure_code("grasp_failed:grasp_joint_bounds") == "joint_bounds"
+
+
+def test_scenario_from_attempt_is_semantic_and_marks_privileged():
+    from emet.controller.manipulation.failure_record import scenario_from_attempt
+
+    attempt = {
+        "target_xyz": [0.0, 0.0, 1.0],
+        "trace": [{"qpos": [0.0, 0.0]}],
+        "joint_names": ["j0", "j1"],
+        "failure_mode": "tracking_failed",
+    }
+    assessment = scenario_from_attempt(
+        attempt, context={"object_query": "mug", "receptacle_query": "cab"}
+    )
+    assert assessment.goal["object"] == "mug"
+    assert assessment.goal["receptacle"] == "cab"
+    assert assessment.meta["privileged"] is False
+    assert "object_body" not in assessment.meta
+
+    teacher = scenario_from_attempt(
+        attempt,
+        context={
+            "object_query": "mug",
+            "receptacle_query": "cab",
+            "privileged": True,
+            "object_body": "obj_main",
+            "receptacle_body": "cab_main",
+        },
+    )
+    assert teacher.meta["privileged"] is True
+    assert teacher.meta["object_body"] == "obj_main"
+    assert teacher.meta["receptacle_body"] == "cab_main"
+
+
+def test_record_manip_attempt_writes_jsonl(tmp_path, monkeypatch):
+    from emet.controller.manipulation.failure_record import record_manip_attempt
+
+    monkeypatch.setenv("EMET_MANIP_FAILURE_DIR", str(tmp_path))
+    path = record_manip_attempt(
+        {"failure_mode": "tracking_failed", "target_xyz": [0.0, 0.0, 1.0], "trace": []},
+        context={"op": "grasp", "object_body": "obj_main"},
+    )
+    assert path is not None
+    lines = (tmp_path / "manip_failures.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    assert rec["attempt"]["failure_mode"] == "tracking_failed"
+    assert rec["context"]["op"] == "grasp"
+
+
+def test_record_manip_attempt_noop_for_empty(tmp_path, monkeypatch):
+    from emet.controller.manipulation.failure_record import record_manip_attempt
+
+    monkeypatch.setenv("EMET_MANIP_FAILURE_DIR", str(tmp_path))
+    assert record_manip_attempt({}, context={}) is None
+    assert not (tmp_path / "manip_failures.jsonl").exists()
+
+
+def test_refusal_from_teleport_collision_parses_deepest_margin():
+    msg = (
+        "Command 47 failed: navigation start failed: teleport_endpoint_collision: "
+        "[{'bodies': ['dishwasher_x', 'base_link'], 'distance_m': -0.0736}, "
+        "{'bodies': ['cabinet_y', 'base_link'], 'distance_m': -0.1162}]"
+    )
+    refusal = refusal_from_teleport_collision(msg)
+    assert refusal is not None
+    assert refusal["code"] == "teleport_collision"
+    assert refusal["refused"] is True
+    assert abs(refusal["margin_m"] - (-0.1162)) < 1e-9
+    assert refusal["threshold_m"] is None
+    assert refusal["relax_allowed"] is False
+    # Body identities are never exposed in the semantic refusal.
+    assert "dishwasher_x" not in json.dumps(refusal)
+    assert "cabinet_y" not in json.dumps(refusal)
+
+
+def test_refusal_from_teleport_collision_none_for_other_errors():
+    assert refusal_from_teleport_collision("base approach rejected") is None
+    assert refusal_from_teleport_collision("grasp_failed:pregrasp_tracking_failed") is None
+    assert refusal_from_teleport_collision("") is None
+
+
+def test_teleport_collision_surfaces_refusal_through_plan_and_data():
+    from emet.controller.task.tamp.task_search import execute_task_plan
+
+    class Executor:
+        def begin_operation(self, *_):
+            pass
+
+        def grasp_only(self, *_args, **_kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(success=True)
+
+        def place_only(self, *_args, **_kwargs):
+            raise RuntimeError(
+                "Command 99 failed: navigation start failed: teleport_endpoint_collision: "
+                "[{'bodies': ['dishwasher_x', 'base_link'], 'distance_m': -0.0736}, "
+                "{'bodies': ['cabinet_y', 'base_link'], 'distance_m': -0.1162}]"
+            )
+
+    ex = Executor()
+    robot, plan, _, _ = setup_plan()
+    robot.move_base_to = lambda *a, **k: True
+    plan.steps[1] = TaskPlanStep("grasp", {"grasp_index": 0, "object_query": "bowl"})
+    plan.steps[2] = TaskPlanStep("place", {"receptacle_query": "table"})
+    result = execute_task_plan(robot, plan, executor=ex, grasp_poses=[np.eye(4)], manip_mode="kinematic")
+    assert result.failed_op == "place"
+    assert result.refusal is not None
+    assert result.refusal["code"] == "teleport_collision"
+    assert abs(result.refusal["margin_m"] - (-0.1162)) < 1e-9
+    data = plan_data(result, "kinematic", "plan:1")
+    assert data["refusal"] == result.refusal
+    assert "dishwasher_x" not in json.dumps(data)
+    assert "cabinet_y" not in json.dumps(data)
+
+

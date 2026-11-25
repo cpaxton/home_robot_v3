@@ -37,7 +37,7 @@ def plan(robot, **kwargs):
 
 
 def test_selection_skips_collisions_then_ik_failure(monkeypatch):
-    robot = fake_robot([False] * 3 + [True] * 13)
+    robot = fake_robot([False] * 3 + [True] * 37)
     seen = []
     executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None,
                                ee_body='tool', joint_names=['arm'])
@@ -46,14 +46,14 @@ def test_selection_skips_collisions_then_ik_failure(monkeypatch):
                         lambda *a, **kw: [(0, .001 if len(seen) > 1 else 1., len(seen) > 1)])
     result = plan(robot, executor=executor)
     assert result.success
-    expected = task_search.approach_candidates_for_object_xy([2, 1])[4]
+    expected = task_search.approach_candidates_for_object_xy([2, 1], count=8)[4]
     np.testing.assert_allclose(result.steps[0].args['xyt'], expected)
     assert len(seen) == 2
     assert any('approach[0] collision' in s for s in result.expanded_nodes)
 
 
 def test_all_blocked_and_query_failure_fail_without_motion():
-    robot = fake_robot([False] * 16)
+    robot = fake_robot([False] * 40)
     assert not plan(robot).success
     def failed(poses):
         raise TimeoutError('no receipt')
@@ -63,7 +63,7 @@ def test_all_blocked_and_query_failure_fail_without_motion():
 
 
 def test_explicit_pose_and_route_validator_are_honored():
-    robot = fake_robot([True] * 16)
+    robot = fake_robot([True] * 40)
     explicit = [4, 3, .2]
     result = plan(robot, approach_pose=explicit)
     assert result.steps[0].args['xyt'] == explicit

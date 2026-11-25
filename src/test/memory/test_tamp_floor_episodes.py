@@ -97,3 +97,14 @@ def test_batch_mode_resolution_keeps_find_batches_manipulation_free():
     assert resolve_episode_manip_mode(episode, full=True, override=None) == "mcts"
     assert resolve_episode_manip_mode(episode, full=True, override="skip") == "skip"
     assert resolve_episode_manip_mode(SimpleNamespace(id="plain"), full=True, override=None) == "oracle"
+
+def test_rby1_counter_to_cab_episode_exists_for_grasp_revalidation():
+    eps = load_find_phase_episodes("configs/ovmm/full_episodes.yaml")
+    row = [e for e in eps if e.id == "robocasa_rby1_counter_to_cab_mcts"]
+    assert len(row) == 1
+    ep = row[0]
+    assert ep.sim == "configs/sim/robocasa_pick_place_rby1.yaml"
+    assert (ep.start_recep, ep.goal_recep) == ("counter", "cab")
+    assert ep.object_gt_body == "obj_main"
+    assert ep.manip_mode == "mcts"
+    assert not ep.floor_object

@@ -83,6 +83,20 @@ episodes:
     explore_steps: 0
     manip_mode: mcts
 
+  # Counter-top object -> cabinet, rby1 kinematic MCTS row (the task that previously
+  # failed pregrasp_tracking_failed). Mirrors the sourccey counter row; use this to
+  # revalidate the torso-settle fix on the counter-height grasp.
+  - id: robocasa_rby1_counter_to_cab_mcts
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_rby1.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.50
+    explore_steps: 0
+    manip_mode: mcts
+
   # Floor object -> counter, stretch teleport reference.
   - id: robocasa_stretch_floor_to_counter_sim
     tier: S1

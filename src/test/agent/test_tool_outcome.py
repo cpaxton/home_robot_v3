@@ -100,6 +100,100 @@ def test_maybe_record_tool_attempt_writes_when_ledger_on():
     assert rows[0].room == "kitchen"
 
 
+def test_from_refusal_carries_margin_and_threshold():
+    out = ToolOutcome.from_refusal(
+        "move_forward",
+        refusal_code="clearance",
+        margin_m=-0.02,
+        threshold_m=0.22,
+        relax_allowed=True,
+        note="obstacle ahead",
+    )
+    assert out.ok is False
+    assert out.status == "refused"
+    assert out.refused is True
+    assert out.refusal_code == "clearance"
+    assert out.margin_m == -0.02
+    assert out.threshold_m == 0.22
+    assert out.relax_allowed is True
+
+
+def test_to_dict_additive_fields_are_absent_when_default():
+    plain = ToolOutcome.coerce("explore", "Done.")
+    d = plain.to_dict()
+    assert "refused" not in d
+    assert "margin_m" not in d
+    assert "threshold_m" not in d
+    assert "refusal_code" not in d
+    assert "relax_allowed" not in d
+
+
+def test_to_dict_refusal_fields_override_payload():
+    out = ToolOutcome(
+        ok=False,
+        status="refused",
+        tool="move_forward",
+        refused=True,
+        refusal_code="clearance",
+        margin_m=-0.02,
+        threshold_m=0.22,
+        relax_allowed=True,
+        payload={"refused": False, "margin_m": 999.0},
+    )
+    d = out.to_dict()
+    assert d["refused"] is True
+    assert d["margin_m"] == -0.02
+    assert d["refusal_code"] == "clearance"
+    assert d["threshold_m"] == 0.22
+    assert d["relax_allowed"] is True
+
+
+def test_render_surfaces_margin_for_refusal():
+    out = ToolOutcome.from_refusal(
+        "move_forward",
+        refusal_code="clearance",
+        margin_m=-0.02,
+        threshold_m=0.22,
+        relax_allowed=True,
+    )
+    text = out.render()
+    assert "refused=clearance" in text
+    assert "margin=-0.020m vs 0.220m" in text
+    assert "(relaxable)" in text
+
+
+def test_refusal_without_margin_does_not_render_margin():
+    out = ToolOutcome.from_refusal("move_forward", refusal_code="collision")
+    assert "margin=" not in out.render()
+    assert "refused=collision" in out.render()
+
+
+def test_from_refusal_dict_maps_nav_refusal_shape():
+    out = ToolOutcome.from_refusal_dict(
+        "pick_place",
+        {
+            "code": "clearance",
+            "margin_m": -0.02,
+            "threshold_m": 0.22,
+            "relax_allowed": True,
+            "relaxed_clearance_m": 0.14,
+        },
+    )
+    assert out.refused is True
+    assert out.refusal_code == "clearance"
+    assert out.margin_m == -0.02
+    assert out.threshold_m == 0.22
+    assert out.relax_allowed is True
+    assert out.payload["relaxed_clearance_m"] == 0.14
+    assert "refused=clearance" in out.render()
+    assert "relaxable" in out.render()
+
+
+def test_from_refusal_dict_none_is_refused_without_detail():
+    out = ToolOutcome.from_refusal_dict("pick_place", None)
+    assert out.refused is True and out.refusal_code == ""
+
+
 def test_aim_arm_stub_records_closer_look(monkeypatch):
     mem = GraphEQAMemory(
         defer_llm_clients=True,

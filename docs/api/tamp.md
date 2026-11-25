@@ -45,6 +45,28 @@ Partial execution always requires inspection. Completed operations are retained,
 but their list does not prove that a failed operation had no physical effect.
 Never automatically replay a grasp or placement after an uncertain outcome.
 
+### Refusals carry margin (additive, schema version 1)
+
+When a pre-motion gate refuses an action (clearance, collision, bounds), `data`
+may include an optional `refusal` object so the agent can reason about *how close*
+the refusal was instead of dead-ending. This is additive; existing fields are
+unchanged and `schema_version` stays `1`.
+
+```json
+"refusal": {"code": "clearance", "margin_m": -0.02, "threshold_m": 0.22, "relax_allowed": true}
+```
+
+- `code` — machine reason (`clearance`, `collision`, `joint_bounds`, …). Mirrors
+  `ToolOutcome.refusal_code`.
+- `margin_m` — signed distance to `threshold_m`; negative = failed by that much.
+- `threshold_m` — the clearance/threshold that was checked.
+- `relax_allowed` — a bounded, agent-invoked relaxation retry is permitted (one step,
+  clamped to the configured `min_clearance`; never automatic).
+
+`relax_allowed: true` does **not** mean the agent should always retry; it means the
+refusal is a near-miss under the floor. The agent still chooses whether to relax or
+escalate to the user. A second refusal after relaxation is terminal.
+
 ## Tools
 
 Multi-step `plan_task` and `execute_task_plan` use this envelope; see the
