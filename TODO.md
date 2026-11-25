@@ -1234,6 +1234,24 @@ See the research roadmap in [the control runbook](docs/mars_reactive_rl.md#propr
       Resolve general motion failures before repeating the nine-trial readiness matrix.
       See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/api/tamp.md`.
 
+## RL-WBC torque contract (2026-11-25)
+
+Design: [whole-body-rl-control.md](docs/plans/whole-body-rl-control.md). Schema v2
+supports multiple named arms, torso/head groups, per-arm grippers, and
+arbitrary arm DOF; the policy action is per-arm joint torque with a separate
+position-servo actuator adapter.
+
+- [x] Multi-arm schema, vector layout, per-arm reward, example Mars/Sourccey/RB-Y1/Stretch profiles.
+- [x] Position-servo adapter with torque/current/lead clipping and fail-closed actuator fields.
+- [x] Case-library fingerprint includes embodiment/schema; generator emits multi-arm scenarios.
+- [x] External innate-os MuJoCo smoke: adapter vs direct torque, clipping, gravity, contact telemetry. See [innate-sim-validation.md](docs/plans/innate-sim-validation.md).
+- [x] Action-boundary `clamp_action` for base velocity, joint torque, and gripper limits; per-joint `control_mode`; current-limit fail-closed.
+- [x] Innate OS prototype: typed `ArmCommand`/`ArmState`, high-rate state, capability manifest, robot-side adapter, sim effort/contact parity. Fork `cpaxton/innate-os` branch `feat/torque-wbc-interface`; fork PR [cpaxton/innate-os#1](https://github.com/cpaxton/innate-os/pull/1); not hardware-tested. See [innate-os-wbc-interface.md](docs/plans/innate-os-wbc-interface.md).
+- [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits).
+- [ ] Wire the adapter into the robot-side WBC transport and a MuJoCo servo model.
+- [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline.
+- [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
+
 ## TAMP agent execution follow-up (2026-09-29)
 
 Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).

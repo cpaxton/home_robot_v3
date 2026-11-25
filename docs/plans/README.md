@@ -43,6 +43,9 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 - **[2026-11-11_interaction_memory.md](2026-11-11_interaction_memory.md)** – Proposed MessyMem-informed interaction beliefs, persistent keyframe retrieval, dynamic invalidation, and matched GPT/Qwen evaluation; no runtime/results claim.
 
 - **[ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md)** – Multi-robot, multi-simulator refactor (emet rename, robots/simulators abstraction).
+- **[whole-body-rl-control.md](whole-body-rl-control.md)** – Multi-arm torque contract (schema v2), actuator adapter, bench identification, and training/acceptance plan.
+- **[innate-os-wbc-interface.md](innate-os-wbc-interface.md)** – Mars/innate-os interface review: torque/current capabilities, contact state, sim parity, and multi-robot boundary.
+- **[innate-sim-validation.md](innate-sim-validation.md)** – External innate-os MuJoCo harness for the torque→position-servo adapter and contact telemetry.
 - **[GRAPH_EQA_PLAN.md](GRAPH_EQA_PLAN.md)** – Plan for adding GraphEQA as a graph-based EQA memory model.
 - **[MAPPING_REFACTOR.md](MAPPING_REFACTOR.md)** – Mapping module layout, instance/memory split, and shared UI.
 - **[2025-03-10_molmospaces_testing.md](2025-03-10_molmospaces_testing.md)** – Testing plan for MolmoSpaces integration (CLI, runner venv, scenes, serve).

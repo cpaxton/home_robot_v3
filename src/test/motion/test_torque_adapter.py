@@ -1,0 +1,335 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
+"""Position-servo adapter for the torque WBC contract."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+import numpy as np
+import pytest
+
+from emet.controller.manipulation.torque_adapter import PositionServoAdapter
+from emet.controller.manipulation.wbc_contract import (
+    ArmAction,
+    ArmObservation,
+    GripperCommand,
+    GripperObservation,
+    ReachSpec,
+    WbcAction,
+    WbcObservation,
+    clamp_action,
+    reach_reward,
+)
+from emet.controller.manipulation.wbc_profiles import example_mars_profile, example_sourccey_profile
+
+
+def _profile_with_actuator(**changes):
+    profile = example_mars_profile()
+    group = profile.joint_group("primary_arm")
+    joints = tuple(replace(joint, **changes) for joint in group.joints)
+    return replace(profile, joint_groups=(replace(group, joints=joints),))
+
+
+def _mars_action(profile, torques):
+    return WbcAction(
+        base_velocity=(0.1, 0.0),
+        arms=(
+            ArmAction(
+                name="primary",
+                joint_torques=tuple(torques),
+                gripper=GripperCommand(values=(0.2,)),
+            ),
+        ),
+    )
+
+
+def _mars_observation(profile, q=0.0, qd=0.0, ee_pose=None, ee_target=None, target_mask=(True, True)):
+    group = profile.joint_group("primary_arm")
+    return WbcObservation(
+        base_pose=(0.0, 0.0, 0.0),
+        base_twist=(0.0, 0.0),
+        arms=(
+            ArmObservation(
+                name="primary",
+                joint_position=(q,) * len(group.joints),
+                joint_velocity=(qd,) * len(group.joints),
+                ee_pose=ee_pose or (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0),
+                ee_target=ee_target,
+                target_mask=target_mask,
+                gripper=GripperObservation(position=(0.0,)),
+            ),
+        ),
+        occupancy=None,
+    )
+
+
+def test_torque_maps_to_bounded_position_lead():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    adapter = PositionServoAdapter(profile)
+    command = adapter.command(_mars_action(profile, (10.0, 0.0, 0.0, 0.0, 0.0)), _mars_observation(profile))
+    assert command.joint_positions["joint1"] == pytest.approx(0.015)
+    assert command.joint_positions["joint2"] == 0.0
+    assert command.commanded_torques["joint1"] == pytest.approx(1.5)  # clipped by torque_limit
+    assert command.base_velocity == (0.1, 0.0)
+
+
+def test_torque_limit_and_current_limit_clip():
+    profile = _profile_with_actuator(
+        kp_eff=100.0,
+        max_lead=0.02,
+        torque_constant=0.1,
+        current_limit=1.0,
+        gear_ratio=1.0,
+        control_mode="current_position",
+    )
+    adapter = PositionServoAdapter(profile)
+    command = adapter.command(_mars_action(profile, (10.0, 0.0, 0.0, 0.0, 0.0)), _mars_observation(profile))
+    # current limit 1 A * 0.1 N*m/A = 0.1 N*m, below the 1.5 N*m torque limit.
+    assert command.commanded_torques["joint1"] == pytest.approx(0.1)
+    assert command.joint_positions["joint1"] == pytest.approx(0.001)
+    assert command.current_limits["joint1"] == pytest.approx(1.0)
+
+
+def test_gravity_feedforward_offsets_position_target():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    adapter = PositionServoAdapter(profile, gravity_torques={"joint1": 1.0})
+    command = adapter.command(_mars_action(profile, (0.0,) * 5), _mars_observation(profile))
+    assert command.joint_positions["joint1"] == pytest.approx(0.01)
+
+
+def test_callable_gravity_feedforward_receives_observation():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    seen = []
+
+    def gravity(observation):
+        seen.append(observation)
+        return {"joint1": 1.0}
+
+    adapter = PositionServoAdapter(profile, gravity_torques=gravity)
+    command = adapter.command(_mars_action(profile, (0.0,) * 5), _mars_observation(profile))
+    assert seen
+    assert command.joint_positions["joint1"] == pytest.approx(0.01)
+
+
+def test_velocity_damping_feedforward_compensates_servo_damping():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02, kd_eff=2.0)
+    adapter = PositionServoAdapter(profile)
+    command = adapter.command(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(profile, qd=0.5),
+    )
+    # kd_eff * qd = 2 * 0.5 = 1 N*m -> 0.01 rad lead.
+    assert command.joint_positions["joint1"] == pytest.approx(0.01)
+
+
+def test_missing_kp_fails_closed():
+    profile = _profile_with_actuator(kp_eff=None)
+    adapter = PositionServoAdapter(profile)
+    with pytest.raises(ValueError, match="kp_eff"):
+        adapter.command(_mars_action(profile, (0.1,) * 5), _mars_observation(profile))
+
+
+def test_missing_max_lead_fails_closed():
+    profile = _profile_with_actuator(max_lead=None)
+    adapter = PositionServoAdapter(profile)
+    with pytest.raises(ValueError, match="max_lead"):
+        adapter.command(_mars_action(profile, (0.1,) * 5), _mars_observation(profile))
+
+
+def test_unknown_feedforward_joint_is_rejected():
+    profile = example_mars_profile()
+    with pytest.raises(ValueError, match="unknown joints"):
+        PositionServoAdapter(profile, gravity_torques={"not_a_joint": 1.0})
+
+
+def test_dual_arm_adapter_commands_all_groups():
+    profile = example_sourccey_profile()
+    arms = []
+    for arm_spec in profile.arms:
+        group = profile.joint_group(arm_spec.joint_group)
+        arms.append(
+            ArmAction(
+                name=arm_spec.name,
+                joint_torques=(0.5,) * len(group.joints),
+                gripper=GripperCommand(values=(0.1,) * arm_spec.gripper.dof),
+            )
+        )
+    action = WbcAction(base_velocity=(0.0, 0.0), arms=tuple(arms), torso_torques=(0.2,))
+    arms_obs = []
+    for arm_spec in profile.arms:
+        group = profile.joint_group(arm_spec.joint_group)
+        arms_obs.append(
+            ArmObservation(
+                name=arm_spec.name,
+                joint_position=(0.0,) * len(group.joints),
+                joint_velocity=(0.0,) * len(group.joints),
+                gripper=GripperObservation(position=(0.0,) * arm_spec.gripper.dof),
+            )
+        )
+    observation = WbcObservation(
+        base_pose=(0.0, 0.0, 0.0),
+        base_twist=(0.0, 0.0),
+        arms=tuple(arms_obs),
+        torso=None,
+        occupancy=np.zeros((4, 4, 4), dtype=np.uint8),
+    )
+    # Add the torso observation required by the profile.
+    from emet.controller.manipulation.wbc_contract import JointGroupObservation
+
+    observation = replace(
+        observation,
+        torso=JointGroupObservation(name="lift", position=(0.0,), velocity=(0.0,)),
+    )
+    command = PositionServoAdapter(profile).command(action, observation)
+    assert set(command.joint_positions) == {
+        "lift",
+        "left_shoulder_pan",
+        "left_shoulder_lift",
+        "left_elbow_flex",
+        "left_wrist_flex",
+        "left_wrist_roll",
+        "right_shoulder_pan",
+        "right_shoulder_lift",
+        "right_elbow_flex",
+        "right_wrist_flex",
+        "right_wrist_roll",
+    }
+    assert command.joint_positions["lift"] == pytest.approx(0.001)  # 0.2 / 200
+    assert set(command.grippers) == {"left", "right"}
+
+
+def test_clamp_action_clips_base_torque_and_gripper():
+    profile = example_mars_profile()
+    action = WbcAction(
+        base_velocity=(99.0, -99.0),
+        arms=(
+            ArmAction(
+                name="primary",
+                joint_torques=(99.0,) * 5,
+                gripper=GripperCommand(values=(99.0,)),
+            ),
+        ),
+    )
+    clamped = clamp_action(action, profile)
+    assert clamped.base_velocity == (0.5, -1.0)
+    assert all(abs(tau) <= 1.5 for tau in clamped.arm("primary").joint_torques)
+    assert clamped.arm("primary").gripper.values == (0.85,)
+    # The raw action is unchanged.
+    assert action.base_velocity == (99.0, -99.0)
+
+
+def test_adapter_clips_base_velocity_and_reports_clipped():
+    profile = example_mars_profile()
+    adapter = PositionServoAdapter(profile)
+    command = adapter.command(
+        WbcAction(
+            base_velocity=(99.0, -99.0),
+            arms=(ArmAction(name="primary", joint_torques=(0.0,) * 5, gripper=GripperCommand(values=(0.0,))),),
+        ),
+        _mars_observation(profile),
+    )
+    assert command.base_velocity == (0.5, -1.0)
+    assert command.clipped is True
+
+
+def test_current_limit_without_torque_constant_fails_closed():
+    profile = _profile_with_actuator(
+        current_limit=1.0,
+        torque_constant=None,
+        control_mode="current_position",
+    )
+    with pytest.raises(ValueError, match="current_limit"):
+        PositionServoAdapter(profile)
+
+
+def test_true_torque_mode_requires_a_torque_adapter():
+    profile = _profile_with_actuator(control_mode="torque")
+    with pytest.raises(ValueError, match="true torque"):
+        PositionServoAdapter(profile)
+
+
+def test_position_mode_does_not_emit_current_limits():
+    profile = _profile_with_actuator(
+        current_limit=1.0,
+        torque_constant=0.1,
+        control_mode="position",
+    )
+    command = PositionServoAdapter(profile).command(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(profile),
+    )
+    assert command.current_limits == {}
+
+
+def test_negative_torque_produces_negative_lead():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    command = PositionServoAdapter(profile).command(
+        _mars_action(profile, (0.0, 0.0, 0.0, 0.0, -0.5)),
+        _mars_observation(profile),
+    )
+    assert command.joint_positions["joint5"] < 0.0
+
+
+def test_lead_is_clipped_by_position_limit():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.2)
+    group = profile.joint_group("primary_arm")
+    joints = list(group.joints)
+    joints[0] = replace(joints[0], position_limit=(0.0, 0.01))
+    profile = replace(profile, joint_groups=(replace(group, joints=tuple(joints)),))
+    command = PositionServoAdapter(profile).command(
+        _mars_action(profile, (1.0, 0.0, 0.0, 0.0, 0.0)),
+        _mars_observation(profile, q=0.009),
+    )
+    assert command.joint_positions["joint1"] == pytest.approx(0.01)
+
+
+def test_callable_feedforward_must_return_mapping():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02)
+    adapter = PositionServoAdapter(profile, gravity_torques=lambda _obs: [1.0])
+    with pytest.raises(ValueError, match="must return a mapping"):
+        adapter.command(_mars_action(profile, (0.0,) * 5), _mars_observation(profile))
+
+
+def test_reward_rejects_all_zero_active_weights():
+    profile = example_mars_profile()
+    target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    with pytest.raises(ValueError, match="positive weight"):
+        reach_reward(
+            _mars_action(profile, (0.0,) * 5),
+            _mars_observation(profile, ee_target=target),
+            profile=profile,
+            spec=ReachSpec(arm_weights=(0.0,)),
+        )
+
+
+def test_target_mask_ignores_unconstrained_position_or_orientation():
+    profile = example_mars_profile()
+    position_target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    same_position_wrong_orientation = (0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0)
+    _, components = reach_reward(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(
+            profile,
+            ee_pose=same_position_wrong_orientation,
+            ee_target=position_target,
+            target_mask=(True, False),
+        ),
+        profile=profile,
+    )
+    assert components["success"] == 1.0
+
+    wrong_position_same_orientation = (0.1, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    _, components = reach_reward(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(
+            profile,
+            ee_pose=wrong_position_same_orientation,
+            ee_target=position_target,
+            target_mask=(False, True),
+        ),
+        profile=profile,
+    )
+    assert components["success"] == 1.0
