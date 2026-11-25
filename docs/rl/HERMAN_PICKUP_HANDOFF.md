@@ -290,12 +290,22 @@ trial. The full receipts are in the same evidence directory.
 
 ### Innate OS simulator
 
-Use the upstream simulator as a second test for the ROS deployment path.
-The local upstream checkout's simulator publishes `/mars/arm/state` and
-`/odom` and consumes `/mars/arm/commands` and `/cmd_vel`. It does not publish
-the native arm status or command echo required by the WBC transport. Its
-odom publisher also copies world-frame planar velocities into fields
-labeled `base_link`. Before using it as a WBC integration test, add a
-simulator-only adapter for health, command echo and child-frame twist and
-run with the mux in an isolated ROS domain. Use the MuJoCo smoke above for
-policy regressions. See the [Innate simulator setup](../robots/innate_mars.md).
+Run the headless Innate simulation smoke to exercise the ROS handoff
+with the real WBC binding and upstream MuJoCo plant. Use a local Innate
+OS checkout containing `ros2_ws/src/maurice_bot/maurice_sim` and an extracted
+commissioning archive. The launcher builds the simulator-only status message
+in a scratch directory. It requires ROS Humble and uses localhost-only
+Fast DDS discovery on domain 87 by default.
+
+```bash
+bash scripts/run_innate_ros_wbc_sim.sh ~/src/innate-os /path/to/robot_description.urdf
+```
+
+The test uses the upstream physics and control callbacks, adds arm status,
+command echo and child-frame odometry, and routes velocity through a simple
+ROS relay registered as `cmd_vel_mux`. It verifies that a competing arm
+publisher blocks readiness, then runs a hold and a wrist waypoint and
+checks the measured stop. The relay exercises topic ownership and routing.
+Innate's full mux arbitration and Jetson Zenoh behavior remain separate
+integration checks. Use the [Innate OS setup](../robots/innate_mars.md)
+for its full GUI stack and the MuJoCo smoke above for policy regressions.
