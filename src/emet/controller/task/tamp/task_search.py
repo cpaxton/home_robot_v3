@@ -456,12 +456,18 @@ def execute_task_plan(
                 scenario_from_attempt,
             )
 
+            robot = getattr(executor, "robot", None)
+            spec = getattr(robot, "_spec", None)
             context = {
                 "op": op,
                 "object_query": plan.object_query,
                 "receptacle_query": plan.receptacle_query,
                 "failure_mode": attempt.get("failure_mode"),
                 "message": code,
+                "feedforward": bool(getattr(executor, "_feedforward", None) is not None),
+                "feedforward_path": str(getattr(executor, "_feedforward_path", "") or ""),
+                "robot_id": str(getattr(spec, "name", "") or ""),
+                "job_id": os.environ.get("EMET_JOB_ID") or "",
             }
             if os.environ.get("EMET_GT_TEACHER", "").strip().lower() in {"1", "true", "yes"}:
                 context["privileged"] = True
