@@ -296,7 +296,7 @@ def failure_code(message: str) -> str:
             ("joint_bounds", "joint_bounds"),
             ("collision", "collision"),
             ("tracking_failed", "tracking_timeout"),
-            ("ik_failed", "ik_failed"),
+            ("ik_failed", "unreachable"),
             ("planning_failed", "planning_failed"),
             ("gripper_close_path_failed", "planning_failed"),
             ("verify_failed", "verification_failed"),
@@ -339,5 +339,6 @@ def failure_code(message: str) -> str:
         "provide_task_ref_or_object_and_receptacle",
         "planner_error",
         "approach_failed",
+        "unreachable",
     }
     return next((part for part in reversed(parts) if part in allowed), "operation_failed")

@@ -421,6 +421,23 @@ def execute_task_plan(
         plan.failed_op = op
         _measure(op)
         plan.message = code
+        # Persist the failed motion attempt (EE target, observed trajectory, failure
+        # mode) for offline RL-WBC replay; the agent-facing result stays a summary.
+        attempt = getattr(executor, "last_attempt", None)
+        if isinstance(attempt, dict) and attempt:
+            from emet.controller.manipulation.failure_record import record_manip_attempt
+
+            record_manip_attempt(
+                attempt,
+                context={
+                    "op": op,
+                    "object_body": plan.object_body,
+                    "receptacle_body": plan.receptacle_body,
+                    "failure_mode": attempt.get("failure_mode"),
+                    "message": code,
+                },
+            )
+            plan.diagnostics.append({"phase": op, "attempt": attempt})
         logger.warning(f"TAMP execute failed op={op}: {code}")
         return plan
 

@@ -8,7 +8,7 @@ import pytest
 
 from emet.agent.tools import get_tools
 from emet.controller.task.tamp import agent_bridge as bridge
-from emet.controller.task.tamp.api import TAMP_TOOLS, json_tool, plan_data, refusal_from_teleport_collision, response
+from emet.controller.task.tamp.api import TAMP_TOOLS, failure_code, json_tool, plan_data, refusal_from_teleport_collision, response
 from emet.controller.task.tamp.task_search import TaskPlan, TaskPlanStep
 
 
@@ -605,6 +605,36 @@ def test_scene_tasks_exposes_robocasa_task_and_respects_filter():
     assert filtered["tasks"] == []
 
 
+def test_failure_code_maps_ik_failed_to_unreachable():
+    assert failure_code("grasp_failed:pregrasp_ik_failed") == "unreachable"
+    assert failure_code("grasp_failed:pregrasp_tracking_failed") == "tracking_timeout"
+    assert failure_code("grasp_failed:grasp_joint_bounds") == "joint_bounds"
+
+
+def test_record_manip_attempt_writes_jsonl(tmp_path, monkeypatch):
+    from emet.controller.manipulation.failure_record import record_manip_attempt
+
+    monkeypatch.setenv("EMET_MANIP_FAILURE_DIR", str(tmp_path))
+    path = record_manip_attempt(
+        {"failure_mode": "tracking_failed", "target_xyz": [0.0, 0.0, 1.0], "trace": []},
+        context={"op": "grasp", "object_body": "obj_main"},
+    )
+    assert path is not None
+    lines = (tmp_path / "manip_failures.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    assert rec["attempt"]["failure_mode"] == "tracking_failed"
+    assert rec["context"]["op"] == "grasp"
+
+
+def test_record_manip_attempt_noop_for_empty(tmp_path, monkeypatch):
+    from emet.controller.manipulation.failure_record import record_manip_attempt
+
+    monkeypatch.setenv("EMET_MANIP_FAILURE_DIR", str(tmp_path))
+    assert record_manip_attempt({}, context={}) is None
+    assert not (tmp_path / "manip_failures.jsonl").exists()
+
+
 def test_refusal_from_teleport_collision_parses_deepest_margin():
     msg = (
         "Command 47 failed: navigation start failed: teleport_endpoint_collision: "
@@ -662,4 +692,5 @@ def test_teleport_collision_surfaces_refusal_through_plan_and_data():
     assert data["refusal"] == result.refusal
     assert "dishwasher_x" not in json.dumps(data)
     assert "cabinet_y" not in json.dumps(data)
+
 
