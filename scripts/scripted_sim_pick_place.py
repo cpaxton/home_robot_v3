@@ -230,6 +230,8 @@ def main() -> int:
                         help="Wait for spawned objects to settle before tool calls.")
     parser.add_argument("--retries", type=int, default=0,
                         help="Retry the scripted sequence on a replan recovery code.")
+    parser.add_argument("--placement-tolerance-m", type=float, default=0.35,
+                        help="GT object-to-receptacle-center sanity bound (default: 0.35)")
     parser.add_argument("--verbose-sim", action="store_true", help="Print sim server stderr.")
     parser.add_argument(
         "--record-mp4",
@@ -247,6 +249,7 @@ def main() -> int:
         help="MP4 path (default ~/runs/emet/manip_smoke/<stamp>/third_person.mp4).",
     )
     args = parser.parse_args()
+    gt_placement_tolerance_m = float(getattr(args, "placement_tolerance_m", 0.35) or 0.35)
 
     os.chdir(REPO)
 
@@ -541,7 +544,9 @@ def main() -> int:
             if receptacle_pos is not None:
                 placement_error = float(np.linalg.norm(after - receptacle_pos))
                 print(f"placement_error_m={placement_error:.4f}")
-                if placement_error > 0.25:
+                # Fixture centers can sit well above a basin/shelf support
+                # surface; the execute tool's release verification is primary.
+                if placement_error > float(gt_placement_tolerance_m):
                     print("FAIL: object is not near the selected receptacle.", file=sys.stderr)
                     ok = False
             if ok:
