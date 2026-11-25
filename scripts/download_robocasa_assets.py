@@ -105,7 +105,9 @@ def _load_urls_from_box_links(robocasa_pkg: Path) -> dict[str, str]:
 def _basic_fixtures_present(fixtures_dir: Path) -> bool:
     from emet.simulation.robocasa_assets_check import BASIC_FIXTURE_SENTINELS
 
-    return any((fixtures_dir / rel).is_file() for rel in BASIC_FIXTURE_SENTINELS)
+    # Any single sentinel is not enough: a partial extraction can leave
+    # counters/counter while the styled sinks (white_sink) are still missing.
+    return all((fixtures_dir / rel).is_file() for rel in BASIC_FIXTURE_SENTINELS)
 
 
 def _lightwheel_registry_present(fixtures_dir: Path) -> bool:
@@ -226,7 +228,7 @@ def main() -> int:
     for name, url, rel, check in specs:
         folder = base / rel
         parent = folder.parent
-        zip_path = parent / f"{folder.name}.zip"
+        zip_path = parent / f"{name}.zip"
         skip = not force_redownload and _asset_present(base, rel, check)
         if skip:
             print(f"Skipping {name} (already present).")

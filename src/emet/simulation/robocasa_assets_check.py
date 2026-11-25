@@ -43,9 +43,9 @@ BASIC_FIXTURE_SENTINELS: tuple[str, ...] = (
 
 
 def basic_fixtures_present(robocasa_pkg: Path) -> bool:
-    """True when the base fixtures zip was extracted (any known sentinel ``model.xml``)."""
+    """True when the base fixtures zip was fully extracted (all sentinel ``model.xml``)."""
     fixtures = robocasa_pkg / "models" / "assets" / "fixtures"
-    return any((fixtures / rel).is_file() for rel in BASIC_FIXTURE_SENTINELS)
+    return all((fixtures / rel).is_file() for rel in BASIC_FIXTURE_SENTINELS)
 
 
 def lightwheel_registry_ok(robocasa_pkg: Path) -> bool:

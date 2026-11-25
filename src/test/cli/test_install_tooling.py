@@ -106,3 +106,23 @@ def test_lightwheel_pack_requires_the_mesh_not_just_the_registry(tmp_path: Path)
     (fixtures / "sinks" / "Sink025").mkdir(parents=True)
     (fixtures / "sinks" / "Sink025" / "model.xml").write_text("<mujoco/>")
     assert module._asset_present(base, "fixtures", "lightwheel_registry") is True
+
+def test_downloader_base_fixtures_require_all_sentinels(tmp_path: Path):
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "download_robocasa_assets.py"
+    spec = importlib.util.spec_from_file_location("download_robocasa_assets", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    fixtures = tmp_path / "fixtures"
+    counter = fixtures / "counters/counter/model.xml"
+    counter.parent.mkdir(parents=True)
+    counter.write_text("<mujoco/>")
+    assert module._basic_fixtures_present(fixtures) is False
+
+    for rel in ("sinks/2_bins_stainless/model.xml", "sinks/white_sink/model.xml"):
+        path = fixtures / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("<mujoco/>")
+    assert module._basic_fixtures_present(fixtures) is True
