@@ -13,6 +13,7 @@
 #   stretch    Stretch default-table teleport plan_pick_place → execute
 #   counter-smoke  One rby1 counter-to-cab MCTS episode (~5–8 min; learned find + TAMP)
 #   counter-kinematic  No-VLM rby1 counter→cab: scene_tasks → plan → execute (grasp smoke)
+#   counter-sink-kinematic  No-VLM rby1 counter→sink: low-receptacle pick-place success
 #   floor-smoke  One fast rby1 MCTS floor episode (~5–8 min; no Stretch agentic sweeps)
 #   floor        Full RoboCasa floor matrix (slow; Stretch + find-only explore)
 #
@@ -38,7 +39,7 @@
 # Env:
 #   OUT_DIR    artifact dir (default ~/runs/emet/tamp_agent_tools_gate/<ts>)
 #   PROFILE    smoke (default) or full — sets ITEMS when ITEMS unset
-#   ITEMS      override profile tokens: chat kinematic stretch counter-kinematic counter-smoke floor-smoke floor
+#   ITEMS      override profile tokens: chat kinematic stretch counter-kinematic counter-sink-kinematic counter-smoke floor-smoke floor
 #   TIMEOUT    per-item wall timeout seconds (default 2700; floor uses FLOOR_TIMEOUT)
 #   FLOOR_TIMEOUT  wall timeout for floor / floor-smoke (default 5400 / 1200)
 #   DRY_RUN    when 1, log each item command without executing (quoting smoke)
@@ -85,11 +86,12 @@ count_item chat
 count_item kinematic
 count_item stretch
 count_item counter-kinematic
+count_item counter-sink-kinematic
 count_item counter-smoke
 count_item floor-smoke
 count_item floor
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "FATAL: ITEMS='$ITEMS' selects no gate items (tokens: chat kinematic stretch counter-kinematic counter-smoke floor-smoke floor)" >&2
+    echo "FATAL: ITEMS='$ITEMS' selects no gate items (tokens: chat kinematic stretch counter-kinematic counter-sink-kinematic counter-smoke floor-smoke floor)" >&2
     exit 2
 fi
 
@@ -126,7 +128,7 @@ write_summary() {
         echo "git=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
         echo "job=${EMET_JOB_ID:-}"
         echo ""
-        for name in molmospaces_chat_teleport molmospaces_kinematic_chat stretch_teleport_control robocasa_counter_kinematic robocasa_counter_smoke robocasa_floor_smoke robocasa_floor_suite; do
+        for name in molmospaces_chat_teleport molmospaces_kinematic_chat stretch_teleport_control robocasa_counter_kinematic robocasa_counter_sink_kinematic robocasa_counter_smoke robocasa_floor_smoke robocasa_floor_suite; do
             if [[ -f "$OUT/${name}.result" ]]; then
                 echo "${name}: $(cat "$OUT/${name}.result")"
             fi
@@ -218,6 +220,14 @@ if items_has counter-kinematic; then
         env EMET_GT_TEACHER=1 uv run python scripts/scripted_sim_pick_place.py \
         --start-sim --sim configs/sim/robocasa_pick_place_rby1.yaml --manip-mode kinematic \
         --object obj --receptacle cab \
+        --tool-calls-json "$ROBOCASA_TOOL_CALLS"
+fi
+
+if items_has counter-sink-kinematic; then
+    run_item robocasa_counter_sink_kinematic robocasa_counter_sink_kinematic "$TIMEOUT" \
+        env EMET_GT_TEACHER=1 uv run python scripts/scripted_sim_pick_place.py \
+        --start-sim --sim configs/sim/robocasa_pick_place_rby1_sink.yaml --manip-mode kinematic \
+        --settle-s 2 --retries 3 --object pear --receptacle sink \
         --tool-calls-json "$ROBOCASA_TOOL_CALLS"
 fi
 
