@@ -280,10 +280,13 @@ def test_relaxed_clearance_m_one_bounded_step_to_floor():
     assert relaxed_clearance_m(0.22, -0.1) is None
 
 
-def test_relaxed_clearance_m_margin_is_informational_only():
+def test_relaxed_clearance_m_margin_gates_authorization():
     from emet.eval.tamp_clutter import relaxed_clearance_m
 
-    # Authorization is decided by the floor alone, not by how close the refusal was.
+    # A step 0.22 -> 0.14 closes at most 0.08 of gap.
+    # Gap -0.02 is closable; gap -0.50 is not.
     assert relaxed_clearance_m(0.22, 0.14, margin_m=-0.02) == 0.14
-    assert relaxed_clearance_m(0.22, 0.14, margin_m=-0.50) == 0.14
+    assert relaxed_clearance_m(0.22, 0.14, margin_m=-0.50) is None
+    # Unknown margin (None) falls back to the floor-only rule.
+    assert relaxed_clearance_m(0.22, 0.14, margin_m=None) == 0.14
 
