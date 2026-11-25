@@ -41,7 +41,9 @@ The script is `scripts/validate_innate_torque_adapter.py`. It:
 
 1. Builds the Mars `EmbodimentProfile` (5 arm joints + separate gripper) and a
    sim-matched actuator profile (`kp_eff=50`, `kd_eff=1`, `max_lead=0.2`,
-   `torque_limit=50`) from the sim's own PD constants.
+   `torque_limit=50`) from the sim's own PD constants. This is a mapping test
+   against the PD law the adapter inverts; the 2x `kp_eff` row shows how it
+   degrades when identification is wrong.
 2. Applies a **0.5 N*m torque to each of the five arm joints** for 0.5 s through:
    - the Emet `PositionServoAdapter` → `VirtualMars.set_joint_target`, and
    - a direct-torque `VirtualMars` subclass that writes `qfrc_applied`.
