@@ -3,7 +3,7 @@
 import numpy as np
 
 from emet.motion.placement_geometry import HeldObject, PlacementScene
-from emet.motion.placement_surfaces import free_surface_centers
+from emet.motion.placement_surfaces import centers_lowest_first, free_surface_centers
 
 
 def payload():
@@ -56,3 +56,9 @@ def test_candidate_truncation_is_reported_only_when_distinct_centers_are_omitted
     exact = free_surface_centers([[0, 0, 0], [1, 1, 0]], max_centers=5, **args)
     assert len(small.centers) == 1 and small.budget_exhausted
     assert len(exact.centers) == 5 and not exact.budget_exhausted
+
+
+def test_centers_lowest_first_is_stable_within_a_height():
+    ordered = centers_lowest_first([[1.0, 0.0, 1.5], [0.0, 0.0, 0.9], [2.0, 0.0, 1.5]])
+    assert [center[2] for center in ordered] == [0.9, 1.5, 1.5]
+    assert [center[0] for center in ordered] == [0.0, 1.0, 2.0]

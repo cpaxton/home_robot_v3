@@ -15,6 +15,17 @@ class SurfaceSearchResult:
     budget_exhausted: bool = False
 
 
+def centers_lowest_first(centers):
+    """Stable low-surface-first order for mobile-manipulator placement.
+
+    The largest patch is often the top shelf, which can exhaust the per-base
+    IK budget before a reachable lower shelf is tried. Callers still validate
+    reach and collision; this only changes exploration order.
+    """
+    arrays = [np.asarray(center, dtype=float) for center in centers]
+    return sorted(arrays, key=lambda center: float(center[2]))
+
+
 def support_patches(value):
     """Accept one legacy rectangular patch or a collection of grounded patches."""
     patches = np.asarray(value, dtype=float)

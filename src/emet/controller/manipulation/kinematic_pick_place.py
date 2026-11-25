@@ -698,23 +698,56 @@ class KinematicPickPlaceExecutor:
         self._last_cmd_q = q1.copy()
         reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
         if not reached and desired_q is not None:
-            # Feedforward removes gravity droop; a small bounded proportional
-            # correction absorbs the remaining IK-branch / posture mismatch.
+            # Re-solve IK from the measured posture and base when the open-loop
+            # plan did not track. The plan can be kinematically valid while the
+            # loaded torso settles short; solving from the observed q finds the
+            # posture that reaches the same target despite that droop.
+            from emet.motion.mujoco_arm_ik import solve_position_ik
+
             lo, hi = self._joint_position_bounds()
-            for _ in range(2):
+            for _ in range(3):
                 if not self._sync_qpos_from_robot():
                     break
                 q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
-                residual = np.clip(desired_q - q_obs, -0.2, 0.2)
-                if float(np.max(np.abs(residual))) < 1e-3:
+                solution = solve_position_ik(
+                    self._model,
+                    self._data,
+                    ee_body=self.ee_body,
+                    joint_names=self.joint_names,
+                    target_pos=np.asarray(target_xyz_world, dtype=np.float64),
+                    tol_m=min(0.01, self.ik_tol_m * 0.25),
+                    max_iters=self.ik_max_iters,
+                )
+                if not solution.success:
                     break
-                q_cmd = np.clip(final_q + 0.5 * residual, lo, hi)
-                for _ in range(6):
+                q_ik = np.asarray(solution.qpos, dtype=np.float64)[qadr]
+                step = np.clip(q_ik - q_obs, -0.35, 0.35)
+                if float(np.max(np.abs(step))) < 1e-3:
+                    break
+                q_cmd = np.clip(q_obs + step, lo, hi)
+                for _ in range(8):
                     self._stream_arm_q(q_cmd)
                     self._sleep(0.05)
                 reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
                 if reached:
                     break
+            if not reached:
+                # Cartesian re-solve can fail at a singular/stretched posture.
+                # Fall back to the bounded joint residual instead of giving up.
+                for _ in range(2):
+                    if not self._sync_qpos_from_robot():
+                        break
+                    q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
+                    residual = np.clip(desired_q - q_obs, -0.2, 0.2)
+                    if float(np.max(np.abs(residual))) < 1e-3:
+                        break
+                    q_cmd = np.clip(final_q + 0.5 * residual, lo, hi)
+                    for _ in range(6):
+                        self._stream_arm_q(q_cmd)
+                        self._sleep(0.05)
+                    reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+                    if reached:
+                        break
         if not reached:
             self._last_motion_failure = self._last_motion_failure or 'tracking_failed'
         self._set_last_attempt(target_xyz_world, reached, measured_error)
@@ -828,13 +861,13 @@ class KinematicPickPlaceExecutor:
             raise ValueError("placement_" + (self._last_motion_failure or "missing_joint_state"))
         scene, payload, support = self._placement_geometry(body, receptacle)
         rotation = self._data.body(self.ee_body).xmat.reshape(3, 3).copy()
-        from emet.motion.placement_surfaces import free_surface_centers, support_patches
+        from emet.motion.placement_surfaces import centers_lowest_first, free_surface_centers, support_patches
 
         support = support_patches(support)
         surface_search = free_surface_centers(support, scene=scene, payload=payload, ee_rotation=rotation,
                                               clearance_m=max(.02, self.place_z_offset_m))
         self.last_surface_search = surface_search
-        centers = surface_search.centers
+        centers = centers_lowest_first(surface_search.centers)
         current = self._world_base_xyt()
         if current is None:
             raise ValueError("placement_base_pose_missing")
