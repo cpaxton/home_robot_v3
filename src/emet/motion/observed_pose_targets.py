@@ -60,7 +60,7 @@ def hand_lowest_offset(model, data, ee_body, geometry_names, rotation):
     import mujoco
 
     ee = data.body(ee_body)
-    local = []
+    local, lower = [], []
     for name in geometry_names:
         geom = model.geom(name)
         kind = int(geom.type[0])
@@ -70,11 +70,28 @@ def hand_lowest_offset(model, data, ee_body, geometry_names, rotation):
             vertices = model.mesh_vert[start:start+int(model.mesh_vertnum[mesh])]
         elif kind == int(mujoco.mjtGeom.mjGEOM_BOX):
             vertices = np.array(list(itertools.product((-1., 1.), repeat=3)))*geom.size
+        elif kind in (int(mujoco.mjtGeom.mjGEOM_SPHERE), int(mujoco.mjtGeom.mjGEOM_CAPSULE),
+                      int(mujoco.mjtGeom.mjGEOM_CYLINDER), int(mujoco.mjtGeom.mjGEOM_ELLIPSOID)):
+            placed = data.geom(name)
+            axes = rotation @ ee.xmat.reshape(3, 3).T @ placed.xmat.reshape(3, 3)
+            center = rotation @ ((placed.xpos-ee.xpos) @ ee.xmat.reshape(3, 3))
+            if kind == int(mujoco.mjtGeom.mjGEOM_SPHERE):
+                extent = geom.size[0]
+            elif kind == int(mujoco.mjtGeom.mjGEOM_ELLIPSOID):
+                extent = np.linalg.norm(axes[2]*geom.size)
+            else:
+                axial = abs(float(axes[2, 2]))
+                radial = 1. if kind == int(mujoco.mjtGeom.mjGEOM_CAPSULE) else np.sqrt(max(0., 1.-axial**2))
+                extent = geom.size[1]*axial+geom.size[0]*radial
+            lower.append(float(center[2]-extent))
+            continue
         else:
             raise ValueError('unsupported_hand_collision_geometry')
         placed = data.geom(name)
         world = vertices @ placed.xmat.reshape(3, 3).T+placed.xpos
         local.append((world-ee.xpos) @ ee.xmat.reshape(3, 3))
-    if not local:
+    if local:
+        lower.append(float((np.concatenate(local) @ rotation.T)[:, 2].min()))
+    if not lower:
         raise ValueError('hand_collision_geometry_unavailable')
-    return float((np.concatenate(local) @ rotation.T)[:, 2].min())
+    return min(lower)

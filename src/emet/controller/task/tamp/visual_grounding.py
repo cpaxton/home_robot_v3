@@ -68,7 +68,7 @@ class VisualTransferGrounder:
                 self._permit()
                 decision = refine_object_hint(reference.observations[decision.get('camera', next(iter(views)))].rgb,
                     decision, endpoint=self.endpoint, model=self.model, object_name=task.object_name,
-                    output=output/'refinement', estimate_grasp_site=False)
+                    output=output/'refinement', estimate_grasp_site=True)
                 profile = grounding_profile(decision, infer_support_from_depth=True, destination_below_source=False)
                 prior = select_transfer(reference, profile=profile, grow_object_region=True)
                 self._permit()

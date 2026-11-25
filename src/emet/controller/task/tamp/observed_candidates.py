@@ -3,7 +3,7 @@
 
 """World-frame transfer candidates built from a calibrated grasp and live geometry."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -197,3 +197,25 @@ def calibrate_cloud_grasps(proposals, *, observation_id, world_from_reference,
         result.append(CalibratedGrasp(local, tuple(approach), tuple(close_joints),
                                       approach_m=approach_m, lift_m=lift_m))
     return tuple(result)
+
+
+class SupportTransferCandidates:
+    """Shared support placement proposals with optional observed hand grasps."""
+    supports_grasp_proposals = True
+
+    def __init__(self, grasps, **placement_options):
+        self.grasps = tuple(grasps)
+        self.placement_options = placement_options
+
+    def __call__(self, task, snapshot, region, *, grasp_proposals=(), hand_from_ee=None):
+        profiles = self.grasps
+        if grasp_proposals:
+            template = profiles[0]
+            profiles = calibrate_cloud_grasps(grasp_proposals,
+                observation_id=snapshot.frame.capture.observation_id,
+                world_from_reference=snapshot.frame.payload.pose.world_from_object,
+                hand_from_ee=hand_from_ee, close_joints=template.close_joints,
+                approach_m=template.approach_m, lift_m=template.lift_m)
+            profiles = tuple(replace(profile, retreat_m=template.retreat_m,
+                transit_clearance_m=template.transit_clearance_m) for profile in profiles)
+        return candidates_from_supports(snapshot, profiles, placement_region=region, **self.placement_options)

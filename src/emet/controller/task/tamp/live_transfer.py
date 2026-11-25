@@ -186,9 +186,23 @@ class LiveTransferScene:
             model_signature=self.signature, fingertip_geom_ids=fingertip_geom_ids, clock=clock,
             check_placement_surface=self.check_placement_surface,
         )
+        self._grasp_anchors = ()
+        self.source.grasp_proposals = self.grasp_proposals
         self.source.set_grounder = self.set_grounder
         if profile.get("simulation_rigid_carry_prediction", False):
             self.source.set_carry_prediction = self.set_carry_prediction
+
+    def grasp_proposals(self, snapshot):
+        from emet.perception.grasps.observed import GraspProposal
+
+        if not self._grasp_anchors:
+            return ()
+        snapshot.frame.require(now=self.clock())
+        if snapshot.admission.background.scene_epoch != self.epoch:
+            raise ObservationUnavailable('scene_identity_changed')
+        pose = snapshot.frame.payload.pose.world_from_object
+        return tuple(GraspProposal(snapshot.frame.capture.observation_id, pose @ local, opening, provenance)
+                     for local, opening, provenance in self._grasp_anchors)
 
     def set_grounder(self, grounder):
         """Bind a phase-owned grounder before scene initialization."""
@@ -380,6 +394,7 @@ class LiveTransferScene:
         read_at = self.clock()
         capture_read_s = read_at-started
         grounding_s = 0.
+        decision = {}
         if getattr(self, 'grounder', None) is not None:
             def read_fresh():
                 packets = self._read_views()
@@ -391,6 +406,7 @@ class LiveTransferScene:
             grounding_s = self.clock()-read_at
             read_at = self.clock()
             sample, selected = resolution.sample, resolution.selection
+            decision = resolution.decision
             self.profile.update(resolution.profile)
             capture = sample.capture
             views = synchronized_views(sample)
@@ -525,6 +541,15 @@ class LiveTransferScene:
             "approximate_observed_box" if self.payload_model.construction == 'approximate_observed_box'
             else "axial_enclosure" if self.enclosure is not None else "unique_rigid_pose")
         self.diagnostics["world_from_payload"] = pose.world_from_object.tolist()
+        from .grounded_grasps import grasp_proposals_from_decision
+
+        proposals = grasp_proposals_from_decision(sample, selected, supports[0].patch.plane, decision,
+            position_error_m=profile['position_error_m'])
+        self._grasp_anchors = tuple((np.linalg.inv(pose.world_from_object) @ proposal.world_from_hand,
+            proposal.opening_m, proposal.provenance) for proposal in proposals)
+        self.diagnostics['grounded_grasp_proposals'] = [
+            {'world_from_hand': proposal.world_from_hand.tolist(), 'opening_m': proposal.opening_m,
+             'provenance': proposal.provenance, 'observation_id': proposal.observation_id} for proposal in proposals]
         self.assumption = StaticBackgroundAssumption(
             self.epoch, capture.earliest, capture.earliest + profile["static_s"], profile["calibration_id"],
         )
@@ -902,6 +927,7 @@ class LiveTransferScene:
                 for packet in self.stream.history()
             ]
         self.stream, self.last_evidence = None, None
+        self._grasp_anchors = ()
         self._carry_prediction = None
         self._carry_prediction_barrier = -np.inf
         self.samples.clear()

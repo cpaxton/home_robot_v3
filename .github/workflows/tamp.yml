@@ -30,6 +30,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y portaudio19-dev libasound2-dev libsndfile1 libgl1 libegl1
           uv sync --locked --python 3.10 --no-default-groups --group dev --group sim
+      - name: Lint shared grasp boundary
+        run: |
+          uv run --no-sync ruff check \
+            src/emet/controller/task/tamp/grounded_grasps.py \
+            src/emet/controller/task/tamp/visual_grounding.py \
+            src/emet/controller/task/tamp/observed_candidates.py \
+            src/emet/controller/task/tamp/observed_arm.py \
+            src/test/controller/task/tamp/test_grounded_grasps.py \
+            src/test/controller/task/tamp/test_shared_grasp_layering.py
       - name: Run TAMP contracts
         # Process isolation keeps a native binding crash attributable to a file.
         run: |
@@ -41,6 +50,10 @@ jobs:
             src/test/controller/task/tamp/test_native_approach.py \
             src/test/controller/task/tamp/test_native_release_budget.py \
             src/test/controller/task/tamp/test_observed_adapter.py \
+            src/test/controller/task/tamp/test_grounded_grasps.py \
+            src/test/controller/task/tamp/test_execution_phase.py \
+            src/test/controller/task/tamp/test_visual_grounding.py \
+            src/test/controller/task/tamp/test_shared_grasp_layering.py \
             src/test/controller/task/tamp/test_transfer_provider.py \
             src/test/controller/task/tamp/test_mobile_case_config.py \
             src/test/controller/task/tamp/test_mobile_map_boundary.py \

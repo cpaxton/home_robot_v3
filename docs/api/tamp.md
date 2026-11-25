@@ -576,3 +576,40 @@ The default observed discovery provider remains read-only. An explicitly injecte
 primitive/task tools; its source must supply independently qualified sensor and
 geometry evidence. See [observed execution assembly](observed_native_tamp.md) and
 the [implementation gates](../plans/2026-10-26_observed_native_execution.md).
+
+### Shared observed grasp proposals
+
+The common observed-arm adapter accepts a metric grasp preference through
+`pick_place` / `plan_pick_place` when the robot binding supplies hand calibration:
+
+```python
+pick_place("pear", "sink", hints={"grasp": {
+    "frame_id": "world",
+    "observation_id": discovered_observation_id,
+    "world_from_hand": world_from_hand_4x4,
+    "opening_m": 0.06,
+}}, hint_mode="prefer")
+```
+
+`world_from_hand` is a finite, rigid 4×4 transform in metres. Hand +X is the
+finger-closing direction; +Z is the approach direction toward the grasp. The
+robot binding converts this hand frame to its native tool frame.
+`opening_m` is estimated required clearance used for gripper compatibility;
+the robot binding owns motor commands and contact closure.
+
+A reference obtained from `scene_tasks` can bind the preference for up to
+120 seconds. Planning independently reacquires fresh geometry and checks the
+scene binding; an old reference never refreshes motion-evidence age.
+Preferred poses can be raised to clear the measured support with the known
+hand geometry. Receipts retain requested/applied poses and report adjustments.
+`strict` fixes the planned hand pose and refuses required clearance adjustments
+or an incompatible opening. Execution still uses the binding's declared
+tracking and observation tolerances. Strict approach-path hints remain unsupported.
+
+Runtime visual grounding uses the same `GraspProposal` and candidate-calibration
+seam. It may suggest a body site, closing angle and world-height fraction; fresh
+measured depth realizes those preferences before planning. Opposite hand
+headings are candidate alternatives. No object CAD, simulator actor pose or
+additional model call while carrying is required. Bindings without hand
+calibration keep their calibrated candidate provider and reject explicit
+unsupported grasp options before motion.

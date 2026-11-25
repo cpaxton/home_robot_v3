@@ -86,9 +86,16 @@ def bind_pandaomron_arm(robot, model):
         robot.send_action({"joint": np.asarray(goals).tolist()})
         return True
 
+    calibration = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, calibration)
+    ee = calibration.body(PANDA_ARM_CHAIN.ee_body)
+    pads = np.array([calibration.geom(f'gripper0_right_finger{i}_pad_collision').xpos for i in (1, 2)])
+    hand_from_ee = np.eye(4)
+    hand_from_ee[:3, 3] = -(pads.mean(0)-ee.xpos) @ ee.xmat.reshape(3, 3)
     return ObservedArm(
         model, ROOT_BODY, PANDA_ARM_CHAIN, synchronize, command_joints, robot.command_gripper_joints, FINGER_JOINTS,
         joint_tolerance=.01, linear_joint_tolerance_m=.001,
+        hand_from_ee=hand_from_ee, maximum_opening_m=.078,
     )
 
 

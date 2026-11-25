@@ -7,161 +7,88 @@ receptacle names. Optional hints express grasp/approach/placement guidance;
 objects and stationary-base requirements are hard task constraints. Hints never
 constitute observation evidence or authorization.
 
-## Completed foundation
+## Implemented foundation
 
-- A shared request boundary validates semantic selectors, hint mode, option
-  groups, protected-object/base constraints and finite JSON values. It owns
-  copies of caller inputs.
-- Physical one-call `pick_place` delegates through the public plan and execute
-  handlers, retaining plan revalidation and native input gates.
-- Both planning and one-call handlers accept optional request arguments. They
-  dispatch them through an adapter's `plan_request` method when available.
-  Unsupported options explicitly refuse before motion; they never fall through
-  to legacy execution. Empty optional dictionaries preserve names-only behavior.
-- The shared observed-arm factory now applies capture-bound world-frame approach
-  direction/distance guidance to transfer candidates before the existing route
-  certification. Direction-only and distance-only hints retain the unspecified
-  native value. These are preferred pregrasp targets; strict approach refuses
-  until a path-direction guarantee is implemented. Discovery references are
-  task-bound, revalidated against fresh captures, capped at 120 seconds and
-  discarded after motion. Other hint groups and protected-object constraints still refuse
-  explicitly. No live qualification or general hinted grasp support is claimed.
-- Advanced metadata advertisement remains deferred until the shared adapter
-  implements the options. No physical hints implementation is claimed here.
+- Canonical physical `pick_place` uses the public plan/execute handlers and
+  shared observed adapter. Optional arguments dispatch through `plan_request`;
+  unsupported options refuse before motion. Legacy arguments remain available.
+- World-frame metric hand-pose hints and preferred approach direction/distance
+  are supported by the common observed-arm factory. Discovery references are
+  task-bound, revalidated against fresh measurements, capped at 120 seconds and
+  discarded after motion. Strict grasp fixes the planned hand pose and refuses
+  required clearance adjustments. Strict approach-path guarantees remain unsupported.
+- Shared runtime visual grounding proposes object/destination regions and a
+  body grasp site, closing angle and world-height fraction. Fresh RGB-D realizes
+  the site; measured local material sets XY, and measured support/visible top
+  set height. Robot hand geometry can raise a preferred grasp above the support,
+  with requested/applied guidance and adjustments in planning receipts.
+- Both supervisors use `GraspProposal`, the common support-candidate generator
+  and the same physical executor. Robot bindings own hand/tool calibration,
+  aperture limits, native joint mapping and controllers. No object CAD is used.
+- Approximate task geometry uses a common translation/volume association policy
+  for single/multiview sources. Newly visible faces need not rigidly match the
+  initial partial surface. Pose observability remains explicitly unqualified;
+  fresh timestamps, bounded association and observed lift/place checks remain.
+- The observed-arm factory owns the phase/payload model-query gate. Inference
+  requires idle, known-empty state. Dispatch failures preserve unknown load;
+  verified placement restores empty. No model calls are added while carrying.
+- Cartesian interpolation is shared with the diagnostic compatibility shim.
+  Collision contracts accept observed voxels or bounded observed surfaces,
+  require known-free workspace and invalidate plans on representation changes.
+  The live map producer still uses the existing background/local-map machinery.
+- The normal Panda benchmark CLI binds shared visual grounding and calls the
+  canonical registry. The alternate diagnostic executor still exists and must
+  not be mistaken for qualification of the shared tool.
+- TAMP CI now includes grasp realization, phase, grounding and layering tests.
+  The shared grasp boundary must not import evaluation/benchmark/Habitat/paper
+  packages. Existing legacy controller-to-evaluation imports remain follow-up work.
 
-- Shared Cartesian motion and the diagnostic now use one pose-waypoint generator.
-  The legacy executor's sampling is preserved and compared against its prior SO(3)
-  interpolation in a regression test. Evaluation imports remain compatibility
-  shims; no second interpolation implementation remains.
-- Observed scene contracts now accept bounded surface geometry in addition to
-  voxels, through the same collision checker and physical executor. Both require
-  known-free workspace evidence. A source representation change invalidates a
-  stored plan before motion; ground truth remains excluded from observed mode.
-  Public-tool integration tests exercise both representations with synthetic
-  evidence. This does not implement the live surface provider or remove remaining
-  payload tracking requirements.
+## Native evidence and limits
 
-- Visual grounding now lives in shared perception, with compatibility imports
-  for old evaluation callers. The shared live scene can consume model proposals,
-  acquire fresh RGB-D after inference, revalidate view/object association and
-  build its support geometry from the new capture. An explicit phase callback
-  must permit model queries; known loaded/unknown phases can refuse them.
-- Shared runtime grounding asks for object and destination regions only. It
-  infers support locally and imposes no universal lower-destination assumption,
-  supporting below-source, same-table and higher surfaces. Legacy sink profiles
-  retain their explicit lower-destination requirement. Retry feedback identifies
-  object/source/destination failures without changing the public reason code.
-- Read-only native Panda/Qwen smoke admitted fresh geometry in 3.7 seconds,
-  with no actor command calls. This tests live grounding, not full agent task
-  success. The common observed-arm factory now binds the grounder to controller-owned
-  phase/payload state; application startup still needs to supply that factory
-  and a measured or reset-derived empty-payload state.
+Development controls use scripted outer tool selection, live Qwen grounding,
+RGB-D/robot feedback, and explicitly reported simulation assists. They are not
+frozen autonomous Codex/Qwen success-rate measurements or hardware qualification.
+All failures and infrastructure exits are retained under repository-root
+`logs/shared-harness-public-transfer-20261124/`.
+
+- v23 passed observed lift verification and started carry, then lost grip.
+- v27 used the VLM grasp proposal through the shared generator, passed observed
+  lift verification, then lost grip during preplace. It also recorded counter contacts.
+- v28's tighter joint tolerance caused settling failure; that setting was reverted.
+- v29/v30 exited before the simulator bound its port; no task result was measured.
+- v31 reached descent but exhausted tracking convergence with the torso near its lower stop.
+- v32 used the existing fixed-torso binding, lifted approximately 84 mm and
+  moved the pear approximately 39 cm into the sink. The independent benchmark
+  goal checker returned true, but grip was lost before the planned release.
+  The tool correctly remained partial; controlled transfer has not passed.
+
+Detailed outcomes and earlier development history are in
+[the control report](../experiments/shared_public_tool_transfer_20261124.md).
+The current public metric-grasp contract is in [the API](../api/tamp.md).
 
 ## Remaining implementation, in order
 
-1. Implement the request in the shared observed adapter. Define observation/frame
-   binding, field validation, hint resolution/adjustment receipts, hard task
-   constraints and strict-mode plan persistence. Preserve legacy plan arguments.
-2. Integrate the tested diagnostic geometry and native motion behavior into the
-   shared executor; accept approximate measured geometry without mandatory exact
-   rigid-payload tracking or voxel scene representation. Do not wrap the Panda
-   diagnostic as another execution backend.
-3. Make the diagnostic runner a normal tool client. Keep robot calibration,
-   kinematics, gripper configuration and controllers in robot bindings. Add the
-   request options to canonical tool metadata only with tested adapter support.
-4. Add native observed drawer motion through `set_receptacle_state`; current
-   physical execution still refuses articulation. Use images/depth and declared
-   robot feedback, never hidden articulation state or direct fixture commands.
-5. Qualify the older observed Stretch table transfer: red cylinder to green
-   region, protected blue cube and stationary base. Do not use the privileged
-   legacy tabletop pilot as agent evidence.
-6. Run matched Codex/Qwen tests through the real registry. Retain the familiar
-   six-transfer comparison, then freeze 20 episodes per atomic family (RoboCasa
-   transfer, drawer opening, Stretch table transfer), targeting 16/20 for each
-   supervisor. Test categorization composition on ten episodes, targeting 8/10.
+1. Stabilize the native carry/placement transition and add observed task-goal
+   verification/recovery after unexpected release. Preserve the distinction
+   between reaching the benchmark goal and completing a controlled placement.
+   Compare posture/hand-orientation alternatives using the same native binding.
+2. Complete image-bound object/grasp and placement hints, protected-object task
+   constraints and strict approach-path guarantees. Metric grasp support is
+   implemented; all remaining unsupported options must continue to refuse.
+3. Qualify shared runtime startup, live surface-map production and complete
+   observed verification before removing the alternate diagnostic executor.
+   Keep benchmark orchestration outside controller/perception/robot primitives.
+4. Add observed native drawer motion through `set_receptacle_state`; physical
+   execution currently refuses articulation. Use images/depth and robot feedback,
+   never hidden articulation state or direct fixture commands.
+5. Qualify the older observed Stretch task: red cylinder to green region,
+   protected blue cube and stationary base. Privileged tabletop pilots are not
+   shared-agent evidence.
+6. Run matched Codex/Qwen trials through the real registry. Freeze 20 episodes
+   per atomic family (RoboCasa transfer, drawer, Stretch transfer), targeting
+   16/20 per supervisor. Then run ten categorization episodes, targeting 8/10.
 
-Keep all infrastructure failures, refusals, physical retries, observed
-verification and independent official scores distinct. Existing diagnostic
-successes do not qualify shared-agent execution. No live qualification runs
-have been performed for this refactor yet.
-
-### Public-tool native integration (2026-11-24, ongoing)
-
-The shared observed-arm factory now owns a payload/phase gate. Visual model
-queries require idle, known-empty state. Dispatch marks payload state unknown;
-verified grasp marks held, and verified placement restores empty. A failed
-dispatch never silently restores empty. Benchmark reset supplies the known-empty
-initial state for the native controls. This is not model-provided evidence.
-
-The Panda runner can now dispatch a single canonical `pick_place` via the real
-CHAT registry and score its receipt. An earlier scripted-turn bug suppressed
-single-turn calls; earlier execution scoring only recognized `execute_plan`.
-Neither fix changes physical success criteria.
-
-Native controls are retained under
-`logs/shared-harness-public-transfer-20261124/pear-v*/`. They use scripted outer
-tool selection and live Qwen visual grounding, no object CAD or saved semantic
-regions. They retain the development profile's explicitly reported simulation
-assists. They are integration controls, not model-only benchmark scores.
-
-The trials exposed three separate issues: small source rings could not supply
-a fully measured support patch; plane growth admitted object-edge returns; and
-a partial-view reference could reject newly visible surfaces before motion.
-Source growth now stays on a local, connected measured plane, excludes object
-pixels, and retains its full region when fitting support. Approximate pickup
-hypotheses allow 20 mm of footprint change while requiring nearby measured
-support; collision/contact patches and final-placement checks are unchanged.
-Tracking records per-view point counts and reference-distance quantiles even
-when registration fails. No complete shared-agent transfer is qualified yet.
-
-The canonical native control reached actor motion in `pear-v10`: 27 commands,
-maximum end-effector displacement about 0.70 m, zero recorded unintended
-contacts, then a tracking refusal during pregrasp. No pickup or transfer was
-verified. The source now builds its approximate registration reference from
-local, appearance-consistent, above-plane returns in synchronized cameras;
-this addresses reference-camera occlusion without CAD completion. Approximate
-preplanning rotation changes are bounded by 10 mm of geometry displacement
-and 0.2 rad; exact geometry keeps its previous rotation bound. Native validation
-of this camera handoff remains required before claiming pickup success.
-
-Measured self-surface association now also filters object tracking. The native
-binding provides candidate-pixel qualification separately from full-frame map
-qualification, avoiding a measured 1.4–1.6 second tracking stall. Approximate
-registration uses a recorded 10 mm residual floor and explicit estimated pose
-scope; exact-model policy is unchanged. Native controls and failure witnesses
-are summarized in `docs/experiments/shared_public_tool_transfer_20261124.md`.
-
-Latest native control (`pear-v15`) certified all six route phases and moved
-0.701 m through 27 commands, but again lost rigid-reference correspondence
-during pregrasp. Pickup remains unverified. The next integration item is to
-separate approximate task geometry from mandatory continuous rigid registration
-and use observed action-boundary verification. Wider fit tolerance alone did
-not solve camera handoff; do not count these controls as task successes.
-
-Approximate-object tracking now has an explicit translation-only estimate path
-and bounded envelope association for newly visible faces; it no longer demands
-rigid 6D surface registration for every camera handoff. It preserves fresh
-measurement identities, marks all pose observability unqualified, and retains
-observed lift/place checks. Native control v17 reached grasp closure and a
-37 mm two-pad lift, then stopped on retention; this does not qualify pickup.
-The common candidate generator estimates approximate grasp height from support
-and visible top. The normal benchmark CLI can bind shared runtime grounding
-and dispatch canonical `pick_place` without a custom injected runner.
-
-Native normal-CLI control v22 achieved approximately 90 mm retained two-pad
-pickup in the independent scorer. Control v23 passed the shared observed lift
-verifier and started preplace, then lost stable grip. Grasp/lift is therefore
-reachable through canonical CHAT tools; sink transfer and repeatability remain
-unqualified. The next task issue is grip stability / adaptive grasp selection,
-rather than the former rigid-registration gate. Explicit simulation carry
-conditioning now allows bounded contact seating while retaining blocked-jaw
-and fresh-depth requirements. Native drawer, protected-object Stretch transfer,
-rich grasp hints and frozen Codex/Qwen qualification are still outstanding.
-
-The follow-up control v25 demonstrated real grip loss (empty-jaw feedback and
-independent scoring agree). Do not weaken retention to label it success. Next,
-connect the existing VLM grasp-site/direction/height proposals and shared
-`GraspProposal` calibration seam to canonical candidates, including Codex hint
-binding. Shared grounding currently requests regions only, so task-level grasp
-adaptation is still missing. Use the same estimator for single/multiview
-sources and the same native executor for every supervisor/robot.
+Separate sustainability follow-ups: broad CPU/lint CI beyond the existing TAMP
+workflow, the root MagicMock debug-path leak, legacy layering inversions and a
+protocol/deprecation policy. The root checkout's Qwen/chat dependency-isolation
+work is independent and has not been modified by this feature branch.

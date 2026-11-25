@@ -236,3 +236,43 @@ dependency warnings. Ruff and whitespace checks passed. The complete test log
 and all native reports, requests, decisions, sensor images and failure witnesses
 are retained under the artifact root. This validates the shared integration and
 its refusal semantics; full transfer and frozen benchmark rates remain open.
+
+## Shared semantic grasp integration
+
+The common source now realizes the magnified VLM's site, closing direction and
+world-height fraction as `GraspProposal` values. Pixel hints select local measured
+material; projecting through an unseen low plane had displaced the first site's
+XY by several centimetres. The native binding owns the hand/tool transform and
+aperture limit. The shared support-candidate generator calibrates these proposals
+and preserves the binding's approach/lift/retreat settings. Known hand geometry
+and the support measurement margin can raise preferred targets; no object CAD
+or new model query while carrying was introduced.
+
+Codex and other supervisors can supply the same seam through capture-bound
+`hints.grasp.world_from_hand` plus required aperture. Strict mode refuses a
+required adjustment; preferred mode reports requested/applied values. Primitive
+hand geometry is supported alongside meshes/boxes, and unnamed geometries use
+IDs. The API contract is documented in `docs/api/tamp.md`.
+
+| Trial | Outcome |
+| --- | --- |
+| v26 | VLM proposals reached native motion; projected low-plane site led to descent tracking failure. |
+| v27 | Measured-site proposals passed observed lift, then lost grip during preplace; counter contacts were recorded. |
+| v28 | Tighter joint tolerance could not settle; that experimental binding change was reverted. |
+| v29, v30 | Simulator exited before binding (signal 4); task unmeasured, failure metadata retained. |
+| v31 | Traceback-enabled startup succeeded; descent tracking failed with torso near lower stop. |
+| v32 | Existing fixed-torso binding lifted about 84 mm and moved the pear about 39 cm into the sink. Upstream goal and whole-box checks returned true; tool remained partial after grip loss before planned release. One unintended contact frame and 91 touch frames were recorded. |
+
+These are development controls with scripted outer selection and live Qwen
+visual grounding. v32 is evidence of physical goal achievement, not controlled
+placement or full observed-tool success. No failure was relabeled success, and
+no matched Codex/Qwen rate is established. Next, stabilize carry/release and
+verify the task goal from observations after an unexpected release.
+
+Validation: **759 related tests passed**, plus focused strict/preferred grasp,
+reference-binding and architecture checks. Ruff and whitespace checks passed;
+CI YAML and shell syntax were checked locally. The existing TAMP workflow now
+runs targeted shared-grasp lint, grounding/phase/geometry tests and an AST import
+boundary guard. Broad CPU CI and pre-existing legacy layering inversions remain
+separate follow-ups. The living implementation plan was reconciled rather than
+extending its superseded per-trial history.

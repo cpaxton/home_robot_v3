@@ -1520,3 +1520,90 @@ def test_approximate_topdown_grasp_uses_support_to_correct_visible_surface_heigh
     floor = transform[:2, 3] @ plane[:2]+plane[2]
     assert candidate.grasp[1][0][2] == pytest.approx((floor+.08)/2+.007)
     assert np.array_equal(snapshot.frame.payload.pose.world_from_object, transform)
+
+
+def test_shared_support_candidates_apply_hand_calibration_and_preserve_motion_profile(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, SupportTransferCandidates
+    from emet.perception.grasps.observed import GraspProposal
+
+    _, snapshot, _, _ = support_snapshot(system)
+    template = CalibratedGrasp(np.eye(4), (0., 0., 1.), (('opening', 0.),),
+        approach_m=.08, lift_m=.1, retreat_m=.23)
+    factory = SupportTransferCandidates((template,), limit=1)
+    hand = np.diag([1., -1., -1., 1.])
+    hand[:3, 3] = [.2, 0., .03]
+    calibration = np.eye(4)
+    calibration[2, 3] = .007
+    proposal = GraspProposal(snapshot.frame.capture.observation_id, hand, .04)
+    (candidate,) = factory(None, snapshot, None, grasp_proposals=(proposal,), hand_from_ee=calibration)
+    np.testing.assert_allclose(candidate.grasp[1][0], (hand @ calibration)[:3, 3])
+    assert candidate.grasp[2][0][2]-candidate.grasp[1][0][2] == pytest.approx(.1)
+    assert candidate.place[2][0][2]-candidate.place[1][0][2] == pytest.approx(.23)
+    with pytest.raises(ObservationUnavailable, match='capture_identity_mismatch'):
+        factory(None, snapshot, None, grasp_proposals=(replace(proposal, observation_id='old'),),
+            hand_from_ee=calibration)
+
+
+@pytest.mark.parametrize('mode,height,accepted', [('strict', .05, True), ('strict', .001, False), ('prefer', .001, True)])
+def test_common_native_refiner_honors_metric_grasp_strictness_and_hand_clearance(system, mode, height, accepted):
+    from emet.controller.task.tamp.manipulation_request import ManipulationRequest
+    from emet.controller.task.tamp.observed_arm import ObservedArm, build_observed_arm_adapter
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, SupportTransferCandidates
+    from emet.robots.base import ArmChain
+
+    task, snapshot, old, _ = support_snapshot(system)
+    from emet.controller.manipulation.native_scene import model_signature
+
+    target = ObservedTargetContact.from_frame(snapshot.frame, model_signature=model_signature(old.model),
+        calibration_id=snapshot.admission.robot_material.configuration_profile_id, fingertip_geom_ids=(2,), max_penetration_m=.005)
+    snapshot = replace(snapshot, target_contact=target, source_support_contact=snapshot.support_contact,
+        source_support_bounds=snapshot.support_bounds)
+    arm = ObservedArm(old.model, 'robot', ArmChain(joint_names=('x', 'y', 'z'), ee_body='ee',
+        gripper_bodies=('ee',), gripper_open_configuration=(('opening', .02),)),
+        old.synchronize, old.command_joints, lambda q: True, ('opening',),
+        hand_from_ee=np.eye(4), maximum_opening_m=.08)
+    template = CalibratedGrasp(np.eye(4), (0., 0., 1.), (('opening', 0.),))
+    adapter = build_observed_arm_adapter(system.adapter.robot, robot_name='test', arm=arm, source=system.source,
+        tasks=(task,), candidates=SupportTransferCandidates((template,), limit=1), clock=system.adapter.clock)
+    pose = np.diag([1., -1., -1., 1.])
+    pose[:3, 3] = [.2, 0., height]
+    request = ManipulationRequest.parse(task.object_name, task.receptacle_name, hint_mode=mode,
+        hints={'grasp': {'world_from_hand': pose.tolist(), 'opening_m': .04,
+            'frame_id': 'world', 'observation_id': snapshot.frame.capture.observation_id}})
+    if not accepted:
+        with pytest.raises(ObservationUnavailable, match='no_observed_transfer_candidate'):
+            adapter.refine(task, snapshot, request=request)
+    else:
+        executor = adapter.refine(task, snapshot, request=request)
+        target = executor.grasp_targets[1][0]
+        assert target[2] >= height
+        if mode == 'strict':
+            np.testing.assert_allclose(target, pose[:3, 3])
+        else:
+            assert executor.grasp_guidance_summary['support_height_adjustments_m'][0] > 0
+    assert not system.calls
+
+
+def test_metric_grasp_reference_is_rebound_before_common_refinement(system):
+    from emet.controller.task.tamp.manipulation_request import ManipulationRequest
+
+    original = system.adapter.refine
+    seen = []
+
+    def refine(task, snapshot, placement_region=None, request=None):
+        seen.append((request.hints['grasp']['observation_id'], snapshot.frame.capture.observation_id))
+        return original(task, snapshot, placement_region)
+
+    refine.supports_manipulation_request = True
+    refine.supports_metric_grasp_hint = True
+    system.adapter.refine = refine
+    discovery = system.adapter.discover()
+    ref = discovery['data']['tasks'][0]['observation_id']
+    request = ManipulationRequest.parse('block', 'counter', hint_mode='strict', hints={'grasp': {
+        'frame_id': 'world', 'observation_id': ref, 'world_from_hand': np.eye(4).tolist(), 'opening_m': .04}})
+    result = system.adapter.plan_request(request)
+    assert result['status'] == 'ok', result
+    assert seen and seen[0][0] == seen[0][1] and seen[0][0] != ref
+    assert result['data']['guidance']['requested']['grasp']['observation_id'] == ref
+    assert result['data']['guidance']['reference_revalidated'] is True
+    assert not system.calls

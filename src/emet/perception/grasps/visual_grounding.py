@@ -155,7 +155,7 @@ def refine_object_hint(rgb, decision, *, endpoint, model, object_name, output, e
     crop.save(buffer, format='PNG')
     prompt = (f'Locate the {object_name} in this magnified image. Ignore the white robot. '
         'Use the numbered grid: x right, y down, normalized 0..1000. '
-        'Choose a solid grasp site, avoiding holes, thin tips and unstable crowns. Choose a body height below the crown and close across the narrow dimension. Return ONLY JSON: {"object":[x0,y0,x1,y1],"grasp_point":[x,y],"grasp_yaw_degrees":angle,"grasp_height_fraction":fraction}. object encloses the whole target; grasp_point is the chosen solid site in this crop. angle is closing direction clockwise from image right (0..360); fraction is height from bottom (0) to top (1). '
+        'Choose a solid grasp site, avoiding holes, thin tips and unstable crowns. Choose a body height below the crown and close across the narrow dimension. Return ONLY JSON: {"object":[x0,y0,x1,y1],"grasp_point":[x,y],"grasp_yaw_degrees":angle,"grasp_height_fraction":fraction}. object encloses the whole target; grasp_point is the chosen solid site in this crop. angle is closing direction clockwise from image right (0..360); fraction is vertical height above the supporting surface from bottom (0) to top (1), not image y. Prefer a middle body height near 0.5 when uncertain and keep the fingers clear of the supporting surface. '
         'If it is absent or ambiguous return {"unavailable":"reason"}. No explanation.')
     if not estimate_grasp_site:
         prompt = (f'Locate the {object_name} in this magnified image. Ignore the white robot. '

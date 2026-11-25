@@ -16,7 +16,7 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.task.tamp.live_transfer import LiveTransferScene
 from emet.controller.task.tamp.observed_adapter import ObservedNativeTask
 from emet.controller.task.tamp.observed_arm import observed_arm_factory
-from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, SupportTransferCandidates
 from emet.controller.task.tamp.placement_confirmation import confirm_placement
 from emet.controller.task.tamp.transfer_grounding import select_transfer
 from emet.robots.pandaomron.observed import fixed_torso_arm, panda_sample_reader
@@ -176,8 +176,8 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
     factory = observed_arm_factory(
         robot_name="pandaomron", load_model=lambda: mujoco.MjModel.from_xml_path(str(robot_model_path)),
         build_source=build_source, tasks=(task,),
-        candidates=lambda _task, snapshot, region: candidates_from_supports(
-            snapshot, grasps, placement_region=region,
+        candidates=SupportTransferCandidates(
+            grasps,
             position_fractions=profile.get("placement_xy_fractions"),
             placement_gap_m=probe["hover_gap_m"] if probe is not None else 0.0,
             yaw_options=tuple(math.radians(yaw) for yaw in profile.get("placement_yaw_degrees", (0., 90.))),
@@ -220,6 +220,7 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
                 return result
 
             diagnostic_refine.supports_manipulation_request = getattr(refine, 'supports_manipulation_request', False)
+            diagnostic_refine.supports_metric_grasp_hint = getattr(refine, 'supports_metric_grasp_hint', False)
             adapter.refine = diagnostic_refine
             normal_data = adapter._data
             assistance = ["simulation_best_fit_pose"] if best_fit else []

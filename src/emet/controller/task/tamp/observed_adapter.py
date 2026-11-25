@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 
 import mujoco
@@ -433,6 +434,8 @@ class ObservedNativeAdapter:
             return response('plan_pick_place', code='strict_approach_unavailable',
                 data={'execution_started': False})
         unsupported = set(request.hints)-{'approach'}
+        if getattr(getattr(self, 'refine', None), 'supports_metric_grasp_hint', False):
+            unsupported.discard('grasp')
         if request.constraints.get('protected_objects'):
             unsupported.add('protected_objects')
         if unsupported or not getattr(getattr(self, 'refine', None), 'supports_manipulation_request', False):
@@ -482,11 +485,12 @@ class ObservedNativeAdapter:
                 self._require_same_initial(initial, current, allow_stricter_map=True)
                 initial = current
                 requested_guidance = request
-                if request is not None and request.hints.get('approach'):
-                    from copy import deepcopy
+                for role in ('approach', 'grasp'):
+                    if request is None or not request.hints.get(role):
+                        continue
                     from dataclasses import replace
 
-                    hint = request.hints['approach']
+                    hint = request.hints[role]
                     if hint.get('frame_id') != 'world':
                         raise ValueError('invalid_manipulation_hint')
                     key = (task.object_ref, task.support_ref, hint.get('observation_id'))
@@ -497,7 +501,7 @@ class ObservedNativeAdapter:
                     # snapshots above must independently preserve the scene binding.
                     self._require_same_initial(reference, initial, allow_stricter_map=True)
                     hints = deepcopy(request.hints)
-                    hints['approach']['observation_id'] = initial.frame.capture.observation_id
+                    hints[role]['observation_id'] = initial.frame.capture.observation_id
                     request = replace(request, hints=hints)
                 if region is not None and (np.any(region[0] < initial.support_bounds[0, :2])
                                            or np.any(region[1] > initial.support_bounds[1, :2])):
@@ -605,10 +609,28 @@ class ObservedNativeAdapter:
                 if len(self.plans) >= 32:
                     self.plans.pop(next(iter(self.plans)))
                 self.plans[ref] = ObservedStoredPlan(task, initial, initial_joints, ex)
+                guidance = None
+                if request is not None:
+                    applied, adjustments = deepcopy(request.hints), []
+                    grasp_summary = getattr(ex, 'grasp_guidance_summary', {})
+                    if applied.get('grasp') and grasp_summary:
+                        actual = grasp_summary.get('applied_world_from_hand')
+                        if actual is None:
+                            applied.pop('grasp')
+                            adjustments.append({'field': 'grasp', 'reason': 'preferred_grasp_unavailable'})
+                        else:
+                            applied['grasp']['world_from_hand'] = actual
+                            delta = max(grasp_summary.get('support_height_adjustments_m', [0.]) or [0.])
+                            if delta:
+                                adjustments.append({'field': 'grasp.height', 'reason': 'measured_support_clearance',
+                                                    'delta_m': delta})
+                    guidance = {'hint_mode': request.hint_mode, 'requested': requested_guidance.hints,
+                        'applied': applied, 'adjustments': adjustments, 'constraints': request.constraints,
+                        'reference_revalidated': bool(set(request.hints) & {'approach', 'grasp'})}
                 return response('plan_pick_place', data=self._data(plan_ref=ref, planned_ops=['grasp', 'place'],
                     completed_ops=[], execution_started=False, planning_ik_calls=ex.ik_solver_calls,
-                    guidance={'hint_mode': request.hint_mode, 'requested': requested_guidance.hints, 'applied': requested_guidance.hints,
-                              'reference_revalidated': bool(request.hints.get('approach')), 'adjustments': [], 'constraints': request.constraints} if request else None,
+                    grasp_guidance=getattr(ex, 'grasp_guidance_summary', None),
+                    guidance=guidance,
                     placement_strategy='verify_at_hover' if ex.release_refiner is not None else 'visual',
                     **self._payload_scope(initial)))
             except (ObservationUnavailable, ValueError, RuntimeError, TimeoutError) as exc:
@@ -735,6 +757,7 @@ class ObservedNativeAdapter:
                         self.execution_phase.grasp_verified()
                 return response('execute_pick_place_plan', data=self._data(execution_started=started,
                     completed_ops=completed, failed_stage=None, measurements=[e.as_dict() for e in self.effects],
+                    grasp_guidance=getattr(ex, 'grasp_guidance_summary', None),
                     **self._payload_scope(plan.initial)))
             except TimeoutError:
                 reason = 'command_outcome_unknown' if started else 'observation_unavailable'
