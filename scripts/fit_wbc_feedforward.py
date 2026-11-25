@@ -49,7 +49,7 @@ def main() -> int:
     parser.add_argument(
         "--max-joint-distance",
         type=float,
-        default=0.20,
+        default=0.12,
         help="Apply a calibration only within this joint distance (default: 0.12)",
     )
     parser.add_argument(

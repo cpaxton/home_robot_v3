@@ -174,3 +174,21 @@ def test_schema1_model_loads_as_one_calibration():
     )
     assert len(model.calibrations) == 1
     assert model.calibrations[0].joint_bias == {"j": 0.3}
+
+
+def test_lift_outside_the_tight_envelope_does_not_inherit_pregrasp_bias():
+    model = FeedforwardModel(
+        embodiment="rby1",
+        calibrations=(
+            FeedforwardCalibration(
+                reference_q={"torso_joint3": 0.6926},
+                joint_bias={"torso_joint3": 0.3684},
+            ),
+        ),
+    )
+    # Measured pregrasp is 0.015 rad from the reference and gets the correction.
+    np.testing.assert_allclose(
+        apply_bias([0.7074], ["torso_joint3"], model), [1.0758], atol=1e-4
+    )
+    # The lift is 0.168 rad away; with the 0.12 envelope it must pass through.
+    np.testing.assert_allclose(apply_bias([0.8605], ["torso_joint3"], model), [0.8605])

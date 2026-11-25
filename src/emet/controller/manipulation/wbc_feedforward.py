@@ -71,7 +71,7 @@ class FeedforwardModel:
     samples: int = 0
     source: str = ""
     schema: int = SCHEMA_VERSION
-    max_joint_distance: float = 0.20
+    max_joint_distance: float = 0.12
     metadata: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -117,7 +117,7 @@ class FeedforwardModel:
             calibrations=calibrations,
             samples=int(data.get("samples") or sum(cal.samples for cal in calibrations)),
             source=str(data.get("source") or ""),
-            max_joint_distance=float(data.get("max_joint_distance", 0.20)),
+            max_joint_distance=float(data.get("max_joint_distance", 0.12)),
             metadata={str(k): float(v) for k, v in (data.get("metadata") or {}).items()},
         )
 
@@ -187,7 +187,7 @@ def fit_feedforward(
     max_abs_bias: float = 0.75,
     exclude_feedforward: bool = True,
     cluster_distance: float = 0.42,
-    max_joint_distance: float = 0.20,
+    max_joint_distance: float = 0.12,
     outlier_bias_limit: float = 1.2,
 ) -> FeedforwardModel:
     """Fit a table of per-posture biases from clean tracking failures.
