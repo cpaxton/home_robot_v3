@@ -16,13 +16,28 @@ from typing import Any
 
 @dataclass
 class ToolOutcome:
-    """Normalized tool result for prompts, traces, and the attempt ledger."""
+    """Normalized tool result for prompts, traces, and the attempt ledger.
+
+    Graded-conservatism fields (all optional, additive, default-neutral) let a
+    refusal carry *why* it happened and *how far* it was from the threshold, so the
+    agent can choose to relax, retry, or escalate instead of dead-ending:
+
+    - ``refused`` / ``refusal_code`` — a machine-readable refusal (not just ``ok=False``).
+    - ``margin_m`` — signed distance to the checked threshold (negative = failed by this much).
+    - ``threshold_m`` — the threshold that was checked.
+    - ``relax_allowed`` — a bounded relaxation retry is permitted.
+    """
 
     ok: bool
     status: str = ""
     note: str = ""
     tool: str = ""
     payload: dict[str, Any] = field(default_factory=dict)
+    margin_m: float | None = None
+    threshold_m: float | None = None
+    refused: bool = False
+    refusal_code: str = ""
+    relax_allowed: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -34,6 +49,17 @@ class ToolOutcome:
             d["tool"] = self.tool
         if self.payload:
             d.update(self.payload)
+        # Graded-conservatism fields win over any same-named payload key.
+        if self.refused:
+            d["refused"] = True
+        if self.refusal_code:
+            d["refusal_code"] = self.refusal_code
+        if self.margin_m is not None:
+            d["margin_m"] = float(self.margin_m)
+        if self.threshold_m is not None:
+            d["threshold_m"] = float(self.threshold_m)
+        if self.relax_allowed:
+            d["relax_allowed"] = True
         return d
 
     def render(self) -> str:
@@ -45,10 +71,41 @@ class ToolOutcome:
             bits.append(f"status={self.status}")
         if self.note:
             bits.append(self.note)
+        if self.refused:
+            bits.append(f"refused={self.refusal_code or 'unknown'}")
+            if self.margin_m is not None and self.threshold_m is not None:
+                bits.append(f"margin={self.margin_m:+.3f}m vs {self.threshold_m:.3f}m")
+                if self.relax_allowed:
+                    bits.append("(relaxable)")
         msg = self.payload.get("message") or self.payload.get("error")
         if msg and str(msg) not in (self.note, self.status):
             bits.append(str(msg)[:200])
         return " ".join(bits)
+
+    @classmethod
+    def from_refusal(
+        cls,
+        tool: str,
+        *,
+        refusal_code: str,
+        margin_m: float | None = None,
+        threshold_m: float | None = None,
+        relax_allowed: bool = False,
+        note: str = "",
+        status: str = "refused",
+    ) -> ToolOutcome:
+        """Build a refused outcome carrying margin/threshold for graded conservatism."""
+        return cls(
+            ok=False,
+            status=status,
+            note=note,
+            tool=tool,
+            refused=True,
+            refusal_code=refusal_code,
+            margin_m=margin_m,
+            threshold_m=threshold_m,
+            relax_allowed=relax_allowed,
+        )
 
     @classmethod
     def from_exception(cls, tool: str, exc: BaseException) -> ToolOutcome:
