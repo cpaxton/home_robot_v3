@@ -761,8 +761,11 @@ Install submodules, simulation extras, or full setup.
 
 **`emet install sim`** / **`emet install robocasa`** (same)
 - Clones robosuite and **Robocasa v0.2** (pinned for MuJoCo 3.3+ / numpy compatibility; main/v1.0 can conflict).
-- `-d, --download-assets` — Download Robocasa kitchen assets
+- `-n, --no-download-assets` — Skip the ~18 GB Robocasa kitchen asset download
 - `-a, --setup-macros` — Force run macro setup (overwrite existing); by default macros are set up only when missing
+- `-y, --yes` — Skip interactive prompts; also enabled automatically when stdin is not a TTY
+- `--no-sync` — Skip the follow-up `uv sync` and third_party reinstall
+- `EMET_INSTALL_ROBOSUITE_MODELS=1` — Also clone/install the optional `robosuite_models` fork (GR1, etc.); off by default because the clone is large
 
 **`emet install full`**
 - `-y, --yes` — Skip confirmation prompts
@@ -779,7 +782,7 @@ emet install paper -y               # latexmk + TeX Live for ./paper/build.sh
 emet install submodules             # Init and update submodules
 emet install sim                    # Install Robocasa, robosuite (third_party)
 emet install robocasa               # Same as install sim
-emet install sim -d -a              # With assets and force-overwrite macros
+emet install sim -a -y              # With assets, force-overwrite macros, no prompts
 emet install full                   # Default full profile (sim + MolmoSpaces)
 emet install full -y --paper         # Full profile plus local paper toolchain
 emet install full -y --all           # All bundles, including paper tooling

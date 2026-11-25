@@ -150,15 +150,14 @@ def test_format_robocasa_assets_incomplete_mentions_objaverse_bbox():
     assert "process_robocasa_objaverse_reg_bbox" in msg
 
 
-def test_basic_fixtures_present_accepts_current_sentinel():
-    pkg = robocasa_package_dir()
-    if not pkg.is_dir():
-        return
-    counter = pkg / "models/assets/fixtures/counters/counter/model.xml"
-    if counter.is_file():
-        from emet.simulation.robocasa_assets_check import basic_fixtures_present
+def test_basic_fixtures_present_accepts_any_sentinel(tmp_path):
+    from emet.simulation.robocasa_assets_check import basic_fixtures_present
 
-        assert basic_fixtures_present(pkg)
+    fixtures = tmp_path / "models/assets/fixtures"
+    counter = fixtures / "counters/counter/model.xml"
+    counter.parent.mkdir(parents=True)
+    counter.write_text("<mujoco/>")
+    assert basic_fixtures_present(tmp_path)
 
 
 def test_robocasa_kitchen_assets_complete_matches_sentinel_when_present():

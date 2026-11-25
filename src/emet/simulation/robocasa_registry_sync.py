@@ -159,6 +159,21 @@ def _sync_one_registry(registry_path: Path, fixtures_root: Path) -> int:
         data[name] = {"xml": f"fixtures/{folder_name}/{name}"}
         added += 1
 
+    # Repair aliases that survived from a previous registry but point at a mesh
+    # the installed packs do not contain (Sink025 -> white_sink).
+    assets_root = fixtures_root.parent
+    for child in sorted(category_dir.iterdir()):
+        if not child.is_dir() or not (child / "model.xml").is_file():
+            continue
+        entry = data.get(child.name)
+        xml = entry.get("xml") if isinstance(entry, dict) else None
+        if not isinstance(xml, str) or (assets_root / xml / "model.xml").is_file():
+            continue
+        target = f"fixtures/{folder_name}/{child.name}"
+        if (assets_root / target / "model.xml").is_file():
+            entry["xml"] = target
+            added += 1
+
     return _write_registry_if_changed(registry_path, data, added)
 
 
@@ -371,7 +386,11 @@ def _sink025_registered(pkg: Path) -> bool:
         return False
     if not isinstance(data, dict):
         return False
-    return "Sink025" in data
+    entry = data.get("Sink025")
+    xml = entry.get("xml") if isinstance(entry, dict) else None
+    if not isinstance(xml, str):
+        return False
+    return (pkg / "models" / "assets" / xml / "model.xml").is_file()
 
 
 def ensure_lightwheel_registry(robocasa_pkg: Path | None = None) -> bool:

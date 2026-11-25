@@ -68,6 +68,20 @@ ASSET_SPECS: list[tuple[str, str, str, str]] = [
         "models/assets/objects/objaverse",
         "dir_nonempty",
     ),
+    # Object packs are required for tasks that sample obj_groups="all". The
+    # upstream Box link for aigen_objs is dead; use the official HF mirrors.
+    (
+        "aigen_objs",
+        "https://huggingface.co/datasets/robocasa/robocasa-assets/resolve/main/aigen_objs.zip",
+        "models/assets/objects/aigen_objs",
+        "dir_nonempty",
+    ),
+    (
+        "objects_lightwheel",
+        "https://huggingface.co/datasets/IIFAN/robocasa365-lightwheel-objects/resolve/main/objects_lightwheel.zip",
+        "models/assets/objects/lightwheel",
+        "dir_nonempty",
+    ),
     (
         "generative_textures",
         "https://utexas.box.com/shared/static/ebaad09k82tmfmlq6ohdkmrh8izl9vn5.zip",
@@ -118,12 +132,19 @@ def _lightwheel_registry_present(fixtures_dir: Path) -> bool:
         return False
 
 
+def _lightwheel_ok(fixtures_dir: Path) -> bool:
+    """The registry alone is not the pack: the Sink025 mesh must also be extracted."""
+    return (fixtures_dir / "sinks" / "Sink025" / "model.xml").is_file() and _lightwheel_registry_present(
+        fixtures_dir
+    )
+
+
 def _asset_present(base: Path, rel: str, check_kind: str) -> bool:
     folder = base / rel
     if check_kind == "basic_fixtures":
         return _basic_fixtures_present(folder)
     if check_kind == "lightwheel_registry":
-        return _lightwheel_registry_present(folder)
+        return _lightwheel_ok(folder)
     if not folder.exists() or next(folder.iterdir(), None) is None:
         return False
     return True
@@ -219,7 +240,7 @@ def main() -> int:
     for name, url, rel, check in specs:
         folder = base / rel
         parent = folder.parent
-        zip_path = parent / f"{folder.name}.zip"
+        zip_path = parent / f"{name}.zip"
         skip = not force_redownload and _asset_present(base, rel, check)
         if skip:
             print(f"Skipping {name} (already present).")
@@ -284,10 +305,10 @@ def main() -> int:
         except Exception as e:
             print(f"Registry sync failed ({e!r}).", file=sys.stderr)
             return 1
-    if not _lightwheel_registry_present(fixtures_dir):
+    if not _lightwheel_ok(fixtures_dir):
         print(
-            "Warning: LightWheel fixtures still not registered (expected Sink025 in "
-            "fixture_registry/sink.yaml). Download fixtures_lw or run sync.",
+            "Warning: LightWheel fixtures incomplete (expected the Sink025 mesh and its "
+            "fixture_registry/sink.yaml entry). Download fixtures_lw or run sync.",
             file=sys.stderr,
         )
         return 1

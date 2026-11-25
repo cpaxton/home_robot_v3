@@ -70,3 +70,69 @@ def test_install_menu_exposes_and_executes_paper_toolchain(monkeypatch, tmp_path
 
     assert install_ui._execute_wizard_plan(tmp_path, plan) == 0
     assert calls == [("latexmk", True)]
+
+
+def test_run_install_simulation_non_interactive_passes_yes(monkeypatch, tmp_path: Path):
+    from emet.cli_cmds import run_sync
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(run_sync.subprocess, "call", lambda cmd, env=None: calls.append(cmd) or 0)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "install_simulation.sh").write_text("#!/bin/bash\n")
+
+    assert run_sync._run_install_simulation(tmp_path, non_interactive=True) == 0
+    assert calls == [["bash", str(tmp_path / "scripts" / "install_simulation.sh"), "-y"]]
+
+    calls.clear()
+    assert run_sync._run_install_simulation(tmp_path) == 0
+    assert "-y" not in calls[0]
+
+def test_lightwheel_pack_requires_the_mesh_not_just_the_registry(tmp_path: Path):
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "download_robocasa_assets.py"
+    spec = importlib.util.spec_from_file_location("download_robocasa_assets", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    base = tmp_path / "models" / "assets"
+    fixtures = base / "fixtures"
+    (fixtures / "fixture_registry").mkdir(parents=True)
+    (fixtures / "fixture_registry" / "sink.yaml").write_text("Sink025:\n  alias: Sink001\n")
+
+    # Registry entry alone is not the pack: the server still needs the Sink025 mesh.
+    assert module._asset_present(base, "fixtures", "lightwheel_registry") is False
+
+    (fixtures / "sinks" / "Sink025").mkdir(parents=True)
+    (fixtures / "sinks" / "Sink025" / "model.xml").write_text("<mujoco/>")
+    assert module._asset_present(base, "fixtures", "lightwheel_registry") is True
+
+def test_missing_fixture_xmls_detects_visuals_without_mjcf(tmp_path: Path):
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "restore_robocasa_fixture_xmls.py"
+    spec = importlib.util.spec_from_file_location("restore_robocasa_fixture_xmls", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    fixture = tmp_path / "models" / "assets" / "fixtures" / "accessories" / "knife_blocks" / "light_wood_3"
+    (fixture / "visuals").mkdir(parents=True)
+    (fixture / "visuals" / "model_0.obj").write_text("v")
+
+    assert module.missing_fixture_xmls(tmp_path) == [fixture / "model.xml"]
+    (fixture / "model.xml").write_text("<mujoco/>")
+    assert module.missing_fixture_xmls(tmp_path) == []
+
+def test_downloader_includes_object_packs_needed_by_obj_groups_all():
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "download_robocasa_assets.py"
+    spec = importlib.util.spec_from_file_location("download_robocasa_assets", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    names = {name for name, _url, _rel, _check in module.ASSET_SPECS}
+    assert {"objaverse", "aigen_objs", "objects_lightwheel"} <= names
+    urls = {name: url for name, url, _rel, _check in module.ASSET_SPECS}
+    assert "huggingface.co" in urls["aigen_objs"]
+    assert "huggingface.co" in urls["objects_lightwheel"]
