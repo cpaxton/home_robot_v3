@@ -207,6 +207,13 @@ def send_reactive_goal(client, *, base=None, arm=None, timeout=10.0):
     return send_command(client, {"reactive_goal": goal, "reactive_timeout_s": timeout})
 
 
+def send_arm_joint_recovery(client, *, joint, target_rad, start_arm_rad, stage_only=False, timeout=10.0):
+    recovery = {"joint": joint, "target_rad": target_rad, "start_arm_rad": start_arm_rad}
+    if stage_only:
+        recovery["stage_only"] = True
+    return send_command(client, {"reactive_goal": {"arm_recovery": recovery}, "reactive_timeout_s": timeout})
+
+
 def update_reactive_goal(client, action, goal):
     target = {k: action["command"][k] for k in ("client_session_id", "sequence")}
     return send_command(client, {"update_reactive_goal": {"target": target, "goal": goal}})

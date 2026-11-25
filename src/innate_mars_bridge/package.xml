@@ -5,6 +5,9 @@
 	<description>ROS2 bridge for Innate Mars robot: pose, proprioception, head and EE cameras</description>
 	<maintainer email="support@hello-robot.com">hello-robot</maintainer>
 	<license>Apache-2.0</license>
+	<!-- ArmStatus comes from the installed Innate OS overlay (mars_msgs or maurice_msgs). -->
+	<exec_depend>std_msgs</exec_depend>
+	<exec_depend>std_srvs</exec_depend>
 	<exec_depend>rclpy</exec_depend>
 	<exec_depend>nav_msgs</exec_depend>
 	<exec_depend>sensor_msgs</exec_depend>
