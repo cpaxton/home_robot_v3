@@ -77,6 +77,10 @@ class ZmqServer(BaseZmqServer):
             self._rtsp_proc = start_mars_rtsp_subprocess()
 
         self.client = InnateMarsClient(init_node=False, verbose=self.verbose)
+        # These controllers are singletons and reuse mutable per-goal state. That is
+        # safe only because the reactive runtime serializes commands to one active
+        # goal at a time (see ReactiveRuntime._reactive_command). Do not add
+        # concurrent goals without giving each controller its own state.
         self._arm_motion = MarsArmMotion(self.client._ros)
         self._joint_driver = IsolatedJointDriver(self.client._ros)
         self._joint_recovery = MarsJointRecovery(self.client._ros, self._joint_driver)
