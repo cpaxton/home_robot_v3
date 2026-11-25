@@ -68,6 +68,20 @@ ASSET_SPECS: list[tuple[str, str, str, str]] = [
         "models/assets/objects/objaverse",
         "dir_nonempty",
     ),
+    # Object packs are required for tasks that sample obj_groups="all". The
+    # upstream Box link for aigen_objs is dead; use the official HF mirrors.
+    (
+        "aigen_objs",
+        "https://huggingface.co/datasets/robocasa/robocasa-assets/resolve/main/aigen_objs.zip",
+        "models/assets/objects/aigen_objs",
+        "dir_nonempty",
+    ),
+    (
+        "objects_lightwheel",
+        "https://huggingface.co/datasets/IIFAN/robocasa365-lightwheel-objects/resolve/main/objects_lightwheel.zip",
+        "models/assets/objects/lightwheel",
+        "dir_nonempty",
+    ),
     (
         "generative_textures",
         "https://utexas.box.com/shared/static/ebaad09k82tmfmlq6ohdkmrh8izl9vn5.zip",

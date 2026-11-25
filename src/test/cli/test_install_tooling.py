@@ -122,3 +122,17 @@ def test_missing_fixture_xmls_detects_visuals_without_mjcf(tmp_path: Path):
     assert module.missing_fixture_xmls(tmp_path) == [fixture / "model.xml"]
     (fixture / "model.xml").write_text("<mujoco/>")
     assert module.missing_fixture_xmls(tmp_path) == []
+
+def test_downloader_includes_object_packs_needed_by_obj_groups_all():
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "download_robocasa_assets.py"
+    spec = importlib.util.spec_from_file_location("download_robocasa_assets", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    names = {name for name, _url, _rel, _check in module.ASSET_SPECS}
+    assert {"objaverse", "aigen_objs", "objects_lightwheel"} <= names
+    urls = {name: url for name, url, _rel, _check in module.ASSET_SPECS}
+    assert "huggingface.co" in urls["aigen_objs"]
+    assert "huggingface.co" in urls["objects_lightwheel"]
