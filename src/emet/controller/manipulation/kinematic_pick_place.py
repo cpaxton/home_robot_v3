@@ -620,6 +620,10 @@ class KinematicPickPlaceExecutor:
             self._set_last_attempt(target_xyz_world, False, float("inf"))
             return False, float('inf')
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
+        # The measured pose can sit a few milliradians outside a limit after a
+        # settle. Plan from the clamped pose; the measured state stays the truth.
+        lo, hi = self._joint_position_bounds()
+        q0 = np.clip(q0, lo, hi)
         seeds = []
         if self._last_cmd_q is not None and np.linalg.norm(self._last_cmd_q - q0) > 1e-3:
             seeds.append(self._last_cmd_q)
