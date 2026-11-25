@@ -738,6 +738,95 @@ Bridge on Herman (192.168.1.43) is live via `emet mars start --connection herman
 - [ ] **DINOv3 on Orin**: caliban deploy path added (`docker/jetson_dinov3_server.py`, `scripts/deploy_caliban_dinov3.sh`, `EMET_DINOV3_ENDPOINT` client + tests). Run `./scripts/deploy_caliban_dinov3.sh --host caliban` after caching `facebook/dinov3-vits16-pretrain-lvd1689m`.
 - [ ] **Wrist camera**: reseat Arducam USB on Herman; SSH verified no `/dev/v4l/by-id/*Arducam*` (2026-08-25).
 
+## Herman WBC hardware and waypoint streaming (2026-11-22)
+
+- [x] Establish a hardware motion baseline with the arm position bridge. The
+      attended coordinated move measured 33.1° shoulder pitch, 32.7° elbow,
+      33.5° wrist pitch and 32.2° wrist roll. Every waypoint confirmed a hold
+      and the final servo status was nominal. This establishes joint-position
+      execution from the opened pose. The test did not measure contact force or
+      exercise WBC, so keep those claims open. See the local recording and
+      receipts in `logs/herman-wave/attended-coordinated-large.UMKAuv/`.
+- [x] Capture the new open pose and run a fresh base-held hand-space rehearsal.
+      Feedback and both fixed learned checkpoints completed with confirmed
+      simulator stops. Peak hand position error was 1.15–2.34 mm. The replay
+      starts from a candidate derived from the capture with a 0.04 rad yaw-joint
+      margin. In the harder six-case capture rehearsal, feedback passed 6/6 and
+      the shared actor passed 0/6. All stops confirmed. The separate coupled
+      teacher suite passed 10/12, with two hand-tracking cases involving a free
+      base still failing. Evidence is under `logs/herman-wave/wbc-open-normal-wave/`,
+      `logs/herman-wave/wbc-open-tracking/` and
+      `logs/herman-wave/wbc-coupled-v2-teacher.json/`.
+- [x] Exercise impossible commands through the simulator's WBC command
+      lifecycle with feedback and the shared whole-body actor. Both reached the
+      control target without contact, reported unsafe contact for a target
+      inside the chassis, and reported wheel lift for a target below the floor,
+      including when those targets replaced a reachable waypoint mid-motion.
+      All ten holds confirmed. For the chassis retarget, simulated impulse was
+      12.29 N·s for the actor and 6.29 N·s for feedback. Time from first contact
+      to confirmed hold was 400 ms and 320 ms, respectively. Use this paired
+      baseline to measure earlier unloading and reduced contact severity.
+      Reproduce with `scripts/audit_mars_wbc_infeasible.py` on the WBC worktree;
+      local results are in `logs/herman-wave/wbc-infeasible-paired-v2.json`.
+- [ ] Fix short-move completion. A seven-count elbow command received an
+      applied-target echo and a successful hold receipt with zero measured elbow
+      travel. Validate encoder-aware arrival and required progress separately
+      from hold confirmation, including exact holds, stiction and sub-count goals.
+- [ ] Make Mars contact handling proportional to severity. Treat model proximity
+      and uncertain proxy overlap as evidence for approach shaping and monitoring.
+      Allow brief, low-energy contact and bounded retreat in supervised tests
+      with compliant fixtures. Stop for forceful contact, sustained effort
+      without progress, wheel unloading or a failed stop. Characterize each
+      joint's current/load, position error and velocity against measured contact
+      force or impulse before using them as force proxies. Use the observed
+      contact-free and gentle-contact data to tune detection and false positives.
+- [ ] Qualify speed against measured reaction and stopping performance. Keep
+      the contact response and command-loss watchdog beside the driver, independent
+      of WBC inference, video and the browser. Log motor sample age, contact onset,
+      detection, request-to-actuator delay, effort decay, stopping travel and
+      measured hold for increasing speeds and different postures. Increase speed
+      within the tested envelope. Herman's low mass helps, and local link speed,
+      gearing and pinch geometry still affect the outcome.
+- [ ] Connect the guarded WBC runtime to verified source-timed arm and odom
+      feedback and a bounded robot-side servo adapter. Verify stale or corrupted
+      feedback, command loss, over-speed, contact and measured stop, including
+      retained ownership if stop is unconfirmed. Use torque-preserving handoff
+      with automatic rest disabled when testing. Retain independent hard bounds
+      for joint travel, ownership, feedback validity and actuator faults.
+- [ ] Build a new first hardware wave from the measured open pose. Send timed
+      hand targets with the gripper held and a bounded base objective. Compare a
+      feedback WBC baseline and a named learned checkpoint on identical targets
+      and starts. Record hand error along the path, actual arm and base travel,
+      tracking latency, contact response and measured settling. Include a
+      small base-yaw-and-hand compensation case to exercise coordinated WBC.
+      Set wave amplitudes and speeds from the measured actuator envelope.
+- [ ] Expand validation to moving-start retargets, short base translations with
+      hand tracking, compliant-object contact and retreat, and then loaded carry
+      and placement. Retain rejected starts and all stop outcomes. Train and
+      evaluate recovery from measured perturbations and benign contacts separately
+      from ordinary path tracking.
+- [ ] Start with a contact-recovery expert for coupled commands and qualify it
+      on *infeasible* references. Include requests that would require
+      self-collision, passing through the environment, or exceeding a joint
+      bound, plus feasible commands that become infeasible when an obstacle
+      moves or the operator retargets. Train it to make feasible progress where
+      available, slow or yield when progress stalls under load, and report
+      `blocked` when further progress would require pushing. Try a bounded
+      retreat where clearance and grip allow. Use simulated contact forces as
+      training labels and retain independent driver-side stop guards. The
+      current actor sees encoder motion, tracking error and previous commands.
+      Compare that input with source-timed, calibrated motor effort where the
+      hardware makes it available. Score incidental-contact recovery and
+      impossible-command handling independently. Record peak effort and impulse,
+      time spent pushing, time to unload, measured hold and false stops. Use
+      matched normal tracking cases before extending training to other experts.
+- [ ] Stream timestamped, frame-qualified SE(2)/SE(3) waypoints from the
+      operator console through the trajectory command protocol. Start in MuJoCo
+      with one active command, mid-motion replacement, visible completion and
+      cancel/connection-loss tests. Enable physical submission after verifying
+      the robot-side watchdog and stop. The browser supplies targets and
+      receives receipts while the Jetson owns actuation and stop.
+
 ## ZMQ protocol / comms (Herman + sim)
 
 Mars bridge publishes **`/scan`** as `lidar_points` + `lidar_timestamp` (float32 N×2). Slim image wire format (`zmq_obs_slim`) drops duplicate JPEG aliases. Sustained benchmark: `scripts/benchmark_zmq_obs_payload.py` (one-shot sizes) and `scripts/benchmark_zmq_obs_stream.py` (fps/jitter/unpickle).
