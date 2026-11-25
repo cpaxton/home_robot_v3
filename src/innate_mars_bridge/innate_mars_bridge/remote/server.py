@@ -47,6 +47,9 @@ from emet.utils.image import scale_camera_matrix
 from innate_mars_bridge.onboard_da3 import create_onboard_da3_from_env, onboard_da3_enabled
 from innate_mars_bridge.onboard_dinov3 import create_onboard_dinov3_from_env, onboard_dinov3_enabled
 from innate_mars_bridge.remote import InnateMarsClient
+from innate_mars_bridge.remote.arm_motion import MarsArmMotion, MarsJointRecovery
+from innate_mars_bridge.remote.joint_recovery import IsolatedJointDriver
+from innate_mars_bridge.remote.native_arm import NativeArmDriver
 from innate_mars_bridge.video_rtsp import mars_rtsp_capabilities, start_mars_rtsp_subprocess
 
 
@@ -74,6 +77,16 @@ class ZmqServer(BaseZmqServer):
             self._rtsp_proc = start_mars_rtsp_subprocess()
 
         self.client = InnateMarsClient(init_node=False, verbose=self.verbose)
+        # These controllers are singletons and reuse mutable per-goal state. That is
+        # safe only because the reactive runtime serializes commands to one active
+        # goal at a time (see ReactiveRuntime._reactive_command). Do not add
+        # concurrent goals without giving each controller its own state.
+        self._arm_motion = MarsArmMotion(self.client._ros)
+        self._joint_driver = IsolatedJointDriver(self.client._ros)
+        self._joint_recovery = MarsJointRecovery(self.client._ros, self._joint_driver)
+        self._native_driver = NativeArmDriver(self.client._ros)
+        self._native_recovery = MarsJointRecovery(self.client._ros, self._native_driver, native=True)
+        self._reactive_motion = self._arm_motion
         self.client._ros.wait_for_cameras()
         self._spin_thread = threading.Thread(target=rclpy.spin, args=(self.client._ros,), daemon=True)
         self._spin_thread.start()
@@ -91,6 +104,8 @@ class ZmqServer(BaseZmqServer):
         caps: dict[str, Any] = {
             "teleport_base": False,
             "depth": has_depth,
+            "isolated_joint_recovery": self._joint_driver.ready() or self._native_driver.ready(),
+            "native_arm_session": self._native_driver.ready(),
             "stereo_head": True,
             "num_cameras": 3,
             "dof": 10,
@@ -356,10 +371,46 @@ class ZmqServer(BaseZmqServer):
     def cancel_navigation_command(self):
         return self.client._ros.nav.cancel_navigation()
 
+    def supports_reactive_control(self):
+        return True
+
+    def _motion_for_goal(self, goal):
+        if isinstance(goal, dict) and "arm_recovery" in goal:
+            return self._native_recovery if self._native_driver.ready() else self._joint_recovery
+        return self._arm_motion
+
+    def validate_reactive_goal(self, goal):
+        controller = self._motion_for_goal(goal)
+        limits = self.client._ros.get_published_arm_limits()
+        if limits is not None:
+            controller.validate(goal, limits=limits)
+        else:
+            controller.validate(goal)
+        recovery_ready = self._joint_driver.ready()
+        if controller is self._joint_recovery and not recovery_ready:
+            raise ValueError("Mars driver has no isolated joint recovery endpoint")
+        if controller is self._arm_motion and (recovery_ready or self._native_driver.ready()):
+            raise ValueError("Mars arm driver is in isolated recovery mode")
+
+    def start_reactive_command(self, goal):
+        self._reactive_motion = self._motion_for_goal(goal)
+        return self._reactive_motion.start(goal)
+
+    def update_reactive_command(self, goal):
+        raise ValueError("Mars arm goals are fixed; cancel before sending another goal")
+
+    def reactive_command_result(self, context):
+        return self._reactive_motion.poll()
+
+    def cancel_reactive_command(self):
+        return self._reactive_motion.stop()
+
     @override
     def handle_action(self, action: dict[str, Any]):
         if action is None:
             return
+        if {"joint", "gripper", "arm_to"}.intersection(action):
+            raise ValueError("Mars arm motion requires a named reactive arm goal")
         if "xyt" in action:
             # Default non-blocking so ZMQ recv can ack ``step`` while Nav2/Spin runs.
             # Clients that need a finish signal wait on ``at_goal`` (see GenericZmqClient).

@@ -133,3 +133,42 @@ Requires innate-os on the robot: `cd ~/innate-os && innate service start` (inter
 | Red/blue swapped in Rerun RGB | Bridge must convert ROS ``bgr8`` → RGB before ``to_jpg`` (``innate_mars_bridge/ros/camera.py``) |
 | MJCF mesh head frozen / map vs model misaligned | **Hardware only:** ``joint_head`` inferred from ``camera_pose``; ``head_visual`` shifted forward (~70 mm). **Sim** keeps vanilla ``innate_mars.xml`` (head STL at neck pivot — may look slightly off vs cameras; arm/base replay unchanged). Hardware body gets **+90° Z** visual fix; sim does not. Meshes are dark semi-transparent; base sphere/arrow off by default. ``uv run python scripts/debug_innate_mars_head_align.py --ip <host>`` |
 | Black / missing EE (wrist) camera in Rerun | ``maurice_cam`` **ArmCameraDriver** needs a V4L symlink matching **`Arducam`** under `/dev/v4l/by-id/`. If missing: driver exits with `Camera symlink matching pattern 'Arducam' not found` and `/mars/arm/image_raw` stays at **Publisher count: 0** (bridge fills black). `emet mars status` reports `wrist down` / `no Arducam symlink`. Reseat USB + restart `maurice_cam` — **not** fixed by `emet deploy` alone. See [deploy.md § Wrist camera](../deploy.md#wrist-camera-arducam). |
+
+## Arm control handoff on Herman
+
+Herman was inspected on Innate OS `0.5.1` (`0d4c350d`). On that release
+`scripts/launch_ros_in_tmux.sh` starts the arm driver independently from
+the three other publishers on `/mars/arm/commands`.
+
+| Publisher | Launch | tmux pane in `ros_nodes` |
+|---|---|---|
+| `maurice_app` | `ros2 launch maurice_control app.launch.py` | `app-bringup.0` |
+| `manipulation_server` | `ros2 launch manipulation behavior.launch.py` | `behaviors-inputs.0` |
+| `udp_leader_receiver` | `ros2 launch maurice_control udp_leader_receiver.launch.py` | `cam-leader.1` |
+
+For an attended Emet arm test, pause Innate app, behavior, and leader control
+by stopping those launch commands independently. Keep the arm driver and
+the other panes running. The app and behavior launch files respawn their
+children, so stopping a child process alone will not release the topic.
+Confirm a physical stop is accessible before pausing app control. With
+Innate's DDS setup sourced, verify `ros2 topic info /mars/arm/commands
+--verbose` lists only the Emet publisher (`innate_mars_zmq_server`) and still lists `maurice_arm` as a
+subscriber. Keep vendor arm services idle. Restore the three original launch
+commands after the Emet motion has ended and released control.
+
+Innate OS 0.8.0 adds LeRobot support and renames the ROS packages from
+`maurice_*` to `mars_*`. Its LeRobot `external_commands` setting is for
+recording actions supplied by another source. The 0.8.0 app, behavior server
+and UDP leader still publish to the arm command topic, so upgrading by
+itself will not remove those competing publishers. See the
+[Innate 0.8.0 release notes](https://www.innate.bot/changelog/october-6-2026)
+and [LeRobot MARS adapter](https://github.com/innate-inc/innate-os/blob/0.8.0/lerobot/lerobot_robot_mars/mars.py).
+
+The corrected bridge deployed on Herman in November 2026 allows 7.5 seconds
+for the vendor's 5-second health report interval and still requires joint
+feedback within 250 ms. The attended gripper and wrist tests used the named
+arm goals in the [Mars bridge README](../../src/innate_mars_bridge/README.md).
+For the wave, Emet commanded `joint5` to the measured start plus 0.15 rad,
+then minus 0.15 rad relative to the start, then back to the start. Measured
+wrist positions were 0.0414 → 0.1810 → −0.1012 → 0.0383 rad. Each goal
+reported measured completion and confirmed hold before the next.

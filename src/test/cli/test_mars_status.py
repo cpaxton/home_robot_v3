@@ -138,3 +138,117 @@ LISTEN 0      100          0.0.0.0:4405       0.0.0.0:*
     status = parse_bridge_status_output("herman", "jetson1", raw)
     assert 4405 in status.listening_ports
     assert status.ready_for_stream
+
+
+def test_mars_start_verifies_streams_and_reports_arm_readiness(monkeypatch):
+    import emet.mars as mars
+
+    calls = []
+
+    def run(host, user, password, command, *, check=True):
+        calls.append((command, check))
+        return 0
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    mars.start_bridge_on_robot("herman", "jetson1", None)
+    [(start, start_check), (streams, streams_check)] = calls
+    assert "ros2 launch innate_mars_bridge" in start
+    assert "live observation, state, and servo streams" in streams
+    assert start_check
+    assert not streams_check
+
+
+def test_mars_status_surfaces_arm_readiness(monkeypatch):
+    import emet.mars as mars
+    from emet.mars import MarsBridgeStatus
+
+    status = MarsBridgeStatus(host="herman", user="jetson1", pid=10105)
+    monkeypatch.setattr(mars, "fetch_bridge_status", lambda *a, **k: status)
+    monkeypatch.setattr(mars, "print_bridge_status", lambda *a, **k: None)
+    probes = []
+
+    def run(host, user, password, command, *, check=True):
+        probes.append(command)
+        return 2
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    result = mars.bridge_status_on_robot("herman", "jetson1", None)
+    assert result.arm_probe_code == 2
+    assert "arm_motion" in probes[0]
+
+
+def test_mars_status_skips_arm_probe_when_not_running(monkeypatch):
+    import emet.mars as mars
+    from emet.mars import MarsBridgeStatus
+
+    status = MarsBridgeStatus(host="herman", user="jetson1", pid=None)
+    monkeypatch.setattr(mars, "fetch_bridge_status", lambda *a, **k: status)
+    monkeypatch.setattr(mars, "print_bridge_status", lambda *a, **k: None)
+    calls = []
+
+    def run(host, user, password, command, *, check=True):
+        calls.append(command)
+        return 0
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    result = mars.bridge_status_on_robot("herman", "jetson1", None)
+    assert result.arm_probe_code is None
+    assert not calls
+
+
+def test_mars_start_fails_if_bridge_does_not_serve_streams(monkeypatch):
+    import pytest
+
+    import emet.mars as mars
+
+    def run(host, user, password, command, *, check=True):
+        return int("Mars bridge missing streams" in command)
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    with pytest.raises(SystemExit, match="did not serve telemetry"):
+        mars.start_bridge_on_robot("herman", "jetson1", None)
+
+
+def test_mars_stop_releases_native_arm_before_killing_bridge(monkeypatch):
+    import emet.mars as mars
+
+    calls = []
+
+    def run(host, user, password, command, *, check=True):
+        calls.append((command, check))
+        return 0
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    mars.stop_bridge_on_robot("herman", "jetson1", None)
+    [(command, check)] = calls
+    assert "arm_motion" in command and "release_native=True" in command
+    assert "fuser -k" in command
+    assert "tmux kill-window" in command
+    assert not check
+
+
+def test_mars_stop_leaves_bridge_running_when_release_unconfirmed(monkeypatch):
+    import pytest
+
+    import emet.mars as mars
+
+    monkeypatch.setattr(mars, "_ssh_run", lambda *a, **k: 1)
+    with pytest.raises(SystemExit, match="left running"):
+        mars.stop_bridge_on_robot("herman", "jetson1", None)
+
+
+def test_mars_stop_force_skips_native_release(monkeypatch):
+    import emet.mars as mars
+
+    calls = []
+
+    def run(host, user, password, command, *, check=True):
+        calls.append(command)
+        return 0
+
+    monkeypatch.setattr(mars, "_ssh_run", run)
+    mars.stop_bridge_on_robot("herman", "jetson1", None, force=True)
+    (command,) = calls
+    assert command.startswith("true || exit $?;")
+    assert "arm_motion" not in command
+    assert "fuser -k" in command

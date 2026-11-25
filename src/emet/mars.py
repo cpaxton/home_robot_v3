@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 import sys
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,6 +27,12 @@ DEFAULT_INNATE_WORKSPACE = "~/innate-os/ros2_ws"
 DEFAULT_EMET_DIR = "~/emet"
 TMUX_SESSION = "ros_nodes"
 TMUX_WINDOW = "emet-bridge"
+
+INNATE_DDS_SETUP = (
+    "if test -r ~/innate-os/config/dds/setup_dds.zsh; then "
+    "source ~/innate-os/config/dds/setup_dds.zsh; "
+    "else source ~/innate-os/dds/setup_dds.zsh; fi"
+)
 
 MARS_ZMQ_PORTS: dict[int, str] = {
     4401: "observations",
@@ -92,6 +98,7 @@ class MarsBridgeStatus:
     ros_log_lines: list[str] = field(default_factory=list)
     ssh_exit_code: int = 0
     camera: MarsCameraHealth | None = None
+    arm_probe_code: int | None = None
 
     @property
     def process_running(self) -> bool:
@@ -177,7 +184,7 @@ def _remote_bridge_launch_cmd(
         f"{da3_env}{dinov3_env}{zmq_env}"
         f"source {emet_dir}/bridge_env.sh 2>/dev/null || "
         f"export PYTHONPATH={py_paths}:$PYTHONPATH; "
-        f"source ~/innate-os/dds/setup_dds.zsh && "
+        f"source /opt/ros/humble/setup.zsh && {INNATE_DDS_SETUP} && "
         f"source {workspace}/install/setup.zsh && "
         f"export PYTHONPATH={py_paths}:$PYTHONPATH && "
         f"ros2 launch innate_mars_bridge server.launch.py"
@@ -442,6 +449,64 @@ def print_bridge_status(
         print(style(f"  → emet preview-cameras --source zmq --connection {conn_ref}", dim=True))
 
 
+def _arm_startup_probe_command(workspace: str, emet_dir: str, *, release_native: bool = False) -> str:
+    def remote_path(path: str) -> str:
+        if path.startswith("~/"):
+            return '"$HOME"/' + shlex.quote(path[2:])
+        return shlex.quote(path)
+
+    setup = remote_path(workspace.rstrip("/") + "/install/setup.zsh")
+    core = remote_path(emet_dir.rstrip("/") + "/emet_core")
+    emet = remote_path(emet_dir.rstrip("/") + "/src")
+    bridge_env = remote_path(emet_dir.rstrip("/") + "/bridge_env.sh")
+    args = "release_native=True" if release_native else ""
+    return shlex.join(
+        [
+            "zsh",
+            "-c",
+            # Match the bridge launch environment: bridge_env.sh first, then ROS/DDS
+            # and the workspace, with PYTHONPATH as a fallback when bridge_env is absent.
+            f"source {bridge_env} 2>/dev/null || export PYTHONPATH={core}:{emet}:\"$PYTHONPATH\"; "
+            "source /opt/ros/humble/setup.zsh && "
+            f"source {setup} && {INNATE_DDS_SETUP} && "
+            f'export PYTHONPATH={core}:{emet}:"$PYTHONPATH" && '
+            "timeout 10 python3 -c "
+            + shlex.quote(f"from innate_mars_bridge.remote.arm_motion import main; raise SystemExit(main({args}))"),
+        ]
+    )
+
+
+def _bridge_stream_probe_command(wait_s: float) -> str:
+    program = """import sys
+import time
+import zmq
+
+ports = {4401: "observations", 4403: "state", 4404: "servo"}
+with zmq.Context() as context:
+    poller = zmq.Poller()
+    sockets = {}
+    for port, stream in ports.items():
+        socket = context.socket(zmq.SUB)
+        socket.linger = 0
+        socket.subscribe(b"")
+        socket.connect(f"tcp://127.0.0.1:{port}")
+        poller.register(socket, zmq.POLLIN)
+        sockets[socket] = stream
+    deadline = time.monotonic() + float(sys.argv[1])
+    while sockets and time.monotonic() < deadline:
+        for socket, _ in poller.poll(100):
+            socket.recv()
+            poller.unregister(socket)
+            sockets.pop(socket)
+            socket.close()
+    if sockets:
+        print("Mars bridge missing streams: " + ", ".join(sockets.values()), file=sys.stderr)
+        sys.exit(1)
+print("Mars bridge verified: live observation, state, and servo streams.")
+"""
+    return shlex.join(["python3", "-c", program, str(wait_s)])
+
+
 def start_bridge_on_robot(
     host: str,
     user: str,
@@ -453,8 +518,9 @@ def start_bridge_on_robot(
     onboard_dinov3: bool = False,
     video_rtsp: bool = False,
     metadata_only_obs: bool = False,
+    wait_s: float = 35.0,
 ) -> None:
-    """Start innate_mars_bridge inside innate-os tmux (Zenoh DDS env)."""
+    """Start the bridge and verify its telemetry streams."""
     launch_line = _remote_bridge_launch_cmd(
         workspace=workspace,
         emet_dir=emet_dir,
@@ -478,16 +544,43 @@ def start_bridge_on_robot(
     )
     note(f"Starting bridge on {user}@{host} ({TMUX_SESSION}:{TMUX_WINDOW})…")
     _ssh_run(host, user, password, remote, check=True)
+    if wait_s > 0:
+        code = _ssh_run(host, user, password, _bridge_stream_probe_command(wait_s), check=False)
+        if code != 0:
+            raise SystemExit(f"Mars bridge did not serve telemetry within {wait_s:g}s. Check emet mars status.")
 
 
-def stop_bridge_on_robot(host: str, user: str, password: str | None) -> None:
+def _report_arm_probe(code: int) -> None:
+    """Summarize the arm startup probe exit code for the operator."""
+    if code == 2:
+        note(style("Mars arm control blocked. The bridge is available for observations.", fg="yellow"))
+    elif code not in (0, 3):
+        note(style("Mars arm readiness could not be verified.", fg="yellow"))
+
+
+def stop_bridge_on_robot(
+    host: str, user: str, password: str | None, *,
+    workspace: str = DEFAULT_INNATE_WORKSPACE, emet_dir: str = DEFAULT_EMET_DIR,
+    force: bool = False,
+) -> None:
+    # Innate 0.8.0's native arm session must be released before the bridge is torn
+    # down, or its powered hold could be left unconfirmed. If release cannot be
+    # confirmed, keep the bridge running and let the operator decide, unless --force
+    # explicitly accepts tearing down an unconfirmed hold.
+    release = "true" if force else _arm_startup_probe_command(workspace, emet_dir, release_native=True)
     remote = (
+        f"{release} || exit $?; "
         f"{_kill_bridge_remote()}; "
         f"tmux kill-window -t {TMUX_SESSION}:{TMUX_WINDOW} 2>/dev/null || true; "
         "echo bridge stopped"
     )
     note(f"Stopping bridge on {user}@{host}…")
-    _ssh_run(host, user, password, remote, check=False)
+    code = _ssh_run(host, user, password, remote, check=False)
+    if code != 0:
+        raise SystemExit(
+            "Native arm release was not confirmed, so the bridge was left running. "
+            "Resolve the Innate native session and retry, or use --force to stop without releasing."
+        )
     print(style("Bridge stopped.", fg="green"))
 
 
@@ -501,6 +594,7 @@ def bridge_status_on_robot(
     onboard_dinov3: bool = False,
     show_next_steps: bool = True,
     workspace: str = DEFAULT_INNATE_WORKSPACE,
+    emet_dir: str = DEFAULT_EMET_DIR,
 ) -> MarsBridgeStatus:
     status = fetch_bridge_status(host, user, password, workspace=workspace)
     print_bridge_status(
@@ -510,6 +604,11 @@ def bridge_status_on_robot(
         onboard_dinov3=onboard_dinov3,
         show_next_steps=show_next_steps,
     )
+    if status.process_running:
+        status.arm_probe_code = _ssh_run(
+            host, user, password, _arm_startup_probe_command(workspace, emet_dir), check=False
+        )
+        _report_arm_probe(status.arm_probe_code)
     return status
 
 
@@ -526,7 +625,7 @@ def mars_start(
     onboard_dinov3: bool = False,
     video_rtsp: bool = False,
     metadata_only_obs: bool = False,
-    wait_s: float = 20.0,
+    wait_s: float = 35.0,
 ) -> None:
     host, user, password, workspace, emet_dir = resolve_mars_target(
         host=host,
@@ -577,11 +676,8 @@ def mars_start(
         onboard_dinov3=onboard_dinov3,
         video_rtsp=video_rtsp,
         metadata_only_obs=metadata_only_obs,
+        wait_s=wait_s,
     )
-
-    if wait_s > 0:
-        note(f"Waiting {wait_s:.0f}s for bridge startup…")
-        time.sleep(wait_s)
 
     bridge_status_on_robot(
         host,

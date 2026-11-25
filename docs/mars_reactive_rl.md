@@ -11,6 +11,74 @@ package is limited to simulation, training, and offline TAMP regression; no live
 Stretch command adapter is provided. Hardware publishers and perception adapters
 are follow-on work, and no learned policy is claimed to beat the baseline.
 
+## Herman wrist wave
+
+The [recorded hardware wave](robots/innate_mars_hardware.md#arm-control-handoff-on-herman)
+uses `joint5` at the measured start plus 0.15 rad, minus 0.15 rad, then back to
+the start. The [MuJoCo smoke test](../scripts/smoke_mars_wave.py) runs those
+same three goals through feedback control or an arm-only PPO bundle. The
+controller masks base and non-wrist actions. The test holds the original
+non-wrist targets through all three waypoints, waits for position and velocity
+settling, and reports contact, drift, and rejected starts.
+
+Train a current-model policy from the joint-feedback initializer and compare
+both controllers on identical held-out seeds. `--max-speed 0.15` caps wrist
+target changes at the current bridge rate for this simulator comparison.
+
+```bash
+python -m emet.rl.arm --output logs/herman-wave/initial
+python -m emet.rl train --task reach --arm-only --architecture mlp --envs 1 \
+  --seeds 12 --resume logs/herman-wave/initial --horizon 6 --steps 8192 \
+  --learning-rate 3e-5 --eval-every 4096 --eval-episodes 8 --output logs/herman-wave/ppo
+python scripts/smoke_mars_wave.py --max-speed 0.15 --seeds {120000..120031} \
+  --output logs/herman-wave/feedback.json
+python scripts/smoke_mars_wave.py --max-speed 0.15 --seeds {120000..120031} \
+  --policy logs/herman-wave/ppo/seed-12 --output logs/herman-wave/ppo.json
+```
+
+Feedback and PPO each completed all 31 admissible waves in about 5.05 s
+with zero simulated contact force. Seed 120016 exceeded the model's wrist
+range at one waypoint. The smoke test exits with status 1 when any start or
+waypoint is rejected and still writes the full report. The PPO run fine-tunes
+the generic arm-only reach policy and preserves the three wave waypoints
+outside the policy. Use `--pose` with seven measured angles, ordered as
+`joint1` through `joint6` followed by `joint_head`, to check a specific start.
+
+On 2026-11-22, Herman reported `joint3` at +1.580 to +1.582 rad against the
+live published upper limit of +1.57080 rad. The previous elbow recovery
+aborted with an unconfirmed stop. The emulated driver rejects the captured
+overrun at startup in both native recovery and regular app handoff modes
+before any servo write. Replaying the measured fold also reports overlap
+between the link3 and base collision proxies. The previous +1.548 rad staging
+target still shows that overlap. Check clearance on the physical arm because
+these proxies approximate the real geometry.
+
+Herman's live driver reported torque on and nominal servo health. It was
+running in native recovery mode with the earlier +1.57080 rad elbow start
+and +1.548 rad target fixed at launch. The leader receiver and app advertised
+publishers on `/mars/arm/commands`, and the only subscriber was the
+manipulation server's passive readback. Plugging in a leader controller
+therefore supplies no actuator path in this mode.
+
+The hardware sequence starts with an attended Innate recovery, with the arm
+supported and the folded clearance inspected. Confirm stationary, healthy
+servos, measured positions and existing holds inside native encoder limits,
+and all six positions inside the live published limits before handing off
+from recovery to the ordinary bridge. Verify exclusive command ownership and
+measured hold before repeating the deterministic wave on the recovered pose.
+The [bridge recovery paths](../src/innate_mars_bridge/README.md#single-joint-limit-recovery)
+describe admission and stop checks.
+
+The proposed hardware integration runs the PPO policy in shadow mode during
+that deterministic wave. Construct its observations from fresh measured
+positions, velocities, applied targets, and the same 20 Hz history used in
+simulation. Log its proposed wrist increments next to the measured and
+applied motion. Any subsequent attended policy-driven trial needs a bridge-side
+adapter that admits only `joint5` within the reviewed wrist sweep, enforces
+live encoder and published limits, rate and target lead, and routes stale
+feedback, unexpected drift or tracking faults through the confirmed-hold path.
+The existing hardware bridge currently executes bounded feedback goals.
+
 ## Start with base-only control
 
 The CLI now defaults to `--task base --architecture mlp`: two 64-unit hidden
@@ -916,3 +984,31 @@ starts were issued. The onboard URDF was copied to `logs/herman-readonly` for lo
 comparison. It adds fixed `base_footprint` and `base_laser` frames to the pinned
 description, but still provides no wheel/caster support geometry. This inspection
 does not resolve the missing Mars stability model or certify hardware readiness.
+
+### Herman wrist-wave rehearsal
+
+Run the deterministic Mars baseline through a single wrist cycle in the
+collision-enabled RL model:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/smoke_mars_wave.py
+```
+
+The probe starts from seeded simulator arm configurations and targets
+`joint5` at +0.15 rad, −0.15 rad, and its starting angle. Each waypoint must
+settle before the next. The base, other arm joints, gripper and head receive
+hold targets. Seeds 0 and 2 settled all three waypoints in 2.45 simulated
+seconds with zero measured contact force. Seed 1 exercises the preflight
+rejection for a target outside the model's wrist range
+(`--seeds 1`, expected exit status 1). These runs cover sampled free-space
+poses. Herman's measured starting posture and surroundings still need to be checked.
+
+The current Herman ROS graph showed only `/rosout` and `/parameter_events`.
+The onboard `maurice_arm` source defines feedback on `/mars/arm/state` and
+`/mars/arm/status`, a best-effort command topic at `/mars/arm/commands`,
+and a `/mars/arm/goto_js_trajectory` service. The Emet Mars bridge currently
+dispatches base goals only. No motion commands or service starts were issued.
+For an attended first trial, bring up the vendor arm driver and capture its
+measured posture, confirm the vendor command and stop semantics, and check
+the wrist sweep at that posture with clearance around the arm. Use the
+deterministic wrist trajectory for the first trial.
