@@ -118,12 +118,19 @@ def _lightwheel_registry_present(fixtures_dir: Path) -> bool:
         return False
 
 
+def _lightwheel_ok(fixtures_dir: Path) -> bool:
+    """The registry alone is not the pack: the Sink025 mesh must also be extracted."""
+    return (fixtures_dir / "sinks" / "Sink025" / "model.xml").is_file() and _lightwheel_registry_present(
+        fixtures_dir
+    )
+
+
 def _asset_present(base: Path, rel: str, check_kind: str) -> bool:
     folder = base / rel
     if check_kind == "basic_fixtures":
         return _basic_fixtures_present(folder)
     if check_kind == "lightwheel_registry":
-        return _lightwheel_registry_present(folder)
+        return _lightwheel_ok(folder)
     if not folder.exists() or next(folder.iterdir(), None) is None:
         return False
     return True
@@ -284,10 +291,10 @@ def main() -> int:
         except Exception as e:
             print(f"Registry sync failed ({e!r}).", file=sys.stderr)
             return 1
-    if not _lightwheel_registry_present(fixtures_dir):
+    if not _lightwheel_ok(fixtures_dir):
         print(
-            "Warning: LightWheel fixtures still not registered (expected Sink025 in "
-            "fixture_registry/sink.yaml). Download fixtures_lw or run sync.",
+            "Warning: LightWheel fixtures incomplete (expected the Sink025 mesh and its "
+            "fixture_registry/sink.yaml entry). Download fixtures_lw or run sync.",
             file=sys.stderr,
         )
         return 1

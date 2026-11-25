@@ -86,3 +86,23 @@ def test_run_install_simulation_non_interactive_passes_yes(monkeypatch, tmp_path
     calls.clear()
     assert run_sync._run_install_simulation(tmp_path) == 0
     assert "-y" not in calls[0]
+
+def test_lightwheel_pack_requires_the_mesh_not_just_the_registry(tmp_path: Path):
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "download_robocasa_assets.py"
+    spec = importlib.util.spec_from_file_location("download_robocasa_assets", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    base = tmp_path / "models" / "assets"
+    fixtures = base / "fixtures"
+    (fixtures / "fixture_registry").mkdir(parents=True)
+    (fixtures / "fixture_registry" / "sink.yaml").write_text("Sink025:\n  alias: Sink001\n")
+
+    # Registry entry alone is not the pack: the server still needs the Sink025 mesh.
+    assert module._asset_present(base, "fixtures", "lightwheel_registry") is False
+
+    (fixtures / "sinks" / "Sink025").mkdir(parents=True)
+    (fixtures / "sinks" / "Sink025" / "model.xml").write_text("<mujoco/>")
+    assert module._asset_present(base, "fixtures", "lightwheel_registry") is True
