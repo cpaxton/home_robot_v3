@@ -158,6 +158,16 @@ class KinematicPickPlaceExecutor:
         if profile is None:
             profile = ArmManipProfile.for_robot(robot_id_from_client(robot), arm=self.arm)
         self.profile = profile
+        self._feedforward = None
+        feedforward_path = os.environ.get("EMET_WBC_FEEDFORWARD")
+        if feedforward_path:
+            try:
+                from emet.controller.manipulation.wbc_feedforward import FeedforwardModel
+
+                self._feedforward = FeedforwardModel.load(feedforward_path)
+                logger.info("Loaded WBC feedforward model from %s", feedforward_path)
+            except (OSError, ValueError) as exc:
+                logger.warning("Ignoring WBC feedforward model %r: %s", feedforward_path, exc)
         self.manip_collision = str(manip_collision).lower()
         self.manip_planner = resolve_agent_manip_planner(config_mode=manip_planner)
         self.voxel_map = voxel_map
@@ -582,6 +592,18 @@ class KinematicPickPlaceExecutor:
             self._sleep(0.25)
         self._last_cmd_q = home_arm_q_array(self.profile)
 
+    def _joint_position_bounds(self) -> tuple[np.ndarray, np.ndarray]:
+        """MuJoCo joint limits for ``self.joint_names`` (infinite when unlimited)."""
+        import mujoco
+
+        lo = np.full(len(self.joint_names), -np.inf)
+        hi = np.full(len(self.joint_names), np.inf)
+        for index, name in enumerate(self.joint_names):
+            jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            if jid >= 0 and bool(self._model.jnt_limited[jid]):
+                lo[index], hi[index] = self._model.jnt_range[jid]
+        return lo, hi
+
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
         self._last_motion_failure = None
         self.last_ee_verification = None
@@ -653,7 +675,12 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(q)
             self._sleep(self.traj_dt)
         if plan.waypoints:
-            final_q = plan.waypoints[-1]
+            final_q = np.asarray(plan.waypoints[-1], dtype=np.float64)
+            if self._feedforward is not None:
+                from emet.controller.manipulation.wbc_feedforward import apply_bias
+
+                lo, hi = self._joint_position_bounds()
+                final_q = apply_bias(final_q, self.joint_names, self._feedforward, lower=lo, upper=hi)
             # The torso base pitch carries the whole arm; a single send + short sleep
             # loses to PD lag (observed torso1 barely moves from home). Re-command the
             # final posture for a bounded settle, like _command_home_posture.

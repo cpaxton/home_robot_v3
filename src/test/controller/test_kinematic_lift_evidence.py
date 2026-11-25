@@ -94,6 +94,7 @@ def test_final_posture_is_recommanded_until_the_torso_settles(monkeypatch):
     ex.ik_tol_m, ex.ik_max_iters, ex.traj_dt, ex.traj_steps = 0.01, 1, 0.05, 2
     ex.manip_planner, ex.rrt_max_iter, ex._collision, ex.visualizer = "linear", 1, None, None
     ex._last_cmd_q = None
+    ex._feedforward = None
     ex._sync_qpos_from_robot = lambda: True
     ex._sleep = lambda seconds: clock.__setitem__("now", clock["now"] + seconds)
     ex._stream_arm_q = Mock()
