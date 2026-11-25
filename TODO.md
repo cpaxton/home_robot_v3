@@ -1234,6 +1234,21 @@ See the research roadmap in [the control runbook](docs/mars_reactive_rl.md#propr
       Resolve general motion failures before repeating the nine-trial readiness matrix.
       See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/api/tamp.md`.
 
+## RL-WBC torque contract (2026-11-25)
+
+Design: [whole-body-rl-control.md](docs/plans/whole-body-rl-control.md). Schema v2
+supports multiple named arms, torso/head groups, per-arm grippers, and
+arbitrary arm DOF; the policy action is per-arm joint torque with a separate
+position-servo actuator adapter.
+
+- [x] Multi-arm schema, vector layout, per-arm reward, example Mars/Sourccey/RB-Y1/Stretch profiles.
+- [x] Position-servo adapter with torque/current/lead clipping and fail-closed actuator fields.
+- [x] Case-library fingerprint includes embodiment/schema; generator emits multi-arm scenarios.
+- [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits).
+- [ ] Wire the adapter into the robot-side WBC transport and a MuJoCo servo model.
+- [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline.
+- [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
+
 ## TAMP agent execution follow-up (2026-09-29)
 
 Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).

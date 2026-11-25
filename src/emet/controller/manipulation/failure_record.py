@@ -131,10 +131,16 @@ def scenario_from_attempt(
             "failure_mode", "privileged",
         )
     })
+    for key in ("embodiment", "schema_version", "action_mode", "robot_id"):
+        if key in ctx:
+            meta[key] = ctx[key]
+    robot_state = ctx.get("robot_state")
+    if not isinstance(robot_state, dict):
+        robot_state = {"q": q0, "joint_names": list(attempt.get("joint_names") or [])}
     return ScenarioRecord(
         initial_voxel=initial_voxel if initial_voxel is not None else {"kind": "voxel_map_2d_unavailable"},
         goal=goal,
-        robot_state={"q": q0, "joint_names": list(attempt.get("joint_names") or [])},
+        robot_state=robot_state,
         meta=meta,
     )
 

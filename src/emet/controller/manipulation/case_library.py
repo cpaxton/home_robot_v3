@@ -49,17 +49,25 @@ class ScenarioRecord:
     """
 
     initial_voxel: Any  # initial map (3D occupancy array or 2D occupancy dict)
-    goal: dict[str, Any]  # {"kind": "ee_target"|"pick_place", "ee_target": [...], "object": ..., "receptacle": ...}
-    robot_state: dict[str, Any]  # {"q": [...], "base_xyt": [...]}
-    meta: dict[str, Any] = field(default_factory=dict)  # episode_id, seed, robot_id, scene, failure_mode, manip_mode, ...
+    goal: dict[str, Any]  # {"kind": "ee_target"|"ee_targets"|"pick_place", ...}
+    robot_state: dict[str, Any]  # legacy {"q": [...]} or v2 {"base": ..., "arms": {...}}
+    meta: dict[str, Any] = field(default_factory=dict)  # episode_id, seed, robot_id, scene, failure_mode, ...
 
     def fingerprint(self) -> str:
-        """Stable content hash of (initial_voxel, goal, robot_state) for dedup."""
+        """Stable content hash of the scenario identity for dedup.
+
+        Embodiment and schema version are part of the identity: the same map,
+        goal, and joint vector on two robots is not the same training case.
+        Episode/job identifiers are intentionally excluded so re-collection can
+        still deduplicate.
+        """
         payload = json.dumps(
             {
                 "initial_voxel": _canonical(self.initial_voxel),
                 "goal": _canonical(self.goal),
                 "robot_state": _canonical(self.robot_state),
+                "embodiment": str(self.meta.get("embodiment") or ""),
+                "schema_version": self.meta.get("schema_version"),
             },
             sort_keys=True,
         )
@@ -123,7 +131,13 @@ class CaseLibrary:
             buckets.setdefault(r.failure_mode, []).append(r)
         return buckets
 
-    def sample(self, n: int, *, rng: np.random.Generator | None = None, failure_mode: str | None = None) -> list[ScenarioRecord]:
+    def sample(
+        self,
+        n: int,
+        *,
+        rng: np.random.Generator | None = None,
+        failure_mode: str | None = None,
+    ) -> list[ScenarioRecord]:
         """Stratified sample *with replacement*: round-robin across failure-mode buckets so
         rare modes aren't starved, and a batch can be larger than the library."""
         rng = rng or np.random.default_rng()
