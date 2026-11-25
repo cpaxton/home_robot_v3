@@ -630,6 +630,24 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         returns_info=True,
     ),
     SkillSpec(
+        name="ask_user",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Ask the user a clarifying, permission, or help question and wait for their answer. "
+            "Use when a request is ambiguous, when a motion was refused (e.g. low clearance) and "
+            "you need permission to relax/retry, or when you are uncertain. Speak the question and "
+            "send it to Discord if connected, then stop — the user's next message is their answer."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question to ask the user."},
+            },
+            "required": ["question"],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
         name="quit",
         modes=frozenset({AgentMode.CHAT}),
         description="End the conversation and stop the robot. Use when the user says goodbye or asks to stop.",

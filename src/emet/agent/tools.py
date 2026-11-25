@@ -1487,6 +1487,49 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    # -- ask_user -------------------------------------------------------------
+    def ask_user(question: str) -> str:
+        executor = context.get("executor")
+        discord_bot = context.get("discord_bot")
+        q = str(question or "").strip()
+        if not q:
+            return "ask_user needs a non-empty question."
+        if executor is not None:
+            try:
+                _exec("say", q)
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("ask_user say failed: %s", e)
+        if discord_bot is not None and hasattr(discord_bot, "push_task_to_all_channels"):
+            try:
+                discord_bot.push_task_to_all_channels(message=q)
+            except Exception as e:  # noqa: BLE001
+                _logger.warning("ask_user discord failed: %s", e)
+        return (
+            f"Question asked of the user: {q!r}. Do not act further until the user replies; "
+            "treat their next message as the answer."
+        )
+
+    tools.append(
+        Tool(
+            name="ask_user",
+            description=(
+                "Ask the user a clarifying, permission, or help question and wait for their answer. "
+                "Use when a request is ambiguous, when a motion was refused (e.g. low clearance) and "
+                "you need permission to relax/retry, or when you are uncertain. Speak the question and "
+                "send it to Discord if connected, then stop — the user's next message is their answer."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "The question to ask the user."},
+                },
+                "required": ["question"],
+            },
+            func=ask_user,
+            returns_info=True,
+        )
+    )
+
     # -- quit ----------------------------------------------------------------
     tools.append(
         Tool(
