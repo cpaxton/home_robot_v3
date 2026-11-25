@@ -81,7 +81,7 @@ def validate_tasks(manifest: dict[str, Any]) -> tuple[list[str], list[str]]:
     return tasks, ([smoke] if smoke else [])
 
 
-def _runner_cmd(episodes_file: str, task_ids: list[str], clearance_m: float, output_dir: Path) -> list[str]:
+def _runner_cmd(episodes_file: str, task_ids: list[str], clearance_m: float, output_dir: Path, *, cpu_only: bool = False) -> list[str]:
     cmd = [
         sys.executable,
         str(CLUTTER_RUNNER),
@@ -92,14 +92,16 @@ def _runner_cmd(episodes_file: str, task_ids: list[str], clearance_m: float, out
         "--output-dir",
         str(output_dir),
     ]
+    if cpu_only:
+        cmd.append("--cpu-only")
     for t in task_ids:
         cmd += ["--episode-id", t]
     return cmd
 
 
-def run_floor(episodes_file: str, task_ids: list[str], clearance_m: float, output_dir: Path) -> Path:
+def run_floor(episodes_file: str, task_ids: list[str], clearance_m: float, output_dir: Path, *, cpu_only: bool = False) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    cmd = _runner_cmd(episodes_file, task_ids, clearance_m, output_dir)
+    cmd = _runner_cmd(episodes_file, task_ids, clearance_m, output_dir, cpu_only=cpu_only)
     print(f"[floor {clearance_m:.2f}] {task_ids}", file=sys.stderr)
     subprocess.run(cmd, cwd=str(REPO), check=True)
     return output_dir
@@ -183,7 +185,7 @@ def main() -> int:
     floor_summary: dict[float, list[dict[str, Any]]] = {}
     for floor in floors:
         odir = out_root / f"floor_{floor:.2f}".replace(".", "_")
-        run_floor(episodes_file, task_ids, floor, odir)
+        run_floor(episodes_file, task_ids, floor, odir, cpu_only=args.cpu_only)
         floor_summary[floor] = collect(odir, task_ids)
 
     agg = aggregate(floor_summary)
