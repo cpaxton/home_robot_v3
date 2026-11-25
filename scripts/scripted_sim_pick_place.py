@@ -74,6 +74,7 @@ def run_scripted_tool_calls(
     tamp_inputs: str = "observed",
     context_out: dict[str, Any] | None = None,
     video_recorder: Any = None,
+    failure_out: dict[str, Any] | None = None,
 ) -> bool:
     """Run agent-shaped tool calls through the live CHAT tool implementation."""
     from emet.agent.tools import get_tools
@@ -133,6 +134,8 @@ def run_scripted_tool_calls(
                     outcome = json.loads(result)
                     if outcome['schema_version'] != 1 or outcome['status'] != 'ok':
                         ok_all = False
+                        if failure_out is not None:
+                            failure_out.update(outcome)
                         break
                     if name == 'scene_tasks':
                         handles.pop('task_ref', None)
@@ -223,6 +226,10 @@ def main() -> int:
     parser.add_argument("--articulation-cycle", action="store_true",
                         help="Separate assisted open/close smoke on the first discovered task; no placement score.")
     parser.add_argument("--cpu-only", action="store_true", help="Hide GPUs in sim subprocess env.")
+    parser.add_argument("--settle-s", type=float, default=0.0,
+                        help="Wait for spawned objects to settle before tool calls.")
+    parser.add_argument("--retries", type=int, default=0,
+                        help="Retry the scripted sequence on a replan recovery code.")
     parser.add_argument("--verbose-sim", action="store_true", help="Print sim server stderr.")
     parser.add_argument(
         "--record-mp4",
@@ -451,14 +458,47 @@ def main() -> int:
                 f"Executing {len(tool_calls)} supplied call(s) through live CHAT tools (manip_mode={manip_mode})",
                 flush=True,
             )
-            ok = run_scripted_tool_calls(
-                robot,
-                tool_calls,
-                manip_mode=manip_mode,
-                tamp_inputs=args.tamp_inputs,
-                context_out=tool_context,
-                video_recorder=video,
-            )
+            if float(getattr(args, "settle_s", 0.0) or 0.0) > 0:
+                # The robosuite server only advances physics while it receives
+                # commands. Hold every actuator at its measured position so the
+                # scene actually settles instead of sleeping on the client.
+                settle_s = float(args.settle_s)
+                print(f"Settling sim for {settle_s:.1f}s before scripted calls…", flush=True)
+                names = list(getattr(getattr(robot, "_spec", None), "actuator_names", ()) or ())
+                q, _, _ = robot.get_joint_state(timeout=2.0)
+                if names and q is not None and len(q) >= len(names):
+                    hold = {name: float(q[index]) for index, name in enumerate(names)}
+                    deadline = time.time() + settle_s
+                    while time.time() < deadline:
+                        robot.set_actuator_positions(hold)
+                        time.sleep(0.05)
+                else:
+                    time.sleep(settle_s)
+                print("Settle hold complete.", flush=True)
+            retryable = {
+                "scene_changed_replan",
+                "approach_changed_replan",
+                "stale_task_plan",
+                "base_approach_invalidated",
+            }
+            attempts = max(0, int(getattr(args, "retries", 0) or 0)) + 1
+            for attempt in range(attempts):
+                failure: dict[str, Any] = {}
+                tool_context.clear()
+                ok = run_scripted_tool_calls(
+                    robot,
+                    tool_calls,
+                    manip_mode=manip_mode,
+                    tamp_inputs=args.tamp_inputs,
+                    context_out=tool_context,
+                    video_recorder=video,
+                    failure_out=failure,
+                )
+                code = str(failure.get("code") or "")
+                if ok or code not in retryable or attempt + 1 >= attempts:
+                    break
+                print(f"Retrying scripted plan after {code} (attempt {attempt + 2}/{attempts})…", flush=True)
+                time.sleep(0.5)
             if video is not None:
                 video.set_status("done" if ok else "failed", detail="success" if ok else "see paired JSON failure outcome")
                 video.capture_once()
