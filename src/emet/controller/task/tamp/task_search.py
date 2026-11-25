@@ -251,7 +251,8 @@ def plan_pick_place(
     if use_scene_query and approach_pose is None:
         # A single 0.55 m ring sits inside counters and islands. Try larger
         # standoffs too; IK ranking below rejects poses the arm cannot reach.
-        radii = (float(approach_standoff_m), float(approach_standoff_m) + 0.20,
+        radii = (float(approach_standoff_m), float(approach_standoff_m) + 0.10,
+                 float(approach_standoff_m) + 0.20, float(approach_standoff_m) + 0.30,
                  float(approach_standoff_m) + 0.40)
         poses = []
         for radius in radii:
