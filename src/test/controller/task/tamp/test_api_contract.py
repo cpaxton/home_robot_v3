@@ -485,143 +485,136 @@ def test_verification_evidence_rejects_private_or_malformed_values(value):
     assert VerificationFailure.from_data(value) is None
 
 
-def test_robocasa_pick_place_task_parses_and_resolves():
+def test_robocasa_pick_place_task_is_semantic():
     from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
 
-    environment = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "style": 1, "layout": 1}
-    # Realistic RoboCasa placements: fixtures (cab_main/counter_main), a distractor
-    # (distr_counter_main), and the task object (obj_main) all end in '_main'.
-    placements = {
-        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
-        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
-        "distr_counter_main": {"cat": "beer", "pos": [0.1, 0.1, 0.8]},
-        "obj_main": {"cat": "kiwi", "pos": [0.0, 0.0, 0.8]},
-    }
-    task = robocasa_pick_place_task(environment, placements)
-    assert task is not None
-    assert task.object == "kiwi"            # task object category, NOT 'cab'
-    assert task.goal_recep == "cab"         # task "Cabinet" -> fixture key "cab_main" (cat 'cab')
-    assert task.start_recep == "counter"
-    assert task.object_gt_body == "obj_main"
-
-
-def test_robocasa_pick_place_task_requires_obj_main():
-    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
-
-    environment = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}
-    placements = {
-        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
-        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
-        "distr_counter_main": {"cat": "beer", "pos": [0.1, 0.1, 0.8]},
-    }
-    # No obj_main (the task object) -> cannot ground the task.
-    assert robocasa_pick_place_task(environment, placements) is None
-
-
-def test_robocasa_pick_place_task_none_for_non_pickplace_or_non_robocasa():
-    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
-
-    assert robocasa_pick_place_task(None, {}) is None
-    assert robocasa_pick_place_task({"kind": "molmospaces"}, {}) is None
-    # Non-PickPlace RoboCasa task (open/close) is not a pick-place task.
-    assert robocasa_pick_place_task({"kind": "robocasa", "task": "OpenCabinet"}, {}) is None
-    # Missing goal receptacle -> None.
-    assert robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}, {"obj_main": {"cat": "mug"}}) is None
-
-
-def test_robocasa_goal_binds_nearest_cabinet_and_emits_one_ref():
-    from emet.controller.task.tamp.agent_bridge import build_scene_task_refs, robocasa_pick_place_task
-
-    placements = {
-        "obj_main": {"cat": "sugar_cube", "pos": [0.5, -0.2, 0.9]},
-        "counter_main": {"cat": "counter", "pos": [0.5, -0.2, 0.9]},
-        "cab_far_main": {"cat": "cab", "pos": [5.0, 5.0, 1.8]},
-        "cab_1_main": {"cat": "cab", "pos": [0.6, -0.3, 1.85]},
-    }
     task = robocasa_pick_place_task(
-        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}, placements
+        {
+            "kind": "robocasa",
+            "task": "PickPlaceCounterToCabinet",
+            "object_category": "sugar_cube",
+        }
     )
-    assert task.goal_gt_body == "cab_1_main"
-
-    refs = build_scene_task_refs([task], placements)
-    assert len(refs) == 1
-    assert refs[0].receptacle_body == "cab_1_main"
-
-
-def test_robocasa_task_tokens_survive_fixtures_containing_to():
-    """CamelCase fixtures (Stove/Toaster/ToasterOven) must not steal the delimiter."""
-    from emet.controller.task.tamp.agent_bridge import _robocasa_task_tokens
-
-    placements = {
-        "obj_main": {"cat": "mug"},
-        "counter_main": {"cat": "counter"},
-        "stove_main": {"cat": "stove"},
-        "toaster_main": {"cat": "toaster"},
-        "toasteroven_main": {"cat": "toasteroven"},
-        "cab_main": {"cat": "cab"},
-    }
-    assert _robocasa_task_tokens("PickPlaceCounterToStove", placements) == ("Counter", "Stove")
-    assert _robocasa_task_tokens("PickPlaceStoveToCounter", placements) == ("Stove", "Counter")
-    assert _robocasa_task_tokens("PickPlaceToasterToCounter", placements) == ("Toaster", "Counter")
-    assert _robocasa_task_tokens("PickPlaceCounterToToasterOven", placements) == ("Counter", "ToasterOven")
-    assert _robocasa_task_tokens("PickPlaceToasterOvenToCounter", placements) == ("ToasterOven", "Counter")
+    assert task is not None
+    assert (task.object, task.start_recep, task.goal_recep) == ("sugar_cube", "counter", "cab")
+    assert not hasattr(task, "object_gt_body")
+    assert not hasattr(task, "goal_gt_body")
 
 
-def test_robocasa_pick_place_task_parses_stove_and_toaster_oven():
+def test_robocasa_task_tokens_are_vocabulary_only():
+    from emet.controller.task.tamp.agent_bridge import _robocasa_task_tokens_semantic
+
+    assert _robocasa_task_tokens_semantic("PickPlaceCounterToStove") == ("Counter", "Stove")
+    assert _robocasa_task_tokens_semantic("PickPlaceStoveToCounter") == ("Stove", "Counter")
+    assert _robocasa_task_tokens_semantic("PickPlaceToasterToCounter") == ("Toaster", "Counter")
+    assert _robocasa_task_tokens_semantic("PickPlaceCounterToToasterOven") == ("Counter", "ToasterOven")
+    assert _robocasa_task_tokens_semantic("PickPlaceToasterOvenToCounter") == ("ToasterOven", "Counter")
+
+
+def test_robocasa_pick_place_task_requires_semantic_object_category():
     from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
 
-    placements = {
-        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 0.8]},
-        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
-        "stove_main": {"cat": "stove", "pos": [1.0, 0.0, 0.8]},
-        "toasteroven_main": {"cat": "toasteroven", "pos": [1.0, 1.0, 0.8]},
-    }
-    stove = robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToStove"}, placements)
-    assert stove is not None
-    assert (stove.start_recep, stove.goal_recep) == ("counter", "stove")
-    oven = robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToToasterOven"}, placements)
-    assert oven is not None
-    assert (oven.start_recep, oven.goal_recep) == ("counter", "toasteroven")
+    assert robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}) is None
+    assert robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "object_category": ""}
+    ) is None
 
 
-def test_robocasa_fixture_match_is_order_independent_with_multiple_cabinets():
-    from emet.controller.task.tamp.agent_bridge import _match_placement_by_category
+def test_robocasa_pick_place_task_none_for_non_robocasa_or_non_pickplace():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
 
-    placements = {"cab_b_main": {"cat": "cab"}, "cab_a_main": {"cat": "cab"}}
-    reordered = dict(reversed(list(placements.items())))
-    assert _match_placement_by_category(placements, "Cabinet") == "cab_a_main"
-    assert _match_placement_by_category(reordered, "Cabinet") == "cab_a_main"
+    assert robocasa_pick_place_task(None) is None
+    assert robocasa_pick_place_task({"kind": "molmospaces"}) is None
+    assert robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "OpenCabinet", "object_category": "mug"}
+    ) is None
+
+
+def test_build_semantic_task_refs_has_no_bodies():
+    from emet.controller.task.tamp.agent_bridge import (
+        build_semantic_task_refs,
+        robocasa_pick_place_task,
+    )
+
+    task = robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "object_category": "mug"}
+    )
+    refs = build_semantic_task_refs([task])
+    assert len(refs) == 1
+    ref = refs[0]
+    assert ref.object_body is None and ref.receptacle_body is None
+    assert ref.semantic_only is True
+    assert ref.task_name == "PickPlaceCounterToCabinet"
+
+
+def test_privileged_task_from_semantic_resolves_gt_for_teacher():
+    from emet.controller.task.tamp.agent_bridge import (
+        build_semantic_task_refs,
+        privileged_task_from_semantic,
+        robocasa_pick_place_task,
+    )
+
+    task = robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "object_category": "sugar_cube"}
+    )
+    ref = build_semantic_task_refs([task])[0]
+    privileged = privileged_task_from_semantic(
+        ref,
+        {
+            "obj_main": {"cat": "sugar_cube"},
+            "counter_main": {"cat": "counter"},
+            "cab_main": {"cat": "cab"},
+        },
+    )
+    assert privileged is not None
+    assert privileged.object_body == "obj_main"
+    assert privileged.receptacle_body == "cab_main"
+    assert privileged.privileged is True
 
 
 class _RobocasaRobot:
-    def __init__(self, task: str, placements: dict):
+    def __init__(self, task: str, object_category: str, placements: dict):
         self._task = task
+        self._object_category = object_category
         self._placements = placements
         self._state = {"command_protocol": {"version": 2, "server_boot_id": "boot"}}
 
     def get_emet_session(self):
         return {
             "is_simulation": True,
-            "environment": {"kind": "robocasa", "task": self._task, "style": 1, "layout": 1},
+            "environment": {
+                "kind": "robocasa",
+                "task": self._task,
+                "object_category": self._object_category,
+                "style": 1,
+                "layout": 1,
+            },
             "sim_object_placements": self._placements,
         }
 
 
-def test_scene_tasks_exposes_robocasa_task_and_respects_filter():
+def test_scene_tasks_robocasa_is_semantic_and_never_reads_gt(monkeypatch):
+    import emet.memory.graph_eqa.sim_ground_truth_graph as gt
     from emet.agent.chat_tamp import build_tamp_handlers
 
+    def _fail(*args, **kwargs):
+        raise AssertionError("RoboCasa assessment must not read GT placements")
+
+    monkeypatch.setattr(gt, "read_sim_object_placements", _fail)
     placements = {
-        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 0.8]},
+        "obj_main": {"cat": "sugar_cube", "pos": [0.0, 0.0, 0.8]},
         "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
         "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
     }
-    handlers = build_tamp_handlers({"robot": _RobocasaRobot("PickPlaceCounterToCabinet", placements)})
+    handlers = build_tamp_handlers(
+        {"robot": _RobocasaRobot("PickPlaceCounterToCabinet", "sugar_cube", placements)}
+    )
     data = decoded(handlers["scene_tasks"]())["data"]
-    assert data["pickable_categories"] == ["mug"]
+    assert data["pickable_categories"] == ["sugar_cube"]
     assert data["receptacle_categories"] == ["cab"]
     assert len(data["tasks"]) == 1
     task = data["tasks"][0]
-    assert task["object_name"] == "mug"
+    assert task["object_name"] == "sugar_cube"
     assert task["receptacle_name"] == "cab"
     assert task["start_receptacle"] == "counter"
     assert task["task_ref"].startswith("task:")
@@ -631,10 +624,56 @@ def test_scene_tasks_exposes_robocasa_task_and_respects_filter():
     assert filtered["tasks"] == []
 
 
+def test_semantic_plan_returns_grounding_unavailable_without_teacher(monkeypatch):
+    from emet.agent.chat_tamp import build_tamp_handlers
+
+    monkeypatch.delenv("EMET_GT_TEACHER", raising=False)
+    placements = {"obj_main": {"cat": "sugar_cube", "pos": [0.0, 0.0, 0.8]}}
+    handlers = build_tamp_handlers(
+        {"robot": _RobocasaRobot("PickPlaceCounterToCabinet", "sugar_cube", placements)}
+    )
+    task_ref = decoded(handlers["scene_tasks"]())["data"]["tasks"][0]["task_ref"]
+    result = decoded(handlers["plan_pick_place"](task_ref=task_ref))
+    assert result["status"] == "error"
+    assert result["code"] == "grounding_unavailable"
+
+
 def test_failure_code_maps_ik_failed_to_unreachable():
     assert failure_code("grasp_failed:pregrasp_ik_failed") == "unreachable"
     assert failure_code("grasp_failed:pregrasp_tracking_failed") == "tracking_timeout"
     assert failure_code("grasp_failed:grasp_joint_bounds") == "joint_bounds"
+
+
+def test_scenario_from_attempt_is_semantic_and_marks_privileged():
+    from emet.controller.manipulation.failure_record import scenario_from_attempt
+
+    attempt = {
+        "target_xyz": [0.0, 0.0, 1.0],
+        "trace": [{"qpos": [0.0, 0.0]}],
+        "joint_names": ["j0", "j1"],
+        "failure_mode": "tracking_failed",
+    }
+    assessment = scenario_from_attempt(
+        attempt, context={"object_query": "mug", "receptacle_query": "cab"}
+    )
+    assert assessment.goal["object"] == "mug"
+    assert assessment.goal["receptacle"] == "cab"
+    assert assessment.meta["privileged"] is False
+    assert "object_body" not in assessment.meta
+
+    teacher = scenario_from_attempt(
+        attempt,
+        context={
+            "object_query": "mug",
+            "receptacle_query": "cab",
+            "privileged": True,
+            "object_body": "obj_main",
+            "receptacle_body": "cab_main",
+        },
+    )
+    assert teacher.meta["privileged"] is True
+    assert teacher.meta["object_body"] == "obj_main"
+    assert teacher.meta["receptacle_body"] == "cab_main"
 
 
 def test_record_manip_attempt_writes_jsonl(tmp_path, monkeypatch):

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import uuid
 from dataclasses import dataclass, replace
@@ -30,14 +31,21 @@ logger = Logger(__name__)
 
 @dataclass(frozen=True)
 class AgentTaskRef:
-    """Semantic task handle with private body IDs for the execution adapter."""
+    """Semantic task handle.
+
+    Assessment refs have no body IDs. ``privileged`` refs may carry GT bodies for
+    teacher/critic data generation; they must never be returned to the model.
+    """
 
     ref: str
     object_query: str
     receptacle_query: str
-    object_body: str
-    receptacle_body: str
+    object_body: str | None = None
+    receptacle_body: str | None = None
     start_receptacle: str = ""
+    task_name: str = ""
+    semantic_only: bool = False
+    privileged: bool = False
 
 
 @dataclass(frozen=True)
@@ -221,44 +229,108 @@ def _robocasa_task_tokens(task_name: str, placements: dict[str, dict[str, Any]])
     return None
 
 
-def robocasa_pick_place_task(environment: Any, placements: dict[str, dict[str, Any]]) -> Any | None:
-    """Build a semantic pick-place task from the active RoboCasa task name.
+_ROBOCASA_TASK_FIXTURES = frozenset(
+    {
+        "counter", "countertop", "cab", "cabinet", "sink", "stove", "microwave",
+        "fridge", "refrigerator", "oven", "dishwasher", "toaster", "toasteroven",
+        "blender", "standmixer", "electrickettle", "coffeemachine", "fridgedrawer",
+        "fridgeshelf",
+    }
+)
 
-    RoboCasa has no iTHOR-style task catalog, but the active task is in the session
-    (``environment.task``, e.g. ``PickPlaceCounterToCabinet``). Returns a task object
-    with semantic ``object`` / ``goal_recep`` / ``start_recep`` plus the internal
-    ``object_gt_body``; body IDs stay private and are never surfaced to the agent.
+
+def _robocasa_task_tokens_semantic(task_name: str) -> tuple[str, str] | None:
+    """Split ``PickPlace<Start>To<Goal>`` using the fixture vocabulary only."""
+    match = re.match(r"PickPlace(.+)", str(task_name or "").strip())
+    if not match:
+        return None
+    rest = match.group(1)
+    splits = [index for index in range(len(rest) - 1) if rest.startswith("To", index)]
+    for index in splits:
+        start, goal = rest[:index], rest[index + 2 :]
+        if (
+            start
+            and goal
+            and _robocasa_fixture_token(start) in _ROBOCASA_TASK_FIXTURES
+            and _robocasa_fixture_token(goal) in _ROBOCASA_TASK_FIXTURES
+        ):
+            return start, goal
+    if len(splits) == 1:
+        start, goal = rest[: splits[0]], rest[splits[0] + 2 :]
+        if start and goal:
+            return start, goal
+    return None
+
+
+def robocasa_pick_place_task(environment: Any) -> Any | None:
+    """Build a semantic task from the RoboCasa session, without GT bodies.
+
+    The session publishes ``object_category`` (a semantic label) and ``task``.
+    Start/goal receptacles come from the task name vocabulary. No placements,
+    no ``obj_main``, and no body IDs are read.
     """
     if not isinstance(environment, dict):
         return None
     if str(environment.get("kind") or "").lower() != "robocasa":
         return None
-    live = placements or {}
-    tokens = _robocasa_task_tokens(str(environment.get("task") or ""), live)
+    tokens = _robocasa_task_tokens_semantic(str(environment.get("task") or ""))
     if tokens is None:
         return None
     start_token, goal_token = tokens
-    # The task object is the wizard object named 'obj' (body 'obj_main'); fixtures
-    # ('cab_main', 'counter_main', …) and distractors ('distr_*') also end in '_main'.
-    object_body = "obj_main" if "obj_main" in live else None
-    if object_body is None:
+    object_category = str(environment.get("object_category") or "").strip()
+    if not object_category:
         return None
-    object_cat = str((live.get(object_body) or {}).get("cat") or "obj")
-    goal_body = _match_placement_by_category(live, goal_token, reference_body=object_body)
-    if goal_body is None:
-        return None
-    start_body = _match_placement_by_category(live, start_token, reference_body=object_body)
     return SimpleNamespace(
-        object=object_cat,
-        goal_recep=str((live.get(goal_body) or {}).get("cat") or _robocasa_fixture_token(goal_token)),
-        start_recep=(
-            str((live.get(start_body) or {}).get("cat") or _robocasa_fixture_token(start_token))
-            if start_body
-            else _robocasa_fixture_token(start_token)
-        ),
-        object_gt_body=object_body,
-        goal_gt_body=goal_body,
-        start_gt_body=start_body,
+        object=object_category,
+        goal_recep=_robocasa_fixture_token(goal_token),
+        start_recep=_robocasa_fixture_token(start_token),
+        task_name=str(environment.get("task") or ""),
+    )
+
+
+def gt_teacher_enabled() -> bool:
+    """Explicit privileged-GT path for teacher/critic data generation only."""
+    return os.environ.get("EMET_GT_TEACHER", "").strip().lower() in {"1", "true", "yes"}
+
+
+def build_semantic_task_refs(tasks: list[Any]) -> list[AgentTaskRef]:
+    """One body-free assessment ref per semantic task."""
+    return [
+        AgentTaskRef(
+            ref=f"task:{index + 1}",
+            object_query=str(getattr(task, "object", "")),
+            receptacle_query=str(getattr(task, "goal_recep", "")),
+            start_receptacle=str(getattr(task, "start_recep", "")),
+            task_name=str(getattr(task, "task_name", "")),
+            semantic_only=True,
+        )
+        for index, task in enumerate(tasks)
+    ]
+
+
+def privileged_task_from_semantic(
+    ref: AgentTaskRef,
+    placements: dict[str, dict[str, Any]] | None,
+) -> AgentTaskRef | None:
+    """Resolve GT bodies for an explicitly privileged teacher/critic request."""
+    from emet.eval.ovmm_find_phase import bodies_matching_category
+
+    live = placements or {}
+    objects = bodies_matching_category(live, ref.object_query)
+    if not objects:
+        return None
+    goal = _match_placement_by_category(live, ref.receptacle_query)
+    if goal is None:
+        return None
+    return AgentTaskRef(
+        ref=ref.ref,
+        object_query=ref.object_query,
+        receptacle_query=ref.receptacle_query,
+        object_body=objects[0],
+        receptacle_body=goal,
+        start_receptacle=ref.start_receptacle,
+        task_name=ref.task_name,
+        privileged=True,
     )
 
 
@@ -312,6 +384,7 @@ def stable_scene_task_refs(
     placements: dict[str, dict[str, Any]] | None,
     *,
     session_key: tuple[str, ...] = (),
+    semantic: bool = False,
 ) -> list[AgentTaskRef]:
     """Register semantic task handles for one live-scene session.
 
@@ -328,7 +401,8 @@ def stable_scene_task_refs(
     by_key = context.setdefault("_tamp_task_ref_keys", {})
     refs_by_name = context.setdefault("_tamp_task_refs", {})
     out: list[AgentTaskRef] = []
-    for ref in build_scene_task_refs(tasks, placements):
+    refs = build_semantic_task_refs(tasks) if semantic else build_scene_task_refs(tasks, placements)
+    for ref in refs:
         key = (
             ref.object_query,
             ref.receptacle_query,
