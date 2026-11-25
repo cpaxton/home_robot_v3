@@ -340,5 +340,6 @@ def failure_code(message: str) -> str:
         "planner_error",
         "approach_failed",
         "unreachable",
+        "grounding_unavailable",
     }
     return next((part for part in reversed(parts) if part in allowed), "operation_failed")

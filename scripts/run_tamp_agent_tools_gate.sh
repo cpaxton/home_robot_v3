@@ -215,7 +215,7 @@ ROBOCASA_TOOL_CALLS='[{"name":"scene_tasks","arguments":{}},{"name":"plan_pick_p
 
 if items_has counter-kinematic; then
     run_item robocasa_counter_kinematic robocasa_counter_kinematic "$TIMEOUT" \
-        uv run python scripts/scripted_sim_pick_place.py \
+        env EMET_GT_TEACHER=1 uv run python scripts/scripted_sim_pick_place.py \
         --start-sim --sim configs/sim/robocasa_pick_place_rby1.yaml --manip-mode kinematic \
         --object obj --receptacle cab \
         --tool-calls-json "$ROBOCASA_TOOL_CALLS"

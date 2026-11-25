@@ -466,6 +466,10 @@ def main(
             if hint is not None:
                 zmq_environment = dict(zmq_environment)
                 zmq_environment["spawn_hint_xyt"] = hint
+            object_info = objects_info.get("obj_main") or next(iter(objects_info.values()), None)
+            if isinstance(object_info, dict) and object_info.get("cat"):
+                zmq_environment = dict(zmq_environment)
+                zmq_environment["object_category"] = str(object_info["cat"])
         if use_robocasa and scene_model is not None and zmq_environment is not None:
             try:
                 import importlib

@@ -112,14 +112,25 @@ def scenario_from_attempt(
     goal: dict[str, Any] = {
         "kind": "ee_target",
         "ee_target_pos": attempt.get("target_xyz"),
-        "object": ctx.get("object_body"),
-        "receptacle": ctx.get("receptacle_body"),
+        "object": ctx.get("object_query") or ctx.get("object"),
+        "receptacle": ctx.get("receptacle_query") or ctx.get("receptacle"),
     }
     meta: dict[str, Any] = {
         "failure_mode": attempt.get("failure_mode") or ctx.get("failure_mode") or "",
         "source": "recorded",
+        "privileged": bool(ctx.get("privileged")),
     }
-    meta.update({k: v for k, v in ctx.items() if k not in ("op", "object_body", "receptacle_body", "failure_mode")})
+    if ctx.get("privileged"):
+        meta["object_body"] = ctx.get("object_body")
+        meta["receptacle_body"] = ctx.get("receptacle_body")
+    meta.update({
+        k: v
+        for k, v in ctx.items()
+        if k not in (
+            "op", "object_query", "receptacle_query", "object_body", "receptacle_body",
+            "failure_mode", "privileged",
+        )
+    })
     return ScenarioRecord(
         initial_voxel=initial_voxel if initial_voxel is not None else {"kind": "voxel_map_2d_unavailable"},
         goal=goal,

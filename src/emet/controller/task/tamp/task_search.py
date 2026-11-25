@@ -13,6 +13,7 @@ Grasp branches are ranked by offline position-IK feasibility before execution.
 from __future__ import annotations
 
 import copy
+import os
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -37,6 +38,8 @@ class TaskPlan:
     steps: list[TaskPlanStep]
     object_body: str
     receptacle_body: str | None
+    object_query: str = ""
+    receptacle_query: str = ""
     chosen_grasp_index: int | None = None
     grasp_scores: list[tuple[int, float, bool]] = field(default_factory=list)
     expanded_nodes: list[str] = field(default_factory=list)
@@ -234,6 +237,8 @@ def plan_pick_place(
             steps=[],
             object_body=object_gt_body,
             receptacle_body=receptacle_gt_body,
+            object_query=object_query,
+            receptacle_query=receptacle_query,
             success=False,
             message="object_not_in_gt",
             expanded_nodes=expanded,
@@ -273,8 +278,9 @@ def plan_pick_place(
                 clear.extend(batch_clear)
             logger.info(f'TAMP approach search: clear={sum(clear)}/{len(clear)}')
         except (RuntimeError, TimeoutError, ValueError, KeyError) as exc:
-            return TaskPlan([], object_gt_body, receptacle_gt_body, success=False,
-                            message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
+            return TaskPlan([], object_gt_body, receptacle_gt_body,
+                            object_query=object_query, receptacle_query=receptacle_query,
+                            success=False, message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
@@ -324,6 +330,8 @@ def plan_pick_place(
             steps=[],
             object_body=object_gt_body,
             receptacle_body=receptacle_gt_body,
+            object_query=object_query,
+            receptacle_query=receptacle_query,
             grasp_scores=scores,
             success=False,
             message=failure_reason,
@@ -356,6 +364,8 @@ def plan_pick_place(
         steps=steps,
         object_body=object_gt_body,
         receptacle_body=receptacle_gt_body,
+        object_query=object_query,
+        receptacle_query=receptacle_query,
         chosen_grasp_index=int(chosen),
         grasp_scores=scores,
         expanded_nodes=expanded,
@@ -448,11 +458,15 @@ def execute_task_plan(
 
             context = {
                 "op": op,
-                "object_body": plan.object_body,
-                "receptacle_body": plan.receptacle_body,
+                "object_query": plan.object_query,
+                "receptacle_query": plan.receptacle_query,
                 "failure_mode": attempt.get("failure_mode"),
                 "message": code,
             }
+            if os.environ.get("EMET_GT_TEACHER", "").strip().lower() in {"1", "true", "yes"}:
+                context["privileged"] = True
+                context["object_body"] = plan.object_body
+                context["receptacle_body"] = plan.receptacle_body
             record_manip_attempt(attempt, context=context)
             # Also seed the ever-growing case library for RL-WBC (scenario record).
             record_scenario(scenario_from_attempt(attempt, context=context))
