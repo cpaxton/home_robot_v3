@@ -15,7 +15,12 @@ import numpy as np
 import pytest
 
 from emet.controller.manipulation.failure_dataset import load_manipulation_attempts
-from emet.controller.manipulation.wbc_feedforward import FeedforwardModel, apply_bias, fit_feedforward
+from emet.controller.manipulation.wbc_feedforward import (
+    FeedforwardCalibration,
+    FeedforwardModel,
+    apply_bias,
+    fit_feedforward,
+)
 
 
 def _record(target, observed, *, robot_id="rby1", mode="tracking_failed", joints=("torso_joint1", "torso_joint2")):
@@ -40,7 +45,7 @@ def _write(tmp_path: Path, records: list[dict]) -> Path:
 def test_fit_recovers_steady_state_bias(tmp_path):
     path = _write(tmp_path, [_record([1.0, 0.5], [0.6, 0.5]), _record([1.2, 0.5], [0.8, 0.5])])
     attempts = load_manipulation_attempts(path)
-    model = fit_feedforward(attempts, embodiment="rby1", min_samples=2)
+    model = fit_feedforward(attempts, embodiment="rby1", min_samples=2, cluster_distance=0.3)
 
     assert model.samples == 2
     assert model.joint_bias["torso_joint1"] == pytest.approx(0.4)
@@ -49,7 +54,7 @@ def test_fit_recovers_steady_state_bias(tmp_path):
 
 def test_fit_fails_closed_without_enough_samples(tmp_path):
     path = _write(tmp_path, [_record([1.0, 0.5], [0.6, 0.5])])
-    with pytest.raises(ValueError, match="no joint had enough"):
+    with pytest.raises(ValueError, match="no posture had enough"):
         fit_feedforward(load_manipulation_attempts(path), min_samples=2)
 
 
@@ -58,13 +63,21 @@ def test_fit_excludes_implausible_outlier(tmp_path):
         tmp_path,
         [_record([1.0, 0.5], [0.0, 0.5]), _record([1.2, 0.5], [0.2, 0.5])],
     )
-    model = fit_feedforward(load_manipulation_attempts(path), min_samples=2, max_abs_bias=0.5)
+    model = fit_feedforward(
+        load_manipulation_attempts(path), min_samples=2, max_abs_bias=0.5, cluster_distance=0.3
+    )
     assert "torso_joint1" not in model.joint_bias
     assert model.joint_bias["torso_joint2"] == pytest.approx(0.0)
 
 
 def test_model_round_trips_and_biases_by_joint_name(tmp_path):
-    model = FeedforwardModel(embodiment="rby1", joint_bias={"torso_joint1": 0.3}, samples=2)
+    model = FeedforwardModel(
+        embodiment="rby1",
+        calibrations=(
+            FeedforwardCalibration(reference_q={"torso_joint1": 0.0}, joint_bias={"torso_joint1": 0.3}),
+        ),
+        samples=2,
+    )
     path = model.save(tmp_path / "ff.json")
     loaded = FeedforwardModel.load(path)
     assert loaded.joint_bias == {"torso_joint1": 0.3}
@@ -72,7 +85,10 @@ def test_model_round_trips_and_biases_by_joint_name(tmp_path):
 
 
 def test_apply_bias_clips_to_joint_limits():
-    model = FeedforwardModel(embodiment="rby1", joint_bias={"j": 0.5})
+    model = FeedforwardModel(
+        embodiment="rby1",
+        calibrations=(FeedforwardCalibration(reference_q={"j": 1.0}, joint_bias={"j": 0.5}),),
+    )
     biased = apply_bias([1.0], ["j"], model, lower=[0.0], upper=[1.2])
     np.testing.assert_allclose(biased, [1.2])
 
@@ -107,7 +123,13 @@ def test_executor_applies_feedforward_to_the_final_settle(monkeypatch):
     ex.ik_tol_m, ex.ik_max_iters, ex.traj_dt, ex.traj_steps = 0.01, 1, 0.05, 2
     ex.manip_planner, ex.rrt_max_iter, ex._collision, ex.visualizer = "linear", 1, None, None
     ex._last_cmd_q = None
-    ex._feedforward = FeedforwardModel(embodiment="rby1", joint_bias={"torso_joint1": 0.2}, samples=1)
+    ex._feedforward = FeedforwardModel(
+        embodiment="rby1",
+        calibrations=(
+            FeedforwardCalibration(reference_q={"torso_joint1": -0.25}, joint_bias={"torso_joint1": 0.2}),
+        ),
+        samples=1,
+    )
     ex._joint_position_bounds = lambda: (np.full(2, -np.inf), np.full(2, np.inf))
     ex._sync_qpos_from_robot = lambda: True
     ex._sleep = lambda seconds: clock.__setitem__("now", clock["now"] + seconds)
@@ -126,9 +148,29 @@ def test_executor_applies_feedforward_to_the_final_settle(monkeypatch):
 def test_bias_is_skipped_outside_the_calibrated_posture():
     model = FeedforwardModel(
         embodiment="rby1",
-        joint_bias={"j": 0.5},
-        reference_q={"j": 1.0},
+        calibrations=(FeedforwardCalibration(reference_q={"j": 1.0}, joint_bias={"j": 0.5}),),
         max_joint_distance=0.2,
     )
     np.testing.assert_allclose(apply_bias([1.1], ["j"], model), [1.6])
     np.testing.assert_allclose(apply_bias([2.0], ["j"], model), [2.0])
+
+def test_posture_table_selects_the_nearest_calibration():
+    model = FeedforwardModel(
+        embodiment="rby1",
+        calibrations=(
+            FeedforwardCalibration(reference_q={"j": 0.0}, joint_bias={"j": 0.2}),
+            FeedforwardCalibration(reference_q={"j": 1.0}, joint_bias={"j": 0.5}),
+        ),
+        max_joint_distance=0.15,
+    )
+    np.testing.assert_allclose(apply_bias([0.05], ["j"], model), [0.25])
+    np.testing.assert_allclose(apply_bias([0.95], ["j"], model), [1.45])
+    np.testing.assert_allclose(apply_bias([2.0], ["j"], model), [2.0])
+
+
+def test_schema1_model_loads_as_one_calibration():
+    model = FeedforwardModel.from_dict(
+        {"schema": 1, "embodiment": "rby1", "joint_bias": {"j": 0.3}, "reference_q": {"j": 0.0}}
+    )
+    assert len(model.calibrations) == 1
+    assert model.calibrations[0].joint_bias == {"j": 0.3}
