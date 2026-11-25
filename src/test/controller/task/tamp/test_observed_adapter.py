@@ -806,14 +806,15 @@ def test_camera_clock_calibration_change_invalidates_plan_before_commands(system
     assert not result['data']['execution_started'] and system.calls == []
 
 
-def test_unstarted_tracking_failure_resets_source_and_requires_fresh_plan(system):
+@pytest.mark.parametrize("reason", ["geometry_tracking_no_match", "approximate_surface_overlap_lost"])
+def test_unstarted_tracking_failure_resets_source_and_requires_fresh_plan(system, reason):
     snapshot = system.source.snapshot
     lost = [True]
     resets = []
 
     def read(obj, support):
         if lost[0]:
-            raise ObservationUnavailable('geometry_tracking_no_match')
+            raise ObservationUnavailable(reason)
         return snapshot(obj, support)
 
     def reset():
@@ -823,7 +824,7 @@ def test_unstarted_tracking_failure_resets_source_and_requires_fresh_plan(system
     system.source.snapshot = read
     system.source.invalidate = reset
     failed = plan(system)
-    assert failed['code'] == 'geometry_tracking_no_match'
+    assert failed['code'] == reason
     assert failed['data']['execution_started'] is False
     assert failed['data']['perception_reset'] is True
     assert failed['recovery'] == 'replan'
@@ -1497,3 +1498,25 @@ def test_preplanning_view_change_bounds_approximate_rotation(system, approximate
     else:
         with pytest.raises(ObservationUnavailable, match='scene_changed_replan'):
             ObservedNativeAdapter._require_same_initial(first, second)
+
+
+def test_approximate_topdown_grasp_uses_support_to_correct_visible_surface_height_bias(system):
+    from emet.controller.task.tamp.observed_candidates import CalibratedGrasp, candidates_from_supports
+
+    _, snapshot, _, _ = support_snapshot(system)
+    transform = snapshot.frame.payload.pose.world_from_object.copy()
+    transform[2, 3] = .06
+    payload = replace(snapshot.frame.payload, construction='approximate_observed_box',
+        pose=replace(snapshot.frame.payload.pose, world_from_object=transform))
+    frame = replace(snapshot.frame, payload=payload,
+        observed_bounds_world=np.array([[.18, -.02, .04], [.22, .02, .08]]))
+    snapshot = replace(snapshot, frame=frame, source_support_contact=snapshot.support_contact,
+        source_support_bounds=snapshot.support_bounds)
+    calibration = np.diag([1., -1., -1., 1.])
+    calibration[2, 3] = .007  # Robot hand/tool offset is still honored.
+    grasp = CalibratedGrasp(calibration, (0., 0., 1.), (('opening', 0.),), world_aligned=True)
+    (candidate,) = candidates_from_supports(snapshot, [grasp], limit=1)
+    plane = snapshot.source_support_contact.patch.plane
+    floor = transform[:2, 3] @ plane[:2]+plane[2]
+    assert candidate.grasp[1][0][2] == pytest.approx((floor+.08)/2+.007)
+    assert np.array_equal(snapshot.frame.payload.pose.world_from_object, transform)

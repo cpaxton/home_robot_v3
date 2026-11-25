@@ -589,8 +589,12 @@ def test_attachment_prior_must_match_across_camera_views():
                         'wrist': replace(measured, foreground_mask=mask)}, scene_epoch='scene')
 
 
-@pytest.mark.parametrize('lost', [False, True])
-def test_carry_prediction_uses_capture_tool_motion_and_checks_gripper_aperture(monkeypatch, lost):
+@pytest.mark.parametrize('measured_value,lost,reference', [
+    (.022, False, (.022, -.022)), (.0175, False, (.022, -.022)),
+    (.012, True, (.022, -.022)), (.030, True, (.022, -.022)),
+    (.020, False, (.030, -.024)),
+])
+def test_carry_prediction_uses_capture_tool_motion_and_checks_gripper_aperture(monkeypatch, measured_value, lost, reference):
     from types import SimpleNamespace
 
     import mujoco
@@ -612,14 +616,13 @@ def test_carry_prediction_uses_capture_tool_motion_and_checks_gripper_aperture(m
     scene.samples = {'held': SimpleNamespace(robot_after=robot)}
     scene.diagnostics = {}
     scene.set_carry_prediction(np.eye(4), {'left': .012, 'right': -.012},
-                               measured_gripper={'left': .022, 'right': -.022})
+                               measured_gripper={'left': reference[0], 'right': reference[1]})
     assert waits[0]['after'] == 10.1 and waits[0]['after'] > old_cap.latest
     cap = CaptureInterval('moving', 10.3, 10.301, 10.31, 'clock')
     measured, _ = view(cap)
     ee = np.eye(4)
     ee[0, 3] = .1
-    robot = SimpleNamespace(joints=np.array([.012, -.012]) if lost else np.array([.022, -.022]),
-                            world_from_ee=ee)
+    robot = SimpleNamespace(joints=np.array([measured_value, -measured_value]), world_from_ee=ee)
     sample = SimpleNamespace(capture=cap, observations={'head': measured}, robot_after=robot)
     scene.read_sample, scene.epoch, scene.initial_views = lambda _: sample, 'scene', None
     monkeypatch.setattr(live, 'synchronized_views', lambda sample: sample.observations)
@@ -685,3 +688,38 @@ def test_live_tracking_excludes_capture_aligned_self_returns_with_object_appeara
     assert result.foreground_mask.sum() >= 25
     assert not np.any(result.foreground_mask & (measured.world[..., 0] > 0.))
     assert result.capture is cap
+
+
+def test_approximate_reference_initialization_does_not_claim_rigid_observability():
+    from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+    cap = CaptureInterval('seed', 10., 10.001, 10.01, 'clock')
+    reference, mask = view(cap)
+    model, pose = registration_surface(ObservedGeometry('seed', 'head', 10., reference.world[mask], .002),
+        box_padding_m=.01)
+    tracker = MultiViewRgbdTracker(model, reference_view='head', reference=reference, mask=mask,
+        scene_epoch='scene', object_ref='item', initial_poses=pose[None], clock=lambda: 10.1)
+    assert not tracker.latest.fit.translation_observable
+    assert not tracker.latest.fit.orientation_observable
+    assert tracker.latest.fit.conditioning == 'approximate_reference_orientation'
+
+
+def test_single_view_tracker_uses_the_same_approximate_geometry_policy():
+    from emet.controller.manipulation.moving_rgbd_tracking import MovingRgbdTracker
+    from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+    cap = CaptureInterval('seed', 10., 10.001, 10.01, 'clock')
+    reference, mask = view(cap)
+    model, pose = registration_surface(ObservedGeometry('seed', 'head', 10., reference.world[mask], .002),
+        box_padding_m=.01)
+    clock = [10.1]
+    tracker = MovingRgbdTracker(model, object_ref='item', observation_id='seed', received_monotonic=10.01,
+        scene_epoch='scene', rgb=reference.rgb, depth=reference.depth, world=reference.world, mask=mask,
+        initial_poses=pose[None], clock=lambda: clock[0])
+    clock[0] = 10.3
+    current, _ = view(CaptureInterval('fresh', 10.2, 10.201, 10.21, 'clock'), shift=(.002, 0., 0.))
+    result = tracker.update(current.rgb, current.depth, current.world, observation_id='fresh',
+        received_monotonic=10.21, scene_epoch='scene')
+    assert result.fit.conditioning == 'approximate_reference_orientation'
+    assert result.fit.observation_ids == ('fresh',)
+    assert not result.fit.translation_observable and not result.fit.orientation_observable

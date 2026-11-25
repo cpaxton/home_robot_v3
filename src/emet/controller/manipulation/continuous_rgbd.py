@@ -160,7 +160,7 @@ class ContinuousRgbdSource:
                     self._rejected_packet = TrackedRgbdCapture(previous.fit, tuple(sorted(views.items())))
                     if (str(error) not in {
                         "geometry_tracking_no_match", "geometry_tracking_unobservable",
-                        "geometry_tracking_budget_exhausted", "moving_geometry_ambiguous",
+                        "geometry_tracking_budget_exhausted", "moving_geometry_ambiguous", "approximate_surface_overlap_lost",
                     } or self.consecutive_fit_rejections >= self.max_transient_fit_rejections):
                         raise
                     # Reject the new fit, not the last actual measurement. Its

@@ -32,6 +32,11 @@ PANDA_PORT = json.loads(PORTS.read_text())["robocasa365"]
 CASES = {PANDA_PORT[split]["case"]: PANDA_PORT[split] for split in ("development", "held_out")}
 
 
+def canonical_transfer_turns(object_name):
+    return ((f"Move the {object_name} from the counter to the sink using pick_place.",
+        "pick_place", {"object_name": object_name, "receptacle_name": "sink"}),)
+
+
 def scripted_turns(object_name):
     arguments = {"object_name": object_name, "receptacle_name": "sink"}
     return (
@@ -414,8 +419,21 @@ def run(args, *, observed_native_factory=None):
             raise ValueError("provide a single observed transfer factory")
         from emet.eval.pandaomron_live_transfer import panda_transfer_factory
 
+        grounding_options = {}
+        if getattr(args, 'grounding_endpoint', None):
+            from emet.controller.task.tamp.visual_grounding import VisualTransferGrounder
+
+            grounding_options = {
+                'grounder_factory': lambda allowed: VisualTransferGrounder(
+                    endpoint=args.grounding_endpoint, model=args.grounding_model,
+                    output=output/'grounding', can_query=allowed),
+                # This runner owns reset to the benchmark's empty-gripper
+                # initial state. It is not an agent-provided load assertion.
+                'initial_payload_state': 'empty',
+            }
         observed_native_factory, grounding_mode = panda_transfer_factory(
             args.observed_profile, output / "robot-only.xml", CASES[args.case]["object_name"], live_scenes,
+            **grounding_options,
         )
     case_args = ["--case-spec", str(args.case_spec.resolve())] if getattr(args, "case_spec", None) else []
     probe_args = ["--probe-calibration", str(args.probe_calibration.resolve())] if args.probe_calibration else []
@@ -465,7 +483,8 @@ def run(args, *, observed_native_factory=None):
             if any(key in session for key in ("sim_object_placements", "sim_articulations", "mujoco_ground_truth")):
                 raise RuntimeError("benchmark client received simulator scene metadata")
             object_name = CASES[args.case]["object_name"]
-            turns = scripted_turns(object_name)
+            turns = (canonical_transfer_turns(object_name) if getattr(args, 'grounding_endpoint', None)
+                     else scripted_turns(object_name))
             prompt = (
                 f"Pick up the {object_name} from the counter and place it inside the sink. Keep the base stationary."
             )
@@ -623,6 +642,8 @@ if __name__ == "__main__":
     parser.add_argument("--probe-calibration", type=Path)
     parser.add_argument("--diagnostic-torso-offset-m", type=float, default=0.0)
     parser.add_argument("--sim-pythonpath")
+    parser.add_argument("--grounding-endpoint", help="Visual grounding through the shared observed factory, separate from outer tool selection.")
+    parser.add_argument("--grounding-model", help="Visual model used by --grounding-endpoint.")
     parser.add_argument("--model-endpoint")
     parser.add_argument("--model")
     parser.add_argument("--max-tokens", type=int, choices=range(16, 513), metavar="16..512", default=128)
@@ -647,6 +668,10 @@ if __name__ == "__main__":
         args.open_loop_pick = True
     if args.open_loop_transfer:
         args.open_loop_pick = True
+    if bool(args.grounding_endpoint) != bool(args.grounding_model):
+        parser.error('--grounding-endpoint and --grounding-model must be supplied together')
+    if args.grounding_endpoint and (args.observed_profile is None or args.open_loop_pick):
+        parser.error('--grounding-endpoint requires --observed-profile and the shared tool path')
     if args.open_loop_pick and args.observed_profile is None:
         parser.error('--open-loop-pick requires --observed-profile')
     if not 0 <= args.diagnostic_torso_offset_m <= 0.01:

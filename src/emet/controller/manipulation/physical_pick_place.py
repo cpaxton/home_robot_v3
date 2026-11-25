@@ -611,7 +611,8 @@ class PhysicalPickPlaceExecutor:
                         self.collision._planning_gripper_contact_corridor = True
                     result = plan_arm_joint_path(self.model, self.data, joint_names=names,
                         q_start=before[addresses], q_goal=goal, collision=self.collision,
-                        planner='linear', step_size=.001, goal_tolerance=.0001)
+                        planner='linear', step_size=.001, goal_tolerance=.0001,
+                        start_bound_slack=.0005 if probe else 0.)
                 finally:
                     self.collision._planning_gripper_contact_corridor = previous
                 if result.success and probe:
@@ -641,7 +642,7 @@ class PhysicalPickPlaceExecutor:
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
         if not result.success:
-            logger.warning('Gripper close rejected: %s; geometry=%s; reason=%s', result.reason,
+            logger.warning('Gripper close rejected: %s; detail=%s; geometry=%s; reason=%s', result.reason, result.detail,
                            getattr(self.collision, 'last_blocked_geom', None),
                            getattr(self.collision, 'last_reason', None))
             detail = f':{result.detail}' if result.detail else ''

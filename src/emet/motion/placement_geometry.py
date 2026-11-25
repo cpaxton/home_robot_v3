@@ -31,7 +31,9 @@ def bounds_array(value):
 
 def box_corners(bounds):
     lo, hi = bounds_array(bounds)
-    return (lo + hi) / 2 + CORNERS * (hi - lo) / 2
+    # Selecting endpoints avoids roundoff that can put a reconstructed corner
+    # microscopically inside the input bounds and reject its own measured points.
+    return np.where(CORNERS < 0, lo, hi)
 
 
 from emet.motion.geometry_sources import OBSERVED_SCENE_SOURCES

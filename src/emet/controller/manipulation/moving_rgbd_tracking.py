@@ -9,7 +9,7 @@ are candidate associations, not calibrated identity or execution certificates.
 
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.ndimage import binary_erosion
@@ -17,7 +17,7 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
-from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_geometry
+from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_approximate_translation, fit_geometry
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 
 
@@ -220,6 +220,12 @@ class MovingRgbdTracker:
             initial_poses=initial_poses,
             max_starts=max_starts, max_points=max_fit_points, max_residual_m=self.max_residual_m,
         )
+        if model.construction == 'approximate_observed_box':
+            # Registering a reference to itself establishes coordinates, not
+            # measured pose observability. Preserve that distinction at seed
+            # time as well as subsequent approximate updates.
+            fit = replace(fit, nullspaces=tuple(np.eye(6) for _ in fit.poses),
+                          conditioning='approximate_reference_orientation')
         self._require_fit(fit)
         self._require_time(received_monotonic)
         self.latest = MovingMaskFit(
@@ -301,16 +307,22 @@ class MovingRgbdTracker:
         centers = previous.fit.poses[:, :3, 3]
         displacement = self.speed * dt + self.margin
         mask = self._candidate_mask(rgb, depth, world, centers=centers, displacement=displacement)
-        fit = fit_geometry(
-            world[mask],
-            self.model,
-            object_ref=self.object_ref,
-            observation_ids=(observation_id,),
-            received_monotonic=received_monotonic,
-            initial_poses=previous.fit.poses[:12],
-            max_evaluations=self.max_evaluations,
-            max_starts=self.max_starts, max_points=self.max_fit_points, max_residual_m=self.max_residual_m,
-        )
+        if self.model.construction == 'approximate_observed_box':
+            fit = fit_approximate_translation(world[mask], self.model,
+                prior=previous.fit.poses[0], object_ref=self.object_ref,
+                observation_ids=(observation_id,), received_monotonic=received_monotonic,
+                max_residual_m=min(.01, max(.003, self.max_residual_m)), max_points=self.max_fit_points)
+        else:
+            fit = fit_geometry(
+                world[mask],
+                self.model,
+                object_ref=self.object_ref,
+                observation_ids=(observation_id,),
+                received_monotonic=received_monotonic,
+                initial_poses=previous.fit.poses[:12],
+                max_evaluations=self.max_evaluations,
+                max_starts=self.max_starts, max_points=self.max_fit_points, max_residual_m=self.max_residual_m,
+            )
         self._require_fit(fit)
         if np.any(cKDTree(centers).query(fit.poses[:, :3, 3])[0] > displacement):
             raise ObservationUnavailable("moving_mask_motion_bound_exceeded")

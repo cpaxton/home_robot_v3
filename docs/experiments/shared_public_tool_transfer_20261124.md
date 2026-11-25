@@ -30,6 +30,16 @@ failures. There is no model-only or frozen success-rate claim.
 | pear-v13 | 28 | `geometry_tracking_no_match` |
 | pear-v14 | 0 | `collision` |
 | pear-v15 | 27 | `geometry_tracking_no_match` |
+| pear-v16 | 55 | `operation_failed` |
+| pear-v17 | 41 | `payload_not_retained` |
+| pear-v18 | 61 | `operation_failed` |
+| pear-v19 | 59 | `approximate_surface_overlap_lost` |
+| pear-v20 | 38 | `joint_bounds` |
+| pear-v21-cli | 38 | `joint_bounds` |
+| pear-v22-cli | 64 | `payload_not_retained` |
+| pear-v23-cli | 65 | `payload_not_retained` |
+| pear-v24-cli | 78 | `payload_not_retained` |
+| pear-v25-cli | 44 | `visual_effect_unknown` |
 
 Changes driven by these controls:
 
@@ -85,3 +95,144 @@ The evidence therefore supports a structural next step: separate bounded
 approximate task geometry from mandatory continuous rigid registration, with
 observed grasp/lift/place verification at action boundaries. Do not keep
 increasing residual limits or score this as a model reasoning failure.
+
+## Follow-up: approximate geometry instead of mandatory rigid fits
+
+The shared multiview tracker now treats `approximate_observed_box` as a task
+estimate. It first estimates translation from majority measured surface
+correspondences, retaining reference orientation as a convention. If a new
+camera sees a previously unobserved face, a bounded approximate-envelope
+association may supply a translation estimate instead. It requires fresh
+appearance-associated, self-filtered depth compatible with the approximate
+volume; it does not complete a hidden shape or declare a unique rigid pose.
+
+The surface route uses at least 60% correspondence within the configured
+residual band, a 30 mm 99th-percentile distance and 60 mm hard cap. The envelope
+route projects translation into the interval compatible with visible extent,
+requires less than 20 mm correction per reference axis, and limits envelope
+residual to 10 mm at the 95th percentile / 30 mm maximum. These are declared
+approximation policies, not calibrated confidence bounds. Diagnostics retain
+association method, true surface-overlap fraction, maximum surface distance,
+RMS scope, original capture identity and time. Neither translation nor
+orientation observability is claimed by this estimator. Exact geometry keeps
+its rigid-fit path. No stale pose is republished as a fresh measurement.
+
+A rejected estimate retains the existing bounded transient-rejection policy;
+it cannot extend evidence age. Planning failures discard the stopped track and
+require fresh grounding. Execution failures do not silently restart perception
+or restore a known-empty payload state.
+
+Native progress with live Qwen grounding and scripted public-tool selection:
+
+- `pear-v16`: 55 commands, completed pregrasp and began descent; stopped on
+  association loss. No pickup verified.
+- `pear-v17`: completed pregrasp/descent/closure, then stopped during lift when
+  the measured retention bound reached 20.6 mm against a 20 mm limit. The
+  independent scorer recorded 37 mm lift with both pads, below pickup criteria.
+- `pear-v18`: explicit simulation retention allowance 35 mm, then measured
+  gripper-aperture loss during lift. No pickup verified.
+- `pear-v19`: approximate support-to-visible-top grasp height, then association
+  loss at closure. No pickup verified.
+- `pear-v20`: bounded-envelope association active; gripper closure refused for
+  measured joint bounds. Detailed joint witnesses were added to closure logs.
+
+Approximate top-down candidates now estimate interior height halfway between
+measured support and observed object top, then apply the robot's calibrated
+hand/tool offset. A visible-surface median biased the grasp toward the top.
+This modifies proposals only: native route checks and observed lift/placement
+verification remain required. The 35 mm retention experiment is a reported
+simulation profile setting, not a changed hardware default.
+
+The benchmark CLI now supports `--grounding-endpoint` and `--grounding-model`
+with `--observed-profile`. In scripted mode it calls canonical `pick_place`
+once through the production CHAT registry. `--model-endpoint` / `--model`
+remain separate outer-supervisor options. Runtime grounding rejects CAD-bearing
+profiles and cannot be combined with the alternate open-loop diagnostic.
+Example, after exporting a robot-only profile without semantic regions:
+
+```sh
+python scripts/eval_pandaomron_sink_agent.py FIXTURE NEW_OUTPUT \
+  --case expansion-pear --case-spec FROZEN_CASE.json \
+  --observed-profile ROBOT_ONLY_PROFILE.json \
+  --grounding-endpoint http://127.0.0.1:8765/v1 \
+  --grounding-model Qwen/Qwen3.5-9B --port-offset FREE_OFFSET
+```
+
+Use the existing native simulator dependency path and software EGL environment
+recorded by the retained drivers. These are development integration controls,
+not a Codex/Qwen success-rate qualification. Full transfer, native drawer,
+Stretch and frozen multi-episode qualification remain outstanding.
+
+The first normal-CLI run (`pear-v21-cli`) reproduced the gripper refusal with
+an actionable witness: finger joint 1 was at 0.040105 m for a 0.040000 m upper
+limit. The existing bound tolerance was 0.1 mm, so this exceeded it by only
+0.005 mm. Explicit simulated contact-terminated closure now permits up to
+0.5 mm of measured start overrun on a linear inward path. Goals keep nominal
+bounds, the actual measured start is collision-checked, and the path cannot
+move farther outside the limit. Ordinary/hardware closure keeps zero additional
+slack. The simulation receipt reports this start-bound allowance. Tests cover
+actual-start checking, monotonic return, oversized overruns, outward goals and
+colliding starts. No joint reading is clipped or rewritten.
+
+The shared box-corner helper also preserves input endpoints exactly; its old
+midpoint reconstruction could shrink a bound by floating-point roundoff and
+reject points used to construct that same measured envelope.
+
+Validation after these changes: **738 related tests passed**, with two existing
+dependency warnings; Ruff and whitespace checks pass. This includes stale-age
+protection under approximate association rejection, planning-only perception
+reset, explicit public failure codes, new-face volume association, rejection of
+a stationary object under an 80 mm moving-tool prior, and generic grasp-height
+proposal behavior. Native qualification is recorded separately from unit tests.
+
+`pear-v22-cli` completed a roughly 90 mm two-pad lift; the independent scorer
+reported retained pickup, but a fixed 4 mm aperture-change condition stopped
+the observed controller before it accepted lift. The explicit simulation carry
+condition now permits seating by half the original remaining finger travel,
+clamped to 4–10 mm. It still refuses jaws near the empty-close goal and larger
+changes, and requires fresh depth. The actual per-finger tolerance is recorded.
+
+`pear-v23-cli` completed **observed lift verification** and began preplace.
+Its maximum two-pad lift was about 98 mm. During preplace the grip continued
+seating/closing and the carry condition stopped the task; the final scorer no
+longer confirmed retained pickup. This is verified grasp/lift progress, not a
+completed sink transfer. No physical score or placement verification was relaxed.
+The next control uses a narrower valid finite gripper target (6 mm per finger,
+instead of 12 mm) to test closure reserve; that profile is retained separately.
+
+`pear-v24-cli` retained roughly 84 mm two-pad pickup in the scorer but stopped
+on asymmetric per-finger seating. The seating budget now bounds total absolute
+jaw travel, retaining per-jaw blocked-empty checks. This permits an object to
+center without granting more total motion. The associated regression includes
+asymmetric centering and still rejects empty or excessive travel.
+
+`pear-v25-cli` reached about 77 mm maximum two-pad lift but lost the object
+before observed lift verification completed; the jaws approached the finite
+empty-close goal and the scorer no longer found retained pickup. This loss
+must not be hidden by further tolerance changes. No complete sink transfer
+passed in this batch. The best shared-controller progress remains v23's
+observed lift verification and start of preplace.
+
+### Next task-level gap
+
+The shared grounder currently deliberately requests only regions
+(`estimate_grasp=False`, `estimate_grasp_site=False`). Thus these controls still
+use the robot's calibrated fixed top-down grasp. The existing magnified VLM
+refiner can already propose a solid body site, closing direction and height,
+and shared `GraspProposal` / `calibrate_observed_grasps` primitives already exist.
+The next implementation should connect those proposals to the common observed
+candidate generator, with capture/frame binding, depth validation and native
+hand/tool calibration. Codex-provided richer grasp hints must reach that same
+seam. Do not add another Panda executor or assume a CAD shape. Then repeat
+matched native controls before broader task/robot qualification.
+
+Single-view and multiview tracking now call the same approximate estimator;
+there is no Panda-specific tracking policy. Reference initialization also marks
+all pose axes unqualified: fitting a reference to itself establishes a coordinate
+convention, not measured rigid observability.
+
+Final checkpoint validation: **743 related tests passed**, with two existing
+dependency warnings. Ruff and whitespace checks passed. The complete test log
+and all native reports, requests, decisions, sensor images and failure witnesses
+are retained under the artifact root. This validates the shared integration and
+its refusal semantics; full transfer and frozen benchmark rates remain open.

@@ -350,3 +350,38 @@ def test_escape_probes_vertical_slide_before_gradient_or_random_search():
     prefix = result.waypoints[:result.waypoints.escape_end_index+1]
     assert all(q[0] == 0. for q in prefix)
     assert prefix[-1][1] >= .01
+
+
+def test_explicit_linear_joint_limit_recovery_checks_actual_start_and_preserves_goal_limits():
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody><body>
+        <joint name="finger" type="slide" range="0 .04"/><geom size=".01"/>
+        </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    options = {'joint_names': ('finger',), 'planner': 'linear', 'step_size': .001}
+    start = np.array([.040105])
+    assert not plan_arm_joint_path(model, data, q_start=start, q_goal=np.array([.012]), **options).success
+    seen = []
+
+    class Geometry:
+        def configuration_collides(self, model, data):
+            seen.append(float(data.qpos[0]))
+            return False
+
+    result = plan_arm_joint_path(model, data, q_start=start, q_goal=np.array([.012]),
+        collision=Geometry(), start_bound_slack=.0005, **options)
+    assert result.success
+    assert seen[0] == start[0]  # Actual geometry, not a clipped start.
+    assert result.waypoints[0][0] == start[0]
+    assert np.all(np.diff(np.asarray(result.waypoints)[:, 0]) <= 0.)
+    for begin, end in ((.041, .012), (.040105, .041)):
+        assert not plan_arm_joint_path(model, data, q_start=np.array([begin]), q_goal=np.array([end]),
+            start_bound_slack=.0005, **options).success
+
+    class Blocked:
+        def configuration_collides(self, model, data):
+            return True
+
+    assert not plan_arm_joint_path(model, data, q_start=start, q_goal=np.array([.012]),
+        collision=Blocked(), start_bound_slack=.0005, **options).success

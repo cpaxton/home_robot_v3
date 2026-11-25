@@ -234,14 +234,23 @@ class LiveTransferScene:
                 return None
             attachment, addresses, reference, goal = hold
             measured = np.asarray(sample.robot_after.joints)[addresses]
+            # Contact can seat during lift without reaching empty jaws. Keep
+            # a hard blocked-aperture check, and bound seating by half the
+            # original remaining travel (at most 10 mm), rather than rejecting
+            # a 4.1 mm seating change as proven object loss. Bound total jaw
+            # travel: centering can move one finger farther than the other.
+            # This mode remains
+            # explicitly simulation-conditioned and still requires fresh depth.
+            seating = np.minimum(.01, np.maximum(.004, .5*(np.abs(reference)-np.abs(goal))))
             if (np.any(np.abs(measured)-np.abs(goal) < .002) or
-                    np.any(np.abs(measured-reference) > .004)):
+                    np.sum(np.abs(measured-reference)) > np.sum(seating)):
                 self.diagnostics['last_carry_aperture_rejection'] = {
                     'measured': measured.tolist(), 'reference': reference.tolist(), 'goal': goal.tolist(),
-                    'capture_id': sample.capture.observation_id}
+                    'capture_id': sample.capture.observation_id, 'seating_tolerance_m': seating.tolist()}
                 raise ObservationUnavailable('carry_grip_aperture_lost')
             prior = sample.robot_after.world_from_ee @ attachment
             views = {name: replace(view, pose_prior=prior) for name, view in views.items()}
+            self.diagnostics['carry_seating_tolerance_m'] = seating.tolist()
             self.diagnostics['carry_prediction_updates'] = self.diagnostics.get('carry_prediction_updates', 0)+1
         if self.initial_views is not None and sample.capture.observation_id == self.initial_capture_id:
             if not ContinuousRgbdSource._same_packet(self.initial_views, views):

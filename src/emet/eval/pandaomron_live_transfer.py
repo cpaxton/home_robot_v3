@@ -262,6 +262,8 @@ def panda_transfer_factory(profile_path, robot_model_path, object_name, owner, *
             def diagnostic_data(**extra):
                 data = {**normal_data(**extra), "assistance": assistance, "clearance_slack_m": slack,
                         "torso_motion": "held_measured" if lock_torso else "planned"}
+                if contact_close:
+                    data["simulation_gripper_start_bound_slack_m"] = .0005
                 if support_tolerance:
                     data["support_contact_tolerance_m"] = support_tolerance
                 if visual_self:

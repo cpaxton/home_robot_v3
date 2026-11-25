@@ -478,7 +478,15 @@ def test_verification_evidence_rejects_private_or_malformed_values(value):
     assert VerificationFailure.from_data(value) is None
 
 
-@pytest.mark.parametrize("reason", ["moving_tracking_time_budget_exhausted", "moving_tracking_lost_reinitialize"])
+@pytest.mark.parametrize("reason", ["moving_tracking_time_budget_exhausted", "moving_tracking_lost_reinitialize",
+    "approximate_surface_overlap_lost"])
 def test_observed_tracking_failure_preserves_actionable_public_code(reason):
     from emet.controller.task.tamp.api import failure_code
     assert failure_code(reason) == reason
+
+
+@pytest.mark.parametrize('reason', ['carry_grip_aperture_lost', 'carry_grip_aperture_unconfirmed'])
+def test_gripper_feedback_loss_reports_payload_failure_instead_of_generic_operation(reason):
+    from emet.controller.task.tamp.api import failure_code
+
+    assert failure_code(reason) == 'payload_not_retained'

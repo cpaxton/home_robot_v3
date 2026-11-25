@@ -15,7 +15,12 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from emet.controller.manipulation.geometry_models import AxialMeshSurface, PrimitiveModel
-from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_attachment_translation, fit_geometry
+from emet.controller.manipulation.geometry_tracking import (
+    GeometryFit,
+    fit_approximate_translation,
+    fit_attachment_translation,
+    fit_geometry,
+)
 from emet.controller.manipulation.moving_rgbd_tracking import MovingRgbdTracker, _arrays, _frozen
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
@@ -269,6 +274,15 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
                value is not None and not np.array_equal(value, prior) for value in priors):
             raise ObservationUnavailable('multiview_pose_prior_mismatch')
         def fit_points(selected):
+            if self.model.construction == 'approximate_observed_box':
+                candidate = fit_approximate_translation(selected, self.model,
+                    prior=previous.fit.poses[0] if prior is None else prior,
+                    object_ref=self.object_ref, observation_ids=(capture.observation_id,),
+                    received_monotonic=capture.received_monotonic,
+                    max_residual_m=min(.01, max(.003, self.max_residual_m)), max_points=self.max_fit_points)
+                self.last_candidate_fit = candidate
+                self._require_fit(candidate)
+                return candidate
             if prior is not None:
                 candidate = fit_attachment_translation(selected, self.model, prior=prior,
                     object_ref=self.object_ref, observation_ids=(capture.observation_id,),
@@ -294,7 +308,7 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         except ObservationUnavailable as error:
             if not self.single_view_fallback or len(points) < 2 or str(error) not in {
                 'geometry_tracking_no_match', 'geometry_tracking_unobservable',
-                'geometry_tracking_budget_exhausted', 'moving_geometry_ambiguous',
+                'geometry_tracking_budget_exhausted', 'moving_geometry_ambiguous', 'approximate_surface_overlap_lost',
             }:
                 raise
             qualified = []

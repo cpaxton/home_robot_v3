@@ -213,7 +213,8 @@ def test_consumer_waits_for_inflight_fresh_capture_without_latching_old_age():
     stream.close()
 
 
-def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence():
+@pytest.mark.parametrize("failure_reason", ["geometry_tracking_no_match", "approximate_surface_overlap_lost"])
+def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence(failure_reason):
     clock = [10.]
     initial = views(clock[0])
     tracker = TrackingBoundary(initial, lambda: clock[0])
@@ -224,7 +225,7 @@ def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence():
         if failures[0]:
             failures[0] -= 1
             tracker.latest = None  # Real tracker invalidates the candidate before fitting.
-            raise ObservationUnavailable('geometry_tracking_no_match')
+            raise ObservationUnavailable(failure_reason)
         return update(packet, scene_epoch=scene_epoch)
 
     tracker.update = fit
@@ -235,7 +236,7 @@ def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence():
     assert stream.snapshot().fit.capture.received_monotonic == 10.
     assert stream.processed_captures == 1 and stream.rejected_fit_captures == 1
     _, rejected, reason = stream.last_fit_rejection
-    assert reason == 'geometry_tracking_no_match'
+    assert reason == failure_reason
     assert rejected[0][1].capture.earliest == 10.1
     clock[0] = 10.2
     assert stream.poll_once()
@@ -246,7 +247,7 @@ def test_transient_fit_rejection_never_refreshes_or_publishes_failed_evidence():
         clock[0] = stamp
         assert not stream.poll_once()
     clock[0] = 10.5
-    with pytest.raises(ObservationUnavailable, match='geometry_tracking_no_match'):
+    with pytest.raises(ObservationUnavailable, match=failure_reason):
         stream.poll_once()
     with pytest.raises(ObservationUnavailable):
         stream.snapshot()

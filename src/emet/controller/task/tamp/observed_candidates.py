@@ -117,6 +117,21 @@ def candidates_from_supports(
                     # object-axis estimate. Geometry/evidence stays measured.
                     action_frame = np.eye(4)
                     action_frame[:3, 3] = source_pose[:3, 3]
+                    if snapshot.frame.payload.construction == 'approximate_observed_box':
+                        source_contact = snapshot.source_support_contact
+                        observed = snapshot.frame.observed_bounds_world
+                        if source_contact is None or observed is None:
+                            raise ObservationUnavailable('support_geometry_unknown')
+                        xy = source_pose[:2, 3]
+                        bottom = float(xy @ source_contact.patch.plane[:2]+source_contact.patch.plane[2])
+                        top = float(observed[1, 2])
+                        if not bottom < top:
+                            raise ObservationUnavailable('payload_geometry_unknown')
+                        # Visible-surface medians are biased toward the top.
+                        # Use an explicitly approximate interior height from
+                        # the measured support and visible top, retaining the
+                        # robot's calibrated hand/tool offset below.
+                        action_frame[2, 3] = (bottom+top)/2
                     pick = action_frame @ grasp.object_from_ee
                     if grasp.keep_current_heading:
                         shape = getattr(snapshot.frame.payload.pose, 'model', None)

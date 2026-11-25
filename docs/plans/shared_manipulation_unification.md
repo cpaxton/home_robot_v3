@@ -137,3 +137,31 @@ during pregrasp. Pickup remains unverified. The next integration item is to
 separate approximate task geometry from mandatory continuous rigid registration
 and use observed action-boundary verification. Wider fit tolerance alone did
 not solve camera handoff; do not count these controls as task successes.
+
+Approximate-object tracking now has an explicit translation-only estimate path
+and bounded envelope association for newly visible faces; it no longer demands
+rigid 6D surface registration for every camera handoff. It preserves fresh
+measurement identities, marks all pose observability unqualified, and retains
+observed lift/place checks. Native control v17 reached grasp closure and a
+37 mm two-pad lift, then stopped on retention; this does not qualify pickup.
+The common candidate generator estimates approximate grasp height from support
+and visible top. The normal benchmark CLI can bind shared runtime grounding
+and dispatch canonical `pick_place` without a custom injected runner.
+
+Native normal-CLI control v22 achieved approximately 90 mm retained two-pad
+pickup in the independent scorer. Control v23 passed the shared observed lift
+verifier and started preplace, then lost stable grip. Grasp/lift is therefore
+reachable through canonical CHAT tools; sink transfer and repeatability remain
+unqualified. The next task issue is grip stability / adaptive grasp selection,
+rather than the former rigid-registration gate. Explicit simulation carry
+conditioning now allows bounded contact seating while retaining blocked-jaw
+and fresh-depth requirements. Native drawer, protected-object Stretch transfer,
+rich grasp hints and frozen Codex/Qwen qualification are still outstanding.
+
+The follow-up control v25 demonstrated real grip loss (empty-jaw feedback and
+independent scoring agree). Do not weaken retention to label it success. Next,
+connect the existing VLM grasp-site/direction/height proposals and shared
+`GraspProposal` calibration seam to canonical candidates, including Codex hint
+binding. Shared grounding currently requests regions only, so task-level grasp
+adaptation is still missing. Use the same estimator for single/multiview
+sources and the same native executor for every supervisor/robot.

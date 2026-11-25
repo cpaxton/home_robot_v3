@@ -33,10 +33,20 @@ class GeometryFit:
     search_boundary_hit: bool
     search_starts: int = 0
     conditioning: str | None = None
+    surface_overlap_fraction: float | None = None
+    surface_max_distance_m: float | None = None
+    association_method: str | None = None
 
     def __post_init__(self):
-        if self.conditioning not in {None, 'rigid_attachment_orientation'}:
+        if self.association_method not in {None, 'partial_surface_correspondence', 'approximate_envelope'}:
+            raise ValueError('invalid_geometry_fit_association')
+        if self.conditioning not in {None, 'rigid_attachment_orientation', 'approximate_reference_orientation'}:
             raise ValueError('invalid_geometry_fit_conditioning')
+        if ((self.surface_overlap_fraction is None) != (self.surface_max_distance_m is None)
+                or (self.surface_overlap_fraction is not None and (
+                    not np.isfinite([self.surface_overlap_fraction, self.surface_max_distance_m]).all()
+                    or not 0 <= self.surface_overlap_fraction <= 1 or self.surface_max_distance_m < 0))):
+            raise ValueError('invalid_geometry_fit_overlap')
         for name in ("poses", "rms_m"):
             object.__setattr__(self, name, immutable(getattr(self, name)))
         object.__setattr__(self, "nullspaces", tuple(immutable(v) for v in self.nullspaces))
@@ -198,6 +208,11 @@ class GeometryFit:
             "search_starts": self.search_starts,
             "execution_qualified": False,
             "conditioning": self.conditioning,
+            **({"surface_overlap_fraction": self.surface_overlap_fraction,
+                "surface_max_distance_m": self.surface_max_distance_m,
+                "association_method": self.association_method,
+                "rms_scope": ("approximate_envelope_distance" if self.association_method == 'approximate_envelope'
+                              else "matched_surface_only")} if self.surface_overlap_fraction is not None else {}),
             "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence",
         }
 
@@ -445,3 +460,80 @@ def fit_attachment_translation(points_world, model, *, prior, object_ref, observ
     return GeometryFit(model, object_ref, pose[None], np.array([np.sqrt(np.mean(errors**2))]),
         (space,), tuple(observation_ids), received_monotonic, result.nfev,
         bool(np.any(np.abs(result.x-center) >= .019)), 1, conditioning='rigid_attachment_orientation')
+
+
+def fit_approximate_translation(points_world, model, *, prior, object_ref, observation_ids,
+                                received_monotonic, max_residual_m=.01, max_points=800,
+                                minimum_overlap=.6):
+    """Track an approximate partial surface without asserting a rigid 6D pose.
+
+    Fresh, independently associated depth uses majority surface correspondence
+    where available. A newly visible face can instead satisfy the explicitly
+    approximate volume, with bounded translation and depth-edge residuals. The
+    reference orientation is a convention (or a measured attachment prior), not
+    a visual orientation measurement. No surface completion or re-identification
+    is performed. This is a task estimate, not an execution certificate.
+    """
+    from scipy.spatial import cKDTree
+
+    if model.construction != 'approximate_observed_box':
+        raise ValueError('approximate_payload_required')
+    points = np.asarray(points_world, float)
+    if (points.ndim != 2 or points.shape[1] != 3 or len(points) < 25 or not np.isfinite(points).all()
+            or not .001 <= max_residual_m <= .01 or not .5 < minimum_overlap <= 1.
+            or max_points < 25):
+        raise ObservationUnavailable('geometry_tracking_inputs_unavailable')
+    prior = ObjectPoseEvidence(prior, received_monotonic, 'rgbd_tracking', observation_ids[-1]).world_from_object
+    sample = points[np.linspace(0, len(points)-1, min(len(points), max_points)).astype(int)]
+    rotation, center = prior[:3, :3], prior[:3, 3]
+    reference = model.points_reference @ rotation.T
+    tree = cKDTree(reference)
+    position = center.copy()
+    for _iteration in range(12):
+        distances, nearest = tree.query(sample-position)
+        matched = distances <= max_residual_m
+        if matched.sum() < 25 or matched.mean() < minimum_overlap:
+            break
+        # Median correspondence displacement tolerates newly exposed surfaces;
+        # all points still participate in the final overlap/envelope checks.
+        delta = np.median(sample[matched]-position-reference[nearest[matched]], axis=0)
+        position += delta
+        if np.any(np.abs(position-center) >= .02):
+            raise ObservationUnavailable('moving_geometry_ambiguous')
+        if np.linalg.norm(delta) < .0001:
+            break
+    distances = tree.query(points-position)[0]
+    matched = distances <= max_residual_m
+    association_method = 'partial_surface_correspondence'
+    rms = float(np.sqrt(np.mean(distances[matched]**2))) if matched.any() else np.inf
+    if (matched.sum() < 25 or matched.mean() < minimum_overlap
+            or np.quantile(distances, .99) > .03 or distances.max() > .06):
+        # A newly visible face need not match an old partial surface. Associate
+        # it with the declared approximate volume instead. Project the previous
+        # translation into the interval compatible with current visible extent;
+        # do not turn a view-dependent surface centroid into object motion.
+        local = (points-center) @ rotation
+        low, high = model.vertices_reference.min(0), model.vertices_reference.max(0)
+        lower = np.quantile(local, .99, axis=0)-high
+        upper = np.quantile(local, .01, axis=0)-low
+        delta = np.where(lower <= upper, np.minimum(np.maximum(0., lower), upper), (lower+upper)/2)
+        if np.any(np.abs(delta) >= .02):
+            raise ObservationUnavailable('approximate_surface_overlap_lost')
+        outside = np.linalg.norm(np.maximum(np.maximum(low-(local-delta), (local-delta)-high), 0.), axis=1)
+        if np.quantile(outside, .95) > .01 or outside.max() > .03:
+            raise ObservationUnavailable('approximate_surface_overlap_lost')
+        position = center+delta @ rotation.T
+        distances = tree.query(points-position)[0]
+        matched = distances <= max_residual_m
+        rms = float(np.sqrt(np.mean(outside**2)))
+        association_method = 'approximate_envelope'
+    pose = prior.copy()
+    pose[:3, 3] = position
+    # No rank/observability certificate is computed by this approximate
+    # estimator. Keep every pose axis unqualified; the approximate-box consumer
+    # explicitly accepts task estimates without inventing rigid observability.
+    null = np.eye(6)
+    return GeometryFit(model, object_ref, pose[None], np.array([rms]),
+        (null,), tuple(observation_ids), received_monotonic, _iteration+1, False, 1,
+        conditioning='approximate_reference_orientation', surface_overlap_fraction=float(matched.mean()),
+        surface_max_distance_m=float(distances.max()), association_method=association_method)

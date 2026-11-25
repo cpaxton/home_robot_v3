@@ -233,6 +233,7 @@ def _plan_arm_joint_path(
     rng=None,
     departure=None,
     max_time_s=None,
+    start_bound_slack=0.,
 ) -> ArmRrtPlanResult:
     """Plan a joint-space path from ``q_start`` to ``q_goal``.
 
@@ -251,10 +252,21 @@ def _plan_arm_joint_path(
         return ArmRrtPlanResult(False, [], planner, "invalid_planning_budget")
     deadline = time.monotonic() + max_time_s if max_time_s is not None else None
     space = make_arm_configuration_space(model, joint_names, step_size=step_size, rng=rng)
-    validate = make_arm_validate_fn(model, data, joint_names, collision, mins=space.mins, maxs=space.maxs,
+    if (not np.isfinite(start_bound_slack) or not 0 <= start_bound_slack <= .001
+            or start_bound_slack and planner != 'linear'):
+        return ArmRrtPlanResult(False, [], planner, 'invalid_start_bound_recovery')
+    low, high = space.mins, space.maxs
+    if start_bound_slack:
+        if np.any(q0 < low-start_bound_slack) or np.any(q0 > high+start_bound_slack):
+            return ArmRrtPlanResult(False, [], planner, 'invalid_start', detail='joint_bounds')
+        # Only the measured start can extend the segment's allowed interval.
+        # The goal retains nominal bounds, and linear interpolation moves each
+        # overrun joint monotonically inward. Never clip the measured geometry.
+        low, high = np.minimum(low, q0), np.maximum(high, q0)
+    validate = make_arm_validate_fn(model, data, joint_names, collision, mins=low, maxs=high,
                                    deadline=deadline)
 
-    start_reason = arm_config_violation(model, data, joint_names, q0, collision, mins=space.mins, maxs=space.maxs)
+    start_reason = arm_config_violation(model, data, joint_names, q0, collision, mins=low, maxs=high)
     if start_reason is not None:
         if start_reason == 'collision' and departure is None and hasattr(collision, 'make_departure'):
             departure = collision.make_departure(model, data, joint_names, q0)
@@ -313,7 +325,7 @@ def _plan_arm_joint_path(
             if deadline is not None and time.monotonic() >= deadline:
                 return ArmRrtPlanResult(False, [], "linear", "no_plan_within_budget")
             violation = arm_config_violation(
-                model, data, joint_names, q, collision, mins=space.mins, maxs=space.maxs
+                model, data, joint_names, q, collision, mins=low, maxs=high
             )
             if violation is not None:
                 return ArmRrtPlanResult(False, [], "linear", f"linear_collision_at_{index}", detail=violation)

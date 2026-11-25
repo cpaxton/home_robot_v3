@@ -193,3 +193,11 @@ def test_transfer_scorer_uses_latest_public_execution_path():
     assert score_transfer(physics, {'pick_place': ok}, actions) == (True, True, True)
     assert score_transfer(physics, {'pick_place': error, 'execute_pick_place_plan': ok}, actions)[2]
     assert not score_transfer(physics, {'execute_pick_place_plan': ok, 'pick_place': error}, actions)[2]
+
+
+def test_runtime_grounding_control_calls_canonical_public_tool_once():
+    from eval_pandaomron_sink_agent import canonical_transfer_turns
+
+    turns = canonical_transfer_turns('pear')
+    assert len(turns) == 1
+    assert turns[0][1:] == ('pick_place', {'object_name': 'pear', 'receptacle_name': 'sink'})

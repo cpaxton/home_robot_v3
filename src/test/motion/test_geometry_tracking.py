@@ -268,3 +268,92 @@ def test_search_removes_only_declared_symmetry_equivalent_starts():
     assert not rotations_equivalent(box, identity, Rotation.from_euler("z", np.pi / 2).as_matrix())
     # An undeclared measured shape cannot inherit those primitive symmetries.
     assert not rotations_equivalent(type("Model", (), {"symmetry": "undeclared"})(), identity, yaw)
+
+
+def test_approximate_partial_overlap_uses_fresh_surfaces_without_claiming_orientation():
+    from emet.controller.manipulation.geometry_tracking import fit_approximate_translation
+    from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+    rng = np.random.default_rng(8)
+    reference = rng.uniform(-.025, .025, (300, 3))
+    model, prior = registration_surface(ObservedGeometry('initial', 'front', 10., reference, .002), box_padding_m=.01)
+    shift = np.array([.002, -.001, .001])
+    # Other-side surfaces were not in the initial reference. Most current
+    # points still agree, and all unmatched returns remain metrically bounded.
+    fresh = np.concatenate((reference+shift, reference[:70]+shift+[.015, 0., 0.]))
+    result = fit_approximate_translation(fresh, model, prior=prior, object_ref='item',
+        observation_ids=('fresh',), received_monotonic=10.4)
+    np.testing.assert_allclose(result.poses[0, :3, 3], prior[:3, 3]+shift, atol=.001)
+    assert not result.orientation_observable and not result.translation_observable
+    assert result.conditioning == 'approximate_reference_orientation'
+    assert result.observation_ids == ('fresh',) and result.received_monotonic == 10.4
+    assert result.as_dict()['rms_scope'] == 'matched_surface_only'
+    assert result.surface_overlap_fraction >= .6
+    assert result.as_dict()['execution_qualified'] is False
+    with pytest.raises(ObservationUnavailable, match='ambiguous'):
+        result.require_unique(now=10.5, position_error_m=.002, rotation_error_rad=.02)
+
+
+@pytest.mark.parametrize('bad', ['majority_unmatched', 'distant_outlier'])
+def test_approximate_partial_overlap_refuses_lost_identity_or_unbounded_returns(bad):
+    from emet.controller.manipulation.geometry_tracking import fit_approximate_translation
+    from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+    rng = np.random.default_rng(12)
+    points = rng.uniform(-.02, .02, (100, 3))
+    model, prior = registration_surface(ObservedGeometry('initial', 'front', 10., points, .002), box_padding_m=.01)
+    fresh = points.copy()
+    if bad == 'majority_unmatched':
+        fresh[:70] += .1
+    else:
+        fresh[0] += .1
+    with pytest.raises(ObservationUnavailable, match='overlap_lost'):
+        fit_approximate_translation(fresh, model, prior=prior, object_ref='item',
+            observation_ids=('fresh',), received_monotonic=10.4)
+
+
+def test_approximate_tracking_tolerates_sparse_bounded_depth_edges_but_reports_them():
+    from emet.controller.manipulation.geometry_tracking import fit_approximate_translation
+    from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+    rng = np.random.default_rng(16)
+    points = rng.uniform(-.02, .02, (300, 3))
+    model, prior = registration_surface(ObservedGeometry('initial', 'front', 10., points, .002), box_padding_m=.01)
+    fresh = points.copy()
+    fresh[0] = [.055, 0., 0.]
+    result = fit_approximate_translation(fresh, model, prior=prior, object_ref='item',
+        observation_ids=('fresh',), received_monotonic=10.4)
+    assert result.surface_max_distance_m > .03
+    assert .99 <= result.surface_overlap_fraction < 1.
+    assert not result.translation_observable and not result.orientation_observable
+    assert result.require_approximate_box(now=10.5).received_monotonic == 10.4
+    with pytest.raises(ObservationUnavailable, match='stale'):
+        result.require_approximate_box(now=13.)
+    with pytest.raises(ValueError, match='approximate_payload_required'):
+        fit_approximate_translation(fresh, PrimitiveModel('box', (.02, .02, .02)), prior=prior,
+            object_ref='item', observation_ids=('fresh',), received_monotonic=10.4)
+
+
+def test_approximate_envelope_accepts_new_face_without_fabricating_a_surface_match():
+    from emet.controller.manipulation.geometry_tracking import fit_approximate_translation
+    from emet.perception.grasps.observed import ObservedGeometry, registration_surface
+
+    x, y = np.meshgrid(np.linspace(-.02, .02, 12), np.linspace(-.02, .02, 12))
+    front = np.column_stack((x.ravel(), y.ravel(), np.full(x.size, .02)))
+    model, prior = registration_surface(ObservedGeometry('initial', 'front', 10., front, .002), box_padding_m=.01)
+    other_face = front-[0., 0., .01]
+    result = fit_approximate_translation(other_face, model, prior=prior, object_ref='item',
+        observation_ids=('fresh-other-view',), received_monotonic=10.4, max_residual_m=.003)
+    assert result.association_method == 'approximate_envelope'
+    assert result.surface_overlap_fraction == 0.
+    assert result.as_dict()['rms_scope'] == 'approximate_envelope_distance'
+    assert result.rms_m[0] == 0.
+    assert not result.translation_observable and not result.orientation_observable
+    np.testing.assert_allclose(result.poses[0], prior)
+    # Tool motion alone cannot establish that a stationary object was lifted:
+    # the fresh visible surface must remain compatible with the moved volume.
+    moved_tool_prior = prior.copy()
+    moved_tool_prior[2, 3] += .08
+    with pytest.raises(ObservationUnavailable, match='overlap_lost'):
+        fit_approximate_translation(other_face, model, prior=moved_tool_prior, object_ref='item',
+            observation_ids=('fresh-stationary',), received_monotonic=10.5, max_residual_m=.003)

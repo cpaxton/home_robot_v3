@@ -617,7 +617,7 @@ class ObservedNativeAdapter:
                 if getattr(exc, 'region_role', None) in {'object', 'source', 'destination'}:
                     result['data']['failed_region'] = exc.region_role
                 if isinstance(exc, ObservationUnavailable) and str(exc) in {
-                    'geometry_tracking_no_match', 'geometry_tracking_budget_exhausted',
+                    'geometry_tracking_no_match', 'geometry_tracking_budget_exhausted', 'approximate_surface_overlap_lost',
                     'moving_tracking_time_budget_exhausted', 'moving_tracking_lost_reinitialize',
                     'moving_multiview_association_unknown', 'moving_geometry_ambiguous', 'object_pose_ambiguous',
                 }:
