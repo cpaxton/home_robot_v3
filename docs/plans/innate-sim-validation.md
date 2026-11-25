@@ -42,10 +42,10 @@ The script is `scripts/validate_innate_torque_adapter.py`. It:
 1. Builds the Mars `EmbodimentProfile` (5 arm joints + separate gripper) and a
    sim-matched actuator profile (`kp_eff=50`, `kd_eff=1`, `max_lead=0.2`,
    `torque_limit=50`) from the sim's own PD constants.
-2. Applies a **0.5 N*m wrist torque** for one second through:
+2. Applies a **0.5 N*m torque to each of the five arm joints** for 0.5 s through:
    - the Emet `PositionServoAdapter` → `VirtualMars.set_joint_target`, and
    - a direct-torque `VirtualMars` subclass that writes `qfrc_applied`.
-   It compares final position, velocity, and applied torque.
+   It compares final position, velocity, and applied torque per joint.
 3. Repeats the command with a hardware-like profile (`kp_eff=1000`,
    `kd_eff=1`, `max_lead=0.05`, `torque_limit=2.0`) to check torque and
    position-lead clipping.
@@ -60,9 +60,9 @@ The script is `scripts/validate_innate_torque_adapter.py`. It:
 
 | Check | Result |
 |---|---|
-| Adapter vs direct torque, final joint4 | `0.54398` vs `0.54864` rad; delta `0.0047` rad |
-| Adapter vs direct torque, final joint4 velocity | `0.09493` vs `0.09715` rad/s; delta `0.0022` rad/s |
-| Applied torque | `0.4606` vs `0.5` N*m (sim sag/backlash/PD residual) |
+| Adapter vs direct torque, max over all 5 arm joints | position delta `0.0026` rad; velocity delta `0.0083` rad/s |
+| Adapter vs direct torque, joint4 | `0.49335` vs `0.49591` rad; delta `0.0026` rad |
+| Applied torque | `0.4601`–`0.4634` vs `0.5` N*m (sim sag/backlash/PD residual) |
 | Hardware-like torque clip | commanded `2.0` N*m at a `2.0` limit |
 | Position lead at clip | `0.002` rad, within `max_lead=0.05` |
 | Gravity-feedforward home drift | `0.0015` rad max |

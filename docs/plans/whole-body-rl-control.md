@@ -150,6 +150,18 @@ values; they are not hardware calibration.
 The same code handles all four; no `left`/`right` or single-gripper branch is
 hard-coded. A robot with a different number of joints only changes its profile.
 
+| Robot | Profile | Actuator path | Current evidence |
+|---|---|---|---|
+| Innate Mars | yes | position-servo adapter; current-controlled wrist/gripper | external innate-os MuJoCo smoke: adapter vs direct torque, limits, gravity, contact |
+| Sourccey | yes | position-servo adapter at each 5-DOF arm; lift holds | schema/vector tests only; no bench or sim validation yet |
+| RB-Y1 (proxy) | yes | torso/arm adapter; current-control capability must be supplied by the backend | schema/vector tests only; base/torso actuator mode open |
+| Stretch 3 | yes | position/velocity telescope + wrist adapter | schema/vector tests only; no bench validation yet |
+
+The point of the table is that the policy/training contract is shared; only the
+profile and actuator adapter are robot-specific. A backend that cannot provide
+torque feedback still participates through the position-servo adapter and must
+declare that limitation in its capability manifest.
+
 ## Actuator adapter
 
 ### Position servo (default for Mars)

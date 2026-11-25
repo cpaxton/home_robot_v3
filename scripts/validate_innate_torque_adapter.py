@@ -119,12 +119,12 @@ def _observation(sim, profile):
     )
 
 
-def _action(profile, *, joint4_torque: float = 0.0, gripper: float = 0.0):
+def _action(profile, *, joint_index: int = 3, torque: float = 0.0, gripper: float = 0.0):
     from emet.controller.manipulation.wbc_contract import ArmAction, GripperCommand, WbcAction
 
     group = profile.joint_group("primary_arm")
     torques = [0.0] * len(group.joints)
-    torques[3] = float(joint4_torque)  # wrist flex, a low-gravity joint
+    torques[joint_index] = float(torque)
     return WbcAction(
         base_velocity=(0.0, 0.0),
         arms=(
@@ -161,23 +161,27 @@ class _TorqueMars:
         return TorqueMars(*args, **kwargs)
 
 
-def _run_adapter(sim, profile, *, joint4_torque: float, steps: int, gravity=None):
+def _run_adapter(sim, profile, *, joint_index: int, torque: float, steps: int, gravity=None):
     from emet.controller.manipulation.torque_adapter import PositionServoAdapter
 
     adapter = PositionServoAdapter(profile, gravity_torques=gravity)
     group = profile.joint_group("primary_arm")
     for _ in range(steps):
-        command = adapter.command(_action(profile, joint4_torque=joint4_torque), _observation(sim, profile))
+        command = adapter.command(
+            _action(profile, joint_index=joint_index, torque=torque),
+            _observation(sim, profile),
+        )
         for name in group.joint_names:
             sim.set_joint_target(name, command.joint_positions[name])
         sim.step(0.01)
 
 
-def _run_direct(sim, profile, *, joint4_torque: float, steps: int):
+def _run_direct(sim, profile, *, joint_index: int, torque: float, steps: int):
     group = profile.joint_group("primary_arm")
+    target = group.joint_names[joint_index]
     for _ in range(steps):
         for name in group.joint_names:
-            sim.set_joint_torque(name, joint4_torque if name == "joint4" else 0.0)
+            sim.set_joint_torque(name, torque if name == target else 0.0)
         sim.step(0.01)
 
 
@@ -243,40 +247,53 @@ def main() -> int:
     report: dict[str, object] = {"innate_sim": str(sim_dir), "profile": profile.name}
     failures: list[str] = []
 
-    # 1. Adapter vs direct torque, same command.
-    adapter_sim = VirtualMars()
-    adapter_sim.step(0.2)
-    _run_adapter(adapter_sim, profile, joint4_torque=0.5, steps=100)
-    direct_sim = _TorqueMars()
-    direct_sim.step(0.2)
-    _run_direct(direct_sim, profile, joint4_torque=0.5, steps=100)
+    # 1. Adapter vs direct torque, each arm joint independently.
     group = profile.joint_group("primary_arm")
-    a = _observation(adapter_sim, profile).arm("primary")
-    d = _observation(direct_sim, profile).arm("primary")
-    q_index = group.joint_names.index("joint4")
-    adapter_q4, direct_q4 = a.joint_position[q_index], d.joint_position[q_index]
-    adapter_qd4, direct_qd4 = a.joint_velocity[q_index], d.joint_velocity[q_index]
-    adapter_tau = adapter_sim.data.qfrc_applied[adapter_sim._joints["joint4"][1]]
-    direct_tau = direct_sim.data.qfrc_applied[direct_sim._joints["joint4"][1]]
+    per_joint = []
+    for index, name in enumerate(group.joint_names):
+        adapter_sim = VirtualMars()
+        adapter_sim.step(0.2)
+        _run_adapter(adapter_sim, profile, joint_index=index, torque=0.5, steps=50)
+        direct_sim = _TorqueMars()
+        direct_sim.step(0.2)
+        _run_direct(direct_sim, profile, joint_index=index, torque=0.5, steps=50)
+        a = _observation(adapter_sim, profile).arm("primary")
+        d = _observation(direct_sim, profile).arm("primary")
+        adapter_tau = adapter_sim.data.qfrc_applied[adapter_sim._joints[name][1]]
+        direct_tau = direct_sim.data.qfrc_applied[direct_sim._joints[name][1]]
+        per_joint.append(
+            {
+                "joint": name,
+                "adapter_q": a.joint_position[index],
+                "direct_q": d.joint_position[index],
+                "q_delta": abs(a.joint_position[index] - d.joint_position[index]),
+                "adapter_qd": a.joint_velocity[index],
+                "direct_qd": d.joint_velocity[index],
+                "qd_delta": abs(a.joint_velocity[index] - d.joint_velocity[index]),
+                "adapter_applied_torque": adapter_tau,
+                "direct_applied_torque": direct_tau,
+            }
+        )
+    max_q_delta = max(item["q_delta"] for item in per_joint)
+    max_qd_delta = max(item["qd_delta"] for item in per_joint)
     report["adapter_vs_direct"] = {
-        "adapter_q4": adapter_q4,
-        "direct_q4": direct_q4,
-        "q4_delta": abs(adapter_q4 - direct_q4),
-        "adapter_qd4": adapter_qd4,
-        "direct_qd4": direct_qd4,
-        "adapter_applied_torque": adapter_tau,
-        "direct_applied_torque": direct_tau,
+        "per_joint": per_joint,
+        "max_q_delta": max_q_delta,
+        "max_qd_delta": max_qd_delta,
     }
-    if abs(adapter_q4 - direct_q4) > 0.03:
-        failures.append("adapter/direct joint4 position differs by > 0.03 rad")
-    if abs(adapter_qd4 - direct_qd4) > 0.03:
-        failures.append("adapter/direct joint4 velocity differs by > 0.03 rad/s")
+    if max_q_delta > 0.03:
+        failures.append(f"adapter/direct position differs by {max_q_delta:.4f} rad (> 0.03)")
+    if max_qd_delta > 0.03:
+        failures.append(f"adapter/direct velocity differs by {max_qd_delta:.4f} rad/s (> 0.03)")
 
     # 2. Hardware-like clipping.
     hardware_adapter = PositionServoAdapter(hardware_profile)
     hardware_obs = _observation(adapter_sim, hardware_profile)
-    command = hardware_adapter.command(_action(hardware_profile, joint4_torque=100.0), hardware_obs)
-    lead = abs(command.joint_positions["joint4"] - hardware_obs.arm("primary").joint_position[q_index])
+    command = hardware_adapter.command(
+        _action(hardware_profile, joint_index=3, torque=100.0),
+        hardware_obs,
+    )
+    lead = abs(command.joint_positions["joint4"] - hardware_obs.arm("primary").joint_position[3])
     report["limit_clipping"] = {
         "commanded_torque": command.commanded_torques["joint4"],
         "lead_rad": lead,
@@ -295,7 +312,7 @@ def main() -> int:
     gravity = lambda _obs: {
         name: float(gravity_sim.data.qfrc_bias[gravity_sim._joints[name][1]]) for name in group.joint_names
     }
-    _run_adapter(gravity_sim, profile, joint4_torque=0.0, steps=100, gravity=gravity)
+    _run_adapter(gravity_sim, profile, joint_index=3, torque=0.0, steps=100, gravity=gravity)
     end = np.array([gravity_sim.encoder_positions()[name] for name in group.joint_names])
     drift = float(np.max(np.abs(end - start)))
     report["gravity_hold"] = {"max_joint_drift_rad": drift}
@@ -306,7 +323,7 @@ def main() -> int:
     contact_sim = VirtualMars()
     _setup_contact(contact_sim)
     before = _contact_forces(contact_sim)
-    _run_adapter(contact_sim, profile, joint4_torque=0.2, steps=100)
+    _run_adapter(contact_sim, profile, joint_index=3, torque=0.2, steps=100)
     after = _contact_forces(contact_sim)
     report["contact"] = {
         "before": before,
