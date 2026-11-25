@@ -705,7 +705,9 @@ class KinematicPickPlaceExecutor:
             from emet.motion.mujoco_arm_ik import solve_position_ik
 
             lo, hi = self._joint_position_bounds()
-            for _ in range(3):
+            gain = 1.0
+            previous_error = measured_error if np.isfinite(measured_error) else float("inf")
+            for _ in range(6):
                 if not self._sync_qpos_from_robot():
                     break
                 q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
@@ -721,7 +723,7 @@ class KinematicPickPlaceExecutor:
                 if not solution.success:
                     break
                 q_ik = np.asarray(solution.qpos, dtype=np.float64)[qadr]
-                step = np.clip(q_ik - q_obs, -0.35, 0.35)
+                step = np.clip(gain * (q_ik - q_obs), -0.35, 0.35)
                 if float(np.max(np.abs(step))) < 1e-3:
                     break
                 q_cmd = np.clip(q_obs + step, lo, hi)
@@ -731,6 +733,11 @@ class KinematicPickPlaceExecutor:
                 reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
                 if reached:
                     break
+                # A full IK step can overshoot at the edge of reach; back off
+                # when the measured error stops improving instead of oscillating.
+                if measured_error >= previous_error * 0.98:
+                    gain = max(0.25, gain * 0.5)
+                previous_error = measured_error
             if not reached:
                 # Cartesian re-solve can fail at a singular/stretched posture.
                 # Fall back to the bounded joint residual instead of giving up.
