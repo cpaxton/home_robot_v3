@@ -679,13 +679,15 @@ class KinematicPickPlaceExecutor:
         for q in plan.waypoints:
             self._stream_arm_q(q)
             self._sleep(self.traj_dt)
+        desired_q = None
         if plan.waypoints:
-            final_q = np.asarray(plan.waypoints[-1], dtype=np.float64)
+            desired_q = np.asarray(plan.waypoints[-1], dtype=np.float64)
+            final_q = desired_q
             if self._feedforward is not None:
                 from emet.controller.manipulation.wbc_feedforward import apply_bias
 
                 lo, hi = self._joint_position_bounds()
-                final_q = apply_bias(final_q, self.joint_names, self._feedforward, lower=lo, upper=hi)
+                final_q = apply_bias(desired_q, self.joint_names, self._feedforward, lower=lo, upper=hi)
             # The torso base pitch carries the whole arm; a single send + short sleep
             # loses to PD lag (observed torso1 barely moves from home). Re-command the
             # final posture for a bounded settle, like _command_home_posture.
@@ -695,6 +697,24 @@ class KinematicPickPlaceExecutor:
                 self._sleep(0.05)
         self._last_cmd_q = q1.copy()
         reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+        if not reached and desired_q is not None:
+            # Feedforward removes gravity droop; a small bounded proportional
+            # correction absorbs the remaining IK-branch / posture mismatch.
+            lo, hi = self._joint_position_bounds()
+            for _ in range(2):
+                if not self._sync_qpos_from_robot():
+                    break
+                q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
+                residual = np.clip(desired_q - q_obs, -0.2, 0.2)
+                if float(np.max(np.abs(residual))) < 1e-3:
+                    break
+                q_cmd = np.clip(final_q + 0.5 * residual, lo, hi)
+                for _ in range(6):
+                    self._stream_arm_q(q_cmd)
+                    self._sleep(0.05)
+                reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+                if reached:
+                    break
         if not reached:
             self._last_motion_failure = self._last_motion_failure or 'tracking_failed'
         self._set_last_attempt(target_xyz_world, reached, measured_error)
