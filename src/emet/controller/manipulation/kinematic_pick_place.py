@@ -653,8 +653,14 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(q)
             self._sleep(self.traj_dt)
         if plan.waypoints:
-            self._stream_arm_q(plan.waypoints[-1])
-            self._sleep(max(0.25, self.traj_dt * 3))
+            final_q = plan.waypoints[-1]
+            # The torso base pitch carries the whole arm; a single send + short sleep
+            # loses to PD lag (observed torso1 barely moves from home). Re-command the
+            # final posture for a bounded settle, like _command_home_posture.
+            deadline = time.time() + max(0.5, self.traj_dt * 10)
+            while time.time() < deadline:
+                self._stream_arm_q(final_q)
+                self._sleep(0.05)
         self._last_cmd_q = q1.copy()
         reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
         if not reached:

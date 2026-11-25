@@ -25,6 +25,46 @@
       cache and grounding-range feedback are on main. Loaded episode timing and
       the safe closer-view Molmo check remain open below.
 
+## RoboCasa pick-place + failure-data pipeline (2026-11-25)
+
+Branch `feat/graded-conservatism`, rebased onto current `main`. Graded-conservatism
+refusals (margin / `relax_allowed` / `teleport_collision` / `unreachable`) and the
+RoboCasa `scene_tasks` branch are implemented; the remaining work is the grasp
+tracking fix, the failure-data training pipeline, and the open/close skill.
+
+- [x] `scene_tasks` RoboCasa branch: derive the active PickPlace task (object
+      `obj_main` + start/goal receptacles) from `environment.task` + GT placements,
+      semantic-only (opaque `task_ref`, no body IDs). Lives in
+      `chat_tamp.scene_tasks` on current `main`; handles Stove/Toaster/ToasterOven
+      task names and is deterministic with multiple cabinets.
+- [x] Collision-free place approach: `_search_placement` selects from bounded
+      base rings and rejects blocked endpoints via `check_base_poses`.
+- [x] Failed-manip replay sink: `KinematicPickPlaceExecutor.last_attempt` (EE target,
+      observed EE/joint trace, `failure_mode`, planned waypoints) → `failure_record.py`
+      JSONL (`EMET_MANIP_FAILURE_DIR`, default `~/runs/emet/manip_failures`).
+- [x] `ik_failed` → `unreachable` (distinct from `tracking_timeout`) in TAMP `failure_code`.
+- [ ] **Failure-data pipeline (RL-WBC) — track to completion.** The sink currently
+      captures single attempts; the training loop still needs (a) episode/job/seed
+      correlation in each record, (b) object/receptacle categories + grasp target in
+      the context, (c) a loader/validation script, and (d) wiring into the in-flight
+      RL-WBC training data path. Do not treat the sink as done until the training side
+      consumes it.
+- [ ] **RoboCasa counter-height grasp tracking.** rby1 `PickPlaceCounterToCabinet`
+      fails `grasp_failed:pregrasp_tracking_failed` (EE error 0.35 m; torso_joint1
+      planned −0.25 vs observed 0.08, other joints track). Likely IK solution at/over
+      the torso1 limit and/or the grasp approach puts the object at the arm-workspace
+      edge. Fix: check `torso_joint1` limits in the rby1 MJCF, re-seed IK off the
+      torso1 extreme, and/or make the grasp approach bounds-/reach-aware. Flag
+      `unreachable` (done) when IK genuinely cannot solve.
+- [ ] **RoboCasa pick-place end-to-end**: after the grasp fix, verify
+      `robocasa_rby1_floor_to_counter_mcts` / `robocasa_sourccey_counter_to_cab_mcts`
+      land within `success_radius_m`. `robocasa_pp_s1` (Stretch) is a teleport
+      plumbing row, not a grasp result.
+- [ ] **Open/close skill** (second RoboCasa foundational skill): kinematic open/close
+      primitive (grasp handle → rotate/translate along fixture joint) + `open_fixture` /
+      `close_fixture` tools; target OpenCabinet/CloseCabinet, OpenDrawer/CloseDrawer,
+      then OpenMicrowave/CloseMicrowave.
+
 ## Shared-agent and benchmark work
 
 - [x] Reconcile #247 with main #246 and address the posted review. Preserve
