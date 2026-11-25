@@ -272,6 +272,27 @@ This validates the mapping and the contact telemetry, not full-arm torque or
 hardware identification. The x430 joints still need the position-offset
 adapter; the wrist/gripper can use current control.
 
+## Prototype branch
+
+A fork exists at `cpaxton/innate-os`, branch `feat/torque-wbc-interface`
+(commit `a6b77861`). It is an external prototype, not vendored into Emet.
+
+It includes:
+
+- `ArmCommand`, `JointCommand`, `ArmState`, and `JointStateExt` messages;
+- a per-joint `position`/`velocity`/`effort`/`current`/`pwm` command callback
+  with `kp_eff`/`max_lead` torque-to-position mapping;
+- `/mars/arm/state_ext` at 100 Hz, `/robot/capabilities`, and unit-consistent
+  effort/current/load fields;
+- `VirtualMars` effort mode, `joint_state_ext`, and `contact_forces`;
+- `mars_sim_driver` `ArmCommand`/`state_ext`/capabilities topics;
+- a `test_driver_core.py` torque/contact check.
+
+The C++ `mars_msgs` and `mars_arm` packages build with `colcon` against the host
+ROS 2 Humble + a local Dynamixel SDK; the Python sim test passes. It has **not**
+been run on hardware, and the actuator constants in `arm_config.yaml` are
+placeholders. Do not treat the branch as a hardware qualification.
+
 ## Hardware limits and options
 
 | Joint | Servo | Position | Current/torque | Practical contact control |
