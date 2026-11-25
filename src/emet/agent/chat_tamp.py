@@ -262,7 +262,10 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
             return response("scene_tasks", code=native_error)
         if _tamp_manip_mode() == "physical":
             return _native_adapter().discover(object_filter, robot)
-        from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
+        from emet.controller.task.tamp.agent_bridge import (
+            robocasa_pick_place_task,
+            stable_scene_task_refs,
+        )
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
             emit_tasks,
@@ -290,6 +293,46 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
         from emet.controller.task.tamp.agent_bridge import robot_session_key
 
         session_key = robot_session_key(robot_obj)
+
+        # RoboCasa has no iTHOR-style task catalog; the active PickPlace task lives
+        # in the simulator session. Resolve it to semantic object/receptacle names
+        # and keep body identities private (same handle contract as the iTHOR path).
+        robocasa_task = robocasa_pick_place_task((session or {}).get("environment"), placements)
+        if robocasa_task is not None:
+            filt = (object_filter or "").strip().lower()
+            matches = (
+                not filt
+                or filt in str(robocasa_task.object).lower()
+                or filt in str(robocasa_task.goal_recep).lower()
+            )
+            task_refs = (
+                stable_scene_task_refs(context, [robocasa_task], placements, session_key=session_key)
+                if matches
+                else []
+            )
+            if not matches:
+                stable_scene_task_refs(context, [], {}, session_key=session_key)
+            from emet.simulation.articulation import articulation_access
+
+            return response(
+                "scene_tasks",
+                data={
+                    "tasks": [
+                        {
+                            "task_ref": ref.ref,
+                            "object_name": ref.object_query,
+                            "receptacle_name": ref.receptacle_query,
+                            "start_receptacle": ref.start_receptacle,
+                            "access": articulation_access(session if live_sim else {}, ref.receptacle_body),
+                        }
+                        for ref in task_refs
+                    ],
+                    "pickable_categories": [robocasa_task.object],
+                    "receptacle_categories": [robocasa_task.goal_recep],
+                    "reachability": None,
+                    "reachability_status": "not_requested",
+                },
+            )
         active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
         candidates = (
             [active_metadata]

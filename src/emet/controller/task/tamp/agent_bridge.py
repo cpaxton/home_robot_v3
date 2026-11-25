@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import uuid
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -113,6 +115,126 @@ def resolve_body_alias(body: str | None, placements: dict[str, dict[str, Any]]) 
     """Resolve a metadata mesh/parent name to the live placement key."""
 
     return next((candidate for candidate in _body_aliases(body) if candidate in placements), None)
+
+
+# RoboCasa task-name → fixture-key aliases (task names use long words, the wizard
+# fixture scan uses short group keys like ``cab`` / ``counter`` / ``sink``).
+_ROBOCASA_FIXTURE_ALIASES: dict[str, str] = {
+    "cabinet": "cab",
+    "countertop": "counter",
+    "toaster": "toaster",
+    "toasteroven": "toasteroven",
+    "standmixer": "standmixer",
+    "fridgedrawer": "fridgedrawer",
+    "fridgeshelf": "fridgeshelf",
+    "electrickettle": "electrickettle",
+    "coffeemachine": "coffeemachine",
+}
+_ROBOCASA_KNOWN_FIXTURES = frozenset(_ROBOCASA_FIXTURE_ALIASES) | frozenset(_ROBOCASA_FIXTURE_ALIASES.values())
+
+
+def _robocasa_fixture_token(name: str) -> str:
+    token = str(name).strip().lower().replace(" ", "")
+    return _ROBOCASA_FIXTURE_ALIASES.get(token, token)
+
+
+def _match_placement_by_category(placements: dict[str, dict[str, Any]], token: str) -> str | None:
+    """Resolve a task-name receptacle token to one placement body key (internal).
+
+    Exact matches (body key or GT ``cat``) win. Prefix matches cover the wizard
+    short keys (``cab`` ↔ ``cab_main``); ties are broken deterministically by
+    shortest key then lexical order so dict iteration order cannot pick a
+    different fixture between runs.
+    """
+    want = _robocasa_fixture_token(token)
+    if not want:
+        return None
+    exact: list[str] = []
+    prefix: list[str] = []
+    for key, info in placements.items():
+        k = str(key).lower()
+        cat = str(info.get("cat") or "").lower()
+        if k == want or cat == want:
+            exact.append(str(key))
+        elif k and len(k) >= 3 and (k.startswith(want) or want.startswith(k)):
+            prefix.append(str(key))
+    for group in (exact, prefix):
+        if group:
+            return sorted(group, key=lambda key: (len(key), key))[0]
+    return None
+
+
+def _robocasa_task_tokens(task_name: str, placements: dict[str, dict[str, Any]]) -> tuple[str, str] | None:
+    """Split ``PickPlace<Start>To<Goal>`` on the CamelCase delimiter.
+
+    RoboCasa task names are CamelCase, so the start/goal delimiter is a capital
+    ``To``. Fixture names can contain it too (``Toaster``, ``ToasterOven``), so
+    prefer the split where both sides resolve against the live placements; a
+    case-insensitive greedy match would read ``PickPlaceCounterToStove`` as
+    ``countertos`` → ``ve``.
+    """
+    match = re.match(r"PickPlace(.+)", str(task_name or "").strip())
+    if not match:
+        return None
+    rest = match.group(1)
+    splits = [index for index in range(len(rest) - 1) if rest.startswith("To", index)]
+    if not splits:
+        return None
+
+    def known(token: str) -> bool:
+        return (
+            _robocasa_fixture_token(token) in _ROBOCASA_KNOWN_FIXTURES
+            or _match_placement_by_category(placements, token) is not None
+        )
+
+    for index in splits:
+        start, goal = rest[:index], rest[index + 2 :]
+        if start and goal and known(start) and known(goal):
+            return start, goal
+    if len(splits) == 1:
+        start, goal = rest[: splits[0]], rest[splits[0] + 2 :]
+        if start and goal:
+            return start, goal
+    return None
+
+
+def robocasa_pick_place_task(environment: Any, placements: dict[str, dict[str, Any]]) -> Any | None:
+    """Build a semantic pick-place task from the active RoboCasa task name.
+
+    RoboCasa has no iTHOR-style task catalog, but the active task is in the session
+    (``environment.task``, e.g. ``PickPlaceCounterToCabinet``). Returns a task object
+    with semantic ``object`` / ``goal_recep`` / ``start_recep`` plus the internal
+    ``object_gt_body``; body IDs stay private and are never surfaced to the agent.
+    """
+    if not isinstance(environment, dict):
+        return None
+    if str(environment.get("kind") or "").lower() != "robocasa":
+        return None
+    live = placements or {}
+    tokens = _robocasa_task_tokens(str(environment.get("task") or ""), live)
+    if tokens is None:
+        return None
+    start_token, goal_token = tokens
+    # The task object is the wizard object named 'obj' (body 'obj_main'); fixtures
+    # ('cab_main', 'counter_main', …) and distractors ('distr_*') also end in '_main'.
+    object_body = "obj_main" if "obj_main" in live else None
+    if object_body is None:
+        return None
+    object_cat = str((live.get(object_body) or {}).get("cat") or "obj")
+    goal_body = _match_placement_by_category(live, goal_token)
+    if goal_body is None:
+        return None
+    start_body = _match_placement_by_category(live, start_token)
+    return SimpleNamespace(
+        object=object_cat,
+        goal_recep=str((live.get(goal_body) or {}).get("cat") or _robocasa_fixture_token(goal_token)),
+        start_recep=(
+            str((live.get(start_body) or {}).get("cat") or _robocasa_fixture_token(start_token))
+            if start_body
+            else _robocasa_fixture_token(start_token)
+        ),
+        object_gt_body=object_body,
+    )
 
 
 def build_scene_task_refs(
