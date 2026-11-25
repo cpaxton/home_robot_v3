@@ -251,6 +251,27 @@ position-only schema:
 - Record commanded and measured torque/current separately. A contact-rich
   dataset needs both.
 
+## Validation against the external MuJoCo sim
+
+The external innate-os `VirtualMars` plant has been exercised with the Emet
+`PositionServoAdapter`; the harness lives in this repository but imports the
+external checkout and never vendors it. See
+[`innate-sim-validation.md`](innate-sim-validation.md).
+
+Current smoke result:
+
+- adapter-driven joint4 motion is within `0.0047 rad` and `0.0022 rad/s` of
+  direct torque over a one-second 0.5 N*m step;
+- a hardware-like 2 N*m torque limit and 0.05 rad position lead clip correctly;
+- gravity-feedforward home drift is `0.0015 rad`;
+- a cube–gripper pad contact remains measurable (`3.16 N`) while a wrist torque
+  is applied;
+- the Mars action vector is `1 arm × 5 joints + 1 gripper = 8`.
+
+This validates the mapping and the contact telemetry, not full-arm torque or
+hardware identification. The x430 joints still need the position-offset
+adapter; the wrist/gripper can use current control.
+
 ## Hardware limits and options
 
 | Joint | Servo | Position | Current/torque | Practical contact control |

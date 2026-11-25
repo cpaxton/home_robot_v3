@@ -44,7 +44,7 @@ def _mars_action(profile, torques):
     )
 
 
-def _mars_observation(profile, q=0.0):
+def _mars_observation(profile, q=0.0, qd=0.0):
     group = profile.joint_group("primary_arm")
     return WbcObservation(
         base_pose=(0.0, 0.0, 0.0),
@@ -53,7 +53,7 @@ def _mars_observation(profile, q=0.0):
             ArmObservation(
                 name="primary",
                 joint_position=(q,) * len(group.joints),
-                joint_velocity=(0.0,) * len(group.joints),
+                joint_velocity=(qd,) * len(group.joints),
                 gripper=GripperObservation(position=(0.0,)),
             ),
         ),
@@ -105,6 +105,17 @@ def test_callable_gravity_feedforward_receives_observation():
     adapter = PositionServoAdapter(profile, gravity_torques=gravity)
     command = adapter.command(_mars_action(profile, (0.0,) * 5), _mars_observation(profile))
     assert seen
+    assert command.joint_positions["joint1"] == pytest.approx(0.01)
+
+
+def test_velocity_damping_feedforward_compensates_servo_damping():
+    profile = _profile_with_actuator(kp_eff=100.0, max_lead=0.02, kd_eff=2.0)
+    adapter = PositionServoAdapter(profile)
+    command = adapter.command(
+        _mars_action(profile, (0.0,) * 5),
+        _mars_observation(profile, qd=0.5),
+    )
+    # kd_eff * qd = 2 * 0.5 = 1 N*m -> 0.01 rad lead.
     assert command.joint_positions["joint1"] == pytest.approx(0.01)
 
 

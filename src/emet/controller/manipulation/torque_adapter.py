@@ -70,15 +70,16 @@ class PositionServoAdapter:
 
     For each joint::
 
-        tau_total = clip(tau_cmd + gravity + friction, +/-tau_limit)
+        tau_total = clip(tau_cmd + gravity + friction + kd_eff * qd, +/-tau_limit)
         tau_total = clip(tau_total, +/-current_limit * kt * gear_ratio)  # if known
         q_cmd     = clip(q_meas + clip(tau_total / kp_eff, +/-max_lead), position_limit)
         i_limit   = |tau_total| / (kt * gear_ratio)                     # if known
 
-    ``kp_eff`` is the identified effective position-loop stiffness in N*m/rad,
-    not a datasheet PID gain. It may vary with pose, temperature, and payload;
-    the adapter is only as good as that identification. ``max_lead`` bounds the
-    position error the policy can request, which is the primary safety limit.
+    ``kp_eff`` and ``kd_eff`` are identified effective position-loop gains,
+    not datasheet PID values. ``kd_eff * qd`` compensates the servo's own
+    velocity damping so the policy's torque is the net requested torque.
+    ``max_lead`` bounds the position error the policy can request, which is
+    the primary safety limit.
     """
 
     def __init__(
@@ -110,14 +111,18 @@ class PositionServoAdapter:
             torso_obs = observation.torso
             if torso_obs is None:
                 raise ValueError("observation is missing the torso group required by the profile")
-            for joint, tau, q in zip(self.profile.torso.joints, action.torso_torques, torso_obs.position):
-                self._joint(joint, tau, q, gravity, friction, positions, currents, torques)
+            for joint, tau, q, qd in zip(
+                self.profile.torso.joints, action.torso_torques, torso_obs.position, torso_obs.velocity
+            ):
+                self._joint(joint, tau, q, qd, gravity, friction, positions, currents, torques)
         for arm_spec in self.profile.arms:
             group = self.profile.joint_group(arm_spec.joint_group)
             arm_obs = observation.arm(arm_spec.name)
             arm_action = action.arm(arm_spec.name)
-            for joint, tau, q in zip(group.joints, arm_action.joint_torques, arm_obs.joint_position):
-                self._joint(joint, tau, q, gravity, friction, positions, currents, torques)
+            for joint, tau, q, qd in zip(
+                group.joints, arm_action.joint_torques, arm_obs.joint_position, arm_obs.joint_velocity
+            ):
+                self._joint(joint, tau, q, qd, gravity, friction, positions, currents, torques)
 
         grippers: dict[str, GripperCommand] = {}
         for arm_spec in self.profile.arms:
@@ -153,6 +158,7 @@ class PositionServoAdapter:
         joint: JointSpec,
         tau: float,
         q: float,
+        qd: float,
         gravity: Mapping[str, float],
         friction: Mapping[str, float],
         positions: dict[str, float],
@@ -164,7 +170,12 @@ class PositionServoAdapter:
         if joint.max_lead is None or joint.max_lead <= 0:
             raise ValueError(f"{joint.name} requires a positive max_lead for position-servo control")
 
-        total = float(tau) + float(gravity.get(joint.name, 0.0)) + float(friction.get(joint.name, 0.0))
+        total = (
+            float(tau)
+            + float(gravity.get(joint.name, 0.0))
+            + float(friction.get(joint.name, 0.0))
+            + float(joint.kd_eff or 0.0) * float(qd)
+        )
         total = float(np.clip(total, -joint.torque_limit, joint.torque_limit))
 
         current_limit = joint.current_limit

@@ -8,6 +8,15 @@ the example profiles in
 the adapter in
 [`torque_adapter.py`](../../src/emet/controller/manipulation/torque_adapter.py).
 
+## Program goal
+
+The goal is one **torque-based whole-body control stack** that spans Mars,
+Sourccey, RB-Y1, Stretch, and future mobile manipulators. A robot supplies an
+`EmbodimentProfile` (base, named arms, torso, grippers, DOF, limits) and an
+actuator adapter. The policy, observation, reward, case library, and training
+loop are shared. Mars is the first target and the first place where the
+position-servo adapter is being validated; it is not a Mars-only design.
+
 ## Decision summary
 
 - The **policy action is per-arm joint torque**, not a single flat joint vector
@@ -148,16 +157,19 @@ hard-coded. A robot with a different number of joints only changes its profile.
 For each joint:
 
 ```text
-tau_total = clip(tau_cmd + gravity + friction, +/-tau_limit)
+tau_total = clip(tau_cmd + gravity + friction + kd_eff * qd,
+                 +/-tau_limit)
 tau_total = clip(tau_total, +/-current_limit * kt * gear_ratio)   # if known
 q_cmd     = clip(q_meas + clip(tau_total / kp_eff, +/-max_lead),
                  position_limit)
 i_limit   = |tau_total| / (kt * gear_ratio)                      # if known
 ```
 
-`kp_eff` is the **identified effective position-loop stiffness**, not a
-datasheet gain. `max_lead` is the safety-critical bound on how far the policy can
-pull the position target from the measured joint. The adapter fails closed if
+`kp_eff` and `kd_eff` are **identified effective position-loop gains**, not
+datasheet values. The `kd_eff * qd` term compensates the servo's own velocity
+damping so the policy's torque is the net requested torque. `max_lead` is the
+safety-critical bound on how far the policy can pull the position target from
+the measured joint. The adapter fails closed if
 either is missing. It sends position targets and, when supported, a current/PWM
 limit through the robot-side transport.
 
@@ -296,3 +308,5 @@ full-arm torque control.
 | [`failure_record.py`](../../src/emet/controller/manipulation/failure_record.py) | Failure/trace -> scenario record |
 | [`src/test/motion/test_wbc_foundations.py`](../../src/test/motion/test_wbc_foundations.py) | Contract, multi-arm, case library, generator tests |
 | [`src/test/motion/test_torque_adapter.py`](../../src/test/motion/test_torque_adapter.py) | Adapter mapping, limits, fail-closed tests |
+| [`scripts/validate_innate_torque_adapter.py`](../../scripts/validate_innate_torque_adapter.py) | External innate-os MuJoCo adapter/contact smoke test |
+| [`innate-sim-validation.md`](innate-sim-validation.md) | Setup, metrics, and limits of the external sim validation |
