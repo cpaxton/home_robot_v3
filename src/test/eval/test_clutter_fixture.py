@@ -214,3 +214,72 @@ def test_certificate_requires_replayable_measured_body_pose():
     fixture['sha256'] = fingerprint(fixture)
     assert certificate_error(fixture, scene_fingerprint='scene', execution_mode='sim',
                              clearance_m=.22, start=[0, 0]) == 'invalid_fixture_body_pose'
+
+def test_min_clearance_margin_reports_closest_approach():
+    from emet.eval.tamp_clutter import min_clearance_margin
+
+    # Single disk radius 0.08 at x=0.30; footprint 0.22.
+    # Closest waypoint x=0.20 → dist 0.10 → margin = 0.10 - 0.30 = -0.20.
+    disks = [(np.array([0.30, 0.0]), 0.08, "item0")]
+    waypoints = [np.array([x, 0.0]) for x in (0.0, 0.1, 0.2)]
+    m = min_clearance_margin(waypoints, disks, footprint_r_m=0.22, skip_first=False)
+    assert m is not None
+    assert abs(m["margin_m"] - (-0.20)) < 1e-9
+    assert m["disk"] == "item0"
+    assert m["footprint_r_m"] == 0.22
+    assert m["disk_radius_m"] == 0.08
+
+
+def test_min_clearance_margin_positive_when_clear():
+    from emet.eval.tamp_clutter import min_clearance_margin
+
+    disks = [(np.array([1.0, 0.0]), 0.08, "item0")]
+    waypoints = [np.array([0.0, 0.0])]
+    m = min_clearance_margin(waypoints, disks, footprint_r_m=0.22, skip_first=False)
+    assert m is not None and m["margin_m"] > 0.0
+
+
+def test_min_clearance_margin_none_without_disks():
+    from emet.eval.tamp_clutter import min_clearance_margin
+
+    assert min_clearance_margin([np.array([0.0, 0.0])], [], footprint_r_m=0.22) is None
+
+
+def test_nav_path_open_around_disks_reports_margin_when_endpoint_blocked():
+    from emet.eval.tamp_clutter import nav_path_open_around_disks
+
+    # Goal sits inside an inflated disk → blocked via strict_endpoints, with a
+    # negative margin so the agent can grade how far off it is.
+    disks = [(np.array([1.0, 0.0]), 0.15, "item0")]
+    path_open, info = nav_path_open_around_disks(
+        np.array([0.0, 0.0]), np.array([1.0, 0.0]), disks,
+        clearance_m=0.22, strict_endpoints=True,
+    )
+    assert not path_open and info["blocked"]
+    assert info["invalid_endpoint"] == "goal"
+    assert info["margin"]["margin_m"] < 0.0
+    assert info["margin"]["disk"] == "item0"
+
+
+def test_nav_path_open_around_disks_open_has_no_margin_key():
+    from emet.eval.tamp_clutter import nav_path_open_around_disks
+
+    # Empty disks → open route, and no margin is computed (nothing to grade).
+    path_open, info = nav_path_open_around_disks(
+        np.array([0.0, 0.0]), np.array([1.0, 0.0]), [], clearance_m=0.22
+    )
+    assert path_open and not info["blocked"]
+    assert "margin" not in info
+
+
+def test_nav_path_open_around_disks_routes_around_single_disk():
+    from emet.eval.tamp_clutter import nav_path_open_around_disks
+
+    # A single disk does not block: the 8-connected probe routes around it.
+    disks = [(np.array([0.5, 0.0]), 0.15, "item0")]
+    path_open, info = nav_path_open_around_disks(
+        np.array([0.0, 0.0]), np.array([1.0, 0.0]), disks, clearance_m=0.22
+    )
+    assert path_open and not info["blocked"]
+    assert "margin" not in info
+

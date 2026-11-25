@@ -326,6 +326,15 @@ def plan_clear_clutter(
     }
     if nav_probe_after is not None:
         out["nav_probe_after"] = nav_probe_after
+        if mode == "nav_goal" and not nav_path_open:
+            margin = nav_probe_after.get("margin")
+            out["nav_refusal"] = {
+                "code": "clearance",
+                "refused": True,
+                "threshold_m": float(clearance_m),
+                "margin_m": float(margin["margin_m"]) if isinstance(margin, dict) else None,
+                "relax_allowed": False,  # enabled in the relaxation follow-up (PR 3)
+            }
     return out
 
 

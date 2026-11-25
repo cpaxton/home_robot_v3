@@ -315,6 +315,48 @@ def first_footprint_hit(
     return None
 
 
+def min_clearance_margin(
+    waypoints: Sequence[np.ndarray] | Sequence[list],
+    disks: Sequence[tuple[np.ndarray | list, float, str]],
+    *,
+    footprint_r_m: float,
+    skip_first: bool = True,
+) -> dict[str, Any] | None:
+    """Minimum signed clearance margin along a route versus obstacle disks.
+
+    ``margin_m = dist - (footprint_r_m + disk_radius)`` for the closest
+    (waypoint, disk) pair. Negative means the footprint overlaps that disk by
+    that much. Returns ``None`` when there is nothing to check (no waypoints after
+    the optional skip, or no disks).
+
+    This is the graded-conservatism signal: a refusal can report "blocked by
+    ``disk`` at ``margin_m`` vs ``footprint_r_m``" so the agent can decide whether a
+    bounded relaxation step is worth attempting.
+    """
+    if not disks:
+        return None
+    fr = float(footprint_r_m)
+    best: dict[str, Any] | None = None
+    for i, raw in enumerate(waypoints):
+        if skip_first and i == 0:
+            continue
+        xy = _clamp_xy(raw)
+        for disk_xy, radius, name in disks:
+            d = float(np.linalg.norm(xy - _clamp_xy(disk_xy)))
+            margin = d - (fr + float(radius))
+            if best is None or margin < best["margin_m"]:
+                best = {
+                    "step": int(i),
+                    "xy": xy.tolist(),
+                    "disk": str(name),
+                    "dist_m": d,
+                    "disk_radius_m": float(radius),
+                    "footprint_r_m": fr,
+                    "margin_m": margin,
+                }
+    return best
+
+
 def placement_obstacle_disks(
     placements: Mapping[str, Any],
     *,
@@ -504,14 +546,28 @@ def nav_path_open_around_disks(
                 if 0 <= r < h and 0 <= c < w and (dr * dr + dc * dc) <= inflate * inflate:
                     occ[r, c] = False
 
+    def chord_margin() -> dict[str, Any] | None:
+        # Graded-conservatism: report how close the straight chord gets (the teleport
+        # snap is effectively the chord). skip_first=False so an endpoint sitting in a
+        # disk still reports its (negative) margin.
+        chord = densify_polyline([robot, goal], step_m=grid_res_m)
+        return min_clearance_margin(chord, parsed, footprint_r_m=float(clearance_m), skip_first=False)
+
     start_cell = to_cell(robot)
     goal_cell = to_cell(goal)
     for cell in (start_cell, goal_cell):
         r, c = cell
         if 0 <= r < h and 0 <= c < w and not occ[r, c]:
             if strict_endpoints:
-                return False, {"probe": "nav_path_8conn", "blocked": True,
-                               "invalid_endpoint": "start" if cell == start_cell else "goal"}
+                info = {
+                    "probe": "nav_path_8conn",
+                    "blocked": True,
+                    "invalid_endpoint": "start" if cell == start_cell else "goal",
+                }
+                m = chord_margin()
+                if m is not None:
+                    info["margin"] = m
+                return False, info
             occ[r, c] = True
 
     path_open = _path_exists(occ, start_cell, goal_cell)
@@ -524,6 +580,10 @@ def nav_path_open_around_disks(
         "goal_xy": goal.tolist(),
         "blocked": not bool(path_open),
     }
+    if not path_open:
+        m = chord_margin()
+        if m is not None:
+            info["margin"] = m
     return bool(path_open), info
 
 
@@ -562,6 +622,9 @@ def nav_interpolated_route(
         "blocked": False,
     }
     hit = first_footprint_hit(waypoints, parsed, footprint_r_m=float(clearance_m), skip_first=True)
+    margin = min_clearance_margin(waypoints, parsed, footprint_r_m=float(clearance_m))
+    if margin is not None:
+        info["margin"] = margin
     if hit is not None:
         info["blocked"] = True
         info["hit"] = hit
