@@ -128,6 +128,7 @@ def select_attempts(
     robot_id: str = "",
     failure_modes: Iterable[str] = TRACKING_FAILURES,
     require_waypoints: bool = True,
+    exclude_feedforward: bool = True,
 ) -> list[ManipulationAttempt]:
     """Filter to the records usable for tracking calibration."""
     allowed = {str(mode) for mode in failure_modes}
@@ -138,6 +139,8 @@ def select_attempts(
         if allowed and attempt.failure_mode not in allowed:
             continue
         if require_waypoints and not attempt.planned_waypoints:
+            continue
+        if exclude_feedforward and attempt.context.get("feedforward") is True:
             continue
         selected.append(attempt)
     return selected

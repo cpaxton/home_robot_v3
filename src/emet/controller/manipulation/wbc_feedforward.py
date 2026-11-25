@@ -39,6 +39,8 @@ class FeedforwardModel:
     samples: int = 0
     source: str = ""
     schema: int = SCHEMA_VERSION
+    reference_q: dict[str, float] = field(default_factory=dict)
+    max_joint_distance: float = 0.20
     metadata: dict[str, float] = field(default_factory=dict)
 
     def bias_vector(self, joint_names: Iterable[str]) -> np.ndarray:
@@ -51,6 +53,8 @@ class FeedforwardModel:
             "joint_bias": {name: float(value) for name, value in sorted(self.joint_bias.items())},
             "samples": int(self.samples),
             "source": self.source,
+            "reference_q": {name: float(value) for name, value in sorted(self.reference_q.items())},
+            "max_joint_distance": float(self.max_joint_distance),
             "metadata": {key: float(value) for key, value in self.metadata.items()},
         }
 
@@ -69,6 +73,8 @@ class FeedforwardModel:
             joint_bias=cleaned,
             samples=int(data.get("samples") or 0),
             source=str(data.get("source") or ""),
+            reference_q={str(k): float(v) for k, v in (data.get("reference_q") or {}).items()},
+            max_joint_distance=float(data.get("max_joint_distance", 0.20)),
             metadata={str(k): float(v) for k, v in (data.get("metadata") or {}).items()},
         )
 
@@ -95,6 +101,7 @@ def fit_feedforward(
     window: int = 5,
     min_samples: int = 2,
     max_abs_bias: float = 0.75,
+    exclude_feedforward: bool = True,
 ) -> FeedforwardModel:
     """Fit a robust per-joint bias from tracking failures.
 
@@ -103,21 +110,29 @@ def fit_feedforward(
     ``max_abs_bias``. This fails closed on a single bad record instead of
     baking an outlier into every command.
     """
-    selected = select_attempts(attempts, robot_id=embodiment or "")
+    selected = select_attempts(
+        attempts, robot_id=embodiment or "", exclude_feedforward=exclude_feedforward
+    )
     requested = [str(name) for name in joint_names]
     samples: dict[str, list[float]] = {name: [] for name in requested}
+    targets: dict[str, list[float]] = {name: [] for name in requested}
     usable = 0
     for attempt in selected:
         bias = attempt.joint_bias(window=window)
-        if not bias:
+        target = attempt.final_target_q()
+        if not bias or target is None:
             continue
         usable += 1
         for name, value in bias.items():
             if requested and name not in samples:
                 continue
             samples.setdefault(name, []).append(float(value))
+            if name not in targets:
+                targets[name] = []
+            targets[name].append(float(target[attempt.joint_names.index(name)]))
 
     fitted: dict[str, float] = {}
+    reference: dict[str, float] = {}
     for name, values in samples.items():
         if len(values) < max(1, int(min_samples)):
             continue
@@ -125,6 +140,7 @@ def fit_feedforward(
         if not math.isfinite(median) or abs(median) > float(max_abs_bias):
             continue
         fitted[name] = median
+        reference[name] = float(np.median(np.asarray(targets.get(name) or [0.0], dtype=np.float64)))
     if not fitted:
         raise ValueError(
             "no joint had enough valid tracking attempts "
@@ -135,6 +151,7 @@ def fit_feedforward(
         joint_bias=fitted,
         samples=usable,
         source="manip_failures",
+        reference_q=reference,
         metadata={"window": float(window), "min_samples": float(min_samples), "max_abs_bias": float(max_abs_bias)},
     )
 
@@ -154,7 +171,13 @@ def apply_bias(
         raise ValueError(f"final_q has {q.size} values for {len(names)} joints")
     if model is None:
         return q
-    q = q + model.bias_vector(names)
+    # Only apply a joint's bias when the target is inside its calibrated posture
+    # envelope; a new IK branch must not inherit an unrelated static offset.
+    for index, name in enumerate(names):
+        reference = model.reference_q.get(name)
+        if reference is not None and abs(float(q[index]) - float(reference)) > model.max_joint_distance:
+            continue
+        q[index] += float(model.joint_bias.get(name, 0.0))
     if lower is not None or upper is not None:
         lo = np.asarray(list(lower) if lower is not None else [-math.inf] * q.size, dtype=np.float64)
         hi = np.asarray(list(upper) if upper is not None else [math.inf] * q.size, dtype=np.float64)

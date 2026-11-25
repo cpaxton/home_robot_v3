@@ -160,6 +160,7 @@ class KinematicPickPlaceExecutor:
         self.profile = profile
         self._feedforward = None
         feedforward_path = os.environ.get("EMET_WBC_FEEDFORWARD")
+        self._feedforward_path = feedforward_path or ""
         if feedforward_path:
             try:
                 from emet.controller.manipulation.wbc_feedforward import FeedforwardModel

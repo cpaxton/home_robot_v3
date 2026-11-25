@@ -122,3 +122,13 @@ def test_executor_applies_feedforward_to_the_final_settle(monkeypatch):
     for call in ex._stream_arm_q.call_args_list[2:]:
         np.testing.assert_allclose(call.args[0], expected)
     assert ex.last_attempt["reached"] is True
+
+def test_bias_is_skipped_outside_the_calibrated_posture():
+    model = FeedforwardModel(
+        embodiment="rby1",
+        joint_bias={"j": 0.5},
+        reference_q={"j": 1.0},
+        max_joint_distance=0.2,
+    )
+    np.testing.assert_allclose(apply_bias([1.1], ["j"], model), [1.6])
+    np.testing.assert_allclose(apply_bias([2.0], ["j"], model), [2.0])

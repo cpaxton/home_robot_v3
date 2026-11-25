@@ -44,6 +44,11 @@ def main() -> int:
     parser.add_argument("--window", type=int, default=5, help="Trace samples used for steady state (default: 5)")
     parser.add_argument("--min-samples", type=int, default=2, help="Minimum attempts per joint (default: 2)")
     parser.add_argument("--max-abs-bias", type=float, default=0.75, help="Reject implausible bias (default: 0.75)")
+    parser.add_argument(
+        "--include-feedforward",
+        action="store_true",
+        help="Include records produced with a feedforward active (contaminated calibration)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the model without writing it")
     args = parser.parse_args()
 
@@ -61,6 +66,7 @@ def main() -> int:
             window=args.window,
             min_samples=args.min_samples,
             max_abs_bias=args.max_abs_bias,
+            exclude_feedforward=not args.include_feedforward,
         )
     except ValueError as exc:
         print(f"Fit failed: {exc}", file=sys.stderr)

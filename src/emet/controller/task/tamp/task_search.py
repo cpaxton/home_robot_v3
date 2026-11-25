@@ -464,6 +464,8 @@ def execute_task_plan(
                 "receptacle_query": plan.receptacle_query,
                 "failure_mode": attempt.get("failure_mode"),
                 "message": code,
+                "feedforward": bool(getattr(executor, "_feedforward", None) is not None),
+                "feedforward_path": str(getattr(executor, "_feedforward_path", "") or ""),
                 "robot_id": str(getattr(spec, "name", "") or ""),
                 "job_id": os.environ.get("EMET_JOB_ID") or "",
             }
