@@ -1246,7 +1246,7 @@ position-servo actuator adapter.
 - [x] Case-library fingerprint includes embodiment/schema; generator emits multi-arm scenarios.
 - [x] External innate-os MuJoCo smoke: adapter vs direct torque, clipping, gravity, contact telemetry. See [innate-sim-validation.md](docs/plans/innate-sim-validation.md).
 - [x] Action-boundary `clamp_action` for base velocity, joint torque, and gripper limits; per-joint `control_mode`; current-limit fail-closed.
-- [x] Innate OS prototype: typed `ArmCommand`/`ArmState`, high-rate state, capability manifest, robot-side adapter, sim effort/contact parity. Fork `cpaxton/innate-os` branch `feat/torque-wbc-interface`; not hardware-tested. See [innate-os-wbc-interface.md](docs/plans/innate-os-wbc-interface.md).
+- [x] Innate OS prototype: typed `ArmCommand`/`ArmState`, high-rate state, capability manifest, robot-side adapter, sim effort/contact parity. Fork `cpaxton/innate-os` branch `feat/torque-wbc-interface`; fork PR [cpaxton/innate-os#1](https://github.com/cpaxton/innate-os/pull/1); not hardware-tested. See [innate-os-wbc-interface.md](docs/plans/innate-os-wbc-interface.md).
 - [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits).
 - [ ] Wire the adapter into the robot-side WBC transport and a MuJoCo servo model.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline.

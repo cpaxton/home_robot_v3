@@ -275,7 +275,13 @@ adapter; the wrist/gripper can use current control.
 ## Prototype branch
 
 A fork exists at `cpaxton/innate-os`, branch `feat/torque-wbc-interface`
-(commit `a6b77861`). It is an external prototype, not vendored into Emet.
+(commit `a6b77861`), with a draft PR into the fork's `main`:
+
+- **Fork PR:** https://github.com/cpaxton/innate-os/pull/1
+- **Branch:** https://github.com/cpaxton/innate-os/tree/feat/torque-wbc-interface
+
+This is an external prototype, not vendored into Emet, and not for upstream
+merge yet. The fork PR exists to keep the interface visible and reviewable.
 
 It includes:
 

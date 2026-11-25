@@ -299,7 +299,10 @@ publish enough capability information to build an `EmbodimentProfile`:
 - command lease/TTL, measured stop, and state timestamps.
 
 For Mars specifically, see
-[innate-os-wbc-interface.md](innate-os-wbc-interface.md). The short version is
+[innate-os-wbc-interface.md](innate-os-wbc-interface.md). The working prototype
+lives in the fork PR
+[cpaxton/innate-os#1](https://github.com/cpaxton/innate-os/pull/1); it is not
+vendored and not a hardware qualification. The short version is
 that the current XL430/XC430 shoulder and elbow joints have no current control;
 they can realize a position-servo impedance adapter but not true joint torque.
 The wrist and gripper are current-capable. Do not present the Mars adapter as
