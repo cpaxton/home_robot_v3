@@ -357,6 +357,28 @@ def min_clearance_margin(
     return best
 
 
+def relaxed_clearance_m(
+    clearance_m: float,
+    min_clearance_m: float | None,
+    *,
+    margin_m: float | None = None,
+) -> float | None:
+    """One bounded relaxation step: the clearance to retry with, or ``None``.
+
+    Graded conservatism: a refusal at ``clearance_m`` may be retried at the configured
+    ``min_clearance_m`` floor (never below it). Returns the floor when a single
+    relaxation step is authorized, else ``None``. When ``margin_m`` is provided it is
+    only informational; authorization is decided by the floor alone so the rule stays
+    simple and auditable.
+    """
+    if min_clearance_m is None:
+        return None
+    floor = float(min_clearance_m)
+    if not (0.0 < floor < float(clearance_m)):
+        return None
+    return floor
+
+
 def placement_obstacle_disks(
     placements: Mapping[str, Any],
     *,
