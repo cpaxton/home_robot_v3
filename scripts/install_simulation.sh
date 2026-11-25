@@ -50,6 +50,7 @@ while getopts "dany" opt; do
             echo "  -a: Force setup macros (overwrite existing macros_private.py)"
             echo "  -y: Non-interactive: skip prompts (asset re-download and macro overwrite)"
             echo "  --force-download: Re-download kitchen assets even when already present"
+            echo "  EMET_INSTALL_ROBOSUITE_MODELS=1: also clone/install optional robosuite_models (GR1, etc.)"
             exit 1
             ;;
     esac
@@ -103,25 +104,37 @@ cd robosuite || exit 1
 pip_install_editable || { echo "robosuite install failed." >&2; exit 1; }
 # Create macros_private.py from macros.py if missing (silences "No private macro file" warnings).
 if [ "$SETUP_MACROS_FORCE" = true ] || [ ! -f "robosuite/macros_private.py" ]; then
-    # In non-interactive mode, auto-confirm overwrite prompts.
-    if [ "$SETUP_MACROS_FORCE" = true ] || [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
-        echo "y" | "$PYTHON" scripts/setup_macros.py || true
+    # robosuite master moved this helper into the package (robosuite/scripts/);
+    # older tags keep it at scripts/. Prefer whichever exists.
+    SETUP_MACROS_PY="scripts/setup_macros.py"
+    if [ ! -f "$SETUP_MACROS_PY" ]; then
+        SETUP_MACROS_PY="robosuite/scripts/setup_macros.py"
+    fi
+    if [ ! -f "$SETUP_MACROS_PY" ]; then
+        echo "robosuite setup_macros.py not found; skipping private macros." >&2
+    elif [ "$SETUP_MACROS_FORCE" = true ] || [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
+        # In non-interactive mode, auto-confirm overwrite prompts.
+        echo "y" | "$PYTHON" "$SETUP_MACROS_PY" || true
     else
-        "$PYTHON" scripts/setup_macros.py || { echo "robosuite setup_macros failed." >&2; exit 1; }
+        "$PYTHON" "$SETUP_MACROS_PY" || { echo "robosuite setup_macros failed." >&2; exit 1; }
     fi
 fi
 cd ..
 
-# Optional extra robot models for robosuite (GR1, etc.). Clone from cpaxton fork; if present, update (fetch/pull).
-if [ ! -d "robosuite_models" ]; then
-    git clone git@github.com:cpaxton/robosuite_models.git
-fi
-if [ -d "robosuite_models" ]; then
-    cd robosuite_models || exit 1
-    git fetch origin 2>/dev/null || true
-    git pull --ff-only origin 2>/dev/null || true
-    pip_install_editable || { echo "robosuite_models install failed." >&2; exit 1; }
-    cd .. || exit 1
+# Optional extra robot models for robosuite (GR1, etc.). Not needed for RoboCasa's
+# PandaMobile/PandaOmron or emet's rby1/Stretch assets. Opt in explicitly: the fork
+# is large and a full clone can stall fresh/CI installs for many minutes.
+if [ "${EMET_INSTALL_ROBOSUITE_MODELS:-0}" = "1" ]; then
+    if [ ! -d "robosuite_models" ]; then
+        git clone https://github.com/cpaxton/robosuite_models.git
+    fi
+    if [ -d "robosuite_models" ]; then
+        cd robosuite_models || exit 1
+        git fetch origin 2>/dev/null || true
+        git pull --ff-only origin 2>/dev/null || true
+        pip_install_editable || { echo "robosuite_models install failed." >&2; exit 1; }
+        cd .. || exit 1
+    fi
 fi
 
 # Robocasa from fork (branch feature/v1.24; numpy 1.24+ compat). If already cloned, update in place; else clone.
@@ -134,7 +147,7 @@ if [ -d "robocasa" ]; then
     git pull --ff-only origin "$ROBOCASA_BRANCH" 2>/dev/null || git reset --hard "origin/$ROBOCASA_BRANCH" 2>/dev/null || true
     cd .. || exit 1
 else
-    git clone git@github.com:cpaxton/robocasa.git --branch "$ROBOCASA_BRANCH" --single-branch --depth 1
+    git clone https://github.com/cpaxton/robocasa.git --branch "$ROBOCASA_BRANCH" --single-branch --depth 1
 fi
 cd robocasa || exit 1
 pip_install_editable || { echo "robocasa install failed." >&2; exit 1; }

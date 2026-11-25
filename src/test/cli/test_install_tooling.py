@@ -70,3 +70,19 @@ def test_install_menu_exposes_and_executes_paper_toolchain(monkeypatch, tmp_path
 
     assert install_ui._execute_wizard_plan(tmp_path, plan) == 0
     assert calls == [("latexmk", True)]
+
+
+def test_run_install_simulation_non_interactive_passes_yes(monkeypatch, tmp_path: Path):
+    from emet.cli_cmds import run_sync
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(run_sync.subprocess, "call", lambda cmd, env=None: calls.append(cmd) or 0)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "install_simulation.sh").write_text("#!/bin/bash\n")
+
+    assert run_sync._run_install_simulation(tmp_path, non_interactive=True) == 0
+    assert calls == [["bash", str(tmp_path / "scripts" / "install_simulation.sh"), "-y"]]
+
+    calls.clear()
+    assert run_sync._run_install_simulation(tmp_path) == 0
+    assert "-y" not in calls[0]

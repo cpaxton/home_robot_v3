@@ -661,6 +661,7 @@ def _run_install_simulation(
     root: Path,
     skip_download_assets: bool = False,
     setup_macros: bool = False,
+    non_interactive: bool = False,
 ) -> int:
     """Run scripts/install_simulation.sh (robosuite + robocasa). Returns exit code.
     Asset download is part of installation by default; pass skip_download_assets to omit.
@@ -674,6 +675,8 @@ def _run_install_simulation(
         args.append("-n")
     if setup_macros:
         args.append("-a")
+    if non_interactive:
+        args.append("-y")
     env = os.environ.copy()
     env["EMET_PYTHON"] = sys.executable
     if _has_uv():
@@ -696,22 +699,27 @@ def _run_install_simulation(
     help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
 )
 @click.option("--no-sync", is_flag=True, help="Skip uv sync and third_party reinstall after clone/install")
-def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Skip interactive prompts (assets, macros)")
+def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool, non_interactive: bool) -> None:
     """Install simulation third-party deps (Robocasa + robosuite).
 
     Clones robosuite and robocasa, runs macro setup when missing (silences
     "No private macro file" warnings), downloads kitchen assets (~10GB), then
     runs ``uv sync`` and reinstalls editable ``third_party/`` robosuite /
     robosuite_models / robocasa (not in uv.lock; sync would otherwise remove them).
-    Use -n to skip the asset download (e.g. CI).
+    Use -n to skip the asset download (e.g. CI) and -y to skip prompts; a
+    non-interactive stdin (CI, background installs) also enables -y.
 
     Examples:
       emet install sim
       emet install sim -a
+      emet install sim -y
       emet install sim --no-download-assets --no-sync
     """
     root = _project_root()
-    result = _run_install_simulation(root, skip_download_assets, setup_macros)
+    result = _run_install_simulation(
+        root, skip_download_assets, setup_macros, non_interactive or not sys.stdin.isatty()
+    )
     if result != 0:
         sys.exit(result)
     if no_sync:
@@ -746,20 +754,25 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -
     help="Force run macro setup (overwrite existing macros_private.py); by default macros are set up only when missing",
 )
 @click.option("--no-sync", is_flag=True, help="Skip uv sync and third_party reinstall after clone/install")
-def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bool) -> None:
+@click.option("-y", "--yes", "non_interactive", is_flag=True, help="Skip interactive prompts (assets, macros)")
+def install_robocasa(skip_download_assets: bool, setup_macros: bool, no_sync: bool, non_interactive: bool) -> None:
     """Install Robocasa and robosuite (same as emet install sim).
 
     Clones robosuite and robocasa, runs macro setup when missing, downloads
     kitchen assets (~10GB), then runs ``uv sync`` and reinstalls editable
-    third_party sim packages. Use -n to skip the asset download.
+    third_party sim packages. Use -n to skip the asset download and -y to
+    skip prompts; a non-interactive stdin also enables -y.
 
     Examples:
       emet install robocasa
       emet install robocasa -a
+      emet install robocasa -y
       emet install robocasa --no-download-assets
     """
     root = _project_root()
-    result = _run_install_simulation(root, skip_download_assets, setup_macros)
+    result = _run_install_simulation(
+        root, skip_download_assets, setup_macros, non_interactive or not sys.stdin.isatty()
+    )
     if result != 0:
         sys.exit(result)
     if no_sync:
