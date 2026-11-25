@@ -522,6 +522,89 @@ def test_robocasa_pick_place_task_none_for_non_pickplace_or_non_robocasa():
     assert robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}, {"obj_main": {"cat": "mug"}}) is None
 
 
+def test_robocasa_task_tokens_survive_fixtures_containing_to():
+    """CamelCase fixtures (Stove/Toaster/ToasterOven) must not steal the delimiter."""
+    from emet.controller.task.tamp.agent_bridge import _robocasa_task_tokens
+
+    placements = {
+        "obj_main": {"cat": "mug"},
+        "counter_main": {"cat": "counter"},
+        "stove_main": {"cat": "stove"},
+        "toaster_main": {"cat": "toaster"},
+        "toasteroven_main": {"cat": "toasteroven"},
+        "cab_main": {"cat": "cab"},
+    }
+    assert _robocasa_task_tokens("PickPlaceCounterToStove", placements) == ("Counter", "Stove")
+    assert _robocasa_task_tokens("PickPlaceStoveToCounter", placements) == ("Stove", "Counter")
+    assert _robocasa_task_tokens("PickPlaceToasterToCounter", placements) == ("Toaster", "Counter")
+    assert _robocasa_task_tokens("PickPlaceCounterToToasterOven", placements) == ("Counter", "ToasterOven")
+    assert _robocasa_task_tokens("PickPlaceToasterOvenToCounter", placements) == ("ToasterOven", "Counter")
+
+
+def test_robocasa_pick_place_task_parses_stove_and_toaster_oven():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 0.8]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+        "stove_main": {"cat": "stove", "pos": [1.0, 0.0, 0.8]},
+        "toasteroven_main": {"cat": "toasteroven", "pos": [1.0, 1.0, 0.8]},
+    }
+    stove = robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToStove"}, placements)
+    assert stove is not None
+    assert (stove.start_recep, stove.goal_recep) == ("counter", "stove")
+    oven = robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToToasterOven"}, placements)
+    assert oven is not None
+    assert (oven.start_recep, oven.goal_recep) == ("counter", "toasteroven")
+
+
+def test_robocasa_fixture_match_is_order_independent_with_multiple_cabinets():
+    from emet.controller.task.tamp.agent_bridge import _match_placement_by_category
+
+    placements = {"cab_b_main": {"cat": "cab"}, "cab_a_main": {"cat": "cab"}}
+    reordered = dict(reversed(list(placements.items())))
+    assert _match_placement_by_category(placements, "Cabinet") == "cab_a_main"
+    assert _match_placement_by_category(reordered, "Cabinet") == "cab_a_main"
+
+
+class _RobocasaRobot:
+    def __init__(self, task: str, placements: dict):
+        self._task = task
+        self._placements = placements
+        self._state = {"command_protocol": {"version": 2, "server_boot_id": "boot"}}
+
+    def get_emet_session(self):
+        return {
+            "is_simulation": True,
+            "environment": {"kind": "robocasa", "task": self._task, "style": 1, "layout": 1},
+            "sim_object_placements": self._placements,
+        }
+
+
+def test_scene_tasks_exposes_robocasa_task_and_respects_filter():
+    from emet.agent.chat_tamp import build_tamp_handlers
+
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 0.8]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
+    }
+    handlers = build_tamp_handlers({"robot": _RobocasaRobot("PickPlaceCounterToCabinet", placements)})
+    data = decoded(handlers["scene_tasks"]())["data"]
+    assert data["pickable_categories"] == ["mug"]
+    assert data["receptacle_categories"] == ["cab"]
+    assert len(data["tasks"]) == 1
+    task = data["tasks"][0]
+    assert task["object_name"] == "mug"
+    assert task["receptacle_name"] == "cab"
+    assert task["start_receptacle"] == "counter"
+    assert task["task_ref"].startswith("task:")
+    assert "obj_main" not in json.dumps(data)
+
+    filtered = decoded(handlers["scene_tasks"](object_filter="banana"))["data"]
+    assert filtered["tasks"] == []
+
+
 def test_refusal_from_teleport_collision_parses_deepest_margin():
     msg = (
         "Command 47 failed: navigation start failed: teleport_endpoint_collision: "
