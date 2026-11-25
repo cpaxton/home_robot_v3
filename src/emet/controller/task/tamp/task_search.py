@@ -249,14 +249,28 @@ def plan_pick_place(
     state = getattr(robot, '_state', None)
     use_scene_query = isinstance(state, dict) and state.get('sim_base_pose_query') is True
     if use_scene_query and approach_pose is None:
-        poses = approach_candidates_for_object_xy(obj_xy, standoff=approach_standoff_m, mode=mode, arm=arm)
+        # A single 0.55 m ring sits inside counters and islands. Try larger
+        # standoffs too; IK ranking below rejects poses the arm cannot reach.
+        radii = (float(approach_standoff_m), float(approach_standoff_m) + 0.20,
+                 float(approach_standoff_m) + 0.40)
+        poses = []
+        for radius in radii:
+            poses.extend(approach_candidates_for_object_xy(
+                obj_xy, standoff=radius, mode=mode, arm=arm, count=8))
+        logger.info(f'TAMP approach search: {len(poses)} candidates over radii={radii}')
     clear = [True] * len(poses)
     if use_scene_query:
         try:
-            evidence = robot.check_base_poses(poses)
-            clear = evidence['clear']
-            if len(clear) != len(poses) or any(type(value) is not bool for value in clear):
-                raise ValueError('invalid clearance response')
+            clear = []
+            # The command protocol bounds a clearance query to 32 endpoints.
+            for start in range(0, len(poses), 32):
+                batch = poses[start:start + 32]
+                evidence = robot.check_base_poses(batch)
+                batch_clear = evidence['clear']
+                if len(batch_clear) != len(batch) or any(type(value) is not bool for value in batch_clear):
+                    raise ValueError('invalid clearance response')
+                clear.extend(batch_clear)
+            logger.info(f'TAMP approach search: clear={sum(clear)}/{len(clear)}')
         except (RuntimeError, TimeoutError, ValueError, KeyError) as exc:
             return TaskPlan([], object_gt_body, receptacle_gt_body, success=False,
                             message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)

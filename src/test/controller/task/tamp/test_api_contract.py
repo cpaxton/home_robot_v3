@@ -173,7 +173,7 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     from emet.controller.task.tamp import task_search
 
     robot = Robot()
-    robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * 15}
+    robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * (len(poses) - 1)}
     seen = []
     executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool",
                                joint_names=["arm"], pregrasp_standoff_m=.18, lift_m=.22,
@@ -192,7 +192,7 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     assert result.mode == "kinematic"
     assert result.plan.success, result.reason
     np.testing.assert_allclose(
-        result.plan.steps[0].args["xyt"], task_search.approach_candidates_for_object_xy([0, 0])[2]
+        result.plan.steps[0].args["xyt"], task_search.approach_candidates_for_object_xy([0, 0], count=8)[2]
     )
 
 
