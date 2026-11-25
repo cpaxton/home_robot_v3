@@ -107,7 +107,8 @@ class ObservedNativeSnapshot:
                     or contact.capture != self.frame.capture or contact.target.kind != 'convex'
                     or not np.array_equal(contact.target.vertices, payload.vertices_reference)
                     or not np.array_equal(contact.target.world_from_local, world_from_reference)
-                    or contact.target.offset_m < margin):
+                    or contact.target.offset_m < margin
+                    or (contact.approximate_volume and payload.construction != 'approximate_observed_box')):
                 raise ValueError('invalid_observed_target_contact')
 
 

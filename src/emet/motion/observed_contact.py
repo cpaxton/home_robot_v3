@@ -102,6 +102,7 @@ class ObservedTargetContact:
     calibration_id: str
     fingertip_geom_ids: frozenset[int]
     max_penetration_m: float
+    approximate_volume: bool = False
 
     def __post_init__(self):
         # Deferred because effects imports the observed collision checker.
@@ -124,6 +125,7 @@ class ObservedTargetContact:
             or self.target.offset_m < 0
             or not fingers
             or any(type(g) is not int or g < 0 for g in fingers)
+            or type(self.approximate_volume) is not bool
             or not np.isfinite(self.max_penetration_m)
             or not 0 <= self.max_penetration_m <= 0.005
         ):
@@ -141,6 +143,7 @@ class ObservedTargetContact:
             self.fingertip_geom_ids,
             self.max_penetration_m,
             self.capture.calibration_id,
+            self.approximate_volume,
         )
 
     @classmethod
@@ -163,6 +166,7 @@ class ObservedTargetContact:
             calibration_id,
             frozenset(fingertip_geom_ids),
             max_penetration_m,
+            approximate_volume=payload.construction == 'approximate_observed_box',
         )
 
     def require(self, *, now, model_signature, capture_id=None):

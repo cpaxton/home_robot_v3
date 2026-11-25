@@ -311,6 +311,14 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
 
     def _target_robot_collides(self, model, data, gid, target=None):
         contact = self.target_contact
+        if (contact.approximate_volume and self.simulation_contact_terminated_close
+                and self.phase in {'grasp', 'close'}
+                and gid in (contact.fingertip_geom_ids | self.target_approach_geom_ids)):
+            # A padded partial-view box is a task estimate, not solid object
+            # material. Explicit contact-terminated simulation may approach it
+            # with the named hand. Surrounding measured surfaces are still
+            # checked by _robot_scene_collides; arm links keep target checks.
+            return False
         if (gid in (contact.fingertip_geom_ids | self.target_approach_geom_ids) and self.phase in CONTACT_PHASES
                 and getattr(self, 'simulation_contact_terminated_close', False)):
             if gid in contact.fingertip_geom_ids and self._planning_gripper_contact_corridor and self.phase == 'close':

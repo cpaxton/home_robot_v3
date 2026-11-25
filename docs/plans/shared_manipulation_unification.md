@@ -36,6 +36,9 @@ constitute observation evidence or authorization.
   Collision contracts accept observed voxels or bounded observed surfaces,
   require known-free workspace and invalidate plans on representation changes.
   The live map producer still uses the existing background/local-map machinery.
+- Sensor depth excludes MuJoCo debug sites; physical robot/scene meshes remain.
+  Mapping retains full measured object ownership separately from the interior
+  subset used for fitting, and ray queries own prepared private native data.
 - The normal Panda benchmark CLI binds shared visual grounding and calls the
   canonical registry. The alternate diagnostic executor still exists and must
   not be mistaken for qualification of the shared tool.
@@ -71,7 +74,11 @@ The current public metric-grasp contract is in [the API](../api/tamp.md).
 1. Stabilize the native carry/placement transition and add observed task-goal
    verification/recovery after unexpected release. Preserve the distinction
    between reaching the benchmark goal and completing a controlled placement.
-   Compare posture/hand-orientation alternatives using the same native binding.
+   v32 struck the faucet with environment checks bypassed. Restore observed
+   obstacle-aware planning before tuning grip. v38 removed debug-site depth
+   artifacts but still refused near the pear: qualify full cross-view measured
+   object ownership under illumination changes. Keep approximate target contact
+   scoped to the explicitly reported simulation mode.
 2. Complete image-bound object/grasp and placement hints, protected-object task
    constraints and strict approach-path guarantees. Metric grasp support is
    implemented; all remaining unsupported options must continue to refuse.

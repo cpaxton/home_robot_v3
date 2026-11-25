@@ -276,3 +276,64 @@ runs targeted shared-grasp lint, grounding/phase/geometry tests and an AST impor
 boundary guard. Broad CPU CI and pre-existing legacy layering inversions remain
 separate follow-ups. The living implementation plan was reconciled rather than
 extending its superseded per-trial history.
+
+## Obstacle-enabled carry diagnosis
+
+The v32 independent physics trace identifies a forearm strike on the faucet
+spout at simulation time 50.35 s, followed by loss of both pad contacts around
+52.75 s. This diagnostic uses scorer fixture labels only to explain the failure;
+fixture coordinates and object state are not supplied to the runtime planner.
+The hand remained upright. Disabling all environmental checks therefore hid a
+real carry obstacle; gripper tolerance alone does not explain that run.
+
+| Trial | Outcome |
+| --- | --- |
+| v33 | Dense certified execution instead of coalesced commands still lost grip during preplace; upstream goal false, 44 unintended contact frames. |
+| v34 | Restored local environmental collision checks; preflight refused with no motion. Approximate target-envelope and local-surface blockers exposed. |
+| v35/v36 | Scoped approximate target contact and retained cross-view object associations. No motion; a hand-adjacent measured return still blocked planning. Preparing private ray-query data did not remove it. |
+| v37 | Debug sites hidden from sensor rendering. The hand-adjacent phantom blocker disappeared; a remaining near-object surface blocked preflight. No commands sent. |
+
+Frozen robot-only replay established the sensor defect: pixel (401, 220) in
+v35's alternate camera measured 0.931780815 m; rendering the capture-aligned
+robot alone reproduced 0.931780279 m. Diagnostic segmentation attributed it to
+`gripper0_right_grip_site_cylinder`, a translucent debug site with 10 m half-length.
+Hiding sites removes that return; physical geometry groups are unchanged.
+See artifact `debug-site-depth-replay.json`. Renderer/scorer identities were used
+only for this diagnostic, never for agent object grounding or motion planning.
+The shared RoboSuite sensor renderer now excludes debug sites by default.
+
+Tracking interior erosion is useful for fitting, but its omitted object edges
+must not become background obstacles. Capture-bound views now retain a separate
+full measured association mask. Mapping uses that association, bounded by the
+approximate object's local volume, while fitting retains its interior subset.
+Unassociated pixels, including other surfaces inside the approximate box, remain
+obstacles. Bootstrap retains all contributing cameras' associations. No CAD
+completion or blanket volume erasure was added.
+
+Approximate boxes are explicitly distinguished from known-model solid material
+in the contact contract. Existing explicit contact-terminated simulation mode
+can approach the approximate target with the named hand in grasp/close only;
+measured surrounding surfaces, arm links and self collision remain checked.
+Default/hardware and known-model target policies are unchanged. Contact identity
+includes this distinction, and a known-model snapshot cannot claim approximation.
+
+Robot surface ray queries now prepare a private position-complete MuJoCo data
+copy. Mapping and tracking cannot share mutable native ray-query scratch or rely
+on a capture that has only had forward kinematics updated. A regression verifies
+caller-state preservation and separate scratch ownership across calls.
+
+v38 retained full associated edge masks, with local obstacle checks enabled.
+It still refused before motion (`ik_failed`); remaining hand/world witnesses lie
+near the pear, for example [1.923, -0.477, 0.987] m. The frozen sensor replay finds
+nearby pear-colored returns in both scene cameras, with different illumination.
+Thus the full-association fix removes erosion as an ownership loss mechanism but
+does not establish complete cross-view object segmentation. Do not clear the
+whole approximate box to hide that remaining uncertainty. Next, qualify measured
+object ownership across views/lighting, then retry obstacle-aware carry/release.
+The v38 scripted outer selection is not a new autonomous-agent benchmark result.
+
+Checkpoint validation: **778 related tests passed**, with two existing dependency
+warnings. Focused rendering/concurrency checks passed (9 tests); Ruff and whitespace
+checks passed. TAMP CI includes the robot-ray and sensor-scene regressions. All
+v33–v38 reports and failures remain under the artifact root; no new complete
+transfer success is claimed.

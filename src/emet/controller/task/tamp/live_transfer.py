@@ -58,7 +58,6 @@ def _bootstrap_reference_masks(views, camera, mask, appearance_mask, plane, *, p
         foreground &= appearance_mask(view.rgb)
         height = view.world[..., :2] @ plane[:2]+plane[2]
         foreground &= view.world[..., 2] > height+.008
-        foreground = _tracking_interior(foreground)
         if foreground.sum() < 25:
             continue
         if view.robot_guard is not None:
@@ -322,9 +321,10 @@ class LiveTransferScene:
                                     (view.world[..., :2] <= bounds[1]+.008), axis=-1)
                     on_plane = (np.abs(view.world[..., 2] - height) <= .008) & within
                     foreground &= ~on_plane
+                associated = foreground
                 foreground = _tracking_interior(foreground)
                 if foreground.sum() >= 25:
-                    masks[name] = replace(view, foreground_mask=foreground)
+                    masks[name] = replace(view, foreground_mask=foreground, associated_foreground_mask=associated)
             if not masks:
                 self.diagnostics["last_empty_tracking_view"] = {
                     "capture_id": sample.capture.observation_id,
@@ -516,12 +516,13 @@ class LiveTransferScene:
                 ),
             )
         tracker = make_tracker()
+        initial_tracking_views = {selected.object_camera: views[selected.object_camera]}
         if self.payload_model.construction == 'approximate_observed_box':
             reference_masks = _bootstrap_reference_masks(
                 views, selected.object_camera, selected.object_mask, tracker.appearance_mask, supports[0].patch.plane)
             if len(reference_masks) > 1:
                 cloud = ObservedGeometry(capture.observation_id, 'synchronized_multiview', capture.earliest,
-                    np.concatenate([views[name].world[mask] for name, mask in reference_masks.items()]),
+                    np.concatenate([views[name].world[_tracking_interior(mask)] for name, mask in reference_masks.items()]),
                     profile['position_error_m'])
                 self.payload_model, reference = registration_surface(
                     cloud, box_padding_m=profile.get('payload_box_padding_m', .01))
@@ -529,6 +530,9 @@ class LiveTransferScene:
                 tracker = make_tracker()
                 for name, mask in reference_masks.items():
                     labels[name][self.task.object_ref] = mask
+            tracker.latest = replace(tracker.latest, masks=tuple(sorted(reference_masks.items())))
+            initial_tracking_views = {name: replace(views[name], associated_foreground_mask=mask)
+                                      for name, mask in reference_masks.items()}
             self.diagnostics['reference_surface_pixels_by_view'] = {
                 name: int(mask.sum()) for name, mask in reference_masks.items()}
         fitted = self.clock()
@@ -553,11 +557,11 @@ class LiveTransferScene:
         self.assumption = StaticBackgroundAssumption(
             self.epoch, capture.earliest, capture.earliest + profile["static_s"], profile["calibration_id"],
         )
-        # Tracker initialization covers the reference view. Subsequent packets
-        # use all cameras, with the same capture identity across views. Start
+        # Initialization retains measured associations from every contributing
+        # reference camera. Subsequent packets keep the same shared capture ID. Start
         # the pose stream before the initial voxel carve to bound capture lag.
         self.stream = ContinuousRgbdSource(
-            tracker, initial_views={selected.object_camera: views[selected.object_camera]},
+            tracker, initial_views=initial_tracking_views,
             read_views=self._read_views, history_size=12, clock=self.clock,
             max_transient_fit_rejections=self.profile.get("transient_fit_rejections", 0),
         )
@@ -695,6 +699,28 @@ class LiveTransferScene:
                 row["cameras"][name] = camera_row
         return rows
 
+    def _associated_object_masks(self, tracked):
+        masks = dict(tracked.fit.masks)
+        if self.payload_model.construction != 'approximate_observed_box':
+            return masks
+        pose = tracked.fit.fit.poses[0]
+        low, high = self.payload_model.vertices_reference.min(0), self.payload_model.vertices_reference.max(0)
+        for name, view in tracked.views:
+            foreground = getattr(view, "associated_foreground_mask", None)
+            if foreground is None:
+                foreground = view.foreground_mask
+            if foreground is None:
+                continue
+            # These are fresh appearance-associated measured returns, not a
+            # volume crop. Other fixtures/unknown pixels stay obstacles even
+            # inside the approximate box. Pose-fitting fallback can use fewer
+            # cameras without turning associated object pixels into background.
+            local = (view.world-pose[:3, 3]) @ pose[:3, :3]
+            within = np.all((local >= low-.01) & (local <= high+.01), axis=-1)
+            selected = foreground & within
+            masks[name] = masks.get(name, False) | selected
+        return masks
+
     def _tracked_masks(self, sample, tracked):
         masks = {name: {} for name in sample.observations}
         for name, obs in sample.observations.items():
@@ -704,7 +730,7 @@ class LiveTransferScene:
                 mask = (depth >= .1) & np.all((world >= patch.bounds[0]) & (world <= patch.bounds[1]), axis=-1)
                 height = world[..., :2] @ patch.plane[:2] + patch.plane[2]
                 masks[name][contact.support_ref] = mask & (np.abs(world[..., 2] - height) <= patch.measurement_margin_m)
-        for name, mask in tracked.fit.masks:
+        for name, mask in self._associated_object_masks(tracked).items():
             masks[name][self.task.object_ref] = mask
         if self.enclosure is not None:
             pose = tracked.fit.fit.poses[0]
@@ -787,7 +813,7 @@ class LiveTransferScene:
         if sample.qualify_surface is not None and not len(sample.material.measured_surface_points):
             sample = replace(sample, material=sample.qualify_surface())
         excluded = {}
-        tracked_masks = dict(tracked.fit.masks)
+        tracked_masks = self._associated_object_masks(tracked)
         for name, observation in sample.observations.items():
             _, depth, world = capture_arrays(observation)
             own = sample.material.matches_surface(world.reshape(-1, 3), point_error_m=self.profile["depth_margin_m"])

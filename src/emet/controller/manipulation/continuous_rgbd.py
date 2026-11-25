@@ -85,7 +85,8 @@ class ContinuousRgbdSource:
                 return False
             if not np.array_equal(old.pose_prior, new.pose_prior):
                 return False
-            if not np.array_equal(old.foreground_mask, new.foreground_mask):
+            if (not np.array_equal(old.foreground_mask, new.foreground_mask)
+                    or not np.array_equal(old.associated_foreground_mask, new.associated_foreground_mask)):
                 return False
             a, b = old.robot_guard, new.robot_guard
             if (a is None) != (b is None):

@@ -62,6 +62,8 @@ jobs:
             src/test/motion/test_local_scene_store.py \
             src/test/motion/test_observed_admission.py \
             src/test/motion/test_observed_contact.py \
+            src/test/motion/test_robot_surface_rays.py \
+            src/test/simulation/test_robosuite_offscreen_render.py \
             src/test/motion/test_observed_support_contact.py
           do
             report=$(basename "$file" .py)

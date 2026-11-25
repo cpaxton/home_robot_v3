@@ -90,3 +90,57 @@ def test_multiview_bootstrap_adds_only_local_matching_above_support_returns():
     views['other'] = make(extra, capture='different')
     with pytest.raises(ObservationUnavailable, match='capture_identity_mismatch'):
         _bootstrap_reference_masks(views, 'front', mask, lambda rgb: rgb, np.zeros(3))
+
+
+@pytest.mark.parametrize('approximate', [False, True])
+def test_object_association_retains_other_view_measurements_without_erasing_unassociated_obstacles(approximate):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from emet.controller.task.tamp.live_transfer import LiveTransferScene
+    from emet.motion.placement_geometry import box_corners
+
+    scene = LiveTransferScene.__new__(LiveTransferScene)
+    scene.payload_model = SimpleNamespace(construction='approximate_observed_box' if approximate else 'known_model_prior',
+        vertices_reference=box_corners([[-.02]*3, [.02]*3]))
+    world = np.zeros((3, 3, 3))
+    world[:, 2, 0] = .2
+    foreground = np.ones((3, 3), bool)
+    foreground[1, 1] = False  # Unassociated obstacle even inside the proxy box.
+    front = np.eye(3, dtype=bool)
+    tracked = SimpleNamespace(fit=SimpleNamespace(masks=(('front', front),),
+        fit=SimpleNamespace(poses=np.eye(4)[None])),
+        views=(('wrist', SimpleNamespace(world=world, foreground_mask=foreground)),))
+    masks = scene._associated_object_masks(tracked)
+    np.testing.assert_array_equal(masks['front'], front)
+    if approximate:
+        assert masks['wrist'][:, :2].sum() == 5
+        assert not masks['wrist'][1, 1] and not masks['wrist'][:, 2].any()
+    else:
+        assert 'wrist' not in masks
+    assert foreground[:, 2].all()  # Original association input was not modified.
+
+
+def test_mapping_keeps_associated_object_edges_omitted_from_pose_fit():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from emet.controller.task.tamp.live_transfer import LiveTransferScene
+    from emet.motion.placement_geometry import box_corners
+
+    scene = LiveTransferScene.__new__(LiveTransferScene)
+    scene.payload_model = SimpleNamespace(construction='approximate_observed_box',
+        vertices_reference=box_corners([[-.02]*3, [.02]*3]))
+    interior = np.zeros((8, 8), bool)
+    interior[2:6, 2:6] = True
+    associated = np.zeros_like(interior)
+    associated[1:7, 1:7] = True
+    tracked = SimpleNamespace(fit=SimpleNamespace(masks=(('scene', interior),),
+        fit=SimpleNamespace(poses=np.eye(4)[None])), views=(('scene', SimpleNamespace(
+            world=np.zeros((8, 8, 3)), foreground_mask=interior, associated_foreground_mask=associated)),))
+    masks = scene._associated_object_masks(tracked)
+    np.testing.assert_array_equal(masks['scene'], associated)
+    assert not masks['scene'][0].any()  # No growth into unassociated environment.
+    assert interior.sum() == 16

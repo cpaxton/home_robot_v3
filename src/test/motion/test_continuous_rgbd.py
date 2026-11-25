@@ -324,3 +324,11 @@ def test_retransmitted_rejected_capture_is_not_refitted_or_counted_twice(changed
         assert stream.poll_once()
         assert stream.snapshot().fit.capture.earliest == 10.2
     stream.close()
+
+
+def test_capture_replay_cannot_change_object_association_without_new_measurement():
+    packet = views(10.)
+    previous = SimpleNamespace(views=tuple(packet.items()))
+    changed = {'head': replace(packet['head'], associated_foreground_mask=np.ones((8, 8), bool))}
+    assert ContinuousRgbdSource._same_packet(previous, packet)
+    assert not ContinuousRgbdSource._same_packet(previous, changed)

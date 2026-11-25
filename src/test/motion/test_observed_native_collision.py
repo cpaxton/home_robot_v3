@@ -552,3 +552,54 @@ def test_bounded_surface_geometry_uses_same_native_executor(representation):
         input_mode='observed', synchronize=lambda data: None, command_joints=lambda q: True)
     assert executor.input_mode == 'observed'
     assert not checker.configuration_collides(model, data)
+
+
+@pytest.mark.parametrize('approximate,simulation,phase,gid,collision', [
+    (True, True, 'grasp', 1, False), (True, True, 'close', 2, False),
+    (False, True, 'grasp', 1, True), (True, False, 'grasp', 1, True),
+    (True, True, 'preplace', 1, True), (True, True, 'grasp', 3, True),
+])
+def test_approximate_target_contact_is_scoped_to_explicit_simulation_hand_approach(
+        approximate, simulation, phase, gid, collision):
+    from types import SimpleNamespace
+
+    from emet.motion.observed_solids import WorldSolid
+
+    checker = ObservedNativeCollisionChecker.__new__(ObservedNativeCollisionChecker)
+    checker.target_contact = SimpleNamespace(approximate_volume=approximate, fingertip_geom_ids=frozenset((1,)),
+        target=WorldSolid('box', (.02, .02, .02), np.eye(4)), collides=lambda *args, **kwargs: True)
+    checker.target_approach_geom_ids = frozenset((2,))
+    checker.simulation_contact_terminated_close = simulation
+    checker._planning_gripper_contact_corridor = False
+    checker.phase, checker.margin = phase, .005
+    checker._robot_bound = lambda *args: (WorldSolid('box', (.01, .01, .01), np.eye(4), offset_m=.01), .001)
+    assert checker._target_robot_collides(None, None, gid) is collision
+
+
+def test_permitted_approximate_target_contact_still_checks_surrounding_depth_obstacles():
+    from types import SimpleNamespace
+
+    from emet.motion.observed_admission import AdmissionDecision
+    from emet.motion.observed_solids import WorldSolid
+
+    checker = ObservedNativeCollisionChecker.__new__(ObservedNativeCollisionChecker)
+    checker.target_contact = SimpleNamespace(approximate_volume=True, fingertip_geom_ids=frozenset((1,)))
+    checker.target_approach_geom_ids = frozenset((1,))
+    checker.simulation_contact_terminated_close = True
+    checker.simulation_ignore_environment = False
+    checker.phase, checker.payload = 'grasp', None
+    checker._stationary_geometry, checker._starting_volumes = {}, {}
+    checker.admission = object()
+    queries = []
+
+    def query(solid, **kwargs):
+        queries.append(solid)
+        return AdmissionDecision(False, 'occupied_local_surface')
+
+    checker.local_scene = SimpleNamespace(query=query)
+    checker.simulation_clearance_slack_m = 0.
+    solid = WorldSolid('box', (.01, .01, .01), np.eye(4), offset_m=.01)
+    checker._robot_bound = lambda *args: (solid, .001)
+    model = SimpleNamespace(geom=lambda gid: SimpleNamespace(name='hand'))
+    assert checker._robot_scene_collides(model, None, 1, solid.bounds)
+    assert queries and checker.last_blocked_geom == 'hand'

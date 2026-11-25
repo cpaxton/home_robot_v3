@@ -337,7 +337,7 @@ def test_expired_support_is_no_actuation_even_with_fresh_payload_observation(sys
     assert system.calls == []
 
 
-@pytest.mark.parametrize('change', ['pose', 'extent', 'uncertainty', 'capture', 'identity'])
+@pytest.mark.parametrize('change', ['pose', 'extent', 'uncertainty', 'capture', 'identity', 'construction'])
 def test_contact_layer_must_enclose_same_captured_payload(system, change):
     task = next(iter(system.adapter.tasks.values()))
     initial = system.source.snapshot(task.object_ref, task.support_ref)
@@ -352,6 +352,8 @@ def test_contact_layer_must_enclose_same_captured_payload(system, change):
         contact = replace(contact, target=replace(contact.target, vertices=contact.target.vertices/2))
     elif change == 'uncertainty':
         contact = replace(contact, target=replace(contact.target, offset_m=0.))
+    elif change == 'construction':
+        contact = replace(contact, approximate_volume=True)
     elif change == 'capture':
         contact = replace(contact, capture=replace(contact.capture, observation_id='different'))
     else:

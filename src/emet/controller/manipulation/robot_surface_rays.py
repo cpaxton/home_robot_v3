@@ -17,6 +17,14 @@ def measured_robot_surfaces(model, data, observations, *, tolerance_m=.015, know
         raise ValueError('invalid_robot_surface_tolerance')
     if not np.isfinite(visual_surface_tolerance_m) or not 0 <= visual_surface_tolerance_m <= .03:
         raise ValueError('invalid_visual_surface_tolerance')
+    # Ray queries use position-dependent BVH/stack state, not just geom poses.
+    # Captures may contain FK-only data, and mapping/tracking can query one
+    # capture concurrently. Prepare private scratch; never mutate or share the
+    # caller's captured mjData through native ray operations.
+    scratch = mujoco.MjData(model)
+    mujoco.mj_copyData(scratch, model, data)
+    mujoco.mj_fwdPosition(model, scratch)
+    data = scratch
     matched = []
     groups = None
     if known_material is not None:

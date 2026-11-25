@@ -723,3 +723,16 @@ def test_single_view_tracker_uses_the_same_approximate_geometry_policy():
     assert result.fit.conditioning == 'approximate_reference_orientation'
     assert result.fit.observation_ids == ('fresh',)
     assert not result.fit.translation_observable and not result.fit.orientation_observable
+
+
+def test_full_object_association_is_frozen_and_distinct_from_fit_subset():
+    capture = CaptureInterval('association', 10., 10., 10., 'clock')
+    measured, mask = view(capture)
+    subset = mask.copy()
+    subset[:45] = False
+    full = replace(measured, foreground_mask=subset, associated_foreground_mask=mask)
+    mask[:] = False
+    assert full.associated_foreground_mask.sum() > full.foreground_mask.sum()
+    assert not full.associated_foreground_mask.flags.writeable
+    with pytest.raises(ValueError, match='invalid_moving_reference_mask'):
+        replace(full, associated_foreground_mask=np.ones((2, 2), bool))

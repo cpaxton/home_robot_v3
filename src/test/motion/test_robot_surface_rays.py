@@ -123,3 +123,30 @@ def test_candidate_only_surface_qualification_matches_full_frame_subset():
     for masks in ([], [np.zeros((2, 2), bool)], [np.zeros(depth.shape, int)]):
         with pytest.raises(ValueError, match='invalid_robot_surface_masks'):
             measured_robot_surfaces(model, data, [obs], pixel_masks=masks)
+
+
+def test_ray_query_prepares_private_data_from_fk_only_capture(monkeypatch):
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+        <body pos="0 0 1"><joint type="slide" axis="0 0 1"/>
+        <geom type="box" size=".3 .3 .1" mass="1"/></body>
+        </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    data.qpos[0] = .2
+    mujoco.mj_kinematics(model, data)
+    before = data.qpos.copy(), data.geom_xpos.copy()
+    obs = SimpleNamespace(rgb=np.zeros((3, 3, 3), np.uint8), depth=np.full((3, 3), 1.1),
+        camera_K=np.array([[100., 0., 1.], [0., 100., 1.], [0., 0., 1.]]), camera_pose=np.eye(4))
+    original = mujoco.mj_multiRay
+    scratch_data = []
+
+    def query(model, scratch, *args):
+        assert scratch is not data
+        scratch_data.append(scratch)
+        return original(model, scratch, *args)
+
+    monkeypatch.setattr(mujoco, 'mj_multiRay', query)
+    for _ in range(2):
+        assert len(measured_robot_surfaces(model, data, [obs])) == 9
+    assert scratch_data[0] is not scratch_data[1]
+    np.testing.assert_array_equal(data.qpos, before[0])
+    np.testing.assert_array_equal(data.geom_xpos, before[1])

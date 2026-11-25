@@ -1387,6 +1387,9 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
         if self._primary_renderer is None:
             self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
             self._primary_renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
+            # Sites are debug/interaction annotations, not sensed material.
+            # Translucent sites still write depth (including long EE markers).
+            self._primary_renderer._scene_option.sitegroup[:] = 0
         return self._primary_renderer
 
     def _discard_primary_renderer_unlocked(self) -> None:

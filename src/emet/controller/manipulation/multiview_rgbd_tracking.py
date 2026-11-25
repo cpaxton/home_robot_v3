@@ -39,6 +39,8 @@ class SynchronizedRgbdView:
     geometry: RgbdCaptureGeometry | None = None
     foreground_mask: np.ndarray | None = None
     pose_prior: np.ndarray | None = None
+    # Full measured ownership; foreground_mask may be an interior fitting subset.
+    associated_foreground_mask: np.ndarray | None = None
 
     def __post_init__(self):
         arrays = _arrays(self.rgb, self.depth, self.world)
@@ -49,14 +51,16 @@ class SynchronizedRgbdView:
             prior = ObjectPoseEvidence(self.pose_prior, self.capture.received_monotonic,
                                        'rgbd_tracking', self.capture.observation_id).world_from_object
             object.__setattr__(self, 'pose_prior', prior)
-        if self.foreground_mask is not None:
-            mask = np.asarray(self.foreground_mask)
+        for name in ("foreground_mask", "associated_foreground_mask"):
+            if getattr(self, name) is None:
+                continue
+            mask = np.asarray(getattr(self, name))
             if (
                 mask.dtype != bool or mask.shape != self.depth.shape or mask.sum() < 25
                 or not np.isfinite(self.world[mask]).all() or np.any(self.depth[mask] <= 0)
             ):
                 raise ValueError("invalid_moving_reference_mask")
-            object.__setattr__(self, "foreground_mask", _frozen(mask))
+            object.__setattr__(self, name, _frozen(mask))
         if self.robot_guard is not None and not isinstance(self.robot_guard, RobotViewGuard):
             raise ValueError("invalid_robot_view_guard")
         if self.geometry is not None:
