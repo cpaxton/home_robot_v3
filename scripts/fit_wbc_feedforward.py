@@ -44,6 +44,14 @@ def main() -> int:
     parser.add_argument("--window", type=int, default=5, help="Trace samples used for steady state (default: 5)")
     parser.add_argument("--min-samples", type=int, default=2, help="Minimum attempts per joint (default: 2)")
     parser.add_argument("--max-abs-bias", type=float, default=0.75, help="Reject implausible bias (default: 0.75)")
+    parser.add_argument("--cluster-distance", type=float, default=0.42, help="Posture cluster radius (default: 0.42)")
+    parser.add_argument("--outlier-bias-limit", type=float, default=1.2, help="Reject contaminated attempts (default: 1.2)")
+    parser.add_argument(
+        "--max-joint-distance",
+        type=float,
+        default=0.12,
+        help="Apply a calibration only within this joint distance (default: 0.12)",
+    )
     parser.add_argument(
         "--include-feedforward",
         action="store_true",
@@ -66,16 +74,21 @@ def main() -> int:
             window=args.window,
             min_samples=args.min_samples,
             max_abs_bias=args.max_abs_bias,
+            cluster_distance=args.cluster_distance,
+            max_joint_distance=args.max_joint_distance,
+            outlier_bias_limit=args.outlier_bias_limit,
             exclude_feedforward=not args.include_feedforward,
         )
     except ValueError as exc:
         print(f"Fit failed: {exc}", file=sys.stderr)
         return 1
 
-    print(f"{'joint':24s} {'bias (rad/m)':>12s}")
-    for name, value in sorted(model.joint_bias.items()):
-        print(f"{name:24s} {value:+12.4f}")
-    print(f"samples={model.samples} joints={len(model.joint_bias)}")
+    for index, calibration in enumerate(model.calibrations):
+        print(f"calibration {index} samples={calibration.samples}")
+        print(f"  {'joint':24s} {'reference':>10s} {'bias (rad/m)':>14s}")
+        for name in sorted(calibration.joint_bias):
+            print(f"  {name:24s} {calibration.reference_q.get(name, 0.0):>10.4f} {calibration.joint_bias[name]:+14.4f}")
+    print(f"samples={model.samples} calibrations={len(model.calibrations)}")
     if args.dry_run:
         print("dry-run: not writing", args.out)
         return 0

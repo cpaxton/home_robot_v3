@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 """Modified version of robocasa's kitchen scene generation script."""
 
+import os
 import re
 import tempfile
 from collections import OrderedDict
@@ -240,6 +241,11 @@ def model_generation_wizard(
     }
     if seed is not None:
         config["seed"] = int(seed)
+    # Benchmark harnesses can pin the task's object group for reproducibility
+    # (e.g. "pear" for PickPlaceCounterToSink); Robocasa defaults to "all".
+    obj_groups = (os.environ.get("EMET_ROBOCASA_OBJ_GROUPS") or "").strip()
+    if obj_groups:
+        config["obj_groups"] = obj_groups
 
     print(colored("Initializing environment...", "yellow"))
 
