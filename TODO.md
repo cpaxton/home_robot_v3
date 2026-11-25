@@ -1244,6 +1244,7 @@ position-servo actuator adapter.
 - [x] Multi-arm schema, vector layout, per-arm reward, example Mars/Sourccey/RB-Y1/Stretch profiles.
 - [x] Position-servo adapter with torque/current/lead clipping and fail-closed actuator fields.
 - [x] Case-library fingerprint includes embodiment/schema; generator emits multi-arm scenarios.
+- [ ] Innate OS: typed `ArmCommand`/`ArmState`, high-rate state, capability manifest, robot-side torque adapter, sim parity. See [innate-os-wbc-interface.md](docs/plans/innate-os-wbc-interface.md).
 - [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits).
 - [ ] Wire the adapter into the robot-side WBC transport and a MuJoCo servo model.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline.

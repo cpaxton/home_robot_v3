@@ -248,6 +248,26 @@ Torque actions require tighter constraints than velocity actions:
 The adapter is feedforward; it is not a force limit. A contact force estimate
 or a compliant guard remains a separate requirement.
 
+## Robot backend contract
+
+The multi-robot abstraction lives here, not in any one robot driver. Each
+backend (innate-os, a ROS 2 Control system, MuJoCo, Isaac, Gazebo, …) must
+publish enough capability information to build an `EmbodimentProfile`:
+
+- base kind and action dimension;
+- arm/joint-group names, joint order, DOF, EE links, grippers;
+- per-joint position/velocity/torque limits and control modes;
+- current/torque feedback availability and units;
+- contact/force sensing and gripper force/contact state;
+- command lease/TTL, measured stop, and state timestamps.
+
+For Mars specifically, see
+[innate-os-wbc-interface.md](innate-os-wbc-interface.md). The short version is
+that the current XL430/XC430 shoulder and elbow joints have no current control;
+they can realize a position-servo impedance adapter but not true joint torque.
+The wrist and gripper are current-capable. Do not present the Mars adapter as
+full-arm torque control.
+
 ## Open questions
 
 - **Mars servo mode**: current-controlled position vs true current control on
