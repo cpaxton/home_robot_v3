@@ -72,6 +72,7 @@ on the active communication integrations.
 | Tool | Main inputs | Effect | Contract |
 | --- | --- | --- | --- |
 | `say` | text | Speech | Requires TTS; speech is not evidence of physical action. |
+| `ask_user` | question | Speak/deliver a question, then wait | The user's reply is the authorization; asking does not itself grant motion or relaxation. |
 | `wave` | none | Gesture/arm motion | Legacy robot-supported gesture; no manipulation success guarantee. |
 | `nod_head` | none | Head gesture | Legacy gesture, distinct from measured task inspection. |
 | `shake_head` | none | Head gesture | Legacy gesture, distinct from measured task inspection. |

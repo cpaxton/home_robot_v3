@@ -1063,26 +1063,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             "treat their next message as the answer."
         )
 
-    tools.append(
-        Tool(
-            name="ask_user",
-            description=(
-                "Ask the user a clarifying, permission, or help question and wait for their answer. "
-                "Use when a request is ambiguous, when a motion was refused (e.g. low clearance) and "
-                "you need permission to relax/retry, or when you are uncertain. Speak the question and "
-                "send it to Discord if connected, then stop — the user's next message is their answer."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string", "description": "The question to ask the user."},
-                },
-                "required": ["question"],
-            },
-            func=ask_user,
-            returns_info=True,
-        )
-    )
+    tools.append(_bind("ask_user", func=ask_user))
 
     # -- quit ----------------------------------------------------------------
     tools.append(_bind("quit", func=lambda: None, executor_commands=_simple_exec_mapping("quit")))

@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "scripts" / "calibrate_clearance_floor.py"
 
 
-def _load() -> "object":
+def _load() -> object:
     spec = importlib.util.spec_from_file_location("calibrate_clearance_floor", SCRIPT)
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

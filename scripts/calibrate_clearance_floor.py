@@ -207,7 +207,6 @@ def main() -> int:
     )
 
     if args.run_smoke and smoke:
-        smoke_dir = out_root / "pick_place_smoke"
         smoke_cmd = [
             sys.executable,
             str(REPO / "scripts" / "eval_tamp_floor.py"),

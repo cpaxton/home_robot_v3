@@ -425,7 +425,11 @@ def execute_task_plan(
         # mode) for offline RL-WBC replay; the agent-facing result stays a summary.
         attempt = getattr(executor, "last_attempt", None)
         if isinstance(attempt, dict) and attempt:
-            from emet.controller.manipulation.failure_record import record_manip_attempt, record_scenario, scenario_from_attempt
+            from emet.controller.manipulation.failure_record import (
+                record_manip_attempt,
+                record_scenario,
+                scenario_from_attempt,
+            )
 
             context = {
                 "op": op,
