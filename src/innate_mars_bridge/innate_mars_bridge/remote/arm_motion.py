@@ -228,6 +228,10 @@ class MarsJointRecovery:
         return {"arm_recovery": {"joint": joint, "target_rad": target}}
 
     def poll(self):
+        # stop() clears the driver handle once a cancel settles; the reactive
+        # runtime never polls a cancelled recovery, but guard against a stray poll.
+        if self.pending is None:
+            raise RuntimeError("Mars joint recovery is not active")
         self.ros.verify_arm_recovery_path(native=self.native)
         q, dq = self.ros.arm_motion_feedback()
         tolerance = ENCODER_STEP_RAD + 1e-9 if self.native else POSITION_TOLERANCE
