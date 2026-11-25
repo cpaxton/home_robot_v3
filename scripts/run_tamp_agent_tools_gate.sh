@@ -225,7 +225,7 @@ fi
 
 if items_has counter-sink-kinematic; then
     run_item robocasa_counter_sink_kinematic robocasa_counter_sink_kinematic "$TIMEOUT" \
-        env EMET_GT_TEACHER=1 uv run python scripts/scripted_sim_pick_place.py \
+        env EMET_GT_TEACHER=1 EMET_ROBOCASA_OBJ_GROUPS=pear uv run python scripts/scripted_sim_pick_place.py \
         --start-sim --sim configs/sim/robocasa_pick_place_rby1_sink.yaml --manip-mode kinematic \
         --settle-s 2 --retries 3 --object pear --receptacle sink \
         --tool-calls-json "$ROBOCASA_TOOL_CALLS"

@@ -9,3 +9,4 @@ robocasa_layout: 1
 headless: true
 port_offset: 0
 seed: 0
+# Set EMET_ROBOCASA_OBJ_GROUPS=pear to pin the object group (default: all).
