@@ -283,3 +283,25 @@ def test_nav_path_open_around_disks_routes_around_single_disk():
     assert path_open and not info["blocked"]
     assert "margin" not in info
 
+
+def test_relaxed_clearance_m_one_bounded_step_to_floor():
+    from emet.eval.tamp_clutter import relaxed_clearance_m
+
+    assert relaxed_clearance_m(0.22, 0.14) == 0.14
+    # No floor configured → no relaxation.
+    assert relaxed_clearance_m(0.22, None) is None
+    # Floor at/above the current clearance → no relaxation.
+    assert relaxed_clearance_m(0.22, 0.22) is None
+    assert relaxed_clearance_m(0.22, 0.30) is None
+    # Non-positive floor is invalid.
+    assert relaxed_clearance_m(0.22, 0.0) is None
+    assert relaxed_clearance_m(0.22, -0.1) is None
+
+
+def test_relaxed_clearance_m_margin_is_informational_only():
+    from emet.eval.tamp_clutter import relaxed_clearance_m
+
+    # Authorization is decided by the floor alone, not by how close the refusal was.
+    assert relaxed_clearance_m(0.22, 0.14, margin_m=-0.02) == 0.14
+    assert relaxed_clearance_m(0.22, 0.14, margin_m=-0.50) == 0.14
+

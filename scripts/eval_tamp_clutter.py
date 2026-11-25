@@ -182,6 +182,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--validate-fixture", action="store_true", help="Construct and execute a reference witness; do not score MCTS")
     p.add_argument("--clearance-m", type=float, default=0.22, help="nav min-clearance for the GT validity probe")
     p.add_argument(
+        "--min-clearance-m",
+        type=float,
+        default=None,
+        help=(
+            "graded-conservatism floor: a refused nav reports relax_allowed and the "
+            "clearance to retry with (one bounded step). None = relaxation disabled."
+        ),
+    )
+    p.add_argument(
         "--test-battery",
         action="store_true",
         help="GT+MCTS battery: pick/place, declutter, blocked & unblocked nav per (robot x scene). No AI models.",
@@ -553,7 +562,7 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         bin_body_override=fixture['bin_body'], goal_xy=fixture['goal_xy'],
         goal_radius_m=ep.success_radius_m, drop_radius_m=ep.success_radius_m,
         manip_mode=manip, executor=executor, seed=ep.seed, clearance_m=args.clearance_m,
-        strict_navigation=True, reference=building,
+        min_clearance_m=args.min_clearance_m, strict_navigation=True, reference=building,
     )
     reference_completed = bool(metrics.get('task_success'))
     final = _read_placements(robot)
@@ -717,6 +726,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
                     objects=(),
                     goal_radius_m=ep.success_radius_m,
                     clearance_m=float(args.clearance_m),
+                    min_clearance_m=args.min_clearance_m,
                 )
             elif ep.mode == "cleanup":
                 goal_reached = True
@@ -789,6 +799,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             executor=executor,
             seed=ep.seed,
             clearance_m=float(args.clearance_m),
+            min_clearance_m=args.min_clearance_m,
         )
         metrics.update(
             {
