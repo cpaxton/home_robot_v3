@@ -10,10 +10,14 @@ The existing TAMP APIs own plan handles, revalidation and physical execution.
 
 from __future__ import annotations
 
+import logging
+
 from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+
+_logger = logging.getLogger(__name__)
 
 
 def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]]:
@@ -146,6 +150,11 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
     def _format_tamp_plan(plan_ref: str, build: Any) -> dict:
         plan = build.plan
         if plan is None or not plan.success or build.task is None:
+            _logger.warning(
+                "plan_pick_place failed: reason=%r diagnostics=%r",
+                build.reason,
+                getattr(plan, "diagnostics", None),
+            )
             return response("plan_pick_place", code=failure_code(build.reason or "planner_error"))
         return response("plan_pick_place", data=plan_data(plan, build.mode, plan_ref))
 
