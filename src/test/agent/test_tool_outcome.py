@@ -168,6 +168,32 @@ def test_refusal_without_margin_does_not_render_margin():
     assert "refused=collision" in out.render()
 
 
+def test_from_refusal_dict_maps_nav_refusal_shape():
+    out = ToolOutcome.from_refusal_dict(
+        "pick_place",
+        {
+            "code": "clearance",
+            "margin_m": -0.02,
+            "threshold_m": 0.22,
+            "relax_allowed": True,
+            "relaxed_clearance_m": 0.14,
+        },
+    )
+    assert out.refused is True
+    assert out.refusal_code == "clearance"
+    assert out.margin_m == -0.02
+    assert out.threshold_m == 0.22
+    assert out.relax_allowed is True
+    assert out.payload["relaxed_clearance_m"] == 0.14
+    assert "refused=clearance" in out.render()
+    assert "relaxable" in out.render()
+
+
+def test_from_refusal_dict_none_is_refused_without_detail():
+    out = ToolOutcome.from_refusal_dict("pick_place", None)
+    assert out.refused is True and out.refusal_code == ""
+
+
 def test_aim_arm_stub_records_closer_look(monkeypatch):
     mem = GraphEQAMemory(
         defer_llm_clients=True,

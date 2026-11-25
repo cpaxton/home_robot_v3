@@ -159,6 +159,29 @@ class ToolOutcome:
         )
 
     @classmethod
+    def from_refusal_dict(cls, tool: str, refusal: dict[str, Any] | None) -> ToolOutcome:
+        """Wrap a ``nav_refusal`` / TAMP ``data.refusal`` dict into a refused outcome.
+
+        The dict shape is ``{code, margin_m, threshold_m, relax_allowed,
+        relaxed_clearance_m}``. Missing keys default to ``None``; a ``None`` refusal
+        yields a non-refusal failed outcome (unknown reason).
+        """
+        if not isinstance(refusal, dict):
+            return cls(ok=False, status="refused", note="refusal (no detail)", tool=tool, refused=True)
+        return cls(
+            ok=False,
+            status="refused",
+            note=str(refusal.get("message") or ""),
+            tool=tool,
+            refused=True,
+            refusal_code=str(refusal.get("code") or ""),
+            margin_m=(float(refusal["margin_m"]) if refusal.get("margin_m") is not None else None),
+            threshold_m=(float(refusal["threshold_m"]) if refusal.get("threshold_m") is not None else None),
+            relax_allowed=bool(refusal.get("relax_allowed", False)),
+            payload={"relaxed_clearance_m": refusal.get("relaxed_clearance_m")} if refusal.get("relaxed_clearance_m") is not None else {},
+        )
+
+    @classmethod
     def from_exception(cls, tool: str, exc: BaseException) -> ToolOutcome:
         return cls(ok=False, status="exception", note=str(exc)[:200], tool=tool, payload={"error": str(exc)})
 
