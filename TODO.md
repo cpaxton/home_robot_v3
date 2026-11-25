@@ -49,13 +49,17 @@ tracking fix, the failure-data training pipeline, and the open/close skill.
       the context, (c) a loader/validation script, and (d) wiring into the in-flight
       RL-WBC training data path. Do not treat the sink as done until the training side
       consumes it.
-- [ ] **RoboCasa counter-height grasp tracking.** rby1 `PickPlaceCounterToCabinet`
-      fails `grasp_failed:pregrasp_tracking_failed` (EE error 0.35 m; torso_joint1
-      planned −0.25 vs observed 0.08, other joints track). Likely IK solution at/over
-      the torso1 limit and/or the grasp approach puts the object at the arm-workspace
-      edge. Fix: check `torso_joint1` limits in the rby1 MJCF, re-seed IK off the
-      torso1 extreme, and/or make the grasp approach bounds-/reach-aware. Flag
-      `unreachable` (done) when IK genuinely cannot solve.
+- [x] Torso settle: re-command the final IK posture for a bounded settle before the
+      measured EE check (`_plan_and_execute_ee`). The recorded failure was PD lag, not
+      a joint limit: Galaxea `torso_joint1` range is −1.13..1.83 rad, so the planned
+      −0.25 is legal, and the observed 0.08 was the joint never arriving. Covered by
+      `test_final_posture_is_recommanded_until_the_torso_settles`.
+- [ ] **RoboCasa counter-height grasp — revalidate end to end.** Re-run rby1
+      `PickPlaceCounterToCabinet` after the settle fix and confirm the EE error no
+      longer trips `pregrasp_tracking_failed`. If it still fails, check whether the
+      0.55 m grasp approach puts the object at the arm-workspace edge and make the
+      grasp approach bounds-/reach-aware like the placement search. `ik_failed`
+      reports `unreachable` (done) when IK genuinely cannot solve.
 - [ ] **RoboCasa pick-place end-to-end**: after the grasp fix, verify
       `robocasa_rby1_floor_to_counter_mcts` / `robocasa_sourccey_counter_to_cab_mcts`
       land within `success_radius_m`. `robocasa_pp_s1` (Stretch) is a teleport
