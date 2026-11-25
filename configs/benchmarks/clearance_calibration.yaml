@@ -1,0 +1,32 @@
+# Graded-conservatism calibration: determine the min_clearance floor empirically.
+#
+# Sweep the nav clearance gate over floor_values and pick the smallest value where
+# sim collisions stay zero and the refusal rate does not spike (the knee). The
+# chosen value becomes the default `min_clearance` (the floor relaxation may reach).
+#
+# Run: scripts/calibrate_clearance_floor.py  (under `emet jobs`, never inline).
+#
+# Tasks are FROZEN and held out from the paper S0/S1 clutter numbers. They are
+# clearance-sensitive nav_goal tasks (reach a landmark through furniture/clutter),
+# which is exactly where the clearance gate is the binding constraint.
+floor_values: [0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22]
+seed: 20261124
+
+# Clutter registry the nav_goal tasks are loaded from (ClutterEpisode schema).
+episodes_file: configs/ovmm/clutter_episodes_signal.yaml
+
+# Frozen nav_goal tasks (rby1; latch path, ~5 min each). Swept over floor_values.
+nav_goal_tasks:
+  - ithor_nav_goal_00_rby1_n8_table_2
+  - ithor_nav_goal_00_rby1_n8_bed_3
+  - ithor_nav_goal_00_rby1_n8_4
+  - ithor_nav_goal_01_rby1_n8_bed_2
+  - ithor_nav_goal_01_rby1_n8_counter_3
+  - ithor_nav_goal_01_rby1_n8_4
+
+# Pipeline sanity check (run once, NOT swept — the floor does not affect it):
+# a fast near-miss pick-place that exercises the full find + pick + place path.
+pick_place_smoke: robocasa_rby1_floor_to_counter_mcts
+
+# Selection rule (enforced in the sweep summary):
+#   smallest floor with zero sim collisions and no refusal-rate spike.

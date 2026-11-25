@@ -1,0 +1,19 @@
+# Graded-conservatism validation: run ONCE against the locked floor.
+#
+# Held out from the calibration set. Confirms the additive refusal contract +
+# relaxation did not overfit the calibration tasks and did not regress the
+# agentic EQA loop or pick-and-place.
+#
+# HM-EQA (no-regression on the agent loop; navigation + VLM, no manipulation):
+#   qids sampled seeded (Random(20261124)) from the paper-113 pool, disjoint from
+#   dev_sets.yaml (dev_ids + gate_holdout8 + gate_bal32). Run e.g.:
+#     uv run emet jobs run --name clearance-val --need-mib 12000 -- \
+#       ./scripts/run_hmeqa_countclock_slice.sh  # or: emet hmeqa h2h --qids 0,7,50
+hmeqa_qids: [0, 7, 50]
+seed: 20261124
+
+# Pick-and-place (functional, held out from calibration): one MuJoCo (RoboCasa),
+# one Molmo (iTHOR).
+pick_place_episodes:
+  - robocasa_pp_s1
+  - molmo_ithor_rby1_s2_bowl_pp
