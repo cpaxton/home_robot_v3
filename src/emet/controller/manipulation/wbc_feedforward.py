@@ -71,7 +71,7 @@ class FeedforwardModel:
     samples: int = 0
     source: str = ""
     schema: int = SCHEMA_VERSION
-    max_joint_distance: float = 0.12
+    max_joint_distance: float = 0.20
     metadata: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -117,7 +117,7 @@ class FeedforwardModel:
             calibrations=calibrations,
             samples=int(data.get("samples") or sum(cal.samples for cal in calibrations)),
             source=str(data.get("source") or ""),
-            max_joint_distance=float(data.get("max_joint_distance", 0.12)),
+            max_joint_distance=float(data.get("max_joint_distance", 0.20)),
             metadata={str(k): float(v) for k, v in (data.get("metadata") or {}).items()},
         )
 
@@ -186,8 +186,9 @@ def fit_feedforward(
     min_samples: int = 2,
     max_abs_bias: float = 0.75,
     exclude_feedforward: bool = True,
-    cluster_distance: float = 0.15,
-    max_joint_distance: float = 0.12,
+    cluster_distance: float = 0.42,
+    max_joint_distance: float = 0.20,
+    outlier_bias_limit: float = 1.2,
 ) -> FeedforwardModel:
     """Fit a table of per-posture biases from clean tracking failures.
 
@@ -199,8 +200,18 @@ def fit_feedforward(
     selected = select_attempts(
         attempts, robot_id=embodiment or "", exclude_feedforward=exclude_feedforward
     )
+    # An attempt with an extreme per-joint offset is a contaminated run (e.g. an
+    # overcorrecting controller), not a posture to learn from.
+    clean: list[ManipulationAttempt] = []
+    for attempt in selected:
+        bias = attempt.joint_bias(window=window)
+        if not bias:
+            continue
+        if any(abs(float(value)) > float(outlier_bias_limit) for value in bias.values()):
+            continue
+        clean.append(attempt)
     requested = [str(name) for name in joint_names]
-    clusters = _cluster_attempts(selected, window=window, cluster_distance=cluster_distance)
+    clusters = _cluster_attempts(clean, window=window, cluster_distance=cluster_distance)
     calibrations: list[FeedforwardCalibration] = []
     usable = 0
     for cluster in clusters:
@@ -236,7 +247,8 @@ def fit_feedforward(
     if not calibrations:
         raise ValueError(
             "no posture had enough valid tracking attempts "
-            f"(selected={len(selected)}, clusters={len(clusters)}, min_samples={min_samples})"
+            f"(selected={len(selected)}, clean={len(clean)}, clusters={len(clusters)}, "
+            f"min_samples={min_samples})"
         )
     return FeedforwardModel(
         embodiment=str(embodiment),
