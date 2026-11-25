@@ -50,6 +50,8 @@ class TaskPlan:
     execution_mode: str | None = None
     diagnostics: list[dict[str, Any]] = field(default_factory=list)
     measurements: list[dict[str, Any]] = field(default_factory=list)
+    # Semantic-only refusal (graded conservatism), e.g. teleport collision margin.
+    refusal: dict[str, Any] | None = None
 
 
 def approach_yaw_for_mode(mode: str = "front", arm: str = "left") -> float:
@@ -422,6 +424,15 @@ def execute_task_plan(
         logger.warning(f"TAMP execute failed op={op}: {code}")
         return plan
 
+    def _capture_refusal(exc: BaseException) -> None:
+        """Attach a semantic-only refusal (e.g. teleport collision margin) if present."""
+        from emet.controller.task.tamp.api import refusal_from_teleport_collision
+
+        if plan.refusal is None:
+            refusal = refusal_from_teleport_collision(str(exc))
+            if refusal is not None:
+                plan.refusal = refusal
+
     for step in plan.steps:
         op = step.op
         args = step.args
@@ -450,6 +461,7 @@ def execute_task_plan(
                 if not isinstance(success, (bool, np.bool_)) or not success:
                     return _fail(op, "approach_failed:" + str(getattr(result, "reason", getattr(result, "message", "movement_not_confirmed"))))
             except Exception as exc:
+                _capture_refusal(exc)
                 return _fail(op, f"approach_failed:{type(exc).__name__}:{exc}")
         elif op == "grasp":
             gi = int(args["grasp_index"])
@@ -492,6 +504,7 @@ def execute_task_plan(
                     # Preserve private command/receipt detail for diagnosis without
                     # leaking simulator identities into the agent-facing response.
                     logger.warning(f"TAMP place execution exception: {type(exc).__name__}: {exc}")
+                    _capture_refusal(exc)
                     return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not result.success:
                     return _fail(op, f"place_failed:{result.message}")
@@ -509,6 +522,7 @@ def execute_task_plan(
                     # Preserve private command/receipt detail for diagnosis without
                     # leaking simulator identities into the agent-facing response.
                     logger.warning(f"TAMP place execution exception: {type(exc).__name__}: {exc}")
+                    _capture_refusal(exc)
                     return _fail(op, f"place_execution_error:{type(exc).__name__}")
                 if not ok:
                     return _fail(op, "teleport_place_failed")

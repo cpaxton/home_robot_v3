@@ -8,7 +8,7 @@ import pytest
 
 from emet.agent.tools import get_tools
 from emet.controller.task.tamp import agent_bridge as bridge
-from emet.controller.task.tamp.api import TAMP_TOOLS, json_tool, response
+from emet.controller.task.tamp.api import TAMP_TOOLS, json_tool, plan_data, refusal_from_teleport_collision, response
 from emet.controller.task.tamp.task_search import TaskPlan, TaskPlanStep
 
 
@@ -476,3 +476,62 @@ def test_unsupported_adapter_does_not_ignore_placement_region():
 def test_verification_evidence_rejects_private_or_malformed_values(value):
     from emet.controller.task.tamp.api import VerificationFailure
     assert VerificationFailure.from_data(value) is None
+
+
+def test_refusal_from_teleport_collision_parses_deepest_margin():
+    msg = (
+        "Command 47 failed: navigation start failed: teleport_endpoint_collision: "
+        "[{'bodies': ['dishwasher_x', 'base_link'], 'distance_m': -0.0736}, "
+        "{'bodies': ['cabinet_y', 'base_link'], 'distance_m': -0.1162}]"
+    )
+    refusal = refusal_from_teleport_collision(msg)
+    assert refusal is not None
+    assert refusal["code"] == "teleport_collision"
+    assert refusal["refused"] is True
+    assert abs(refusal["margin_m"] - (-0.1162)) < 1e-9
+    assert refusal["threshold_m"] is None
+    assert refusal["relax_allowed"] is False
+    # Body identities are never exposed in the semantic refusal.
+    assert "dishwasher_x" not in json.dumps(refusal)
+    assert "cabinet_y" not in json.dumps(refusal)
+
+
+def test_refusal_from_teleport_collision_none_for_other_errors():
+    assert refusal_from_teleport_collision("base approach rejected") is None
+    assert refusal_from_teleport_collision("grasp_failed:pregrasp_tracking_failed") is None
+    assert refusal_from_teleport_collision("") is None
+
+
+def test_teleport_collision_surfaces_refusal_through_plan_and_data():
+    from emet.controller.task.tamp.task_search import execute_task_plan
+
+    class Executor:
+        def begin_operation(self, *_):
+            pass
+
+        def grasp_only(self, *_args, **_kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(success=True)
+
+        def place_only(self, *_args, **_kwargs):
+            raise RuntimeError(
+                "Command 99 failed: navigation start failed: teleport_endpoint_collision: "
+                "[{'bodies': ['dishwasher_x', 'base_link'], 'distance_m': -0.0736}, "
+                "{'bodies': ['cabinet_y', 'base_link'], 'distance_m': -0.1162}]"
+            )
+
+    ex = Executor()
+    robot, plan, _, _ = setup_plan()
+    robot.move_base_to = lambda *a, **k: True
+    plan.steps[1] = TaskPlanStep("grasp", {"grasp_index": 0, "object_query": "bowl"})
+    plan.steps[2] = TaskPlanStep("place", {"receptacle_query": "table"})
+    result = execute_task_plan(robot, plan, executor=ex, grasp_poses=[np.eye(4)], manip_mode="kinematic")
+    assert result.failed_op == "place"
+    assert result.refusal is not None
+    assert result.refusal["code"] == "teleport_collision"
+    assert abs(result.refusal["margin_m"] - (-0.1162)) < 1e-9
+    data = plan_data(result, "kinematic", "plan:1")
+    assert data["refusal"] == result.refusal
+    assert "dishwasher_x" not in json.dumps(data)
+    assert "cabinet_y" not in json.dumps(data)
