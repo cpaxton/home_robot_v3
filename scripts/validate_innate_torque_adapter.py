@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Smoke-test the torque -> position-servo adapter against innate-os's MuJoCo sim.
 
 This script is deliberately an **external integration test**. It does not vendor
