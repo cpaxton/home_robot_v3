@@ -529,6 +529,25 @@ def test_robocasa_pick_place_task_none_for_non_pickplace_or_non_robocasa():
     assert robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}, {"obj_main": {"cat": "mug"}}) is None
 
 
+def test_robocasa_goal_binds_nearest_cabinet_and_emits_one_ref():
+    from emet.controller.task.tamp.agent_bridge import build_scene_task_refs, robocasa_pick_place_task
+
+    placements = {
+        "obj_main": {"cat": "sugar_cube", "pos": [0.5, -0.2, 0.9]},
+        "counter_main": {"cat": "counter", "pos": [0.5, -0.2, 0.9]},
+        "cab_far_main": {"cat": "cab", "pos": [5.0, 5.0, 1.8]},
+        "cab_1_main": {"cat": "cab", "pos": [0.6, -0.3, 1.85]},
+    }
+    task = robocasa_pick_place_task(
+        {"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}, placements
+    )
+    assert task.goal_gt_body == "cab_1_main"
+
+    refs = build_scene_task_refs([task], placements)
+    assert len(refs) == 1
+    assert refs[0].receptacle_body == "cab_1_main"
+
+
 def test_robocasa_task_tokens_survive_fixtures_containing_to():
     """CamelCase fixtures (Stove/Toaster/ToasterOven) must not steal the delimiter."""
     from emet.controller.task.tamp.agent_bridge import _robocasa_task_tokens

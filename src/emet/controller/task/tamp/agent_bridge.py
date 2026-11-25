@@ -138,17 +138,40 @@ def _robocasa_fixture_token(name: str) -> str:
     return _ROBOCASA_FIXTURE_ALIASES.get(token, token)
 
 
-def _match_placement_by_category(placements: dict[str, dict[str, Any]], token: str) -> str | None:
+def _match_placement_by_category(
+    placements: dict[str, dict[str, Any]],
+    token: str,
+    *,
+    reference_body: str | None = None,
+) -> str | None:
     """Resolve a task-name receptacle token to one placement body key (internal).
 
     Exact matches (body key or GT ``cat``) win. Prefix matches cover the wizard
-    short keys (``cab`` ↔ ``cab_main``); ties are broken deterministically by
-    shortest key then lexical order so dict iteration order cannot pick a
-    different fixture between runs.
+    short keys (``cab`` ↔ ``cab_main``). When several fixtures match (layouts
+    have multiple cabinets), prefer the one nearest ``reference_body`` — the task
+    object sits on the start counter beside its goal cabinet. Ties fall back to
+    shortest key then lexical order so dict order cannot change the choice.
     """
     want = _robocasa_fixture_token(token)
     if not want:
         return None
+
+    def rank(key: str) -> tuple[float, int, str]:
+        if reference_body:
+            ref = placements.get(reference_body) or {}
+            info = placements.get(key) or {}
+            try:
+                distance = float(
+                    np.linalg.norm(
+                        np.asarray(info["pos"], dtype=np.float64)[:2]
+                        - np.asarray(ref["pos"], dtype=np.float64)[:2]
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                distance = float("inf")
+            return (distance, len(key), key)
+        return (0.0, len(key), key)
+
     exact: list[str] = []
     prefix: list[str] = []
     for key, info in placements.items():
@@ -160,7 +183,7 @@ def _match_placement_by_category(placements: dict[str, dict[str, Any]], token: s
             prefix.append(str(key))
     for group in (exact, prefix):
         if group:
-            return sorted(group, key=lambda key: (len(key), key))[0]
+            return sorted(group, key=rank)[0]
     return None
 
 
@@ -221,10 +244,10 @@ def robocasa_pick_place_task(environment: Any, placements: dict[str, dict[str, A
     if object_body is None:
         return None
     object_cat = str((live.get(object_body) or {}).get("cat") or "obj")
-    goal_body = _match_placement_by_category(live, goal_token)
+    goal_body = _match_placement_by_category(live, goal_token, reference_body=object_body)
     if goal_body is None:
         return None
-    start_body = _match_placement_by_category(live, start_token)
+    start_body = _match_placement_by_category(live, start_token, reference_body=object_body)
     return SimpleNamespace(
         object=object_cat,
         goal_recep=str((live.get(goal_body) or {}).get("cat") or _robocasa_fixture_token(goal_token)),
@@ -234,6 +257,8 @@ def robocasa_pick_place_task(environment: Any, placements: dict[str, dict[str, A
             else _robocasa_fixture_token(start_token)
         ),
         object_gt_body=object_body,
+        goal_gt_body=goal_body,
+        start_gt_body=start_body,
     )
 
 
@@ -257,7 +282,14 @@ def build_scene_task_refs(
                 object_body = object_matches[0]
         if object_body is None:
             continue
-        receptacle_bodies = bodies_matching_category(live, str(getattr(task, "goal_recep", "")))
+        goal_hint = getattr(task, "goal_gt_body", None)
+        receptacle_bodies: list[str] = []
+        if goal_hint:
+            resolved_goal = resolve_body_alias(str(goal_hint), live)
+            if resolved_goal is not None:
+                receptacle_bodies = [resolved_goal]
+        if not receptacle_bodies:
+            receptacle_bodies = bodies_matching_category(live, str(getattr(task, "goal_recep", "")))
         for receptacle_body in receptacle_bodies:
             if len(refs) >= int(max_tasks):
                 return refs
