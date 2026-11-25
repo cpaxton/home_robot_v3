@@ -38,6 +38,7 @@ from emet.config.rerun_config import open_live_rerun_visualizer
 from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
+from emet.core.pose_stream import PoseStreamClientMixin
 from emet.core.robot import AbstractRobotClient, ControlMode
 from emet.core.zmq_obs_codec import (
     decode_zmq_obs_depth_inplace,
@@ -269,7 +270,7 @@ def get_observation_from_zmq_dict(obs: dict[str, Any]) -> Observations | None:
     )
 
 
-class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
+class GenericZmqClient(PoseStreamClientMixin, ZmqStreamPauseMixin, AbstractRobotClient):
     """ZMQ client parameterised by a RobotSpec.
 
     Provides the same ZMQ protocol as StretchZmqClient but without

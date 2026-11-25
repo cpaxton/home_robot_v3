@@ -108,6 +108,12 @@ class InnateMarsRosInterface(Node):
 
         self.nav = None
 
+    def create_wbc_transport(self, *, driver_verification):
+        """Opt in to WBC ownership on this robot-side node."""
+        from innate_mars_bridge.remote.wbc import create_wbc_transport
+
+        return create_wbc_transport(self, driver_verification=driver_verification)
+
     def wait_for_cameras(self) -> None:
         """Block until head stereo and EE cameras have published at least one frame."""
         self.get_logger().info("InnateMarsRosInterface: waiting for cameras...")

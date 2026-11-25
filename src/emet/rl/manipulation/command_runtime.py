@@ -14,6 +14,7 @@ import numpy as np
 
 from emet.core.command_client import send_command
 from emet.core.command_runtime import CommandRuntime
+from emet.rl.manipulation.pose_stream_reference import SingleHandPoseStream
 from emet.rl.manipulation.safety import whole_body_stopped
 from emet.rl.manipulation.tracking import TaskPoseTrajectory
 
@@ -296,6 +297,7 @@ class TaskPoseCommandRuntime(CommandRuntime):
         self.outcome = None
         self.last_advance = time.monotonic()
         self.last_info = None
+        self._pose_stream = None
 
     def supports_reactive_control(self):
         return True
@@ -304,10 +306,18 @@ class TaskPoseCommandRuntime(CommandRuntime):
         if message is None:
             return None
         return super().command_message(
-            {**message, "task_pose_control": True, "task_pose_runtime_timing": dict(self.timing_limits)}
+            {
+                **message,
+                "task_pose_control": True,
+                "pose_stream": SingleHandPoseStream.capabilities(),
+                "task_pose_runtime_timing": dict(self.timing_limits),
+            }
         )
 
     def validate_reactive_goal(self, goal):
+        if "pose_stream" in goal:
+            SingleHandPoseStream().validate(goal)
+            return
         path = parse_trajectory_goal(goal)
         limits = self.env.control.grip_limits
         if np.any(path.gripper < limits[0]) or np.any(path.gripper > limits[1]):
@@ -316,7 +326,15 @@ class TaskPoseCommandRuntime(CommandRuntime):
     def start_reactive_command(self, goal):
         if self.env._done or self.env.control.stopped or self.env.initialization_failed:
             raise RuntimeError("executor must prepare an active verified stage first")
-        self.env.set_task_trajectory(parse_trajectory_goal(goal))
+        self._pose_stream = None
+        self._stream_finishing = False
+        if "pose_stream" in goal:
+            self._pose_stream = SingleHandPoseStream()
+            path = self._pose_stream.trajectory(self.env.control, goal, new=True)
+        else:
+            path = parse_trajectory_goal(goal)
+        self.env.continue_pose_stream = self._pose_stream is not None
+        self.env.set_task_trajectory(path)
         self.outcome = None
         self.last_advance = time.monotonic()
         return {
@@ -330,6 +348,23 @@ class TaskPoseCommandRuntime(CommandRuntime):
     def update_reactive_command(self, goal):
         if self.outcome is not None or self.env._done or self.env.control.stopped:
             raise RuntimeError("cannot update a completed or failed contract")
+        stream = "pose_stream" in goal
+        if stream != (self._pose_stream is not None):
+            raise ValueError("cannot switch reactive trajectory formats during a command")
+        if stream:
+            if self._pose_stream.is_finish(goal):
+                self._stream_finishing = True
+                self.env.continue_pose_stream = False
+            elif self._stream_finishing:
+                raise ValueError("pose stream is finishing")
+            else:
+                self.env.steps = 0
+                self.env.set_task_trajectory(self._pose_stream.trajectory(self.env.control, goal, new=False))
+            return {
+                "frame": "world",
+                "motion_mode": "task_pose",
+                "pose_stream_lease_s": max(3.0, self.env.control.task_trajectory.end + 2),
+            }
         self.env.set_task_trajectory(parse_trajectory_goal(goal))
         return {"frame": "world", "motion_mode": "task_pose"}
 
@@ -367,7 +402,9 @@ class TaskPoseCommandRuntime(CommandRuntime):
                             self.last_timing["cycle_s"] = time.monotonic() - started
                             if self.last_timing["cycle_s"] > self.timing_limits["cycle_budget_s"]:
                                 raise RuntimeError("control step deadline exceeded")
-                            if done or truncated:
+                            if info["is_success"] and self._pose_stream is not None and not self._stream_finishing:
+                                self.env.control.hold_position()
+                            elif done or truncated:
                                 self.outcome = (
                                     "succeeded" if info["is_success"] else "failed",
                                     {
@@ -394,6 +431,7 @@ class TaskPoseCommandRuntime(CommandRuntime):
 
     def cancel_reactive_command(self):
         env = self.env
+        env.continue_pose_stream = False
         env.control.stop()
         deadline = time.monotonic() + 0.75
         simulation_deadline = float(env.data.time) + 0.75

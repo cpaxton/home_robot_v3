@@ -4,7 +4,7 @@ import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from emet.rl.manipulation.reward_config import WholeBodyRewardConfig, hand_tracking_terms
+from emet.rl.manipulation.reward_config import WholeBodyRewardConfig, hand_tracking_terms, mars_folded_pose_cost
 from emet.rl.manipulation.whole_body_observation import pose_rotation
 
 REWARD_GROUPS = ("tracking", "stability", "contact_safety")
@@ -175,6 +175,9 @@ class RewardMeter:
         bad = bool(
             e.monitor.wheel_lift or e._physics_invalid or force > p.unsafe_force or getattr(e, "retention_lost", False)
         )
+        folded_pose_cost = 0.0
+        if p.robot == "innate_mars" and settings.mars_folded_pose_weight:
+            folded_pose_cost = float(mars_folded_pose_cost(c.positions()))
         groups = np.array(
             [
                 dt * (hand_score + base_score) + progress,
@@ -183,7 +186,8 @@ class RewardMeter:
                     -dt * (settings.jerk_weight * jerk_cost + settings.effort_weight * effort)
                     - settings.command_delta_weight * command_cost
                 ),
-                -dt * settings.force_weight * force_cost - settings.guard_penalty * bad,
+                -dt * (settings.force_weight * force_cost + settings.mars_folded_pose_weight * folded_pose_cost)
+                - settings.guard_penalty * bad,
             ],
             dtype=np.float32,
         )
@@ -206,4 +210,6 @@ class RewardMeter:
             "force_excess_cost": float(force_cost),
             "guard_failed": bad,
         }
+        if settings.mars_folded_pose_weight and p.robot == "innate_mars":
+            self.last_terms["mars_folded_pose_cost"] = folded_pose_cost
         return groups

@@ -53,6 +53,7 @@ from innate_mars_bridge.video_rtsp import mars_rtsp_capabilities, start_mars_rts
 class ZmqServer(BaseZmqServer):
     @override
     def __init__(self, *args, **kwargs):
+        self._wbc_executor = None
         kwargs.setdefault("image_scaling", resolve_zmq_image_scaling(0.5))
         kwargs.setdefault("ee_image_scaling", resolve_zmq_ee_image_scaling(0.5))
         super().__init__(*args, **kwargs)
@@ -335,6 +336,38 @@ class ZmqServer(BaseZmqServer):
             "step": self._last_step,
         }
 
+    def install_wbc_executor(self, executor):
+        """Install an explicitly commissioned robot-local executor before serving commands."""
+        with self._command_lock:
+            if self._wbc_executor is not None:
+                raise RuntimeError("Mars WBC executor already installed")
+            self._wbc_executor = executor
+
+    def supports_reactive_control(self):
+        return self._wbc_executor is not None
+
+    def command_message(self, message):
+        if message is not None and self._wbc_executor is not None:
+            executor = self._wbc_executor
+            if executor.available():
+                message = {**message, "pose_stream": executor.stream.capabilities()}
+        return super().command_message(message)
+
+    def validate_reactive_goal(self, goal):
+        self._wbc_executor.stream.validate(goal)
+
+    def start_reactive_command(self, goal):
+        return self._wbc_executor.start(goal)
+
+    def update_reactive_command(self, goal):
+        return self._wbc_executor.update(goal)
+
+    def reactive_command_result(self, context):
+        return self._wbc_executor.result()
+
+    def cancel_reactive_command(self):
+        return self._wbc_executor.stop()
+
     def start_navigation_command(self, action):
         if action.get("nav_teleport"):
             raise ValueError("teleport is unavailable on hardware")
@@ -452,10 +485,12 @@ class ZmqServer(BaseZmqServer):
 @click.option("--send_port", default=4401, help="Port to send observations to")
 @click.option("--recv_port", default=4402, help="Port to receive actions from")
 @click.option("--local", is_flag=True, help="Run code locally on the robot.")
+@click.option("--wbc-config-factory", help="Robot-local commissioning factory as module:function.")
 def main(
     send_port: int = 4401,
     recv_port: int = 4402,
     local: bool = False,
+    wbc_config_factory: str | None = None,
 ):
     rclpy.init()
     server = ZmqServer(
@@ -463,6 +498,16 @@ def main(
         recv_port=recv_port,
         use_remote_computer=(not local),
     )
+    if wbc_config_factory:
+        from importlib import import_module
+
+        if not local:
+            raise click.UsageError("WBC requires the robot-local bridge")
+        module, separator, name = wbc_config_factory.partition(":")
+        if not separator or not module or not name:
+            raise click.UsageError("WBC config factory must use module:function")
+        factory = getattr(import_module(module), name)
+        server.install_wbc_executor(factory(server.client._ros))
     server._use_remote_computer = not local
     server.start()
 

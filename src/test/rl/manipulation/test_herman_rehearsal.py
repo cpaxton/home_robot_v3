@@ -27,9 +27,67 @@ from emet.rl.manipulation.herman_rehearsal_env import HermanRehearsalEnv, camera
 from emet.rl.manipulation.models import build_manipulation_model
 from emet.rl.reference import REFERENCE
 from emet.robots.innate_mars.passive_ssh import subscriber_command
+from emet.robots.innate_mars.startup_recovery import (
+    ENCODER_STEP_RAD,
+    JOINT_NAMES,
+    plan_safe_start,
+    project_parked_hold,
+    run_safe_start,
+)
 
 FIXTURE = Path(__file__).with_name("fixtures") / "herman_capture_v1.json"
 CANONICAL_MARS = "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+
+PARKED_LIMITS = dict(
+    zip(
+        JOINT_NAMES,
+        [(-1.5708, 1.5708), (-1.22, 1.5708), (-1.7453, 1.5708), (-1.7453, 1.9199), (-1.5708, 1.5708), (0, 0.8727)],
+        strict=True,
+    )
+)
+PARKED_ELBOW = dict(zip(JOINT_NAMES, np.array([1024, -794, 1048, -205, 6, 38]) * ENCODER_STEP_RAD, strict=True))
+
+
+def test_parked_projection_retains_hand_pitch_and_grip_and_leaves_margin():
+    target = project_parked_hold(PARKED_ELBOW, PARKED_LIMITS)
+    assert target["joint3"] == pytest.approx(PARKED_LIMITS["joint3"][1] - 2 * ENCODER_STEP_RAD)
+    assert target["joint3"] + target["joint4"] == pytest.approx(PARKED_ELBOW["joint3"] + PARKED_ELBOW["joint4"])
+    assert target["joint6"] == PARKED_ELBOW["joint6"]
+    assert project_parked_hold(target, PARKED_LIMITS) == target
+    reserve = np.deg2rad(2.0)
+    with_reserve = project_parked_hold(PARKED_ELBOW, PARKED_LIMITS, settling_reserve_rad=reserve)
+    assert with_reserve["joint3"] == pytest.approx(target["joint3"] - reserve)
+    assert with_reserve["joint4"] == pytest.approx(target["joint4"] + reserve)
+    assert project_parked_hold(with_reserve, PARKED_LIMITS, settling_reserve_rad=reserve) == with_reserve
+
+
+def test_parked_projection_uses_shoulder_clearance_and_preserves_measured_state():
+    measured = {"joint1": 0.0, "joint2": -0.6, "joint3": 0.2, "joint4": 0.1, "joint5": 0.0, "joint6": 0.05}
+    target = project_parked_hold(measured, PARKED_LIMITS)
+    assert measured["joint2"] == -0.6
+    assert target["joint2"] == pytest.approx(-0.5 + 2 * ENCODER_STEP_RAD)
+    assert target["joint3"] + target["joint2"] == pytest.approx(measured["joint3"] + measured["joint2"])
+    with pytest.raises(ValueError, match="separate recovery"):
+        project_parked_hold(measured | {"joint6": -0.01}, PARKED_LIMITS)
+
+
+@pytest.mark.sim
+def test_parked_projection_reports_contact_without_adopting_the_projected_pose():
+    from emet.rl.manipulation.herman_rehearsal_env import audit_parked_transition
+
+    model, _ = build_manipulation_model("innate_mars", forearm_collision="cad_hull", mesh_storage="binary")
+    data = mujoco.MjData(model)
+    for name, value in PARKED_ELBOW.items():
+        data.qpos[model.joint(name).qposadr[0]] = value
+    data.qpos[model.joint("joint6M").qposadr[0]] = -PARKED_ELBOW["joint6"]
+    mujoco.mj_forward(model, data)
+    original = data.qpos.copy()
+    audit = audit_parked_transition(model, data, PARKED_ELBOW, PARKED_LIMITS)
+    assert audit["state"] == "needs_contact_review"
+    assert not audit["hardware_admitted"]
+    assert audit["hand_pitch_change_rad"] == pytest.approx(0)
+    assert audit["static_sweep"][0]["forearm_chassis_gap_m"] < 0
+    np.testing.assert_array_equal(data.qpos, original)
 
 
 def encoded(a):
@@ -254,6 +312,82 @@ def test_calibrated_head_mount_matches_captured_optical_tf():
     np.testing.assert_allclose(data.cam_xmat[cid].reshape(3, 3), expected, atol=1e-8)
 
 
+@pytest.mark.sim
+def test_folded_forearm_uses_cad_clearance_and_still_collides_when_intersecting():
+    from emet.rl.manipulation.herman_rehearsal_env import geometry_diagnostic, scene_factory
+
+    capture = json.loads(FIXTURE.read_text())
+    capture["samples"]["depth"] = {"width": 640, "height": 480}
+    folded = np.array([1024, -794, 1022, -205, 6, 38]) * (2 * np.pi / 4096)
+    model, fingerprint = scene_factory(capture, [])("innate_mars", mesh_storage="binary")
+    legacy, legacy_fingerprint = scene_factory(capture, [], forearm_collision="proxy_box")(
+        "innate_mars", mesh_storage="binary"
+    )
+
+    def geometry(m, arm):
+        data = mujoco.MjData(m)
+        for index, value in enumerate(arm, 1):
+            joint = m.joint(f"joint{index}")
+            assert joint.range[0] <= value <= joint.range[1]
+            data.qpos[joint.qposadr[0]] = value
+        data.qpos[m.joint("joint6M").qposadr[0]] = -arm[5]
+        mujoco.mj_forward(m, data)
+        pair = {m.geom("rl_link3").id, m.geom("rl_base_link").id}
+        distances = [c.dist for c in data.contact if {c.geom1, c.geom2} == pair]
+        return geometry_diagnostic(m, data), distances
+
+    assert fingerprint != legacy_fingerprint
+    original, original_contacts = geometry(legacy, folded)
+    corrected, corrected_contacts = geometry(model, folded)
+    assert original["active_signed_distance_m"] < -0.015
+    assert original_contacts
+    assert corrected["forearm_collision"] == "cad_hull"
+    assert 0.001 < corrected["active_signed_distance_m"] < 0.002
+    assert corrected["active_signed_distance_m"] == pytest.approx(original["cad_hull_signed_distance_m"])
+    assert not corrected_contacts
+
+    intersecting = folded.copy()
+    intersecting[1:3] = [-0.8723, 1.57]
+    _, real_contacts = geometry(model, intersecting)
+    assert any(distance < -0.004 for distance in real_contacts)
+
+
+@pytest.mark.sim
+def test_cad_rehearsal_holds_the_measured_folded_pose():
+    from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+    from emet.rl.manipulation.env import ManipulationConfig
+    from emet.rl.manipulation.herman_rehearsal_env import HermanRehearsalEnv, scene_factory
+    from emet.rl.manipulation.tracking import TaskPoseTrajectory
+
+    capture = json.loads(FIXTURE.read_text())
+    capture["samples"]["depth"] = {"width": 640, "height": 480}
+    folded = np.array([1024, -794, 1022, -205, 6]) * (2 * np.pi / 4096)
+    env = HermanRehearsalEnv(
+        ManipulationConfig(robot="innate_mars", action_mode="direct_velocity", trajectory_preview=True, horizon=4),
+        initial_arm=folded,
+        initial_head=np.deg2rad(-11.77734375),
+        initial_grip=38 * (2 * np.pi / 4096),
+        model_factory=scene_factory(capture, [], head_range_rad=[-0.3491, 0.3491]),
+    )
+    try:
+        _, initial = env.reset(seed=1900000)
+        assert not initial["initialization_failed"]
+        c = env.control
+        base, hand = c.base_pose(), c.ee_pose()
+        env.set_task_trajectory(
+            TaskPoseTrajectory([0, 1], [base, base], [hand, hand], [c.grip_reference] * 2, base_mask=[True] * 3)
+        )
+        for _ in range(20):
+            _, _, done, truncated, info = env.step(task_pose_teacher_action(c))
+            assert not info["unsafe_contact"], info
+            assert not info["wheel_lift"], info
+            if done or truncated:
+                break
+        np.testing.assert_allclose(c.positions(), folded, atol=0.01)
+    finally:
+        env.close()
+
+
 def test_passive_capture_pairs_arm_with_delayed_depth():
     from emet.robots.innate_mars.rehearsal_capture_ros import choose_arm_sample
 
@@ -279,3 +413,34 @@ def test_innate_080_unsigned_depth_requires_matching_publisher():
     assert decode_depth(sample, DEPTH_RULE_INNATE_080)[0, 1] == 0.75
     with pytest.raises(ValueError, match="pinned publisher"):
         decode_depth({**sample, "publisher_sha256": "0" * 64}, DEPTH_RULE_INNATE_080)
+
+
+def test_safe_start_stages_a_coordinated_lift_and_stops_if_the_first_hold_misses():
+    plan = plan_safe_start(PARKED_ELBOW, PARKED_LIMITS)
+    first, final = [waypoint["target_rad"] for waypoint in plan["waypoints"]]
+    assert first["joint2"] < final["joint2"]
+    assert final["joint3"] < first["joint3"]
+    assert final["joint3"] <= PARKED_LIMITS["joint3"][1] - np.deg2rad(5)
+    assert first["joint4"] == final["joint4"]
+    assert final["joint6"] == PARKED_ELBOW["joint6"]
+
+    class Driver:
+        moves = 0
+        stopped = False
+
+        def prepare_safe_start_hold(self):
+            return PARKED_ELBOW
+
+        def move_and_confirm_hold(self, target, *, duration_s):
+            self.moves += 1
+            return target | {"joint3": PARKED_ELBOW["joint3"]}
+
+        def stop_and_confirm(self):
+            self.stopped = True
+            return True
+
+    driver = Driver()
+    with pytest.raises(RuntimeError, match="did not track joint3"):
+        run_safe_start(driver, PARKED_LIMITS)
+    assert driver.moves == 1
+    assert driver.stopped

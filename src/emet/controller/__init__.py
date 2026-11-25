@@ -41,6 +41,7 @@ __all__ = [
     "StretchZmqClient",
     "HomeRobotZmqClient",
     "RobotClient",
+    "connect_robot",
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
@@ -64,3 +65,13 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     return sorted(set(globals()) | set(__all__))
+
+
+def connect_robot(robot: str, robot_ip: str, **kwargs):
+    """Connect using the registered robot backend and the Simple Robot API."""
+    from emet.robots import get_robot_backend
+
+    backend = get_robot_backend(robot)
+    if backend is None:
+        raise ValueError(f"unknown robot {robot!r}")
+    return backend.create_client(robot_ip, **kwargs)

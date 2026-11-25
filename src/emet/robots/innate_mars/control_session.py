@@ -12,16 +12,34 @@ import time
 import numpy as np
 
 from emet.robots.innate_mars.motion_boundary import MotionBoundary
+from emet.robots.innate_mars.reach_progress import ElbowLoadGuard, elbow_load_speed_scale
 
 
 class GuardedControlSession:
-    def __init__(self, *, driver, profile, enabled=False):
+    def __init__(
+        self,
+        *,
+        driver,
+        profile,
+        enabled=False,
+        translation_limit_m=0.0,
+        translation_tolerance_m=0.05,
+        adaptive_elbow_load=False,
+    ):
+        if not all(math.isfinite(v) and v >= 0 for v in (translation_limit_m, translation_tolerance_m)):
+            raise ValueError("translation limits must be finite and nonnegative")
         self.driver, self.profile = driver, profile
         self.enabled = enabled
+        self._translation_limit_m = translation_limit_m
+        self._translation_tolerance_m = translation_tolerance_m
         self.guard = None
         self.fault = None
         self.last_velocity = np.zeros(2 + profile.arm_size)
         self.last_command_time = None
+        if adaptive_elbow_load and profile.robot != "innate_mars":
+            raise ValueError("adaptive elbow load pacing requires Mars")
+        self._elbow_load_guard = ElbowLoadGuard() if adaptive_elbow_load else None
+        self.elbow_speed_scale = 1.0
 
     def start(self):
         if self.guard is not None or self.fault is not None:
@@ -42,14 +60,21 @@ class GuardedControlSession:
             raise RuntimeError(
                 "verified velocity, SI/read validity, measured-stop and robot watchdog capabilities required"
             )
+        if self._elbow_load_guard and caps.get("elbow_load_percent_verified") is not True:
+            raise RuntimeError("adaptive elbow pacing requires verified XL430 load feedback")
         try:
             feedback = self.driver.feedback()
             age = self._age(feedback)
             if not 0 <= age <= 0.2:
                 raise ValueError("missing or stale arm/odometry capture")
             # Capture the immutable origin only after validating both sources.
-            self.guard = MotionBoundary(feedback["base_pose"], translation_limit_m=0, translation_tolerance_m=0.05)
+            self.guard = MotionBoundary(
+                feedback["base_pose"],
+                translation_limit_m=self._translation_limit_m,
+                translation_tolerance_m=self._translation_tolerance_m,
+            )
             self.guard.enforce(feedback["base_pose"], state_age_s=age, stop=self._stop)
+            self._update_elbow_load(feedback)
             if np.any(abs(self._arm_velocity(feedback)) >= np.minimum(0.03, self.profile.speed)):
                 raise ValueError("arm must be stationary before starting a session")
             twist = self._base_velocity(feedback)
@@ -91,6 +116,14 @@ class GuardedControlSession:
             raise ValueError("invalid arm feedback")
         return measured
 
+    def _update_elbow_load(self, feedback):
+        if self._elbow_load_guard is not None:
+            if feedback.get("arm_healthy") is not True:
+                raise RuntimeError("Mars arm fault or missing health feedback")
+            load = float(feedback.get("elbow_load_percent", math.nan))
+            self._elbow_load_guard.check(now=feedback["arm_captured_monotonic"], load_percent=load)
+            self.elbow_speed_scale = elbow_load_speed_scale(load)
+
     def _stop(self):
         self.last_velocity[:] = 0
         return self.driver.stop_and_confirm(timeout_s=0.75) is True
@@ -106,11 +139,23 @@ class GuardedControlSession:
         telemetry timestamp. Caller supplies base + arm velocities in profile
         order; gripper release is not part of this interface.
         """
+        return self._command(velocity, base_target=base_target, target_visible=target_visible, normalized=False)
+
+    def command_action(self, action, *, base_target, target_visible=True):
+        """Send one normalized WBC action as base and arm SI velocities.
+
+        The final grip channel is validated with the action and omitted from
+        the driver packet. Grip remains under the hardware executor's control.
+        """
+        return self._command(action, base_target=base_target, target_visible=target_visible, normalized=True)
+
+    def _command(self, velocity, *, base_target, target_visible, normalized):
         if self.guard is None or self.fault is not None:
             raise RuntimeError("session is not active")
         try:
             feedback = self.driver.feedback()
             self.guard.enforce(feedback["base_pose"], state_age_s=self._age(feedback), stop=self._stop)
+            self._update_elbow_load(feedback)
             measured = self._arm_velocity(feedback)
             if np.any(abs(measured) > self.profile.speed):
                 raise ValueError("measured arm velocity exceeds robot profile limits")
@@ -127,12 +172,20 @@ class GuardedControlSession:
             if target.shape != (3,) or not np.isfinite(target).all():
                 raise ValueError("invalid base target")
             yaw = abs(math.remainder(target[2] - self.guard.start[2], 2 * math.pi))
-            if np.linalg.norm(target[:2] - self.guard.start[:2]) > 1e-6 or yaw > self.guard.yaw_limit_rad:
-                raise ValueError("target outside hold-XY / yaw experiment range")
-            packet = np.asarray(velocity, dtype=float)
+            travel = np.linalg.norm(target[:2] - self.guard.start[:2])
+            if travel > self.guard.translation_limit_m + 1e-6 or yaw > self.guard.yaw_limit_rad:
+                raise ValueError("target outside the session base envelope")
             limits = np.r_[self.profile.base_speed, self.profile.base_yaw_speed, self.profile.speed]
+            packet = np.asarray(velocity, dtype=float)
+            if normalized:
+                if packet.shape != (len(limits) + 1,) or not np.isfinite(packet).all() or np.any(abs(packet) > 1):
+                    raise ValueError("invalid normalized WBC action")
+                packet = packet[:-1] * limits
             if packet.shape != limits.shape or not np.isfinite(packet).all() or np.any(abs(packet) > limits):
                 raise ValueError("velocity outside robot profile limits")
+            if self._elbow_load_guard is not None:
+                packet = packet.copy()
+                packet[2 + 2] *= self.elbow_speed_scale
             now = time.monotonic()
             elapsed = now - self.last_command_time
             if not 0 <= elapsed <= 0.2:

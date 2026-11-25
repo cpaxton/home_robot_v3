@@ -27,14 +27,17 @@ from emet.rl.manipulation.herman_rehearsal import (
 )
 from emet.rl.manipulation.herman_rehearsal_env import (
     HermanRehearsalEnv,
+    audit_parked_transition,
     geometry_diagnostic,
     scene_factory,
     select_start_proposal,
 )
+from emet.rl.manipulation.mars_folded_region import audit_mars_folded_path
 from emet.rl.manipulation.models import build_manipulation_model
 from emet.rl.manipulation.safety import whole_body_stopped
 from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
 from emet.rl.manipulation.whole_body_observation import actor_observation
+from emet.robots.innate_mars.startup_recovery import plan_safe_start
 
 # Physical hold envelope for the base during a rehearsal: the independent
 # hold-XY / bounded-yaw region the running robot permits before its hold
@@ -324,9 +327,18 @@ def main():
         help="also test explicitly synthetic valid starts, never the recorded blocked posture",
     )
     parser.add_argument("--arm-only", action="store_true", help="Route a wave through the arm-only simulator executor")
+    parser.add_argument("--legacy-forearm-box", action="store_true", help="Use the archived forearm collision box")
+    parser.add_argument(
+        "--parked-settling-reserve-deg",
+        type=float,
+        default=0.0,
+        help="Extra joint margin for measured drift while a projected hold settles",
+    )
     args = parser.parse_args()
     if args.arm_only and args.case_set == "tracking":
         parser.error("--arm-only applies to the wave cases")
+    if not np.isfinite(args.parked_settling_reserve_deg) or args.parked_settling_reserve_deg < 0:
+        parser.error("parked settling reserve must be finite and nonnegative")
     if args.output.exists():
         parser.error("fresh output directory required")
     sources = code_identity()
@@ -420,7 +432,12 @@ def main():
     )
     if args.case_set in {"wave", "slow-wave"}:
         baseline = dataclasses.replace(baseline, horizon=max(35.0, baseline.horizon))
-    factory = scene_factory(capture, scene)
+    factory = scene_factory(
+        capture,
+        scene,
+        forearm_collision="proxy_box" if args.legacy_forearm_box else "cad_hull",
+        head_range_rad=audit["published_joint_limits"].get("joint_head"),
+    )
     model, fingerprint = factory(
         "innate_mars",
         mesh_storage="binary",
@@ -442,9 +459,24 @@ def main():
         if mj_errors[name]["position_m"] > 0.005 or mj_errors[name]["rotation_rad"] > 0.02:
             audit["physics_blockers"].append("mujoco_kinematic_mismatch:" + name)
     audit["geometry_diagnostic"] = geometry_diagnostic(model, data)
-    if audit["geometry_diagnostic"]["proxy_signed_distance_m"] < -0.001:
-        audit["physics_blockers"].append("captured_link3_chassis_proxy_penetration")
+    if audit["geometry_diagnostic"]["active_signed_distance_m"] < -0.001:
+        audit["physics_blockers"].append("captured_link3_chassis_contact")
     audit["mujoco_vs_live_tf"] = mj_errors
+    audit["parked_transition"] = audit_parked_transition(
+        model,
+        data,
+        values,
+        audit["published_joint_limits"],
+        settling_reserve_rad=np.deg2rad(args.parked_settling_reserve_deg),
+    )
+    try:
+        audit["safe_start"] = plan_safe_start(values, audit["published_joint_limits"])
+        start = audit["safe_start"]
+        joint_names = [f"joint{i}" for i in range(1, 6)]
+        points = [values, *(waypoint["target_rad"] for waypoint in start["waypoints"])]
+        start["fold_region"] = audit_mars_folded_path([[point[name] for name in joint_names] for point in points])
+    except ValueError as exc:
+        audit["safe_start"] = {"unavailable": str(exc)}
     audit["captured_physics_admitted"] = not audit["physics_blockers"]
     mujoco.mj_saveModel(model, str(args.output / "scene.mjb"))
     np.savez_compressed(

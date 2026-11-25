@@ -300,7 +300,7 @@ class ArmSplineReference(TaskPoseTrajectory):
 
 
 class ArmSplinePlant(ManipulationEnv):
-    def __init__(self):
+    def __init__(self, *, model_factory=None):
         self.reset_posture = np.array(ANCHORS["ready"], float)
         super().__init__(
             ManipulationConfig(
@@ -328,6 +328,7 @@ class ArmSplinePlant(ManipulationEnv):
                 initialization_attempts=1,
             ),
             mesh_storage="binary",
+            model_factory=model_factory,
         )
 
     def _initial_arm_posture(self, sampled):
@@ -349,6 +350,7 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         finish_after_hold=False,
         tracking_first=False,
         spread_requirements=None,
+        model_factory=None,
     ):
         from emet.rl.manipulation.trajectory_metrics import SpreadRequirements
 
@@ -372,7 +374,7 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         ):
             raise ValueError("unique spline identities and seeds required")
         self.cursor = 0
-        super().__init__(ArmSplinePlant())
+        super().__init__(ArmSplinePlant(model_factory=model_factory))
         self.action_space = self.env.action_space
         _, width = history_layout(self.env.profile, retention_context=True)
         self.observation_space = spaces.Dict(

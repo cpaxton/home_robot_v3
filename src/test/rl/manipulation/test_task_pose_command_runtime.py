@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from emet.core.command_client import cancel_reactive_goal, command_receipt, send_command, update_reactive_goal
+from emet.core.pose_stream import PoseStream
 from emet.rl.manipulation.command_runtime import (
     TaskPoseCommandRuntime,
     parse_trajectory_goal,
@@ -18,6 +19,7 @@ from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
 from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 from emet.rl.manipulation.whole_body_actor import WholeBodyActor
 from emet.rl.manipulation.whole_body_bundle import export_actor
+from emet.rl.manipulation.whole_body_observation import pose_rotation
 
 
 @pytest.fixture
@@ -94,7 +96,7 @@ def test_whole_body_bundle_executes_waypoint_with_motion_observation(runtime, tm
         action = send_task_pose_trajectory(c, path(server, 0.01))
         server.advance()
         c._state = server.command_message({})
-        assert command_receipt(c, action)["status"] == "running"
+        assert command_receipt(c, action)["status"] == "running", command_receipt(c, action)
         assert server.last_info is not None
     finally:
         env.close()
@@ -341,3 +343,57 @@ def test_late_policy_inference_stops_before_accepting_action(runtime):
     assert receipt["result"]["failure"] == "policy inference deadline exceeded"
     assert runtime.env.control.stopped
     assert not runtime.env.control.last_action.any()
+
+
+@pytest.mark.sim
+def test_simple_pose_stream_updates_and_preserves_held_base(runtime):
+    from scipy.spatial.transform import Rotation
+
+    c = client(runtime)
+    stream = PoseStream(c)
+    before = runtime.env.control.base_pose().copy()
+    for offset in (0.01, 0.02):
+        target = path(runtime, offset).hand[-1]
+        quat = Rotation.from_matrix(pose_rotation(target)).as_quat()
+        action = stream.send({"arms": {"arm": np.r_[target[:3], quat]}}, duration_s=1)
+        np.testing.assert_allclose(runtime.env.control.task_trajectory.base[-1], before)
+    stream.finish()
+    for _ in range(300):
+        runtime.advance()
+        c._state = runtime.command_message({})
+        receipt = command_receipt(c, action)
+        if receipt["status"] in {"succeeded", "failed"}:
+            break
+    assert receipt["status"] == "succeeded", receipt
+    assert receipt["result"]["stop_confirmed"]
+    assert stream.wait(0.1)
+
+
+@pytest.mark.sim
+def test_pose_stream_rejects_unadvertised_channels(runtime):
+    stream = PoseStream(client(runtime))
+    with pytest.raises(ValueError, match="head"):
+        stream.send({"head": [0, 0]}, duration_s=1)
+    with pytest.raises(ValueError, match="named arm"):
+        stream.send({"arms": {"left": [0, 0, 0, 0, 0, 0, 1]}}, duration_s=1)
+    assert stream.action is None
+
+
+@pytest.mark.sim
+def test_stream_remains_open_after_waypoint_arrival(runtime):
+    from scipy.spatial.transform import Rotation
+
+    c = client(runtime)
+    stream = PoseStream(c)
+    hand = runtime.env.control.ee_pose()
+    pose = [*hand[:3], *Rotation.from_matrix(pose_rotation(hand)).as_quat()]
+    action = stream.send({"arms": {"arm": pose}}, duration_s=0.15)
+    for _ in range(80):
+        runtime.advance()
+        c._state = runtime.command_message({})
+    assert command_receipt(c, action)["status"] == "running", runtime.outcome[1].get(
+        "code", runtime.outcome[1].get("failure")
+    )
+    assert runtime.env.control.holding
+    assert stream.send({"arms": {"arm": pose}}, duration_s=0.1) == action
+    assert stream.cancel()

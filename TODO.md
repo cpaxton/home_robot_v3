@@ -58,9 +58,53 @@
       matched tiny-wave preflight. Teacher 1/1, both actors 0/1 with translation
       faults by 4.5 s, all simulator stops confirmed; 50 focused tests pass.
       No hardware motion. [Report](docs/experiments/herman_wave_20261117.md).
-- [ ] Reconcile Herman's reported stow pose with joint1/joint2 declared limits and
-      link3/chassis proxy geometry; validate an actual staging path. Preserve
-      blocked exact capture separately from any synthetic start.
+- [ ] Add head gaze/tilt to whole-body control on robots with a verified head
+      actuator. Start with measured head pose and bounded tilt in simulation,
+      check camera extrinsics and head/arm clearance through folded poses, and
+      verify command ownership and stop behavior before enabling hardware.
+      Herman's sock trial confirmed a measured 11.8° downward head tilt with
+      the base stationary. The sock entered both head images. The built-in
+      depth had a hole at that range, and offline stereo recovered a candidate
+      grasp point. Add a gaze-and-reacquire step with capture-time camera TF
+      before handing a close target to WBC.
+- [x] Correct the forearm collider in Herman's captured-scene rehearsal. The
+      CAD hull clears the chassis in the measured in-range fold, and the
+      parameterized sock pregrasp completes from that capture in simulation.
+      [Replay results](docs/rl/MARS_HARDWARE_READINESS.md#folded-pose-simulation).
+- [ ] Reproduce a retained sock lift with a reachable grasp on the exposed fold.
+      Preserve the recorded bilateral-contact loss as a single-arm audit, and
+      verify jaw closure and grip retention on the robot-side WBC endpoint.
+      [Pickup rehearsal](docs/rl/MARS_HARDWARE_READINESS.md#sock-pickup-rehearsal).
+- [ ] Close the live Mars pickup loop on measured hand-to-sock error. Stream
+      short WBC updates from fresh hand pose and stereo estimates. Advance
+      when the jaws enter a grasp region sized to the sock and camera
+      uncertainty. Confirm retention during a small lift. If the elbow
+      stops tracking, recompute reach with it held and reposition the target
+      or base only when a new approach is feasible. Replay the 0.7° wrist
+      tracking miss as a tolerance case and the elbow stall as lost authority.
+- [x] Clear the servo 3 overload without the idle fold and test the verified
+      low-output inward target. The elbow stalled with rising load, and the
+      guard confirmed torque off. Read-only arm telemetry is back.
+- [x] Verify a powered hold and full arm health at 82.1° with the forearm
+      propped and automatic folding disabled.
+- [x] Verify the elbow carries its own weight after removing the prop and
+      record the first fixed-base WBC approach from the unsupported posture.
+- [x] Implement and audit Emet's pitch-preserving parked-pose projection.
+      The sweep from the recorded 92.11° posture still starts in modeled contact.
+- [ ] Qualify a physically executed rest-to-hold transition and a hold that
+      remains steady under gravity. Verify independent hold confirmation after
+      an odometry stop before retrying the sock approach.
+- [x] Add a settling reserve to the parked-pose projection and verify the
+      elbow output readback during a bounded inward test. The elbow stalled
+      below the raised cap, so the original setting was restored.
+- [ ] Complete the recovery-to-motion handoff on Herman. Preserve the measured
+      powered hold while restoring and reading back the intended motion
+      settings. Compare the same elbow stroke with and without forearm support,
+      recording servo voltage, temperature, position trajectory, encoder and
+      output. [Elbow stall diagnosis](docs/rl/MARS_HARDWARE_READINESS.md#stereo-guided-sock-grasp).
+- [ ] Reconcile the earlier out-of-range stow capture with the declared
+      joint1/joint2 limits and validate a physical staging path. Preserve that
+      capture separately from the in-range fold and synthetic starts.
 - [x] Implement admitted random smooth arm-spline postures, reversals and holds,
       with 32 train / 16 audit identities per level and a 20% overall tick share.
       [Distribution and validation protocol](docs/experiments/mars_arm_splines_20261117.md).
@@ -1252,6 +1296,10 @@ as an experimental training result.
       base SE(2), hand SE(3), and gripper targets; trajectory updates, measured versus
       commanded state, speed/effort limits, deadlines, stop confirmation and ownership.
       Keep simulator qualification separate from hardware readiness.
+- [ ] Make WBC the sole owner of robot base and arm motion. Route operator,
+      teleoperation and planner requests through one waypoint interface. Keep
+      the driver-side watchdog and protective stop independent of WBC, and
+      verify measured hold before handing motion ownership back.
 - [ ] Test the integrated agent through public TAMP tools, first with ground-truth
       oracle plans and then the agent: physical pick/carry/place, goal changes,
       interruptions and recovery. Record retention, task success, tracking, settling,
@@ -1261,6 +1309,18 @@ as an experimental training result.
       interaction under an explicitly authorized hardware procedure. Compare measured
       trajectories and loads against simulation; do not infer hardware safety from
       simulator success or start motion from this checklist alone.
+- [ ] Run the first combined arm-and-base WBC trial on Herman with direct base
+      velocity and bounded arm position targets. Hold the gripper. Start with
+      the rehearsed 8 cm forward move plus elbow motion. While on wired power,
+      cap total measured base travel at 20 cm and total rotation at 90°,
+      including motion while stopping. Use smaller commanded bounds for the trial.
+      [Direct WBC trial](docs/rl/MARS_HARDWARE_READINESS.md#direct-arm-and-base-wbc-trial).
+- [ ] Evaluate whether Mars needs an in-house joint velocity controller.
+      Use the first position-target trial to measure rate tracking, command
+      delay, load decay and stopping. If the position servo limits tracking
+      or contact response, prototype a robot-side velocity controller and
+      compare it on the same coupled trajectories. Verify joint limits,
+      command-loss behavior and the arm's ability to hold under gravity.
 - [x] Passive Herman connection check (2026-10-23): SSH responds and ROS Humble
       is installed. The default ROS graph showed only metadata topics; actual
       driver domain, modes, watchdog and stop behavior remain unverified. No

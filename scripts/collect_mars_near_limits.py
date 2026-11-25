@@ -3,8 +3,10 @@
 import argparse
 import hashlib
 import json
+import re
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +16,7 @@ from emet.rl.manipulation.arm_spline_benchmark import save, stop
 from emet.rl.manipulation.arm_splines import ANCHORS, ArmSplineReference, ArmSplineTrackingEnv, SplineLevel
 from emet.rl.manipulation.carry_benchmark import source_hashes
 from emet.rl.manipulation.expert_routing import bind_expert
+from emet.rl.manipulation.models import build_manipulation_model
 from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
 from emet.rl.manipulation.whole_body_observation import ACTOR_KEYS
 
@@ -32,6 +35,16 @@ class NearLimitEnv(ArmSplineTrackingEnv):
             or case["split"] not in ("train", "audit")
         ):
             raise ValueError("expected a seeded near-limit Mars arm case")
+        replay = case.get("replay")
+        if replay is not None:
+            posture = np.asarray(replay["reset_arm_rad"], dtype=float)
+            offsets = np.asarray(replay["joint_offsets_rad"], dtype=float)
+            if (
+                posture.shape != (5,)
+                or offsets.shape != (3, 5)
+                or not np.isfinite(np.r_[posture, offsets.ravel()]).all()
+            ):
+                raise ValueError("incident replay requires a finite reset and three five-axis offsets")
 
     def limits_for(self, case):
         simulated = self.unwrapped.control.limits
@@ -47,6 +60,8 @@ class NearLimitEnv(ArmSplineTrackingEnv):
         return limits
 
     def sample_posture(self, rng, case, level):
+        if "replay" in case:
+            return np.asarray(case["replay"]["reset_arm_rad"], dtype=float)
         limits = self.limits_for(case)
         q = np.array(list(ANCHORS.values())[rng.integers(len(ANCHORS))])
         q = np.clip(
@@ -62,18 +77,22 @@ class NearLimitEnv(ArmSplineTrackingEnv):
     def sample_reference(self, rng, case, level):
         control = self.unwrapped.control
         start = control.positions().copy()
-        joint = case["joint"]
-        direction = 1 if case["side"] == "lower" else -1
-        stage = start.copy()
-        stage[joint] += direction * rng.uniform(0.085, 0.13)
-        gesture = stage.copy()
-        wrist = 3 if joint == 4 else 4
-        gesture[wrist] = np.clip(
-            stage[wrist] + rng.choice([-1, 1]) * rng.uniform(0.07, 0.14),
-            control.limits[wrist, 0] + 0.03,
-            control.limits[wrist, 1] - 0.03,
-        )
-        reference = ArmSplineReference(control, [start, stage, gesture, stage], level, timing=self.timing)
+        if "replay" in case:
+            points = [start, *(start + np.asarray(case["replay"]["joint_offsets_rad"]))]
+        else:
+            joint = case["joint"]
+            direction = 1 if case["side"] == "lower" else -1
+            stage = start.copy()
+            stage[joint] += direction * rng.uniform(0.085, 0.13)
+            gesture = stage.copy()
+            wrist = 3 if joint == 4 else 4
+            gesture[wrist] = np.clip(
+                stage[wrist] + rng.choice([-1, 1]) * rng.uniform(0.07, 0.14),
+                control.limits[wrist, 0] + 0.03,
+                control.limits[wrist, 1] - 0.03,
+            )
+            points = [start, stage, gesture, stage]
+        reference = ArmSplineReference(control, points, level, timing=self.timing)
         if case["published_limits_rad"] is not None:
             limits = self.limits_for(case)
             if np.any(reference.certificate["joint_minimum"] < limits[:, 0] + 0.002) or np.any(
@@ -160,7 +179,17 @@ def rollout(env, case, actor, *, collect=False):
 
 
 def run_case(case, output):
-    env = NearLimitEnv([case], levels=(LEVEL,), maximum_attempts=12, timing="bounded_v2", finish_after_hold=True)
+    attempts = 1 if "replay" in case else 12
+    env = NearLimitEnv(
+        [case],
+        levels=(LEVEL,),
+        maximum_attempts=attempts,
+        timing="bounded_v2",
+        finish_after_hold=True,
+        model_factory=partial(build_manipulation_model, forearm_collision=case["forearm_collision"])
+        if case.get("forearm_collision")
+        else None,
+    )
     row = {"case": case, "success": False}
     try:
         teacher, frames = rollout(env, case, None, collect=case["split"] == "train")
@@ -217,11 +246,17 @@ def main():
     parser.add_argument(
         "--limits-audit", type=Path, help="Use the intersection with the published ranges in this capture audit"
     )
+    parser.add_argument("--incident-manifest", type=Path, help="Collect the declared hardware-derived arm replays")
+    parser.add_argument(
+        "--audit-cad-forearm", action="store_true", help="Use the corrected CAD hull on incident audits"
+    )
     parser.add_argument("--worker-case", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.worker_case:
         run_case(json.loads(args.worker_case), args.output)
         return
+    if args.audit_cad_forearm and args.incident_manifest is None:
+        parser.error("--audit-cad-forearm requires an incident manifest")
     limits = None
     if args.limits_audit:
         audit = json.loads(args.limits_audit.read_text())["audit"]
@@ -243,8 +278,41 @@ def main():
         for side_index, side in enumerate(("lower", "upper"))
         for rep in range(repeats)
     ]
+    incidents = None
+    if args.incident_manifest:
+        contents = args.incident_manifest.read_bytes()
+        incidents = json.loads(contents)
+        if (
+            incidents.get("format") != "mars-arm-incident-replay-v1"
+            or not incidents.get("cases")
+            or not incidents.get("observed")
+        ):
+            raise ValueError("expected a nonempty Mars arm incident replay manifest")
+        ids = [case["id"] for case in incidents["cases"]]
+        seeds = [case["seed"] for case in incidents["cases"]]
+        if (
+            len(set(ids)) != len(ids)
+            or len(set(seeds)) != len(seeds)
+            or any(not re.fullmatch(r"[a-zA-Z0-9:_-]+", value) for value in ids)
+        ):
+            raise ValueError("incident replay identifiers and seeds must be unique and safe to write")
+        if any("replay" not in case for case in incidents["cases"]):
+            raise ValueError("incident case is missing its replay")
+        cases = [
+            {
+                **case,
+                **({"forearm_collision": "cad_hull"} if args.audit_cad_forearm and case["split"] == "audit" else {}),
+                "level": 0,
+                "actor": str(args.actor.resolve()) if case["split"] == "audit" and args.actor else None,
+            }
+            for case in incidents["cases"]
+        ]
     sources = source_hashes()
-    save(args.output / "manifest.json", {"cases": cases, "sources": sources})
+    specification = {"cases": cases, "sources": sources}
+    if incidents is not None:
+        specification["incident_sources"] = incidents["observed"]
+        specification["incident_manifest_sha256"] = hashlib.sha256(contents).hexdigest()
+    save(args.output / "manifest.json", specification)
     with ThreadPoolExecutor(args.workers) as pool:
         rows = list(pool.map(lambda case: launch(case, args.output, worker=__file__), cases))
     if source_hashes() != sources:

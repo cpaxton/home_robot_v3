@@ -81,10 +81,11 @@ Stage-specific teacher admission must cover the requested motion. The
 [unloaded-prefix readout](../experiments/mars_unloaded_grasp_admission_20261116.md)
 shows why execution boundaries and planning admission both need explicit scope.
 
-The operator console should use the same waypoint lifecycle as a planner.
-It supplies timestamped pose schedules, can replace an active schedule, and
-shows command receipts including a blocked outcome and measured stop status.
-The robot owns motion and contact handling if the stream drops. Start with
+WBC should be the sole source of normal base and arm motion commands. Operator,
+teleoperation and planner inputs share the same waypoint lifecycle. They can
+send and replace timestamped pose schedules and receive command receipts with
+blocked outcomes and measured stop status. The robot-side driver owns the
+watchdog and protective stop independently of WBC. Start with
 simulator submission and cancellation, then verify the robot-side actuator
 adapter and watchdog before enabling hardware submission. See
 [controller deployment](CONTROLLER_DEPLOYMENT.md).

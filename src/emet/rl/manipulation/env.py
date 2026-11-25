@@ -1847,7 +1847,7 @@ class ManipulationEnv(gym.Env):
             self.peak_hold_drift = max(
                 self.peak_hold_drift, float(np.linalg.norm(self.control.base_pose()[:2] - self.hold_base_anchor))
             )
-        terminal_success = success and not continuing
+        terminal_success = success and not continuing and not getattr(self, "continue_pose_stream", False)
         if failure or terminal_success:
             self.control.stop()
         cost = self._tracking_cost()

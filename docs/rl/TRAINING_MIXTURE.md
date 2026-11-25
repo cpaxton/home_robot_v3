@@ -5,6 +5,51 @@ training. [ACTIVE_WORK](ACTIVE_WORK.md) owns job/branch status; experiment repor
 own results. Update this page whenever sampling weights, case pools, reset
 conditions or training stages change. Planned allocations are not running ones.
 
+## Hardware failures in the single-arm replay bank
+
+Save the requested trajectory, the measured start and motion, the command
+readback, and the terminal receipt. The
+[Herman sock replay manifest](../../configs/benchmarks/mars_arm_sock_replays_v1.json)
+preserves the two recorded hardware stops and the parameterized approach sent
+to the simulator. The recorded joint starts are audit cases. Two explicit
+open-start variants retain the inward elbow and wrist-lift intent as
+candidate corrective examples.
+
+Run `scripts/collect_mars_near_limits.py --incident-manifest` with that
+manifest to build the arm-only bank. The collector emits training tensors for
+teacher runs that pass the tracking and stop gates. Failed audits remain in
+the report. On the first run, both corrective variants passed and yielded
+110 frames. The distillation loader verified the bank through its
+`--workspace-bank` path.
+
+The [parameterized approach replay](../../scripts/rehearse_mars_pick_waypoints.py)
+also exports an arm bank with `--arm-bank` when the teacher confirms a
+contact-free approach and hold from the staged pose. The outward arc yielded
+401 frames. The local `logs/herman-wave/sock-arm-flywheel-v1/report.json`
+combines both sources in three equally weighted teacher episodes. The measured
+folded start and the failed reach attempts remain in the replay evidence.
+
+The full-pickup rehearsal adds a single-arm retention audit. Its trace in
+`logs/herman-wave/sock-pickup-fresh-retention.json` preserves the commanded pose
+schedule, jaw position, bilateral contact, object height, and confirmed stop
+after the slip. Keep it as a grasp-loss case for evaluating when the controller
+should stop or regrasp. The teacher export still covers passing approaches
+only. The simulated slip has no hardware force label.
+
+The latest manifest indexes the same-gain supported elbow stall, the
+visible wrist tolerance miss, and the measured fixed-elbow reach. The wrist
+and reach references have held-out simulator cases. Hardware traces remain
+evidence for evaluation. The collector does not simulate the actuator
+stall or train a fault response from these records. In the six-case run,
+both corrective teacher episodes passed and exported 110 frames. The two
+new held-out references were rejected by the collector's collision check
+before rollout, and the older two were rejected by the limit intersection.
+There was no actor score on those cases. Reconcile the collector's scene
+and geometry with the captured-scene rehearsal before using them for
+policy qualification. Local results are under
+`logs/herman-wave/sock-handoff-audit-v3/`. See the
+[Herman RL lessons](HERMAN_RL_LESSONS.md).
+
 ## Completed ordinary-run mixture
 
 Shares are **physical 20 Hz control ticks**, not episode counts, PPO decisions
@@ -314,3 +359,11 @@ this mixture while preserving the initializer's declared base-feedback settings
 (`--source-base-feedback`), which the earlier matched-head comparison removed.
 The unchanged PPO mixture above remains the only completed PPO exposure.
 New raw datasets and weights stay ignored.
+
+The supported-recovery lift is a separate synthetic Mars teacher case.
+The legacy collider rejected it. With the corrected CAD forearm hull it
+passed and exported 51 frames in the case-level run under
+`logs/herman-wave/sock-supported-recovery-cad/`. The recurrent physical
+overload is indexed as audit evidence and kept out of imitation targets.
+The [folded-pose cost](HERMAN_RL_LESSONS.md#mars-folded-pose-trajectory-cost)
+is now available for a Mars reward comparison.

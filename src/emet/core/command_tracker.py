@@ -134,6 +134,13 @@ class CommandTracker:
                 self._active = None
             return deepcopy(receipt)
 
+    def renew_active(self, session, sequence, timeout_s):
+        with self._lock:
+            key = (session, sequence)
+            if self._active != key or self._clock() >= self._receipts[key]["deadline"]:
+                raise RuntimeError("cannot renew an expired or inactive command")
+            self._receipts[key]["deadline"] = self._clock() + timeout_s
+
     def expired_navigation(self) -> dict | None:
         """Expiry requires adapter cancellation; it is not itself proof of stopping."""
         with self._lock:

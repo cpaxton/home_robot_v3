@@ -30,6 +30,7 @@ from emet.config.rerun_config import open_live_rerun_visualizer
 from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
+from emet.core.pose_stream import PoseStreamClientMixin
 from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace, read_image_timing
 from emet.core.zmq_protocol import (
@@ -76,7 +77,7 @@ def _dict_first_nonempty(msg: dict[str, Any], *keys: str) -> Any:
 # faulthandler.enable()
 
 
-class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
+class StretchZmqClient(PoseStreamClientMixin, ZmqStreamPauseMixin, AbstractRobotClient):
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
 

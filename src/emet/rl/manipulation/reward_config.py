@@ -32,6 +32,7 @@ class WholeBodyRewardConfig:
     force_free_N: float = 3.0
     force_scale_N: float = 3.0
     force_weight: float = 0.1
+    mars_folded_pose_weight: float = 0.0
     guard_penalty: float = 10.0
     success_bonus: float = 2.0
     failure_penalty: float = 2.0
@@ -69,7 +70,10 @@ class WholeBodyRewardConfig:
         )
 
     def record(self):
-        return {"format": "whole_body_reward_v1", **asdict(self)}
+        values = asdict(self)
+        if self.mars_folded_pose_weight == 0:
+            del values["mars_folded_pose_weight"]
+        return {"format": "whole_body_reward_v1", **values}
 
     @classmethod
     def from_record(cls, value):
@@ -77,7 +81,8 @@ class WholeBodyRewardConfig:
             return cls()
         if isinstance(value, cls):
             return value
-        if not isinstance(value, dict) or set(value) != {"format", *(f.name for f in fields(cls))}:
+        expected = {"format", *(f.name for f in fields(cls))}
+        if not isinstance(value, dict) or set(value) not in (expected, expected - {"mars_folded_pose_weight"}):
             raise ValueError("complete versioned reward configuration required")
         if value["format"] != "whole_body_reward_v1":
             raise ValueError("unsupported reward configuration format")
@@ -105,3 +110,17 @@ def hand_tracking_terms(config, position_error, rotation_error, velocity_error, 
         - np.sum((velocity_error[3:] / config.hand_angular_velocity_scale_rad_s) ** 2)
     )
     return float(config.hand_pose_weight * pose), float(config.hand_velocity_weight * gate * velocity), float(gate)
+
+
+def mars_folded_pose_cost(joints_rad):
+    """Unitless exposure to the measured Mars shoulder/elbow fold region.
+
+    The two smooth ramps are provisional geometry priors, not force estimates.
+    The cost can be applied to measured states or summed over candidate paths.
+    """
+    q = np.asarray(joints_rad, dtype=float)
+    if q.ndim == 0 or q.shape[-1] != 5 or not np.isfinite(q).all():
+        raise ValueError("expected finite five-axis Mars joint positions")
+    shoulder = np.clip((-q[..., 1] - np.deg2rad(45)) / np.deg2rad(25), 0.0, 1.0)
+    elbow = np.clip((q[..., 2] - np.deg2rad(70)) / np.deg2rad(20), 0.0, 1.0)
+    return shoulder**2 * (3 - 2 * shoulder) * elbow**2 * (3 - 2 * elbow)

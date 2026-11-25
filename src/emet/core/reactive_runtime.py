@@ -74,6 +74,10 @@ class ReactiveRuntime:
                 raise RuntimeError("reactive deadline exceeded")
             try:
                 context = self.update_reactive_command(value["goal"])
+                if "pose_stream" in value["goal"]:
+                    lease = context.get("pose_stream_lease_s")
+                    if lease is not None:
+                        self.command_tracker.renew_active(current[0], current[1], lease)
             except Exception:
                 self._finish_reactive_cancel("failed", "reactive update failed")
                 raise

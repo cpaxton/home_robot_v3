@@ -7,7 +7,7 @@ import mujoco
 import numpy as np
 
 from emet.rl.manipulation.fixtures import scene_xml
-from emet.rl.model import robot_xml
+from emet.rl.model import ASSETS, robot_xml
 from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
@@ -22,9 +22,39 @@ def build_manipulation_model(
     mesh_storage="inline",
     scene_geoms=(),
     hide_training_fixtures=False,
+    forearm_collision="proxy_box",
+    head_range_rad=None,
+    grip_range_rad=None,
+    scene_payload_half_size=None,
 ):
     if type(hide_training_fixtures) is not bool or (hide_training_fixtures and robot != "innate_mars"):
         raise ValueError("fixture-free scene rehearsal requires Mars")
+    if forearm_collision not in ("proxy_box", "cad_hull") or (
+        forearm_collision == "cad_hull" and robot != "innate_mars"
+    ):
+        raise ValueError("CAD forearm collision is available only for Mars")
+    joint_ranges = {}
+    if grip_range_rad is not None:
+        joint_ranges["joint6"] = grip_range_rad
+    if head_range_rad is not None:
+        joint_ranges["joint_head"] = head_range_rad
+    for joint, limits in joint_ranges.items():
+        limits = np.asarray(limits, dtype=float)
+        if robot != "innate_mars" or limits.shape != (2,) or not np.isfinite(limits).all() or limits[0] >= limits[1]:
+            raise ValueError(f"finite ordered Mars limits required for {joint}")
+        joint_ranges[joint] = limits
+    if "joint6" in joint_ranges:
+        joint_ranges["joint6M"] = -joint_ranges["joint6"][::-1]
+    if scene_payload_half_size is not None:
+        scene_payload_half_size = np.asarray(scene_payload_half_size, dtype=float)
+        if (
+            not hide_training_fixtures
+            or scene_payload_half_size.shape != (3,)
+            or not np.isfinite(scene_payload_half_size).all()
+            or np.any(scene_payload_half_size <= 0)
+            or np.any(scene_payload_half_size > 0.1)
+        ):
+            raise ValueError("bounded payload half sizes require a captured Mars scene")
     if not isinstance(scene_geoms, (list, tuple)) or len(scene_geoms) > 2000:
         raise ValueError("bounded scene geometry required")
     for geom in scene_geoms:
@@ -55,6 +85,17 @@ def build_manipulation_model(
         raise ValueError("invalid contact cone")
     if robot == "innate_mars":
         root = add_physical_chassis(robot_xml())
+        for joint, limits in joint_ranges.items():
+            root.find(f".//joint[@name='{joint}']").set("range", " ".join(map(str, limits)))
+        if forearm_collision == "cad_hull":
+            # The union box fills empty space next to the folded forearm.
+            # Keep the same active geom, mass and contact rules, and use the
+            # source STL's convex hull as its contact surface.
+            forearm = root.find(".//geom[@name='rl_link3']")
+            forearm.attrib.pop("pos")
+            forearm.attrib.pop("size")
+            forearm.set("type", "mesh")
+            forearm.set("mesh", "link3_mesh")
         root.find("option").set("noslip_iterations", "5")
         # Experimental bounded gripper torque; the upstream 1000 Nm/rad
         # position actuator produces destructive impulses on first contact.
@@ -117,6 +158,18 @@ def build_manipulation_model(
                 geom.set("contype", "0")
                 geom.set("conaffinity", "0")
                 geom.set("rgba", "0 0 0 0")
+    if scene_payload_half_size is not None:
+        body = root.find(".//body[@name='object1']")
+        body.attrib.pop("gravcomp")
+        geom = body.find("geom")
+        geom.attrib.update(
+            name="sock_proxy",
+            size=" ".join(map(str, scene_payload_half_size)),
+            contype="1",
+            conaffinity="1",
+            rgba="0.9 0.9 0.9 1",
+            friction="1.1 0.005 0.0001",
+        )
     for index, geom in enumerate(scene_geoms):
         ET.SubElement(
             root.find("worldbody"),
@@ -163,4 +216,7 @@ def build_manipulation_model(
             if compiler.get(key):
                 compiler.set(key, "assets" if robot == "stretch" else "meshes")
     identity = ET.tostring(root) + b";contact_load:efc_linear_l1_bound_v2"
+    if forearm_collision == "cad_hull":
+        collision_mesh = ASSETS / "innate_mars" / "meshes" / "link3.STL"
+        identity += b";forearm_contact_mesh:" + hashlib.sha256(collision_mesh.read_bytes()).digest()
     return model, hashlib.sha256(identity).hexdigest()

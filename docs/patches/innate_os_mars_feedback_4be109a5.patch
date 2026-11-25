@@ -1,0 +1,77 @@
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
+index 7f98ca3..7c62127 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/arm_control.cpp
+@@ -18,6 +18,7 @@ void MarsArmNode::controlTimerCallback() {
+         // ========== READ STATE (position + velocity + load in one bulk read) ==========
+         auto [positions, velocities, loads] = robot_->readState();
+         ts[2] = std::chrono::steady_clock::now();
++        const auto state_stamp = this->now();
+
+         // Convert raw load/current to effort values
+         std::vector<double> efforts;
+@@ -32,15 +33,17 @@ void MarsArmNode::controlTimerCallback() {
+
+         // ========== PUBLISH ARM STATE ==========
+         std::vector<double> positions_rad;
++        // Present Velocity (128) uses 0.229 revolutions/minute per unit.
++        constexpr double kVelocityRadPerSecond = 0.229 * 2.0 * M_PI / 60.0;
+         std::vector<double> velocities_rad;
+         for (size_t j = 0; j < positions.size(); ++j) {
+             positions_rad.push_back(jointRad(positions[j], j));
+-            const double vel = (velocities[j] * 2 * M_PI) / 4096.0;
++            const double vel = velocities[j] * kVelocityRadPerSecond;
+             velocities_rad.push_back(flippedJoint(j) ? -vel : vel);
+         }
+
+         // Publish arm joint state (only first 6 servos) to /mars/arm/state
+-        arm_state_msg_.header.stamp = this->now();
++        arm_state_msg_.header.stamp = state_stamp;
+         arm_state_msg_.position = std::vector<double>(positions_rad.begin(), positions_rad.begin() + 6);
+         arm_state_msg_.velocity = std::vector<double>(velocities_rad.begin(), velocities_rad.begin() + 6);
+         arm_state_msg_.effort = std::vector<double>(efforts.begin(), efforts.begin() + 6);
+@@ -66,12 +69,13 @@ void MarsArmNode::controlTimerCallback() {
+             head_angle_rad = -head_angle_rad;
+         }
+
+-        joint_state_msg_.header.stamp = this->now();
++        joint_state_msg_.header.stamp = state_stamp;
+         std::vector<double> all_positions(positions_rad.begin(), positions_rad.begin() + 6);
+         all_positions.push_back(head_angle_rad);
+         joint_state_msg_.position = all_positions;
+         std::vector<double> all_velocities(velocities_rad.begin(), velocities_rad.begin() + 6);
+-        all_velocities.push_back(velocities_rad[6]);
++        const double head_velocity = velocities_rad[6];
++        all_velocities.push_back(joint_configs_[6].head_direction_reversed ? -head_velocity : head_velocity);
+         joint_state_msg_.velocity = all_velocities;
+         std::vector<double> all_efforts(efforts.begin(), efforts.begin() + 6);
+         all_efforts.push_back(efforts[6]);
+diff --git a/ros2_ws/src/mars_bot/mars_arm/mars_arm/robot.cpp b/ros2_ws/src/mars_bot/mars_arm/mars_arm/robot.cpp
+index aff8c4e..b9a2df9 100644
+--- a/ros2_ws/src/mars_bot/mars_arm/mars_arm/robot.cpp
++++ b/ros2_ws/src/mars_bot/mars_arm/mars_arm/robot.cpp
+@@ -113,13 +113,22 @@ std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> Robot::readStat
+     last_read_txrx_us =
+         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0).count();
+
+-    if (result != COMM_SUCCESS) {
++    bool complete = result == COMM_SUCCESS;
++    if (complete) {
++        for (int id : servo_ids_) {
++            if (!state_reader_->isAvailable(id, ADDR_PRESENT_LOAD, 10)) {
++                complete = false;
++                break;
++            }
++        }
++    }
++    if (!complete) {
+         if (tries > 0) {
+             return readState(tries - 1);
+         }
+         // Never hand back zeros: the control loop would publish them as a
+         // real pose (encoder 0 = -pi) and a fold would hold the arm there.
+-        throw std::runtime_error("failed to read servo state over the bus");
++        throw std::runtime_error("incomplete servo state read over the bus");
+     }
+
+     std::vector<int> positions;

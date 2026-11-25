@@ -51,3 +51,34 @@ robot.move_base_to([0, 0, -3.14159/2], relative=True)
 ```
 
 You can find a version of this code in [examples/simple_motions.py](../examples/simple_motions.py).
+
+## Timed pose streams
+
+Use the same client API for robots whose server advertises pose streaming.
+The existing Stretch commands above remain available.
+
+```python
+from emet.controller import connect_robot
+
+robot = connect_robot("innate_mars", robot_ip="192.168.1.15")
+with robot.open_pose_stream(frame="odom") as stream:
+    stream.send({"arms": {"arm": [0.30, 0.01, 0.18, 0, 0, 0, 1]}}, duration_s=2.0)
+    stream.wait(timeout_s=8.0)
+```
+
+Base targets are `[x, y, yaw]`, head targets are `[pan, tilt]` and arm
+targets are `[x, y, z, qx, qy, qz, qw]` keyed by arm name. Positions are
+in metres and angles are in radians. The server advertises its available
+channels and arm names. An omitted channel holds its previous target or
+the measured pose at stream start. Set `free_base=True` to explicitly
+allow a supporting backend to move an omitted base. Sending again
+replaces the active segment from current feedback. Reaching a waypoint
+holds the target and leaves the stream open. Each accepted update renews
+the lease for the larger of 3 seconds or segment duration plus 2 seconds.
+Call `finish()` to request final settlement, or `wait()` to request it
+and block for a receipt. Closing an unfinished context cancels it.
+
+The manipulation simulator's task-pose runtime supports the single arm
+and base. Live Mars and Sourccey execution require a server with a
+qualified robot-side stream executor. Existing bridges will reject the
+new call when the capability is absent.

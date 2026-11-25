@@ -38,9 +38,26 @@ def camera_calibration(model, capture):
     }
 
 
-def scene_factory(capture, scene):
+def scene_factory(
+    capture,
+    scene,
+    *,
+    forearm_collision="cad_hull",
+    head_range_rad=None,
+    grip_range_rad=None,
+    scene_payload_half_size=None,
+):
     def build(robot, **kwargs):
-        model, fingerprint = build_manipulation_model(robot, scene_geoms=scene, hide_training_fixtures=True, **kwargs)
+        model, fingerprint = build_manipulation_model(
+            robot,
+            scene_geoms=scene,
+            hide_training_fixtures=True,
+            forearm_collision=forearm_collision,
+            head_range_rad=head_range_rad,
+            grip_range_rad=grip_range_rad,
+            scene_payload_half_size=scene_payload_half_size,
+            **kwargs,
+        )
         calibration = camera_calibration(model, capture)
         identity = hashlib.sha256((fingerprint + json.dumps(calibration, sort_keys=True)).encode()).hexdigest()
         return model, identity
@@ -108,7 +125,7 @@ class HermanRehearsalEnv(ManipulationEnv):
 
 
 def geometry_diagnostic(model, data):
-    """Compare the conservative link3 proxy with its source CAD convex hull.
+    """Report active forearm clearance and a source CAD comparison.
 
     Direct geomDistance avoids broad-phase changes from flipping collision bits
     after compilation. This diagnoses model geometry, not physical clearance.
@@ -116,9 +133,76 @@ def geometry_diagnostic(model, data):
     import mujoco
 
     base = model.geom("rl_base_link").id
+    forearm = model.geom("rl_link3")
+    distances = {
+        name: float(mujoco.mj_geomDistance(model, data, geom, base, 0.5, np.zeros(6)))
+        for name, geom in (
+            ("active_signed_distance_m", forearm.id),
+            ("cad_hull_signed_distance_m", model.geom("link3_geom").id),
+        )
+    }
+    distances["forearm_collision"] = "cad_hull" if forearm.type[0] == mujoco.mjtGeom.mjGEOM_MESH else "proxy_box"
+    return distances
+
+
+def audit_parked_transition(model, data, measured, published_limits, *, settling_reserve_rad=0.0):
+    """Review the vendor-style projection without resetting the recorded pose."""
+    import mujoco
+
+    from emet.rl.manipulation.profiles import MARS
+    from emet.rl.manipulation.safety import ContactMonitor
+    from emet.robots.innate_mars.startup_recovery import ENCODER_STEP_RAD, project_parked_hold
+
+    try:
+        target = project_parked_hold(measured, published_limits, settling_reserve_rad=settling_reserve_rad)
+    except ValueError as exc:
+        return {"state": "unavailable", "reason": str(exc), "hardware_admitted": False}
+    deltas = {joint: target[joint] - measured[joint] for joint in target}
+    if not any(deltas.values()):
+        return {"state": "already_in_range", "target_rad": target, "hardware_admitted": False}
+
+    size = max(map(abs, deltas.values()))
+    if size > np.pi:
+        return {
+            "state": "unavailable",
+            "reason": "outside the calibrated single-turn range",
+            "hardware_admitted": False,
+        }
+    samples = int(np.ceil(size / ENCODER_STEP_RAD)) + 1
+    scratch = mujoco.MjData(model)
+    scratch.qpos[:] = data.qpos
+    monitor = ContactMonitor(model, MARS)
+    rows = []
+    for fraction in np.linspace(0, 1, samples):
+        for joint, delta in deltas.items():
+            scratch.qpos[model.joint(joint).qposadr[0]] = measured[joint] + fraction * delta
+        mujoco.mj_forward(model, scratch)
+        pair_distances = {}
+        for a, b, distance in zip(scratch.contact.geom1, scratch.contact.geom2, scratch.contact.dist, strict=True):
+            if distance >= 0 or (a not in monitor.robot_geoms and b not in monitor.robot_geoms):
+                continue
+            if (a in monitor.floor and b in monitor.support_geoms) or (
+                b in monitor.floor and a in monitor.support_geoms
+            ):
+                continue
+            pair = tuple(sorted((model.geom(a).name, model.geom(b).name)))
+            pair_distances[pair] = min(pair_distances.get(pair, 0), float(distance))
+        rows.append(
+            {
+                "fraction": float(fraction),
+                "forearm_chassis_gap_m": geometry_diagnostic(model, scratch)["active_signed_distance_m"],
+                "contacts": [[*pair, dist] for pair, dist in pair_distances.items()],
+            }
+        )
     return {
-        name: float(mujoco.mj_geomDistance(model, data, model.geom(geom).id, base, 0.5, None))
-        for name, geom in (("proxy_signed_distance_m", "rl_link3"), ("cad_hull_signed_distance_m", "link3_geom"))
+        "state": "needs_contact_review" if any(row["contacts"] for row in rows) else "clear_in_static_model",
+        "start_rad": {joint: measured[joint] for joint in target},
+        "target_rad": target,
+        "joint_delta_rad": deltas,
+        "settling_reserve_rad": settling_reserve_rad,
+        "hand_pitch_change_rad": sum(deltas[name] for name in ("joint2", "joint3", "joint4")),
+        "static_sweep": rows,
+        "hardware_admitted": False,
     }
 
 
@@ -163,7 +247,7 @@ def select_start_proposal(model, data, values, head):
         collision = checker.configuration_collides(model, data)
         clearance = geometry_diagnostic(model, data)
         support = reference_support_margin(model, data, MARS)
-        accepted = not collision and clearance["proxy_signed_distance_m"] >= 0.01 and support >= 0.01
+        accepted = not collision and clearance["active_signed_distance_m"] >= 0.01 and support >= 0.01
         attempts.append(
             {
                 **row,
