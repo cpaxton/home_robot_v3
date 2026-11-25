@@ -352,6 +352,34 @@ def test_mcts_and_approach_grounding_share_supplied_placements(monkeypatch):
     assert seen == [0.0]
 
 
+def test_robocasa_pick_place_task_parses_and_resolves():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    environment = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "style": 1, "layout": 1}
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 0.8]},
+        "cab": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
+        "counter": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+    }
+    task = robocasa_pick_place_task(environment, placements)
+    assert task is not None
+    assert task.object == "mug"
+    assert task.goal_recep == "cab"          # task "Cabinet" -> fixture key "cab"
+    assert task.start_recep == "counter"
+    assert task.object_gt_body == "obj_main"
+
+
+def test_robocasa_pick_place_task_none_for_non_pickplace_or_non_robocasa():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    assert robocasa_pick_place_task(None, {}) is None
+    assert robocasa_pick_place_task({"kind": "molmospaces"}, {}) is None
+    # Non-PickPlace RoboCasa task (open/close) is not a pick-place task.
+    assert robocasa_pick_place_task({"kind": "robocasa", "task": "OpenCabinet"}, {}) is None
+    # Missing goal receptacle -> None.
+    assert robocasa_pick_place_task({"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}, {"obj_main": {"cat": "mug"}}) is None
+
+
 def test_refusal_from_teleport_collision_parses_deepest_margin():
     msg = (
         "Command 47 failed: navigation start failed: teleport_endpoint_collision: "

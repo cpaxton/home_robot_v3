@@ -740,7 +740,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
-        from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
+        from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task, stable_scene_task_refs
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
             emit_tasks,
@@ -767,6 +767,31 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             placements = {}
         from emet.controller.task.tamp.agent_bridge import robot_session_key
         session_key = robot_session_key(robot_obj)
+
+        # RoboCasa: no iTHOR-style task catalog; derive the single active task from
+        # the session (environment.task) + GT placements, semantic-only.
+        robocasa_task = robocasa_pick_place_task((session or {}).get("environment"), placements)
+        if robocasa_task is not None:
+            task_refs = stable_scene_task_refs(context, [robocasa_task], placements, session_key=session_key)
+            return response(
+                "scene_tasks",
+                data={
+                    "tasks": [
+                        {
+                            "task_ref": ref.ref,
+                            "object_name": ref.object_query,
+                            "receptacle_name": ref.receptacle_query,
+                            "start_receptacle": ref.start_receptacle,
+                        }
+                        for ref in task_refs
+                    ],
+                    "pickable_categories": [robocasa_task.object],
+                    "receptacle_categories": [robocasa_task.goal_recep],
+                    "reachability": None,
+                    "reachability_status": "not_requested",
+                },
+            )
+
         active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
         candidates = (
             [active_metadata]
