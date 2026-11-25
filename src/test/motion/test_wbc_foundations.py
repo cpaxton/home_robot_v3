@@ -404,12 +404,31 @@ def test_scenario_from_attempt_and_record_scenario(tmp_path, monkeypatch):
         "joint_names": ["torso_joint1", "arm_joint1"],
         "trace": [{"qpos": [0.1, 0.2], "ee_xyz": [0.0, 0.0, 0.5]}],
     }
-    rec = scenario_from_attempt(attempt, context={"object_body": "obj_main"})
-    assert rec.goal["object"] == "obj_main"
+    rec = scenario_from_attempt(
+        attempt, context={"object_query": "mug", "receptacle_query": "cab"}
+    )
+    assert rec.goal["object"] == "mug"
+    assert rec.goal["receptacle"] == "cab"
+    assert rec.meta["privileged"] is False
+    assert "object_body" not in rec.meta
     assert rec.goal["ee_target_pos"] == [0.0, 0.0, 0.9]
     assert rec.robot_state["q"] == [0.1, 0.2]
     assert rec.failure_mode == "tracking_failed"
     assert rec.initial_voxel["kind"] == "voxel_map_2d_unavailable"
+
+    privileged = scenario_from_attempt(
+        attempt,
+        context={
+            "object_query": "mug",
+            "receptacle_query": "cab",
+            "privileged": True,
+            "object_body": "obj_main",
+            "receptacle_body": "cab_main",
+        },
+    )
+    assert privileged.meta["privileged"] is True
+    assert privileged.meta["object_body"] == "obj_main"
+    assert privileged.meta["receptacle_body"] == "cab_main"
 
     monkeypatch.setenv("EMET_CASE_LIBRARY_DIR", str(tmp_path))
     assert record_scenario(rec) is True
