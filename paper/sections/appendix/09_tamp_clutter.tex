@@ -5,7 +5,11 @@
 \label{app:tamp_clutter}
 
 Task and motion planning (TAMP) is the ability to \emph{interact with the world as part
-of a plan}. We propose a lightweight sim benchmark on MolmoSpaces iTHOR across four
+of a plan}. Agentic manipulation policies such as \textbf{AMP}~\citep{chen2026amp} drive
+sensing, perception, and motion skills through code emitted by a frontier model; our TAMP
+tools (\texttt{scene\_tasks} / \texttt{plan\_pick\_place} / \texttt{execute\_pick\_place\_plan})
+follow the same spirit with structured, schema-versioned tool results and guarded execution.
+We propose a lightweight sim benchmark on MolmoSpaces iTHOR across four
 robots (Galaxea R1 \texttt{rby1}, Stretch, Innate Mars, Nori A3) where each episode
 starts the robot surrounded by small floor objects that must be moved out of the way.
 
