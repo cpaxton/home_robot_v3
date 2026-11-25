@@ -55,17 +55,52 @@ def record_manip_attempt(attempt: dict[str, Any], *, context: dict[str, Any] | N
         return None
 
 
+def _to_numpy(t: Any) -> np.ndarray:
+    if hasattr(t, "detach"):  # torch tensor (possibly on GPU)
+        t = t.detach().cpu()
+    return np.asarray(t)
+
+
+def export_initial_voxel_map(vm: Any) -> dict[str, Any]:
+    """Export a voxel map's occupancy as a JSON-serializable **initial map** dict.
+
+    Captures the 2D occupancy (obstacles + explored) plus reconstruction metadata
+    (grid origin + resolution) so the scenario can be reproduced. Duck-typed against
+    any ``SparseVoxelMap``-like object; never raises.
+    """
+    out: dict[str, Any] = {"kind": "voxel_map_2d"}
+    try:
+        origin = getattr(vm, "grid_origin", None)
+        if origin is not None:
+            arr = np.asarray(origin, dtype=np.float64).reshape(-1)
+            out["grid_origin"] = [float(arr[0]), float(arr[1])] if arr.size >= 2 else [0.0, 0.0]
+        out["grid_resolution"] = float(getattr(vm, "grid_resolution", 0.05))
+        m2d = vm.get_2d_map() if callable(getattr(vm, "get_2d_map", None)) else None
+        if m2d is not None and len(m2d) >= 2:
+            out["obstacles"] = (_to_numpy(m2d[0]) > 0).astype(np.uint8).tolist()
+            out["explored"] = (_to_numpy(m2d[1]) > 0).astype(np.uint8).tolist()
+        else:
+            out["obstacles"] = []
+            out["explored"] = []
+    except Exception:
+        out["kind"] = "voxel_map_2d_unavailable"
+        out["obstacles"] = []
+        out["explored"] = []
+    return out
+
+
 def scenario_from_attempt(
     attempt: dict[str, Any],
     *,
     context: dict[str, Any] | None = None,
-    voxel: np.ndarray | None = None,
+    initial_voxel: Any = None,
 ) -> Any:
     """Build a :class:`~emet.controller.manipulation.case_library.ScenarioRecord` from an attempt.
 
     The goal is the EE target (position from ``last_attempt``), the robot state is the
-    initial observed joint configuration (first trace sample), and ``voxel`` is the local
-    occupancy crop when available (a hook for the agent-level recorder; empty otherwise).
+    initial observed joint configuration (first trace sample), and ``initial_voxel`` is
+    the **initial** map — pass the result of :func:`export_initial_voxel_map` (the
+    agent-level recorder supplies it; empty/placeholder otherwise).
     """
     from emet.controller.manipulation.case_library import ScenarioRecord
 
@@ -86,7 +121,7 @@ def scenario_from_attempt(
     }
     meta.update({k: v for k, v in ctx.items() if k not in ("op", "object_body", "receptacle_body", "failure_mode")})
     return ScenarioRecord(
-        voxel=np.asarray(voxel, dtype=np.uint8) if voxel is not None else np.zeros((0, 0, 0), dtype=np.uint8),
+        initial_voxel=initial_voxel if initial_voxel is not None else {"kind": "voxel_map_2d_unavailable"},
         goal=goal,
         robot_state={"q": q0, "joint_names": list(attempt.get("joint_names") or [])},
         meta=meta,

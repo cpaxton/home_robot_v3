@@ -39,17 +39,28 @@ def _canonical(value: Any) -> Any:
 
 @dataclass
 class ScenarioRecord:
-    """One reconstructible training scenario."""
+    """One reconstructible training scenario.
 
-    voxel: np.ndarray  # local 3D binary occupancy crop (H, W, D), base frame
+    ``initial_voxel`` is the **initial** map (the scene geometry before the attempt):
+    either a local 3D binary occupancy crop (numpy array, from a generator) or a 2D
+    occupancy dict (``{"kind": "voxel_map_2d", "obstacles", "explored", ...}``, from
+    :func:`~emet.controller.manipulation.failure_record.export_initial_voxel_map`).
+    It is never a mid-attempt or final snapshot.
+    """
+
+    initial_voxel: Any  # initial map (3D occupancy array or 2D occupancy dict)
     goal: dict[str, Any]  # {"kind": "ee_target"|"pick_place", "ee_target": [...], "object": ..., "receptacle": ...}
     robot_state: dict[str, Any]  # {"q": [...], "base_xyt": [...]}
     meta: dict[str, Any] = field(default_factory=dict)  # episode_id, seed, robot_id, scene, failure_mode, manip_mode, ...
 
     def fingerprint(self) -> str:
-        """Stable content hash of (voxel, goal, robot_state) for dedup."""
+        """Stable content hash of (initial_voxel, goal, robot_state) for dedup."""
         payload = json.dumps(
-            {"voxel": _canonical(self.voxel), "goal": _canonical(self.goal), "robot_state": _canonical(self.robot_state)},
+            {
+                "initial_voxel": _canonical(self.initial_voxel),
+                "goal": _canonical(self.goal),
+                "robot_state": _canonical(self.robot_state),
+            },
             sort_keys=True,
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -60,7 +71,7 @@ class ScenarioRecord:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "voxel": _canonical(self.voxel),
+            "initial_voxel": _canonical(self.initial_voxel),
             "goal": _canonical(self.goal),
             "robot_state": _canonical(self.robot_state),
             "meta": _canonical(self.meta),
@@ -68,8 +79,11 @@ class ScenarioRecord:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ScenarioRecord:
+        initial = d.get("initial_voxel")
+        if isinstance(initial, list) and all(isinstance(row, list) for row in initial):
+            initial = np.asarray(initial, dtype=np.uint8)
         return cls(
-            voxel=np.asarray(d.get("voxel") or [], dtype=np.uint8),
+            initial_voxel=initial,
             goal=dict(d.get("goal") or {}),
             robot_state=dict(d.get("robot_state") or {}),
             meta=dict(d.get("meta") or {}),
