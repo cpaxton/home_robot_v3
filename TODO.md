@@ -5,42 +5,51 @@ Strike through or move to a PR when done.
 
 ## TAMP simulator API readiness (2026-10-05)
 
-- [x] Reclaim disposable pip caches; preserve source worktrees, datasets and run evidence.
-- [x] Consistent JSON across all four TAMP tools; boot/pose/clearance guards,
-      partial execution evidence and stale-state checks. Full regression pack: 206 passed.
-- [x] Correct unsupported shoulder-stall diagnosis; retain object-independent failures.
-- [x] Complete gate `20261005_183936_f4b352`: failed CHAT smoke, 1/3 admitted,
-      2/3 scored replays passed. Simulator readiness remains failed.
-- [x] Repair planning snapshots, handle namespaces, and operation-scoped evidence;
-      218 regression tests pass. See `docs/experiments/tamp_api_correctness_20261006.md`.
-- [x] Inspect CHAT smoke `20261006_160739_730b9a`: pickup passed, placement failed;
-      returned handles and operation-scoped partial evidence behaved correctly.
 - [ ] Capture the placement command failure reason with private diagnostic logging.
       Resolve general motion failures before repeating the nine-trial readiness matrix.
       See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
+
+## RoboCasa pick-place + failure-data pipeline (2026-11-25)
+
+Branch `feat/graded-conservatism`. Graded-conservatism refusals (margin /
+`relax_allowed` / `teleport_collision` / `unreachable`) and the RoboCasa
+`scene_tasks` branch are landed; the remaining work is the grasp tracking fix, the
+failure-data training pipeline, and the open/close skill. See
+`docs/plans/robocasa-more-tasks.md`.
+
+- [x] `scene_tasks` RoboCasa branch: derive the active PickPlace task (object
+      `obj_main` + start/goal receptacles) from `environment.task` + GT placements,
+      semantic-only (opaque `task_ref`, no body IDs).
+- [x] Collision-free place approach (`check_base_poses` + bounds-aware standoff).
+- [x] Failed-manip replay sink: `KinematicPickPlaceExecutor.last_attempt` (EE target,
+      observed EE/joint trace, `failure_mode`, planned waypoints) → `failure_record.py`
+      JSONL (`EMET_MANIP_FAILURE_DIR`, default `~/runs/emet/manip_failures`).
+- [x] `ik_failed` → `unreachable` (distinct from `tracking_timeout`) in TAMP `failure_code`.
+- [ ] **Failure-data pipeline (RL-WBC) — track to completion.** The sink currently
+      captures single attempts; the training loop still needs (a) episode/job/seed
+      correlation in each record, (b) object/receptacle categories + grasp target in
+      the context, (c) a loader/validation script, and (d) wiring into the in-flight
+      RL-WBC training data path. Do not treat the sink as done until the training side
+      consumes it.
+- [ ] **RoboCasa counter-height grasp tracking.** rby1 `PickPlaceCounterToCabinet`
+      fails `grasp_failed:pregrasp_tracking_failed` (EE error 0.35 m; torso_joint1
+      planned −0.25 vs observed 0.08, other joints track). Likely IK solution at/over
+      the torso1 limit and/or the approach (15/16 candidates collision-rejected at
+      0.55 m standoff) puts the object at the arm-workspace edge. Fix: check
+      `torso_joint1` limits in the rby1 MJCF, re-seed IK off the torso1 extreme,
+      and/or make the grasp approach bounds-/reach-aware like the place fix. Flag
+      `unreachable` (done) when IK genuinely cannot solve.
+- [ ] **RoboCasa pick-place end-to-end**: after the grasp fix, verify `robocasa_pp_s1`
+      (Stretch) + `robocasa_pick_place_rby1` (rby1) land within `success_radius_m`.
+- [ ] **Open/close skill** (second RoboCasa foundational skill): kinematic open/close
+      primitive (grasp handle → rotate/translate along fixture joint) + `open_fixture` /
+      `close_fixture` tools; target OpenCabinet/CloseCabinet, OpenDrawer/CloseDrawer,
+      then OpenMicrowave/CloseMicrowave.
 
 ## TAMP agent execution follow-up (2026-09-29)
 
 Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).
 
-- [x] Export baseline coverage/success and task-layout figures as PDF/SVG/PNG.
-- [x] Instrument lift outcomes; identify height-only false-positive acceptance and
-      metre-scale attachment offsets. Historical 21/25 is not verified grasp success.
-- [ ] Validate measured-joint arrival and target-distance guards, repair remaining
-      execution failures, then run paired trials across all original admitted tasks.
-- [x] Complete 90-candidate oracle expansion: 19 admitted, 19/19 fresh MCTS passes,
-      five new admitted case IDs and zero startup errors. Updated oracle-only figures saved.
-- [x] Diagnose RBY1 tracking: wall-intersecting approaches and floating-base pose
-      reset artifact; endpoint rejection and solver support validated by 102 tests.
-      See `docs/experiments/tamp_contact_tracking_20260930.md`.
-- [x] Retry repaired execution: kettle relocation passes after reserving IK
-      tracking margin; latest case is 1/3 objects, 0/1 full tasks (latch control).
-- [x] Execute preselected alternative approaches: three fresh-process repeats
-      pass (3/3 full cleanups, 9/9 relocations, 54/54 arm arrivals), assisted latch
-      only. See `docs/experiments/tamp_approach_validation_20261001.md`.
-- [x] Integrate online alternative-approach selection with read-only collision queries:
-      139 regression tests pass; three fresh MCTS repeats score 2/3 full tasks and
-      7/9 relocations. See `docs/experiments/tamp_auto_approaches_20261001.md`.
 - [ ] Diagnose residual apple tracking and kettle invalid-start failures; verify arm
       collision geometry and payload sweeps before resuming broader latch expansion.
 - [ ] Measure the full shared agent on frozen valid tasks with explicit model,
@@ -55,22 +64,10 @@ registry. Oracle teleport and kinematic latch remain separately labeled controls
 - [ ] Pass three matched physical pick/place trials on each original Molmo and
       RoboCasa fixture, with independent retention, support, contact and actuation audits.
 - [ ] After that gate, validate broader layouts and bounded partial-map observation/replanning.
-- [x] Complete the 24-case protocol, seven small-registry rows, GT floor/tool controls,
-      and all 200 full-registry rows; retain failures, unsupported capabilities and timeouts.
-      Full registry: 54/200 successes; corrected 50-row subset: 18 successes, kept separate.
-      See the [results report](docs/experiments/physical_tamp_acceptance_20260926_results.md).
-- [x] Add scene-backed candidate construction, independent executed reference
-      admission, immutable pose certificates, and final-scene scoring for controls.
-      See [validated registry workflow](docs/experiments/tamp_validated_registry.md).
-- [x] Complete corrected r3 admission and fresh MCTS replay; report construction and
-      reference failures separately from the scored denominator. September 28 pilot:
-      4/8 admitted and 4/4 fresh MCTS replay passes. Full job `20260928_222600_2cf5c6`
-      finished: 25/200 admitted, 21/25 scored successes. No 200-task solvability claim.
 - [ ] Expand scene coverage with geometry-based object selection; verify reference
       repeatability and diagnose Mars startup failures before broader claims.
 - [ ] Resolve rotational grip slip in RoboCasa and Molmo under the frozen physics
       and retention bounds; both now have independently verified physical pickups.
-- [x] Revalidate Molmo grasp with open-gripper geometry; approach and physical pickup now pass.
 - [ ] Complete Molmo retained transport and placement. Revalidated route reuse now
       executes carry, but rotational grip drift exceeds 0.1 rad before release.
       Release and open-finger retreat have static certificates; physical acceptance is pending.
@@ -84,13 +81,6 @@ Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/sha
 No full sweeps; one shared policy across tasks, capability/configuration adapters
 for necessary robot geometry differences. Do not promote based only on graph size.
 
-- [x] Sequential TAMP controls: rby1/Sourccey table, unreachable-grasp rejection,
-      and rby1 furnished-scene agent-tools execution passed; 77 focused regression
-      tests passed. These are oracle-assisted controls, not learned manipulation.
-- [x] Recorded Sourccey chase video and camera stills; publication rendering review
-      remains necessary. Source/results are recorded in the canonical plan.
-- [x] Started Herman's existing bridge without deployment or motion commands;
-      passive head-camera pose check passed (0.5 mm / 0 deg gaze mismatch).
 - [ ] Wrist camera: tabled at user request. Driver expects Arducam but device is
       absent from USB enumeration; ROS publisher count is zero. Do not claim wrist
       capture works or issue arm motion to troubleshoot it.
@@ -104,31 +94,10 @@ for necessary robot geometry differences. Do not promote based only on graph siz
 - [ ] Complete bounded paired EQA/OVMM acceptance and learned manipulation gate.
       Historic lazy 8/16 vs deep-merge 6/16 is development evidence; the new query
       policy has not yet demonstrated improvement. Preserve negative results.
-- [x] Post-fix Habitat diagnostic: DynaMem 1/2, lazy arrival 0/2, query-driven 0/2
-      at `39640791`. DynaMem now has the shared VLM; inspection escape executes.
-- [x] Save actual grounding RGB/depth/masks and verifier outputs (`c5ff2347`).
-      Instrumented repeat `20260905_230122_e483a6` scored 0/2. A suspicious VLM
-      lamp selection scored 0.0302 and was correctly blocked by admission 0.12.
-      Offline replay admits it at 0.03; live thresholds are unchanged.
 - [ ] Red/blue MuJoCo comparison `20260905_230647_10f8d9` at `3621d63e`:
       DynaMem agentic 0/2, query-driven 0/2. Shared query policy is now wired
       into the MuJoCo find runner and CLI; no separate robot-specific policy.
-- [x] One-shot DynaMem red/blue control `20260905_230946_a9cc38`: 1/2 (object
-      found, receptacle error 0.60 m). IMPORTANT: S0 executor ignores the requested
-      four-view override and scans eight views, so this is not a same-map control.
-      Red-cylinder voxel score 0.106 was rescued by detector confirmation; the
-      query-driven 0.14 retrieval floor would exclude that particular candidate.
-- [x] Exact existing CPU/Stretch S0 test `20260905_232835_c3cd73` completed:
-      FAILED object localization; retained its success assertions.
-- [x] Eight-view comparison `20260905_232921_b3f4a7`: both rows 0/2;
-      DynaMem 63 s, query-driven 278 s / 22 graph nodes. More coverage alone
-      does not fix localization (unchanged thresholds, 12/8 action budgets).
-- [x] Unify S0 one-shot/agentic factory, memory profile and mapping protocol;
-      record requested scan steps and actual frames added.
-- [x] Query-conditioned fresh masks, bounded per-source detector recovery for
-      weak voxel hits, independent verification for compound targets. Recovery
-      creates search evidence only; admission thresholds unchanged. 95 focused
-      tests pass. Post-change live comparison still required.
+
 ## ZMQ follow-ups after PR #135
 
 - [ ] Move onboard DINOv3 loading/inference off the publication loop into a
@@ -770,19 +739,12 @@ Mars bridge publishes **`/scan`** as `lidar_points` + `lidar_timestamp` (float32
 - [ ] **Robot self-filter lost in DynaMem `add()`**: `voxel_dynamem.py:1109` copies base `voxel.py:403` minus the URDF mesh self-filter — the robot may see itself on real hardware. Reintroduce or document why it is off.
 - [ ] **Split `query_answer` + de-dup renumber/rebuild blocks**: `build_eqa_prompt_text` is extracted (#104); `query_answer` is still ~477 lines — still need `run_eqa_prompt(commands)` / `finalize_eqa_answer(parsed)`. The renumber+rebuild block in `maintain`/`_drop_nodes_near`/`absorb_object_node` is copy-pasted 5×.
 - [ ] **Rooms as first-class nodes**: runtime `RoomCluster` + prompt `Rooms:` / `(room)` tags exist; still recompute every refresh. Persist room id / name / bounds on nodes and in `graph.json` exports.
-- [x] **`room_clustering/` + `partition()` + `proximity`**: naive `near` + XY radius; `room_clusters.py` is the naming/stamp facade.
 - [ ] **`occupancy_cc` room backend**: flood-fill free/explored cells on the voxel 2D map; assign instance nodes to occupancy CCs (respects mapped walls).
 - [ ] **`portal` room backend**: occupancy CCs cut at narrow passages / doors.
 - [ ] **Room clustering backend sweep** once a second geometry backend exists (`eqa.room_clustering.backend` / `EMET_EQA_ROOM_CLUSTERING_BACKEND`). Do not mix with OVMM S0 instance labeling.
 - [ ] **Bound voxel memory growth**: `observations` never pruned, `semantic_memory` keeps every subsampled point, pickles dump everything. Trim frames + downsample old semantic points on a schedule.
 - [ ] **Prefix-KV timeout leaves a live CUDA worker** (`qwen3_vl_client.py:549-569` raises while the generate thread keeps running): next generate can race. Serialize on a lock or hard-kill the worker.
 - [ ] **Silent exception hygiene**: ~23 `except Exception` in graph_memory.py — at least `_logger.debug` with node/obs context. (Bare `except:` in `voxel_dynamem.list_objects_in_an_image` now logs and retries.)
-- [x] **Dead code sweep**: removed unused `Qwen3VLClient = Qwen35VLClient` alias from `qwen_client.py` and discarded Candidate 1/2 comment blocks in `voxel_map_dynamem.py`. (`get_change_events` / `alternate_nav_target_for_failed_action` remain in use.)
-
-## Docs / ops
-
-- [x] Document Herman Discord happy path: `innate_mars_hardware.md` Discord section covers `EMET_BASE_ROTATE_ONLY` + `EMET_ALLOW_SDPA_ATTN` / flash-attn with a tethered copy-paste env recipe.
-- [x] Action-outcome ledger docs for `feature/agent-world-model`: [docs/attempt_ledger.md](docs/attempt_ledger.md) (see Embodied agent planning § Docs).
 
 ## TAMP clutter benchmark + Nori A3 (follow-ups)
 
@@ -797,21 +759,6 @@ Remaining items are **GPU experiments / product**, not code blockers. Operator t
 [docs/experiments/tamp_clutter.md](docs/experiments/tamp_clutter.md) Remaining experiments
 (E1 battery → E5 latch → E3 small YAML → E4 large registry → fill `tab:tamp_clutter`).
 
-- [x] **GT+MCTS battery 24/24** (2026-08-28): pickplace / declutter / navblocked / navclear
-      pass for nori, innate_mars, rby1 × iTHOR scenes 0–1, sim-oracle manip, zero AI models.
-      That run predates chord-collision + reachable-landmark; re-run below before citing it.
-- [x] **GPU GT+MCTS battery re-run** (2026-09-05, three robots × scenes 0–1; 21/24 pass).
-      Furniture on
-      the spawn→landmark chord can now fail `navclear`. Queue, do not run inline:
-
-      ```
-      NEED_MIB=8000 uv run emet jobs run --name tamp-gt-battery --need-mib 8000 -- \
-        uv run python scripts/eval_tamp_clutter.py --test-battery \
-        --battery-robots nori --battery-scenes 0,1
-      ```
-
-      The three-robot run is complete at `logs/tamp_validation_20260905/gt_mcts_battery/`;
-      three Innate Mars navigation rows remain tracked below.
 - [ ] **Investigate Innate Mars nav-goal failures (validation 2026-09-05).** The fresh
       24-case sim-oracle battery scored **21/24**: all cleanup rows passed, and all Nori/rby1
       rows passed; Innate Mars failed `navblocked_s0` (cleared 8/8, GT probe blocked, final
@@ -839,28 +786,10 @@ Remaining items are **GPU experiments / product**, not code blockers. Operator t
         --episodes configs/ovmm/clutter_episodes_large.yaml
       ```
 
-- [x] **rby1 latch paper row smoke** (2026-09-05): `ithor_cleanup_s1_bin_n3` relocated
-      3/3 objects with 100% manipulation success. The large-registry paper row remains open.
-      Default small-YAML smoke `ithor_cleanup_s1_bin_n3` and
-      large-registry rby1 `latch` episodes. Stretch / mars / nori stay `sim` on floor clutter.
 - [ ] **Live latch smokes (GPU, via `emet jobs`)**: rby1 default latch
       `--episode-id ithor_cleanup_s1_bin_n3`. Mars/nori floor objects need `--manip-mode latch`
       (expected weak: Nori IK bottoms out ~0.29 m vs z≈0.02 floor). Unit/offline path already
       passes.
-- [x] **Integrate TAMP single-object path smoke** (2026-09-05): the kinematic agent-tools
-      gate passed. **Integrate the multi-object clear chain** remains the real product blocker
-      now that MCTS pick/place
-      works. The single-object semantic tools (`scene_tasks` / `plan_pick_place` /
-      `execute_pick_place_plan` in `emet.controller.task.tamp.agent_bridge` + `emet/agent/tools.py`)
-      exist, but the **multi-object clear chain (`plan_clear_clutter`) is not exposed**. Add a
-      `clear_clutter` CHAT skill (resolve scattered objects from scene graph/memory → run the
-      MCTS chain to the bin → optional landmark nav) so the LLM agent can parse "clean up the
-      room" / "get to the sofa" and drive TAMP end-to-end; reuse `AgentTaskRef`/`AgentPlanBuild`
-      handles and the same no-AI test battery for the agent path.
-- [x] **innate_mars actuator naming**: the innate_mars MJCF actuators are *unnamed*, and the
-      robosuite server applies `{"joint": vec}` via `mj_name2id(mjOBJ_ACTUATOR, aname)` —
-      unnamed actuators never receive ctrl from `set_actuator_positions`. Name them (like
-      nori_a3.xml) so the kinematic streaming path actually drives the arm.
 - [ ] **Nori real-hardware client**: implement an `AbstractRobotClient` adapter over
       `nori-sdk` (WebRTC jog streams → emet motion contract). The SDK is teleop-oriented;
       absolute-joint moves need the action-completion path.
@@ -896,15 +825,9 @@ Stretch is deferred. Stretch `latch` needs:
 
 Offline units + scripted table smokes exist; these are the remaining **real / integration** and product gaps.
 
-### Config / agent path
-- [x] **Wire `agent.manip_mode` / `manip_collision` / `manip_planner` into `DynamemTaskExecutor`**: `emet run agent` merges the finalized chat `agent:` section (YAML / `--set agent.manip_*`) into `parameters["agent"]` before executor init; `EMET_MANIP_*` env vars still win. (Manip-only top-level `agent:` blocks are now recognized as chat-agent sections by the loader.)
-- [x] **Stretch MuJoCo pick/place default (docs)**: with visual-servo off, any sim advertising `sim_set_body_pose` takes **GT teleport** (`prefer_sim_teleport_manip`; table in `docs/molmospaces.md`; loud callout in `AGENT_RUN.md`). When comparing paper/OVMM Stretch numbers to the old grasp path, pass `-V` / `--visual-servo`.
-- [x] **Stretch / AnyGrasp `_pickup` / `_place` always return True**: fixed — Stretch path propagates `agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful` (and declines confirmation → False).
-
 ### Real tests (not yet green on every machine)
 - [ ] **MolmoSpaces ithor + rby1** kinematic and teleport smokes when `.venv-molmospaces` + assets are warm (`scripted_sim_pick_place` / `scripted_molmo_grasp_mp` / `scripted_tamp_pick_place` with `--sim configs/sim/molmospaces_ithor_train_0.yaml`).
 - [x] **Molmo kinematic approach frame**: fixed `_world_base_xyt` + place detach/`sim_set_body_pose`/verify-before-retract; bowl→microwave kinematic PASS (grasp_err≈0.027, place_err=0; 2026-08-03).
-- [x] **OVMM full** episode `molmo_ithor_rby1_s2_bowl_pp` with `manip_mode=sim` (find + teleport pick/place) — reconfirmed 2026-08-03 post base-frame/place fixes.
 - [ ] **Robocasa / Stretch** pick-place smoke with and without `--visual-servo` to lock the teleport-vs-servo behavior.
 - [ ] **CI / overnight**: mark or gate the above under `RUN_MOLMOSPACES_TESTS` / sim markers so agents use `emet test --no-sim` for the offline pack only.
 
@@ -917,5 +840,4 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 
 ### Hardware / product
 - [ ] **Real-robot manip** (Stretch / Mars): no GT `sim_set_body_pose` — keep visual-servo / AnyGrasp; add a no-LLM tool-sequence test that asserts we **do not** enter teleport when `is_simulation` is false.
-- [x] **`aim_arm_at` → `take_ee_picture` chain**: EE capture gated on successful aim grant (consumed once). Real-robot dogfood after pick failures still open (wrist stream / Mars).
 - [ ] **Paper figures**: keep regenerating `manip_figures` / chase-cam MP4s from scripted TAMP on the scene used in the paper; check in paths under `~/runs/emet/` only (not repo blobs).
