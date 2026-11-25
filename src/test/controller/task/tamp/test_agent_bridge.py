@@ -209,9 +209,9 @@ def test_bridge_grounds_auto_approach_selection():
     assert build.mode == "teleport"
     assert build.plan is not None and build.plan.success, build.reason
     assert queries, "agent bridge must consult the read-only base-pose query"
-    assert len(queries[0]) == 16
+    assert [len(query) for query in queries] == [32, 8]
     obj_xy = np.asarray(placements["bowl_hash_1_0_0"]["pos"], dtype=np.float64)[:2]
-    expected = approach_candidates_for_object_xy(obj_xy)[1]
+    expected = approach_candidates_for_object_xy(obj_xy, count=8)[1]
     np.testing.assert_allclose(build.plan.steps[0].args["xyt"], expected)
 
 
