@@ -366,15 +366,18 @@ def relaxed_clearance_m(
     """One bounded relaxation step: the clearance to retry with, or ``None``.
 
     Graded conservatism: a refusal at ``clearance_m`` may be retried at the configured
-    ``min_clearance_m`` floor (never below it). Returns the floor when a single
-    relaxation step is authorized, else ``None``. When ``margin_m`` is provided it is
-    only informational; authorization is decided by the floor alone so the rule stays
-    simple and auditable.
+    ``min_clearance_m`` floor (never below it). A step to the floor closes at most
+    ``clearance_m - min_clearance_m`` of margin, so when ``margin_m`` is known the
+    step is only authorized if that gap is closable — otherwise the refusal is reported
+    as non-relaxable and the agent should escalate instead. ``margin_m is None`` (gap
+    unknown) falls back to the floor-only rule.
     """
     if min_clearance_m is None:
         return None
     floor = float(min_clearance_m)
     if not (0.0 < floor < float(clearance_m)):
+        return None
+    if margin_m is not None and float(margin_m) < -(float(clearance_m) - floor):
         return None
     return floor
 
