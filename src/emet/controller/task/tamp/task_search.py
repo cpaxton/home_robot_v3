@@ -425,18 +425,18 @@ def execute_task_plan(
         # mode) for offline RL-WBC replay; the agent-facing result stays a summary.
         attempt = getattr(executor, "last_attempt", None)
         if isinstance(attempt, dict) and attempt:
-            from emet.controller.manipulation.failure_record import record_manip_attempt
+            from emet.controller.manipulation.failure_record import record_manip_attempt, record_scenario, scenario_from_attempt
 
-            record_manip_attempt(
-                attempt,
-                context={
-                    "op": op,
-                    "object_body": plan.object_body,
-                    "receptacle_body": plan.receptacle_body,
-                    "failure_mode": attempt.get("failure_mode"),
-                    "message": code,
-                },
-            )
+            context = {
+                "op": op,
+                "object_body": plan.object_body,
+                "receptacle_body": plan.receptacle_body,
+                "failure_mode": attempt.get("failure_mode"),
+                "message": code,
+            }
+            record_manip_attempt(attempt, context=context)
+            # Also seed the ever-growing case library for RL-WBC (scenario record).
+            record_scenario(scenario_from_attempt(attempt, context=context))
             plan.diagnostics.append({"phase": op, "attempt": attempt})
         logger.warning(f"TAMP execute failed op={op}: {code}")
         return plan
