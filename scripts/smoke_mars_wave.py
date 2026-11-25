@@ -78,6 +78,9 @@ def run(seed, pose=None, *, policy=None, max_speed=HARDWARE_MAX_SPEED_RAD_S):
 
         # The environment's normal success tolerances are looser than the
         # wave's. Keep each goal active until the measured pose has settled.
+        # _scenario_ready is formally a MarsBaseEnv attribute; MarsReachEnv reads
+        # it via getattr(..., True), so this coupling holds only while that
+        # fallback stays in place.
         env._scenario_ready = False
         action_limit = max_speed / MARS.max_joint_speed
         settle_steps = round(MARS.settle_seconds / MARS.control_dt)
