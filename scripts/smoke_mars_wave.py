@@ -17,9 +17,13 @@ POSE_JOINTS = (*MARS.arm_joints, *MARS.held_joints)
 WAVE_OFFSETS_RAD = (0.15, -0.15, 0.0)
 POSITION_TOLERANCE_RAD = 0.025
 VELOCITY_TOLERANCE_RAD_S = 0.04
+# Hardware arm ramp rate (innate_mars_bridge remote arm_motion.MAX_SPEED). The
+# simulator's MARS.max_joint_speed is 4x this; default to the hardware envelope so
+# a plain run exercises the speed the physical arm actually uses.
+HARDWARE_MAX_SPEED_RAD_S = 0.15
 
 
-def run(seed, pose=None, *, policy=None, max_speed=MARS.max_joint_speed):
+def run(seed, pose=None, *, policy=None, max_speed=HARDWARE_MAX_SPEED_RAD_S):
     env = MarsReachEnv(EnvConfig(arm_only=True))
     try:
         env.reset(seed=seed)
@@ -137,7 +141,7 @@ def main():
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 2])
     parser.add_argument("--pose", type=float, nargs=7, help="joint1 through joint6 followed by joint_head, in radians")
     parser.add_argument("--policy", type=Path, help="Arm-only PPO bundle directory")
-    parser.add_argument("--max-speed", type=float, default=MARS.max_joint_speed, help="Wrist command cap, in rad/s")
+    parser.add_argument("--max-speed", type=float, default=HARDWARE_MAX_SPEED_RAD_S, help="Wrist command cap, in rad/s")
     parser.add_argument("--output", type=Path, help="Save the full JSON report")
     args = parser.parse_args()
     if not 0 < args.max_speed <= MARS.max_joint_speed:
