@@ -13,6 +13,8 @@ omegaconf
 hydra-core
 sophuspy
 pyliblzfse
+# pin (pinocchio) is intentionally omitted here: the bridge never imports it and it
+# is only needed on the workstation for collision support (see pyproject.toml).
 # ROS Humble camera extensions on Innate OS use the NumPy 1.x ABI.
 numpy>=1.26,<2
 scipy>=1.11
