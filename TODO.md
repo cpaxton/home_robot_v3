@@ -54,9 +54,10 @@ tracking fix, the failure-data training pipeline, and the open/close skill.
       a joint limit: Galaxea `torso_joint1` range is −1.13..1.83 rad, so the planned
       −0.25 is legal, and the observed 0.08 was the joint never arriving. Covered by
       `test_final_posture_is_recommanded_until_the_torso_settles`.
-- [ ] **RoboCasa counter-height grasp — revalidate end to end.** Re-run rby1
-      `PickPlaceCounterToCabinet` after the settle fix and confirm the EE error no
-      longer trips `pregrasp_tracking_failed`. If it still fails, check whether the
+- [ ] **RoboCasa counter-height grasp — revalidate end to end.** Run
+      `robocasa_rby1_counter_to_cab_mcts` (`configs/ovmm/full_episodes.yaml`) after
+      the settle fix and confirm the EE error no longer trips
+      `pregrasp_tracking_failed`. If it still fails, check whether the
       0.55 m grasp approach puts the object at the arm-workspace edge and make the
       grasp approach bounds-/reach-aware like the placement search. `ik_failed`
       reports `unreachable` (done) when IK genuinely cannot solve.
