@@ -56,7 +56,7 @@ def test_reach_reward_success_and_collision():
 
 def _record(voxel_value=1, failure_mode="tracking_lag"):
     return ScenarioRecord(
-        voxel=np.full((4, 4, 4), voxel_value, dtype=np.uint8),
+        initial_voxel=np.full((4, 4, 4), voxel_value, dtype=np.uint8),
         goal={"kind": "ee_target", "ee_target": [0.0, 0.0, 0.5, 1, 0, 0, 0]},
         robot_state={"q": [0.0] * 4, "base_xyt": [0.0, 0.0, 0.0]},
         meta={"failure_mode": failure_mode, "source": "test"},
@@ -103,15 +103,15 @@ def test_case_library_save_load_round_trip(tmp_path):
 def test_synthetic_obstacle_target_produces_valid_scenario():
     rng = np.random.default_rng(42)
     rec = synthetic_obstacle_target(rng, grid_shape=(16, 16, 16), n_obstacles=(2, 4))
-    assert rec.voxel.shape == (16, 16, 16)
-    assert rec.voxel.sum() > 0  # some obstacles present
+    assert rec.initial_voxel.shape == (16, 16, 16)
+    assert rec.initial_voxel.sum() > 0  # some obstacles present
     # Target position is not inside an occupied voxel (it was rejection-sampled free).
     target_pos = np.asarray(rec.goal["ee_target"][:3], dtype=np.float64)
     lo = np.array([-0.6, -0.6, 0.0])
     hi = np.array([0.6, 0.6, 1.0])
     cell = (hi - lo) / 15
     idx = np.clip(((target_pos - lo) / cell).astype(int), 0, 15)
-    assert rec.voxel[tuple(idx)] == 0
+    assert rec.initial_voxel[tuple(idx)] == 0
 
 
 def test_synthetic_generator_is_reproducible_with_seed():
@@ -119,7 +119,7 @@ def test_synthetic_generator_is_reproducible_with_seed():
     rng2 = np.random.default_rng(7)
     r1 = synthetic_obstacle_target(rng1)
     r2 = synthetic_obstacle_target(rng2)
-    assert np.array_equal(r1.voxel, r2.voxel)
+    assert np.array_equal(r1.initial_voxel, r2.initial_voxel)
     assert r1.goal == r2.goal
 
 
@@ -137,8 +137,46 @@ def test_scenario_from_attempt_and_record_scenario(tmp_path, monkeypatch):
     assert rec.goal["ee_target_pos"] == [0.0, 0.0, 0.9]
     assert rec.robot_state["q"] == [0.1, 0.2]
     assert rec.failure_mode == "tracking_failed"
+    # The initial map defaults to an explicit 'unavailable' marker, never a silent blank.
+    assert rec.initial_voxel["kind"] == "voxel_map_2d_unavailable"
 
     monkeypatch.setenv("EMET_CASE_LIBRARY_DIR", str(tmp_path))
     assert record_scenario(rec) is True
     assert record_scenario(rec) is False  # duplicate, deduped by fingerprint
+
+
+def test_export_initial_voxel_map_from_mock():
+    from emet.controller.manipulation.failure_record import export_initial_voxel_map
+
+    class MockVoxelMap:
+        grid_origin = np.array([-2.0, -3.0])
+        grid_resolution = 0.1
+
+        def get_2d_map(self):
+            return (
+                np.array([[0, 1], [1, 0]], dtype=np.float32),
+                np.array([[1, 1], [1, 0]], dtype=np.float32),
+            )
+
+    out = export_initial_voxel_map(MockVoxelMap())
+    assert out["kind"] == "voxel_map_2d"
+    assert out["grid_origin"] == [-2.0, -3.0]
+    assert out["grid_resolution"] == 0.1
+    assert out["obstacles"] == [[0, 1], [1, 0]]
+    assert out["explored"] == [[1, 1], [1, 0]]
+
+
+def test_export_initial_voxel_map_never_raises():
+    from emet.controller.manipulation.failure_record import export_initial_voxel_map
+
+    class Boom:
+        grid_origin = np.array([0.0, 0.0])
+
+        def get_2d_map(self):
+            raise RuntimeError("no map")
+
+    out = export_initial_voxel_map(Boom())
+    assert out["kind"] == "voxel_map_2d_unavailable"
+    assert out["obstacles"] == []
+
 

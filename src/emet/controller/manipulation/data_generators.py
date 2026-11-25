@@ -91,4 +91,4 @@ def synthetic_obstacle_target(
         "base_xyt": [0.0, 0.0, 0.0],
     }
     meta: dict[str, Any] = {"source": "synthetic", "failure_mode": ""}
-    return ScenarioRecord(voxel=occ, goal=goal, robot_state=robot_state, meta=meta)
+    return ScenarioRecord(initial_voxel=occ, goal=goal, robot_state=robot_state, meta=meta)
