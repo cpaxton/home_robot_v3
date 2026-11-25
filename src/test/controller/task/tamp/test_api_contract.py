@@ -356,17 +356,33 @@ def test_robocasa_pick_place_task_parses_and_resolves():
     from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
 
     environment = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet", "style": 1, "layout": 1}
+    # Realistic RoboCasa placements: fixtures (cab_main/counter_main), a distractor
+    # (distr_counter_main), and the task object (obj_main) all end in '_main'.
     placements = {
-        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 0.8]},
-        "cab": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
-        "counter": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+        "distr_counter_main": {"cat": "beer", "pos": [0.1, 0.1, 0.8]},
+        "obj_main": {"cat": "kiwi", "pos": [0.0, 0.0, 0.8]},
     }
     task = robocasa_pick_place_task(environment, placements)
     assert task is not None
-    assert task.object == "mug"
-    assert task.goal_recep == "cab"          # task "Cabinet" -> fixture key "cab"
+    assert task.object == "kiwi"            # task object category, NOT 'cab'
+    assert task.goal_recep == "cab"         # task "Cabinet" -> fixture key "cab_main" (cat 'cab')
     assert task.start_recep == "counter"
     assert task.object_gt_body == "obj_main"
+
+
+def test_robocasa_pick_place_task_requires_obj_main():
+    from emet.controller.task.tamp.agent_bridge import robocasa_pick_place_task
+
+    environment = {"kind": "robocasa", "task": "PickPlaceCounterToCabinet"}
+    placements = {
+        "cab_main": {"cat": "cab", "pos": [1.0, 0.0, 0.8]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 0.8]},
+        "distr_counter_main": {"cat": "beer", "pos": [0.1, 0.1, 0.8]},
+    }
+    # No obj_main (the task object) -> cannot ground the task.
+    assert robocasa_pick_place_task(environment, placements) is None
 
 
 def test_robocasa_pick_place_task_none_for_non_pickplace_or_non_robocasa():

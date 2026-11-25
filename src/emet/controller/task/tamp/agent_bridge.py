@@ -169,12 +169,12 @@ def robocasa_pick_place_task(environment: Any, placements: dict[str, dict[str, A
         return None
     start_token, goal_token = m.group(1), m.group(2)
     live = placements or {}
-    # The wizard object is the placement whose body key ends in '_main'.
-    obj_keys = [k for k in live if str(k).endswith("_main")]
-    if not obj_keys:
+    # The task object is the wizard object named 'obj' (body 'obj_main'); fixtures
+    # ('cab_main', 'counter_main', …) and distractors ('distr_*') also end in '_main'.
+    object_body = "obj_main" if "obj_main" in live else None
+    if object_body is None:
         return None
-    object_body = str(obj_keys[0])
-    object_cat = str((live.get(object_body) or {}).get("cat") or object_body[:-len("_main")])
+    object_cat = str((live.get(object_body) or {}).get("cat") or "obj")
     goal_body = _match_placement_by_category(live, goal_token)
     if goal_body is None:
         return None
