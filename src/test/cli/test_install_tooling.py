@@ -106,3 +106,19 @@ def test_lightwheel_pack_requires_the_mesh_not_just_the_registry(tmp_path: Path)
     (fixtures / "sinks" / "Sink025").mkdir(parents=True)
     (fixtures / "sinks" / "Sink025" / "model.xml").write_text("<mujoco/>")
     assert module._asset_present(base, "fixtures", "lightwheel_registry") is True
+
+def test_missing_fixture_xmls_detects_visuals_without_mjcf(tmp_path: Path):
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "restore_robocasa_fixture_xmls.py"
+    spec = importlib.util.spec_from_file_location("restore_robocasa_fixture_xmls", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    fixture = tmp_path / "models" / "assets" / "fixtures" / "accessories" / "knife_blocks" / "light_wood_3"
+    (fixture / "visuals").mkdir(parents=True)
+    (fixture / "visuals" / "model_0.obj").write_text("v")
+
+    assert module.missing_fixture_xmls(tmp_path) == [fixture / "model.xml"]
+    (fixture / "model.xml").write_text("<mujoco/>")
+    assert module.missing_fixture_xmls(tmp_path) == []

@@ -213,6 +213,11 @@ fi
 # Return to root directory
 cd "$ROOT_DIR" || exit 1
 
+# The downloadable fixtures pack ships accessory visuals without their MJCFs.
+# Restore them from the pinned official repo (no-op when complete).
+"$PYTHON" scripts/restore_robocasa_fixture_xmls.py --robocasa-dir "$ROOT_DIR/third_party/robocasa" || \
+    echo "Warning: could not restore fixture MJCFs; Robocasa scenes may fail to load." >&2
+
 echo "Installation complete."
 echo "For 'emet serve robocasa' / '--use-robocasa', kitchen assets must include LightWheel fixtures (fixtures_lw)."
 echo "If scene load fails with 'Did not find style ... Sink025', run: uv run python scripts/download_robocasa_assets.py --yes"
