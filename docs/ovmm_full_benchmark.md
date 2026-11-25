@@ -56,7 +56,7 @@ the torso-settle change to revalidate; the floor row below does not exercise it.
 ```bash
 ITEMS=counter-smoke ./scripts/run_tamp_agent_tools_gate.sh
 # or: uv run python scripts/eval_tamp_floor.py \
-#       --episode-id robocasa_rby1_counter_to_cab_mcts
+#       --episode-id robocasa_rby1_counter_to_cab_mcts --all-episodes
 ```
 
 **Sourccey kinematic row** (`robocasa_sourccey_counter_to_cab_mcts`, `manip_mode: mcts`):

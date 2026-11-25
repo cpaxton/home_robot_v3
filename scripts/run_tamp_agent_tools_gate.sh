@@ -213,7 +213,7 @@ if items_has counter-smoke; then
     mkdir -p "$OUT/counter_smoke"
     run_item robocasa_counter_smoke robocasa_counter_smoke "$FLOOR_TIMEOUT" \
         uv run python scripts/eval_tamp_floor.py \
-        --episode-id robocasa_rby1_counter_to_cab_mcts --output-dir "$OUT/counter_smoke"
+        --episode-id robocasa_rby1_counter_to_cab_mcts --all-episodes --output-dir "$OUT/counter_smoke"
 fi
 
 if items_has floor-smoke; then
