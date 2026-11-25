@@ -654,7 +654,7 @@ def deploy(
     )
     if start_bridge:
         if spec.start_via == "mars_tmux":
-            from emet.mars import start_bridge_on_robot
+            from emet.mars import report_arm_readiness, start_bridge_on_robot
 
             start_bridge_on_robot(
                 host,
@@ -663,6 +663,7 @@ def deploy(
                 workspace=remote_ws,
                 emet_dir=remote_emet,
             )
+            report_arm_readiness(host, user, password, workspace=remote_ws, emet_dir=remote_emet)
             print("Bridge running in tmux ros_nodes:emet-bridge. View: emet view-bridge")
         else:
             start_stretch_bridge_on_robot(

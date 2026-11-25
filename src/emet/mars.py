@@ -558,6 +558,20 @@ def _report_arm_probe(code: int) -> None:
         note(style("Mars arm readiness could not be verified.", fg="yellow"))
 
 
+def report_arm_readiness(
+    host: str,
+    user: str,
+    password: str | None,
+    *,
+    workspace: str = DEFAULT_INNATE_WORKSPACE,
+    emet_dir: str = DEFAULT_EMET_DIR,
+) -> int:
+    """Run the arm startup probe, report the result, and return its exit code."""
+    code = _ssh_run(host, user, password, _arm_startup_probe_command(workspace, emet_dir), check=False)
+    _report_arm_probe(code)
+    return code
+
+
 def stop_bridge_on_robot(
     host: str, user: str, password: str | None, *,
     workspace: str = DEFAULT_INNATE_WORKSPACE, emet_dir: str = DEFAULT_EMET_DIR,
@@ -605,10 +619,7 @@ def bridge_status_on_robot(
         show_next_steps=show_next_steps,
     )
     if status.process_running:
-        status.arm_probe_code = _ssh_run(
-            host, user, password, _arm_startup_probe_command(workspace, emet_dir), check=False
-        )
-        _report_arm_probe(status.arm_probe_code)
+        status.arm_probe_code = report_arm_readiness(host, user, password, workspace=workspace, emet_dir=emet_dir)
     return status
 
 
