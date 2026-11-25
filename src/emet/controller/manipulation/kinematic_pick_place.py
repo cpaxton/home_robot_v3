@@ -582,18 +582,6 @@ class KinematicPickPlaceExecutor:
             self._sleep(0.25)
         self._last_cmd_q = home_arm_q_array(self.profile)
 
-    def _joint_position_bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        """MuJoCo joint limits for ``self.joint_names`` (infinite when unlimited)."""
-        import mujoco
-
-        lo = np.full(len(self.joint_names), -np.inf)
-        hi = np.full(len(self.joint_names), np.inf)
-        for index, name in enumerate(self.joint_names):
-            jid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_JOINT, name)
-            if jid >= 0 and bool(self._model.jnt_limited[jid]):
-                lo[index], hi[index] = self._model.jnt_range[jid]
-        return lo, hi
-
     def _plan_and_execute_ee(self, target_xyz_world: np.ndarray) -> tuple[bool, float]:
         self._last_motion_failure = None
         self.last_ee_verification = None
@@ -665,18 +653,13 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(q)
             self._sleep(self.traj_dt)
         if plan.waypoints:
-            final_q = np.asarray(plan.waypoints[-1], dtype=np.float64)
-            # The torso carries the whole arm and its PD has no gravity compensation:
-            # it settles ~0.4 rad short under load, so hold the final posture with a
-            # bounded integral correction until the measured joints arrive.
-            offset = np.zeros_like(final_q)
-            lo, hi = self._joint_position_bounds()
-            deadline = time.time() + max(3.0, self.traj_dt * 60)
+            final_q = plan.waypoints[-1]
+            # The torso base pitch carries the whole arm; a single send + short sleep
+            # loses to PD lag (observed torso1 barely moves from home). Re-command the
+            # final posture for a bounded settle, like _command_home_posture.
+            deadline = time.time() + max(0.5, self.traj_dt * 10)
             while time.time() < deadline:
-                if self._sync_qpos_from_robot():
-                    q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
-                    offset += 0.25 * (final_q - q_obs)
-                self._stream_arm_q(np.clip(final_q + offset, lo, hi))
+                self._stream_arm_q(final_q)
                 self._sleep(0.05)
         self._last_cmd_q = q1.copy()
         reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
