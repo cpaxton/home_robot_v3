@@ -190,7 +190,7 @@ if [ "$DOWNLOAD_ASSETS" = true ]; then
     fi
 fi
 if [ "$DOWNLOAD_ASSETS" = true ]; then
-    echo "Checking and downloading Robocasa kitchen assets as needed (~10-15GB, includes fixtures_lw)..."
+    echo "Checking and downloading Robocasa kitchen assets as needed (~18GB, includes fixtures_lw and object packs)..."
     cd "$ROOT_DIR" || exit 1
     if [ "$NONINTERACTIVE_ASSETS" = "true" ]; then
         if [ "$FORCE_DOWNLOAD_ASSETS" = "true" ]; then

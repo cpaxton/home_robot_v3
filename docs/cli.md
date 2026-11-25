@@ -761,7 +761,7 @@ Install submodules, simulation extras, or full setup.
 
 **`emet install sim`** / **`emet install robocasa`** (same)
 - Clones robosuite and **Robocasa v0.2** (pinned for MuJoCo 3.3+ / numpy compatibility; main/v1.0 can conflict).
-- `-n, --no-download-assets` — Skip the ~10 GB Robocasa kitchen asset download
+- `-n, --no-download-assets` — Skip the ~18 GB Robocasa kitchen asset download
 - `-a, --setup-macros` — Force run macro setup (overwrite existing); by default macros are set up only when missing
 - `-y, --yes` — Skip interactive prompts; also enabled automatically when stdin is not a TTY
 - `--no-sync` — Skip the follow-up `uv sync` and third_party reinstall

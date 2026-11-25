@@ -704,7 +704,7 @@ def install_sim(skip_download_assets: bool, setup_macros: bool, no_sync: bool, n
     """Install simulation third-party deps (Robocasa + robosuite).
 
     Clones robosuite and robocasa, runs macro setup when missing (silences
-    "No private macro file" warnings), downloads kitchen assets (~10GB), then
+    "No private macro file" warnings), downloads kitchen assets (~18GB), then
     runs ``uv sync`` and reinstalls editable ``third_party/`` robosuite /
     robosuite_models / robocasa (not in uv.lock; sync would otherwise remove them).
     Use -n to skip the asset download (e.g. CI) and -y to skip prompts; a
