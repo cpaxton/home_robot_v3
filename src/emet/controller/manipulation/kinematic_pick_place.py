@@ -610,23 +610,70 @@ class KinematicPickPlaceExecutor:
             return KinematicPickPlaceResult(False, body, self.ee_body, g_err, None, "attach_verify_failed")
         return KinematicPickPlaceResult(True, body, self.ee_body, g_err, None, "ok")
 
+    def _base_pose_clearance(self, candidates: Sequence[np.ndarray]) -> list[bool]:
+        """Collision-free subset of world XYT base poses; fall back to all-clear.
+
+        Uses the live ``robot.check_base_poses`` query (private geometry, no motion);
+        on a missing bridge or an error, assumes clear so a non-sim backend still
+        navigates with the single-pose path.
+        """
+        poses = [np.asarray(p, dtype=np.float64).reshape(3) for p in candidates]
+        if not hasattr(self.robot, "check_base_poses"):
+            return [True] * len(poses)
+        try:
+            evidence = self.robot.check_base_poses(poses)
+            clear = evidence.get("clear") if isinstance(evidence, dict) else None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"base pose clearance query failed ({exc}); assuming clear")
+            return [True] * len(poses)
+        if not isinstance(clear, list) or len(clear) != len(poses) or any(type(v) is not bool for v in clear):
+            logger.warning("invalid clearance response; assuming clear")
+            return [True] * len(poses)
+        return clear
+
     def _approach_xy(
         self,
         target_xy: np.ndarray,
         *,
         standoff_m: float = 0.55,
         yaw: float | None = None,
+        recep_radius_m: float | None = None,
     ) -> bool:
         """Nav-teleport base near *target_xy* (MuJoCo world) so arm IK is in reach.
 
         ``tamp_approach=side`` (Sourccey) uses the same +Y standoff + arm yaw as
         :func:`~emet.controller.task.tamp.task_search.approach_pose_for_object_xy`.
         ``front`` (Galaxea / rby1) stands off radially from the current base.
+
+        Graded conservatism: for ``front`` mode the base pose is chosen from a
+        collision-free ring (``robot.check_base_poses``) at a bounds-aware standoff
+        (``recep_radius_m``), so a deep appliance is approached from outside its own
+        footprint instead of teleporting into it.
         """
         os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
         xy = np.asarray(target_xy, dtype=np.float64).reshape(2)
         spec = getattr(self.robot, "_spec", None)
         mode = str(spec.tamp_approach or "front").lower().strip() if spec is not None else "front"
+
+        if mode == "front" and hasattr(self.robot, "check_base_poses"):
+            from emet.controller.task.tamp.task_search import approach_candidates_for_object_xy
+
+            if recep_radius_m is not None:
+                standoff_m = max(float(standoff_m), float(recep_radius_m) + 0.45)
+            candidates = approach_candidates_for_object_xy(xy, standoff=standoff_m, mode="front", arm=self.arm, count=16)
+            clear = self._base_pose_clearance(candidates)
+            for cand, ok in zip(candidates, clear, strict=True):
+                if not ok:
+                    continue
+                logger.info(f"KinematicPickPlace: approach base (collision-free) -> {cand.tolist()}")
+                result = self.robot.move_base_to(cand, blocking=True, world_frame=True)
+                success = getattr(result, "success", result)
+                if isinstance(success, (bool, np.bool_)) and success:
+                    self._sleep(0.4)
+                    return True
+            logger.warning("KinematicPickPlace: no collision-free approach candidate for place")
+            return False
+
         if mode == "side":
             approach = approach_pose_for_object_xy(xy, standoff=standoff_m, mode="side", arm=self.arm)
             if yaw is not None:
@@ -696,7 +743,13 @@ class KinematicPickPlaceExecutor:
             f"KinematicPickPlace: place target recep={recep_body!r} pos={recep_pos.tolist()} (n_receps={len(receps)})"
         )
         if approach_base:
-            if not self._approach_xy(recep_pos[:2]):
+            recep_radius = None
+            bounds = (pl.get(recep_body) or {}).get("bounds")
+            if bounds is not None:
+                b = np.asarray(bounds, dtype=np.float64).reshape(2, 3)
+                half = 0.5 * (b[1, :2] - b[0, :2])
+                recep_radius = float(np.hypot(float(half[0]), float(half[1])))
+            if not self._approach_xy(recep_pos[:2], recep_radius_m=recep_radius):
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, None, "place_approach_failed")
             # Re-register attach after base teleport so offset matches the live EE.
             robot_zmq_attach_body(self.robot, body, self.ee_body)

@@ -204,7 +204,7 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     ex.place_z_offset_m = 0.0
     ex._ensure_model = lambda: True
     ex._placements = lambda: ex.robot.placements
-    ex._approach_xy = lambda *a: failure != "approach"
+    ex._approach_xy = lambda *a, **k: failure != "approach"
     ex._sleep = lambda *a: None
     ex._verify_place_xy = lambda *a: (True, 0.001)
     motions = iter([(True, 0.001), (True, 0.001), (failure != "retract", 0.08)])
