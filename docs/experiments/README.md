@@ -1,5 +1,11 @@
 # Paper experiments — master index
 
+**Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)
+records a simulator-only Mars result: 0.973 aggregate held-out success over
+50 episodes per subtask (arm 1.0, base 1.0, combined 0.92) against a 0.98
+privileged-teacher ceiling. Derived base/EE error features and actor-visited
+DAgger labels were the key changes. No hardware policy is promoted.
+
 **PR #247 review (2026-11-17):** [Main reconciliation and source-bound verification](pr247_review_20261117.md)
 records conflict resolutions, review fixes, 1,776 passing tests with one optional
 Habitat skip, a separate passing configuration probe and the 73-page paper build.

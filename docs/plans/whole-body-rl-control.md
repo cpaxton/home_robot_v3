@@ -1,6 +1,6 @@
 # Whole-body RL control: multi-arm torque contract
 
-Status: **schema v2 implemented; actuator adapter prototyped; no hardware policy
+Status: **schema v2 + adapter-matched trainer implemented; no hardware policy
 promoted.** This document is the design authority for the contract in
 [`wbc_contract.py`](../../src/emet/controller/manipulation/wbc_contract.py),
 the example profiles in
@@ -98,13 +98,26 @@ WbcAction:
   adapter.
 - `clamp_action(action, profile)` is the shared base/torque/gripper safety clamp.
   Every adapter calls it before mapping to hardware; it is not optional.
+- `action_bounds(profile)` returns the per-channel physical bounds in vector
+  order. `normalized_action_vector` / `action_from_normalized_vector` map
+  bounded base/torque/gripper channels affinely onto `[-1, 1]` for PPO-style
+  training; a gripper with no declared `command_limits` passes through
+  unbounded so the gap is visible rather than silently rescaled.
+- `active_action_mask(observation, profile)` marks the channels the active task
+  may use. Arm channels follow that arm's target; base and torso channels stay
+  active for arm tasks so the controller can extend reach. The training loop
+  masks inactive channels; the executor still holds those joints rather than
+  interpreting zero torque as a safe command.
 - The head group is **observed-only** in this schema. It has no action channel
   and is excluded from `controlled_joint_names`, so a head feedforward torque
   is rejected rather than silently ignored.
 - `action_vector(action, profile)` flattens in **base, torso, arms (profile
-  order), per-arm gripper** order. `action_from_vector` reverses it.
+  order), per-arm gripper** order. `action_from_vector` reverses it and
+  validates the result against the profile.
 - The policy never sees joint-name strings; the training loop uses the profile
-  to build tensors. The profile id/hash must be stored in the policy bundle.
+  to build tensors. `EmbodimentProfile.to_dict()` / `from_dict()` and the
+  `fingerprint` property are the checkpoint/dataset identity. The profile hash
+  must be stored in the policy bundle, not only the robot name.
 
 ### Observation
 
@@ -112,8 +125,10 @@ WbcAction:
 WbcObservation:
   base_pose: (x, y, theta)
   base_twist: (d_base,)
-  torso: JointGroupObservation | null
-  head: JointGroupObservation | null
+  base_target?: (x, y, theta)     # masked SE(2) goal
+  base_target_mask: (x, y, heading)
+  torso: JointGroupObservation | null   # position/velocity/torque + target?
+  head: JointGroupObservation | null    # observed-only
   arms: [
     { name,
       joint_position, joint_velocity, joint_torque?,
@@ -121,35 +136,62 @@ WbcObservation:
       gripper? }
   ]
   occupancy: (H, W, D) uint8 | null
+  occupancy_origin?, occupancy_resolution?   # required together
   failure_mode: str
 ```
 
-- `ee_target` is per arm; an arm with `ee_target=None` is observed but inactive
-  for the task. This is how a one-arm task runs on a dual-arm robot.
-- `target_mask` allows position-only or orientation-only targets.
-- `occupancy` is a local crop in the base frame. No GT object pose.
+- `ee_pose` and `ee_target` are both expressed in the arm's
+  `ArmSpec.target_frame`; an arm with `ee_target=None` is observed but inactive
+  for the task. This is how a one-arm task runs on a dual-arm robot. The Mars
+  simulator profile uses `world` goals so base motion can assist reach; a
+  base-frame target instead moves with the robot.
+- `base_target` is the masked SE(2) goal in the odometry frame. It is optional,
+  so base-only tasks can run on a multi-arm robot, and a fixed base rejects it.
+- `torso.target` is a joint-space posture target. It is optional; an active
+  torso target is included in success and reward. Head targets are rejected
+  because the head has no action channel in schema v2.
+- `target_mask` allows position-only or orientation-only arm targets; the base
+  has independent x/y/heading masks.
+- `occupancy` is a local crop in the base frame. When supplied, `origin` and
+  `resolution` locate the voxels so different embodiments cannot silently
+  disagree about geometry. No GT object pose.
 - `joint_torque` is measured/estimated when available; otherwise it is empty.
   The policy must not assume torque feedback exists.
+- The training encoder adds derived, sensor-only error features that are not
+  part of the semantic contract: base x/y and wrapped heading error, plus EE
+  position and orientation (rotation-vector) error per arm. These helped the
+  combined task after DAgger; the encoder layout is versioned separately
+  (`OBSERVATION_LAYOUT_VERSION`).
 
 ### Reward
 
-`reach_reward(action, next_obs, profile=..., ...)` sums/weights active arms:
+`reach_reward(action, next_obs, profile=..., ...)` is the whole-body tracking
+reward, not just a single-arm reach:
 
-- position and orientation errors honor `target_mask`;
+- position and orientation errors honor each arm's `target_mask`; orientation
+  error and `quat_tolerance` are geodesic radians, not a quaternion
+  dot-product residual;
+- an active `base_target` contributes masked x/y and wrapped-heading error;
+  an active `torso.target` contributes joint-space posture error (wrapped for
+  revolute joints);
 - `arm_weights` controls task priority;
 - `success_mode="all"` (bimanual) or `"any"` (single-arm task on a multi-arm
-  robot);
+  robot) controls only the arm terms; active base and torso targets are always
+  required. Base-only and torso-only goals are valid;
 - action and jerk penalties normalize by each joint's torque limit and base
   velocity limit, so coefficients transfer across robots;
 - collision is a global penalty; per-arm components are logged as
-  `arm.<name>.pos_err`, etc.
+  `arm.<name>.pos_err`, etc., plus `base_xy_err`, `base_heading_err`, and
+  `torso_err`.
 
 ## Example layouts
 
 These are schema examples in
 [`wbc_profiles.py`](../../src/emet/controller/manipulation/wbc_profiles.py).
 They use published ranges where available and clearly-marked placeholder torque
-values; they are not hardware calibration.
+values; they are not hardware calibration. `mars_sim_profile()` is the separate
+simulator-matched Mars profile (`kp=80`, `kv=4`, effort `2.0`) used by the
+MuJoCo trainer; the example Mars profile remains the bench-replacement target.
 
 | Robot | Base | Torso | Arms | Grippers | Action dim |
 |---|---|---|---:|---:|---:|
@@ -202,7 +244,7 @@ limit through the robot-side transport.
 |---|---|---|---|
 | Position servo | torque | position + current limit | Mars now; stable, approximate |
 | Current-controlled position | torque | current limit + position | available on Dynamixel X-series; needs driver/bench work |
-| True torque | torque | current/torque | requires torque loop, thermal model, torque sensing/observer |
+| True torque | torque | current/torque | `TorqueAdapter`; requires torque-capable joints, torque loop, thermal model, torque sensing/observer |
 | Impedance | pose + Kp/Kd + tau_ff | position + current feedforward | hardware-native alternative; can be a future adapter |
 
 Impedance is attractive because it is closer to how these servos actually
@@ -228,10 +270,14 @@ Start with the elbow (joint 3), the current failure point.
 6. **Supported → unsupported hold**: repeat the same commands with and without
    forearm support; verify no stall or latched overload.
 
-Deliverable: `actuator_model.json` with `kp_eff`, `max_lead`, gravity/friction
-coefficients, current/torque constants, thermal limits, and uncertainty. Store
-its hash in the policy bundle. A profile without a completed identification is
-research-only.
+Deliverable: an actuator-identification JSON consumed by
+`load_actuator_identification` with per-joint `kp_eff`, `max_lead`, current/torque
+constants, gear ratio, control mode, and limits, plus a separate
+`FeedforwardModel` JSON for static gravity/load bias. Store both hashes in the
+policy bundle. A profile without a completed identification is research-only.
+The calibration CLI only fits what the failure traces contain; torque constants,
+friction, bandwidth, and thermal derating still require the hardware sweeps
+above.
 
 ## Training plan
 
@@ -243,7 +289,10 @@ research-only.
 3. **Teacher torques**: inverse dynamics or a PD target from the analytic
    teacher. Record `tau_cmd`, `tau_meas`/current, `q`, `qd`, and the adapter
    mode in the case library.
-4. **Start with one arm and one target**, then dual-arm tasks. Use
+4. **Start with one arm and one stationary target**, then arm-only tracking,
+   base-only driving, combined base+arm, and dual-arm tasks. The Mars base is
+   differential-drive `(vx, yaw_rate)`, so a lateral base goal requires a
+   turn-and-drive maneuver rather than direct translation. Use
    `success_mode="all"` only when both arms genuinely have targets.
 5. **Keep the existing velocity tracker** for free-space tracking until the
    torque actor matches it. Compare on the same held-out cases.
@@ -254,17 +303,147 @@ research-only.
    - no wheel lift, joint-limit overrun, thermal trip, or unconfirmed stop;
    - no regression on the retained velocity actor's free-space cases.
 
+## Training wiring
+
+The contract now has a runnable vertical slice:
+
+- [`wbc_env.py`](../../src/emet/rl/manipulation/wbc_env.py) builds a fixed-width,
+  profile-derived observation vector and a normalized action Gymnasium space.
+  It decodes through the contract, calls an `ActuatorAdapter`, and scores the
+  next observation with `reach_reward`.
+- [`wbc_mujoco.py`](../../src/emet/rl/manipulation/wbc_mujoco.py) is the first
+  backend. It is **adapter-matched Mars**, not a true-torque plant: the policy
+  emits torques, the position-servo adapter turns them into bounded position
+  targets, and the existing MuJoCo servo model executes them. The base uses the
+  planar `MarsControl` `base_x/y/yaw` velocity actuators, not the weak
+  physical-wheel contact model (whose 0.05 Nm actuators make base goals
+  unreachable). Goals are sampled by FK from a randomized reachable arm
+  configuration; base goals are optional. The backend applies the retained
+  base-acceleration, joint-target-rate, and gripper-rate slew limits, and holds
+  the gripper open for reach training because the current contract has no
+  gripper target or reward. `--teacher-steps` optionally behavior-clones a
+  simulator-privileged PD teacher before PPO; the teacher's sampled joint
+  target never enters the actor observation or exported checkpoint. The BC
+  policy is evaluated and saved as `bc_policy.pt` before PPO, and
+  `--bc-kl-coefficient` anchors PPO to it so a short fine-tune cannot silently
+  erase the warm start.
+- [`wbc_training.py`](../../src/emet/rl/manipulation/wbc_training.py) is a small
+  PPO trainer and checkpoint format. The checkpoint carries the full profile
+  payload/fingerprint, observation/action width, observation-layout version,
+  PPO config, and metadata. Loading with a different profile is rejected
+  before inference. The first trainer is single-arm Mars; the environment
+  exposes `info["action_mask"]` for future multi-arm masked PPO, but this
+  trainer does not yet consume it.
+- [`wbc_calibration.py`](../../src/emet/rl/manipulation/wbc_calibration.py) fits
+  the static per-joint bias from the manipulation-failure sink. Pass the saved
+  feedforward to training with `--feedforward`; the trainer converts bias to
+  torque with the profile's identified `kp_eff` and gives it to the adapter.
+
+Smoke commands:
+
+```bash
+python scripts/fit_wbc_feedforward.py \
+  --records ~/runs/emet/manip_failures/manip_failures.jsonl \
+  --embodiment innate_mars --out runs/wbc/feedforward.json
+
+EMET_WBC_FEEDFORWARD=runs/wbc/feedforward.json \
+  python -m emet.rl.manipulation.wbc_training \
+  --steps 2048 --output runs/wbc --device auto \
+  --target-range 0.15 --base-goal-mode forward \
+  --teacher-steps 4096 --teacher-epochs 30 --bc-kl-coefficient 0.1 \
+  --checkpoint-every 512 --eval-episodes 10
+
+# Continue an interrupted run (steps are additional, not total)
+python -m emet.rl.manipulation.wbc_training \
+  --resume runs/wbc/checkpoint.pt --steps 2048 --output runs/wbc --device auto
+```
+
+`--device auto` selects CUDA when available. `metrics.jsonl` receives one row
+per update, and `checkpoint.pt` carries policy, optimizer, step/update count,
+profile fingerprint, and observation-layout version for resume. `wbc_calibration.py`
+provides the same fit as a tested module API; the script adds the operator-facing
+dry-run/feedforward-contamination flags.
+
+### DAgger subtask suite
+
+[`wbc_dagger.py`](../../src/emet/rl/manipulation/wbc_dagger.py) adds the
+actor-visited-state loop that plain BC needs:
+
+- suite: `arm` (held base, EE target), `base` (held arm, planar base target),
+  and `combined` (forward-cone base + arm target);
+- initial teacher rollouts and BC warm start;
+- each DAgger iteration rolls out the current actor with small action noise,
+  queries the privileged teacher at the visited states, aggregates the labels,
+  retrains the actor, and evaluates each subtask separately;
+- teacher-only evaluation is recorded as the ceiling; the best checkpoint is
+  chosen by aggregate held-out success.
+
+```bash
+python -m emet.rl.manipulation.wbc_dagger \
+  --iterations 4 --teacher-steps 2048 --dagger-steps 1024 \
+  --bc-epochs 30 --eval-episodes 10 --device auto --output runs/wbc-dagger
+```
+
+The teacher uses simulator-only target/phase information; it is never part of
+the actor observation or exported checkpoint.
+
+The MuJoCo trainer uses `mars_sim_profile()`, so a checkpoint must be loaded
+with that same sim-matched profile; the example Mars profile is the
+bench-replacement target and has a different fingerprint. These are
+wiring/prototype commands. The example profile's actuator fields are still
+placeholders; replace them with bench identification before interpreting the
+reward or claiming contact performance.
+
+### First smoke evidence
+
+On 2026-11-25, the contract-native Mars path was exercised on the local RTX
+4070. These are wiring checks, not a benchmark or a promoted controller:
+
+- Cold PPO from scratch (18k steps, arm-only, 0.15 rad target range, held base)
+  stayed at 0/10 eval success; the reward curve was flat.
+- A simulator-privileged PD teacher behavior-cloned for 2,048 samples / 30
+  epochs (MSE 0.054) reached **16/20 (80%)** eval success on the arm-only
+  distribution without any PPO. This is the warm-start reference.
+- Two thousand PPO steps with a 0.1 BC-KL anchor and 3e-4 actor LR retained
+  **15/20 (75%)**. The same fine-tune without the KL anchor and at 1e-3 LR
+  reached 1/10 after 2k, then degraded to 0/20 after 10k. The BC-KL anchor is
+  therefore required for short fine-tunes.
+- The contact-wheel base model was unusable for base goals (0.05 Nm wheel
+  actuators); the planar `MarsControl` base is used instead.
+- The first base+arm curriculum uses a forward cone, staged base-then-arm
+  teacher, and arm IK against the current base.
+- Plain teacher BC on the three-task suite starts around **0.45** aggregate
+  (arm ~0.35, base 1.0, combined 0.0). Combined is the distribution-shift
+  failure case.
+- Adding derived sensor-only error features (base x/y/heading error, EE
+  position/rotation-vector error) and running DAgger changed the result
+  sharply. DAgger iteration 1 reached **0.92** aggregate, and iterations 5–6
+  reached **0.95** (arm 1.0, base 1.0, combined 0.85).
+- Fresh held-out validation of the best checkpoint, 50 episodes per subtask:
+  **0.973 aggregate** (arm 1.0, base 1.0, combined 0.92). The teacher ceiling
+  on the same seeds is **0.98 aggregate** (combined 0.94). Artifacts:
+  `logs/eval/wbc_dagger_features_20261125/`. Full protocol and limitations:
+  [wbc_dagger_20261125.md](../experiments/wbc_dagger_20261125.md).
+
+Treat these as evidence that the contract, DAgger loop, derived features, and
+teacher-parity path work on the current simulator distribution. The policy is
+still simulator-only; broader base goals, contact tasks, and hardware
+qualification remain.
+
 ## Migration and versioning
 
 - `SCHEMA_VERSION = 2`. The v1 flat single-arm contract is **not** silently
   reinterpreted.
-- Policy bundles must include `embodiment` name, profile hash, schema version,
-  action mode, and actuator-model hash. A mismatch is rejected.
+- Policy bundles must include `embodiment` name, `EmbodimentProfile.fingerprint`,
+  schema version, action mode, and actuator-model hash. A mismatch is rejected.
+  The fingerprint covers the full profile, including limits and actuator-model
+  fields, so a renamed profile cannot hide a changed control contract.
 - Old velocity checkpoints remain v1 artifacts. They are not loaded as torque
   actors.
 - The case library stores nested multi-arm goals/state in JSON. Legacy
-  single-arm records remain readable; new records add `meta.embodiment` and
-  `meta.schema_version=2`.
+  single-arm records remain readable; new records add `meta.embodiment`,
+  `meta.embodiment_fingerprint`, and `meta.schema_version=2`. The scenario
+  fingerprint includes all three, so a profile revision is a distinct case.
 - `synthetic_obstacle_target(..., profile=...)` emits the multi-arm layout;
   without a profile it preserves the legacy single-target format.
 
@@ -316,10 +495,11 @@ and has its own `test_whole_body_v2.py`. That stack remains the free-space
 baseline and is not redefined here.
 
 This document/schema is the new **torque contract**: a multi-arm, per-arm
-action/observation API with an actuator adapter boundary. It currently has
-contract/adapter tests and the external innate-os smoke test, not a training
-consumer. When a training loop adopts it, the two stacks should be compared on
-the same held-out cases rather than merged by name.
+action/observation API with an actuator adapter boundary. It now has contract
+and adapter tests, the external innate-os smoke test, and a contract-native
+Gym/MuJoCo/PPO wiring. The two stacks should still be compared on the same
+held-out cases rather than merged by name; the new trainer is not automatically
+better than the retained velocity baseline.
 
 ## Open questions
 
@@ -342,12 +522,22 @@ the same held-out cases rather than merged by name.
 | Path | Purpose |
 |---|---|
 | [`wbc_contract.py`](../../src/emet/controller/manipulation/wbc_contract.py) | Schema v2, profiles, actions/observations, reward, vector helpers |
-| [`torque_adapter.py`](../../src/emet/controller/manipulation/torque_adapter.py) | Position-servo adapter and adapter protocol |
-| [`wbc_profiles.py`](../../src/emet/controller/manipulation/wbc_profiles.py) | Example Mars/Sourccey/RB-Y1/Stretch layouts |
+| [`torque_adapter.py`](../../src/emet/controller/manipulation/torque_adapter.py) | Position-servo and true-torque adapters |
+| [`wbc_profiles.py`](../../src/emet/controller/manipulation/wbc_profiles.py) | Example layouts and bench-identification patch loader |
 | [`case_library.py`](../../src/emet/controller/manipulation/case_library.py) | Deduplicated scenario records |
 | [`data_generators.py`](../../src/emet/controller/manipulation/data_generators.py) | Synthetic obstacle/target scenarios; multi-arm mode |
 | [`failure_record.py`](../../src/emet/controller/manipulation/failure_record.py) | Failure/trace -> scenario record |
+| [`failure_dataset.py`](../../src/emet/controller/manipulation/failure_dataset.py) | Reader/validation for recorded manipulation attempts |
+| [`wbc_feedforward.py`](../../src/emet/controller/manipulation/wbc_feedforward.py) | Static per-joint feedforward fit from tracking failures |
+| [`wbc_env.py`](../../src/emet/rl/manipulation/wbc_env.py) | Contract observation layout, Gym env, reward adapter |
+| [`wbc_mujoco.py`](../../src/emet/rl/manipulation/wbc_mujoco.py) | Adapter-matched Mars MuJoCo backend |
+| [`wbc_training.py`](../../src/emet/rl/manipulation/wbc_training.py) | PPO trainer and profile-checked checkpoint |
+| [`wbc_calibration.py`](../../src/emet/rl/manipulation/wbc_calibration.py) | Failure-sink -> feedforward library/CLI |
+| [`wbc_dagger.py`](../../src/emet/rl/manipulation/wbc_dagger.py) | Subtask suite, actor-visited teacher labeling, DAgger loop |
+| [`scripts/fit_wbc_feedforward.py`](../../scripts/fit_wbc_feedforward.py) | Operator feedforward-fit CLI with dry-run/contamination flags |
 | [`src/test/motion/test_wbc_foundations.py`](../../src/test/motion/test_wbc_foundations.py) | Contract, multi-arm, case library, generator tests |
 | [`src/test/motion/test_torque_adapter.py`](../../src/test/motion/test_torque_adapter.py) | Adapter mapping, limits, fail-closed tests |
+| [`src/test/motion/test_wbc_env.py`](../../src/test/motion/test_wbc_env.py) | Env layout, reward, PPO/checkpoint tests |
+| [`src/test/motion/test_wbc_calibration.py`](../../src/test/motion/test_wbc_calibration.py) | Failure-record feedforward tests |
 | [`scripts/validate_innate_torque_adapter.py`](../../scripts/validate_innate_torque_adapter.py) | External innate-os MuJoCo adapter/contact smoke test |
 | [`innate-sim-validation.md`](innate-sim-validation.md) | Setup, metrics, and limits of the external sim validation |

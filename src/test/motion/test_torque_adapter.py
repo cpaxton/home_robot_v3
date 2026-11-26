@@ -11,7 +11,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from emet.controller.manipulation.torque_adapter import PositionServoAdapter
+from emet.controller.manipulation.torque_adapter import PositionServoAdapter, TorqueAdapter
 from emet.controller.manipulation.wbc_contract import (
     ArmAction,
     ArmObservation,
@@ -30,6 +30,13 @@ def _profile_with_actuator(**changes):
     profile = example_mars_profile()
     group = profile.joint_group("primary_arm")
     joints = tuple(replace(joint, **changes) for joint in group.joints)
+    return replace(profile, joint_groups=(replace(group, joints=joints),))
+
+
+def _torque_profile(**changes):
+    profile = example_mars_profile()
+    group = profile.joint_group("primary_arm")
+    joints = tuple(replace(joint, control_mode="torque", **changes) for joint in group.joints)
     return replace(profile, joint_groups=(replace(group, joints=joints),))
 
 
@@ -243,6 +250,49 @@ def test_current_limit_without_torque_constant_fails_closed():
     )
     with pytest.raises(ValueError, match="current_limit"):
         PositionServoAdapter(profile)
+
+
+def test_torque_adapter_emits_direct_joint_torques():
+    profile = _torque_profile()
+    observation = _mars_observation(profile)
+    command = TorqueAdapter(profile).command(
+        _mars_action(profile, (0.5, -0.25, 0.0, 0.0, 0.0)),
+        observation,
+    )
+    assert command.joint_positions == {}
+    assert command.commanded_torques["joint1"] == pytest.approx(0.5)
+    assert command.commanded_torques["joint2"] == pytest.approx(-0.25)
+    assert command.base_velocity == (0.1, 0.0)
+    assert set(command.grippers) == {"primary"}
+
+
+def test_torque_adapter_clips_to_torque_and_current_limits():
+    profile = _torque_profile(
+        torque_limit=1.5,
+        torque_constant=0.1,
+        current_limit=1.0,
+        gear_ratio=1.0,
+    )
+    command = TorqueAdapter(profile).command(
+        _mars_action(profile, (10.0, 0.0, 0.0, 0.0, 0.0)),
+        _mars_observation(profile),
+    )
+    assert command.commanded_torques["joint1"] == pytest.approx(0.1)
+    assert command.current_limits["joint1"] == pytest.approx(1.0)
+
+
+def test_torque_adapter_adds_identified_feedforward():
+    profile = _torque_profile()
+    adapter = TorqueAdapter(profile, gravity_torques={"joint1": 0.4}, friction_torques={"joint2": -0.1})
+    command = adapter.command(_mars_action(profile, (0.2, 0.2, 0.0, 0.0, 0.0)), _mars_observation(profile))
+    assert command.commanded_torques["joint1"] == pytest.approx(0.6)
+    assert command.commanded_torques["joint2"] == pytest.approx(0.1)
+
+
+def test_torque_adapter_rejects_position_servo_joints():
+    profile = example_mars_profile()
+    with pytest.raises(ValueError, match="true torque"):
+        TorqueAdapter(profile)
 
 
 def test_true_torque_mode_requires_a_torque_adapter():

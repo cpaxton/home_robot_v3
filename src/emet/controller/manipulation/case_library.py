@@ -56,10 +56,12 @@ class ScenarioRecord:
     def fingerprint(self) -> str:
         """Stable content hash of the scenario identity for dedup.
 
-        Embodiment and schema version are part of the identity: the same map,
-        goal, and joint vector on two robots is not the same training case.
-        Episode/job identifiers are intentionally excluded so re-collection can
-        still deduplicate.
+        Embodiment, profile fingerprint, and schema version are part of the
+        identity: the same map, goal, and joint vector on two robots is not the
+        same training case, and changing a profile's limits/actuator model makes
+        previously collected records a different reset contract. Episode/job
+        identifiers are intentionally excluded so re-collection can still
+        deduplicate.
         """
         payload = json.dumps(
             {
@@ -67,6 +69,7 @@ class ScenarioRecord:
                 "goal": _canonical(self.goal),
                 "robot_state": _canonical(self.robot_state),
                 "embodiment": str(self.meta.get("embodiment") or ""),
+                "embodiment_fingerprint": str(self.meta.get("embodiment_fingerprint") or ""),
                 "schema_version": self.meta.get("schema_version"),
             },
             sort_keys=True,
