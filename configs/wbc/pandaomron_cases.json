@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "robot": "pandaomron",
+  "profile": "pandaomron_sim",
+  "cases": [
+    {
+      "id": "pandaomron.free_space.arm",
+      "family": "free_space_reach",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "active",
+      "source": "wbc_dagger default arm subtask",
+      "occupancy": "none",
+      "gate": {"min_success": 0.90, "max_collision_rate": 0.0, "max_tracking_error_m": 0.03, "max_duration_s": 8.0},
+      "notes": "held-out seeds; no hard-case injection"
+    },
+    {
+      "id": "pandaomron.free_space.base",
+      "family": "base_arm",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "active",
+      "source": "wbc_dagger default base subtask",
+      "occupancy": "none",
+      "gate": {"min_success": 0.85, "max_collision_rate": 0.0, "max_tracking_error_m": 0.04, "max_duration_s": 8.0},
+      "notes": "base-only tracking"
+    },
+    {
+      "id": "pandaomron.free_space.combined",
+      "family": "base_arm",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "active",
+      "source": "wbc_dagger default combined subtask",
+      "occupancy": "none",
+      "gate": {"min_success": 0.85, "max_collision_rate": 0.0, "max_tracking_error_m": 0.04, "max_duration_s": 8.0},
+      "notes": "base + arm target"
+    },
+    {
+      "id": "pandaomron.hard_posture.014",
+      "family": "hard_posture",
+      "robot": "pandaomron",
+      "split": "train",
+      "status": "active",
+      "source": "wbc_pandaomron_hard_cases_train.json#failure-014",
+      "occupancy": "none",
+      "gate": {"min_success": 0.80, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 8.0},
+      "notes": "cabinet placement failure posture"
+    },
+    {
+      "id": "pandaomron.hard_posture.015",
+      "family": "hard_posture",
+      "robot": "pandaomron",
+      "split": "train",
+      "status": "active",
+      "source": "wbc_pandaomron_hard_cases_train.json#failure-015",
+      "occupancy": "none",
+      "gate": {"min_success": 0.80, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 8.0},
+      "notes": "sink placement failure posture"
+    },
+    {
+      "id": "pandaomron.hard_posture.016",
+      "family": "hard_posture",
+      "robot": "pandaomron",
+      "split": "train",
+      "status": "active",
+      "source": "wbc_pandaomron_hard_cases_train.json#failure-016",
+      "occupancy": "none",
+      "gate": {"min_success": 0.80, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 8.0},
+      "notes": "sink attach-verification failure"
+    },
+    {
+      "id": "pandaomron.hard_posture.017",
+      "family": "hard_posture",
+      "robot": "pandaomron",
+      "split": "train",
+      "status": "active",
+      "source": "wbc_pandaomron_hard_cases_train.json#failure-017",
+      "occupancy": "none",
+      "gate": {"min_success": 0.80, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 8.0},
+      "notes": "sink placement failure posture"
+    },
+    {
+      "id": "pandaomron.hard_posture.018",
+      "family": "hard_posture",
+      "robot": "pandaomron",
+      "split": "train",
+      "status": "active",
+      "source": "wbc_pandaomron_hard_cases_train.json#failure-018",
+      "occupancy": "none",
+      "gate": {"min_success": 0.80, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 8.0},
+      "notes": "sink geometry/placement failure posture"
+    },
+    {
+      "id": "pandaomron.hard_posture.019",
+      "family": "hard_posture",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "active",
+      "source": "wbc_pandaomron_hard_cases_test.json#failure-019",
+      "occupancy": "none",
+      "gate": {"min_success": 0.80, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 8.0},
+      "notes": "held-out tracking failure; never used for hard-case injection"
+    },
+    {
+      "id": "pandaomron.shelf_entry.cabinet",
+      "family": "shelf_entry",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "planned",
+      "source": "RoboCasa PickPlaceCounterToCabinet; occupancy case generator pending",
+      "occupancy": "required",
+      "gate": {"min_success": 0.75, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 12.0},
+      "notes": "open cabinet shelf; obstacle-aware reach/insert"
+    },
+    {
+      "id": "pandaomron.carry_payload.sink",
+      "family": "carry_payload",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "planned",
+      "source": "RoboCasa PickPlaceCounterToSink carry; payload case generator pending",
+      "occupancy": "required",
+      "gate": {"min_success": 0.75, "max_collision_rate": 0.0, "max_tracking_error_m": 0.05, "max_duration_s": 12.0},
+      "notes": "held pear; carry posture and base/arm coordination"
+    },
+    {
+      "id": "pandaomron.contact_recovery.sink_attach",
+      "family": "contact_recovery",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "planned",
+      "source": "sink attach-verification failure; contact case generator pending",
+      "occupancy": "optional",
+      "gate": {"min_success": 0.70, "max_collision_rate": 0.0, "max_tracking_error_m": 0.06, "max_duration_s": 12.0},
+      "notes": "contact-rich recovery; teacher privileged contacts"
+    },
+    {
+      "id": "pandaomron.articulation.door",
+      "family": "articulation",
+      "robot": "pandaomron",
+      "split": "test",
+      "status": "planned",
+      "source": "RoboCasa cabinet door; articulation adapter pending",
+      "occupancy": "required",
+      "gate": {"min_success": 0.70, "max_collision_rate": 0.0, "max_tracking_error_m": 0.06, "max_duration_s": 15.0},
+      "notes": "open/close a door; not in the first controller gate"
+    }
+  ]
+}
