@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import mujoco
 import numpy as np
-
-from emet.simulation.stretch_mujoco.robocasa_gen import _apply_scene_qpos0, _scene_qpos_by_name
+import pytest
 
 
 def _door_model() -> mujoco.MjModel:
@@ -32,6 +31,9 @@ def _door_model() -> mujoco.MjModel:
 
 
 def test_open_door_qpos_survives_model_rebuild():
+    pytest.importorskip("robocasa")
+    from emet.simulation.stretch_mujoco.robocasa_gen import _apply_scene_qpos0, _scene_qpos_by_name
+
     source = _door_model()
     data = mujoco.MjData(source)
     door = int(source.joint("cabinet_door_joint").qposadr[0])
