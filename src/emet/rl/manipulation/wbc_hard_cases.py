@@ -170,7 +170,7 @@ def hard_cases_from_failure_records(
                 "receptacle_query": context.get("receptacle_query"),
                 "failure_mode": attempt.get("failure_mode"),
                 "message": context.get("message"),
-                "op": context.get("op"),
+                "op": attempt.get("op"),
                 "reached": attempt.get("reached"),
                 "error_m": attempt.get("error_m"),
             },

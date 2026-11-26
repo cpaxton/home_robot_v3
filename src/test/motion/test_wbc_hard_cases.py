@@ -26,6 +26,7 @@ def _record(initial, target, *, robot="panda_omron", mode="tracking_failed"):
             "planned_waypoints": [list(target)],
             "failure_mode": mode,
             "reached": False,
+            "op": "grasp",
         },
         "context": {
             "robot_id": robot,
@@ -45,6 +46,7 @@ def test_hard_cases_extract_contract_joint_order():
     assert cases[0].target_q == target
     assert cases[0].arm == "right"
     assert cases[0].failure_mode == "tracking_failed"
+    assert cases[0].source["op"] == "grasp"
 
 
 def test_hard_cases_skip_other_robots_and_noop_targets():
