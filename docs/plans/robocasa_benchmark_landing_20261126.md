@@ -114,10 +114,15 @@ uv run pytest -q \
 Use `emet jobs`; do not block an agent turn on RoboCasa.
 
 ```bash
-# Old rby1 sink row. Replace the object/receptacle selectors only if the task
-# config already pins them.
+# Old rby1 sink row. This is the recorded green command (job
+# robocasa-sink-green2): all three ops complete, release verifies, pear ends in
+# the sink, displacement 0.807 m. GT teacher is explicit and tagged.
 NEED_MIB=12000 uv run emet jobs run --name robocasa-rby1-sink-regression --need-mib 12000 -- \
-  ./scripts/your_robocasa_sink_eval.sh
+  env EMET_SIM_NAV_TELEPORT=1 EMET_GT_TEACHER=1 EMET_ROBOCASA_OBJ_GROUPS=pear \
+  uv run python scripts/scripted_sim_pick_place.py --start-sim \
+  --sim configs/sim/robocasa_pick_place_rby1_sink.yaml --manip-mode kinematic \
+  --settle-s 2 --retries 3 --object pear --receptacle sink \
+  --tool-calls-json '[{"name":"scene_tasks","arguments":{}},{"name":"plan_pick_place","arguments":{"task_ref":"$task_ref"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"$plan_ref"}}]'
 
 # New Panda reach adapter
 NEED_MIB=12000 uv run emet jobs run --name robocasa-panda-reach --need-mib 12000 -- \
