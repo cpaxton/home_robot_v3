@@ -120,7 +120,10 @@ through a finite-difference EE Jacobian for arbitrary task targets. A loaded
 error mean **1.13 cm**, p95 **1.67 cm**, max **1.70 cm**; the 1.3 cm smoke is
 typical, not a marginal one-off. The sweep also writes an
 `observations`/`teacher_actions` dataset for BC/DAgger fine-tuning
-(`/tmp/opencode/wbc_robocasa_sweep_policy/loaded_data.npz`).
+(`/tmp/opencode/wbc_robocasa_sweep_policy/loaded_data.npz`). A Cartesian offset
+sweep (±5 cm x/y, 0–8 cm up) is also **20/20**, mean **0.87 cm**, p95 **1.54
+cm** (`/tmp/opencode/wbc_robocasa_sweep_cartesian/`). Both reach envelopes are
+inside the 2 cm tolerance; DAgger is reserved for farther task targets.
 
 This is a reach-tracking result, not task success. The benchmark task still
 needs:

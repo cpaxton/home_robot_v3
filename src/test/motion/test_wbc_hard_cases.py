@@ -76,6 +76,26 @@ def test_hard_cases_normalize_robot_aliases():
     ]
 
 
+def test_hard_cases_capture_scene_context():
+    initial = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5, 0.7)
+    target = (0.2, 0.1, 0.4, -1.9, 0.0, 2.4, 0.8)
+    record = _record(initial, target)
+    record["context"].update(
+        {
+            "op": "grasp",
+            "object_body": "obj_main",
+            "receptacle_body": "cab_main",
+            "layout": 1,
+            "style": 1,
+        }
+    )
+    case = hard_cases_from_failure_records([record], robot="pandaomron")[0]
+    assert case.scene["object_body"] == "obj_main"
+    assert case.scene["receptacle_body"] == "cab_main"
+    assert case.scene["layout"] == 1
+    assert case.scene["style"] == 1
+
+
 def test_hard_cases_json_roundtrip(tmp_path):
     case = WbcHardCase(
         name="c1",
@@ -84,6 +104,7 @@ def test_hard_cases_json_roundtrip(tmp_path):
         initial_q=(0.0,) * 7,
         target_q=(0.1,) * 7,
         failure_mode="tracking_failed",
+        scene={"env": "PickPlaceCounterToCabinet", "layout": 1, "style": 1},
     )
     path = save_hard_cases(tmp_path / "cases.json", [case])
     loaded = load_hard_cases(path)

@@ -34,10 +34,13 @@ class WbcHardCase:
     target_q: tuple[float, ...]
     failure_mode: str = ""
     source: dict[str, Any] = field(default_factory=dict)
+    scene: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.name or not self.robot or not self.arm:
             raise ValueError("hard case name/robot/arm must be non-empty")
+        if not isinstance(self.scene, dict):
+            raise ValueError("hard case scene must be a mapping")
         if not self.initial_q or len(self.initial_q) != len(self.target_q):
             raise ValueError("hard case initial_q and target_q must have equal non-zero length")
         if not all(isinstance(value, (int, float)) for value in (*self.initial_q, *self.target_q)):
@@ -52,6 +55,7 @@ class WbcHardCase:
             "target_q": [float(value) for value in self.target_q],
             "failure_mode": self.failure_mode,
             "source": self.source,
+            "scene": dict(self.scene),
         }
 
     @classmethod
@@ -64,6 +68,7 @@ class WbcHardCase:
             target_q=tuple(float(value) for value in raw["target_q"]),
             failure_mode=str(raw.get("failure_mode") or ""),
             source=dict(raw.get("source") or {}),
+            scene=dict(raw.get("scene") or {}),
         )
 
 
@@ -168,6 +173,22 @@ def hard_cases_from_failure_records(
                 "op": context.get("op"),
                 "reached": attempt.get("reached"),
                 "error_m": attempt.get("error_m"),
+            },
+            scene={
+                key: context[key]
+                for key in (
+                    "robot_id",
+                    "op",
+                    "object_query",
+                    "receptacle_query",
+                    "object_body",
+                    "receptacle_body",
+                    "layout",
+                    "style",
+                    "scene",
+                    "job_id",
+                )
+                if context.get(key) is not None
             },
         )
         cases.append(case)

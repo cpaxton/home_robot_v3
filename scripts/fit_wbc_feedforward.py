@@ -22,10 +22,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from pathlib import Path
 
 from emet.controller.manipulation.failure_dataset import load_manipulation_attempts, select_attempts
-from emet.controller.manipulation.wbc_feedforward import FeedforwardModel, fit_feedforward
+from emet.controller.manipulation.wbc_feedforward import fit_feedforward
 
 
 def main() -> int:
@@ -45,7 +44,9 @@ def main() -> int:
     parser.add_argument("--min-samples", type=int, default=2, help="Minimum attempts per joint (default: 2)")
     parser.add_argument("--max-abs-bias", type=float, default=0.75, help="Reject implausible bias (default: 0.75)")
     parser.add_argument("--cluster-distance", type=float, default=0.42, help="Posture cluster radius (default: 0.42)")
-    parser.add_argument("--outlier-bias-limit", type=float, default=1.2, help="Reject contaminated attempts (default: 1.2)")
+    parser.add_argument(
+        "--outlier-bias-limit", type=float, default=1.2, help="Reject contaminated attempts (default: 1.2)"
+    )
     parser.add_argument(
         "--max-joint-distance",
         type=float,
