@@ -38,6 +38,22 @@ def test_placements_to_session_dict_json_safe():
     assert out["apple_main"]["pos"] == [0.1, -0.5, 0.9]
 
 
+def test_internal_object_category_key_is_not_a_placement():
+    raw = {
+        "apple_main": {"cat": "apple", "pos": [0.1, -0.5, 0.9]},
+        "_emet_object_category": "apple",
+    }
+    assert "_emet_object_category" not in (placements_to_session_dict(raw) or {})
+    wizard = placements_from_objects_info(
+        {
+            "apple_main": {"cat": "apple", "pos": [0.0, 0.0, 1.0]},
+            "_emet_object_category": "apple",
+        }
+    )
+    assert wizard is not None
+    assert set(wizard) == {"apple_main"}
+
+
 def test_is_default_table_environment():
     assert is_default_table_environment(None)
     assert is_default_table_environment("stretch_default_scene")

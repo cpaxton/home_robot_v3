@@ -810,3 +810,52 @@ def test_semantic_access_query_matches_one_fixture_without_exposing_a_body():
         "required_action": None,
         "available_actions": [],
     }
+
+
+def test_articulation_query_requires_a_token_delimiter():
+    from emet.simulation.articulation import articulation_for_query
+
+    session = {
+        "sim_articulations": [
+            {"bodies": ["cable_main"], "supported": True, "state": "open"},
+        ]
+    }
+    assert articulation_for_query(session, "cab") is None
+    session["sim_articulations"] = [{"bodies": ["cab_main"], "supported": True, "state": "open"}]
+    assert articulation_for_query(session, "cab") is session["sim_articulations"][0]
+
+
+def test_planning_attempt_records_pre_motion_q_and_empty_waypoints():
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="ee">
+              <joint name="j1" type="hinge" axis="0 0 1"/>
+              <geom name="g" type="box" size="0.01 0.01 0.01"/>
+              <joint name="j2" type="hinge" axis="0 0 1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    data.qpos[:] = [0.1, 0.2]
+    mujoco.mj_forward(model, data)
+
+    executor = object.__new__(KinematicPickPlaceExecutor)
+    executor._model = model
+    executor._data = data
+    executor.ee_body = "ee"
+    executor.joint_names = ["j1", "j2"]
+    executor._placement_support_bounds = None
+    attempt = executor.planning_attempt("place", "placement_geometry_missing")
+    assert attempt["op"] == "place"
+    assert attempt["failure_mode"] == "placement_geometry_missing"
+    assert attempt["initial_q"] == pytest.approx([0.1, 0.2])
+    assert attempt["trace"][0]["qpos"] == pytest.approx([0.1, 0.2])
+    assert attempt["planned_waypoints"] == []
