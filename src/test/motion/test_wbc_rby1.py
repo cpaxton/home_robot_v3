@@ -166,3 +166,24 @@ def test_rby1_teacher_drives_base_toward_forward_goal():
         assert float(np.linalg.norm(end[:2] - start[:2])) > 0.03
     finally:
         backend.close()
+
+
+@pytest.mark.sim
+def test_rby1_single_arm_goal_disables_the_other_arm():
+    from emet.rl.manipulation.wbc_rby1 import Rby1WbcBackend
+
+    backend = Rby1WbcBackend(
+        seed=0,
+        arm_goal_probability=1.0,
+        base_goal_probability=0.0,
+        active_arms=("left",),
+    )
+    try:
+        observation = backend.reset(seed=0)
+        assert observation.arm("left").ee_target is not None
+        assert observation.arm("right").ee_target is None
+        assert backend._target_q["right"] == pytest.approx(backend._start_q["right"])
+    finally:
+        backend.close()
+    with pytest.raises(ValueError, match="unknown active arms"):
+        Rby1WbcBackend(seed=0, active_arms=("middle",))

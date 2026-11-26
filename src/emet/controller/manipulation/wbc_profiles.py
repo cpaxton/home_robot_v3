@@ -447,6 +447,9 @@ def pandaomron_sim_profile() -> EmbodimentProfile:
         (-2.8973, 2.8973),
     )
     panda_torque = (80.0, 80.0, 80.0, 80.0, 12.0, 12.0, 12.0)
+    # The contract teacher runs at 20 Hz. The datasheet-scale 1000/200 gains
+    # limit-cycle at that rate; these identified gains track the same targets
+    # without saturating the small wrist motors.
     arm = JointGroupSpec(
         name="panda_arm",
         role="arm",
@@ -457,8 +460,8 @@ def pandaomron_sim_profile() -> EmbodimentProfile:
                 2.0,
                 panda_torque[index],
                 control_mode="torque",
-                kp_eff=1000.0,
-                kd_eff=200.0,
+                kp_eff=300.0,
+                kd_eff=30.0,
                 max_lead=0.05,
             )
             for index in range(7)
