@@ -32,7 +32,14 @@ from emet.controller.manipulation.wbc_contract import (
     WbcObservation,
     normalized_action_vector,
 )
-from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
+from emet.controller.manipulation.wbc_profiles import (
+    PANDAOMRON_EE_LINK_ALIASES,
+    PANDAOMRON_GRIPPER_JOINT_ALIASES,
+    pandaomron_sim_profile,
+    resolve_body_name,
+    resolve_joint_names,
+)
+from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
 from emet.rl.manipulation.wbc_pandaomron import _READY_Q, _READY_TORSO
 
 _ARM_JOINTS = tuple(f"robot0_joint{i}" for i in range(1, 8))
@@ -129,6 +136,12 @@ class RoboCasaPandaBackend:
         if self.substeps < 1 or abs(self.substeps * float(self.model.opt.timestep) - self.control_dt) > 1e-9:
             raise ValueError("RoboCasa control_dt must be an integer number of simulation timesteps")
         self.model_fingerprint = hashlib.sha256(self.env.sim.model.get_xml().encode()).hexdigest()[:16]
+        gripper = self.profile.arms[0].gripper
+        assert gripper is not None
+        if resolve_body_name(self.model, self.profile.arms[0].ee_link, PANDAOMRON_EE_LINK_ALIASES) != _EE_BODY:
+            raise ValueError("RoboCasa Panda EE aliases do not match the composed model")
+        if resolve_joint_names(self.model, gripper.joint_names, PANDAOMRON_GRIPPER_JOINT_ALIASES) != _GRIPPER_JOINTS:
+            raise ValueError("RoboCasa Panda gripper aliases do not match the composed model")
         self._bind()
 
     def _bind(self) -> None:
@@ -148,6 +161,14 @@ class RoboCasaPandaBackend:
         self._ee_body = int(self.model.body(_EE_BODY).id)
         self._torque_acts = {f"joint{i}": int(self.model.actuator(name).id) for i, name in enumerate(_ARM_ACTUATORS, 1)}
         self._torque_acts["joint_torso_height"] = self._torso_act
+        self._contact_sensor = MuJoCoContactSensor(
+            self.model,
+            base_body=_BASE_BODY,
+            ee_body=_EE_BODY,
+            finger_bodies=("gripper0_right_leftfinger", "gripper0_right_rightfinger"),
+            support_bodies=("mobilebase0_fixed_support", "mobilebase0_support"),
+        )
+        self.collision_measured = True
 
     def set_ee_target(self, pose: tuple[float, ...] | None) -> None:
         """Set a world-frame target (7 values) or restore the reset offset.
@@ -258,14 +279,16 @@ class RoboCasaPandaBackend:
                 invalid = True
                 break
         self.env.sim.forward()
+        contact = self._contact_sensor.read(self.data)
         self._elapsed += self.control_dt
         return (
             self._observation(),
             invalid,
             {
-                "contact_force": None,
-                "collision": None,
-                "collision_measured": False,
+                "contact_force": contact.collision_force,
+                "collision": contact.self_collision,
+                "collision_measured": True,
+                "hand_contact_force": contact.hand_force,
                 "invalid_physics": invalid,
                 "elapsed_s": self._elapsed,
                 "ncon": int(self.data.ncon),
@@ -384,10 +407,13 @@ class RoboCasaPandaBackend:
     def _base_pose(self) -> tuple[float, float, float]:
         world = self._world_base_pose()
         rotation = Rotation.from_euler("z", -self._origin_yaw)
-        local = rotation.apply(
-            np.array([world[0] - self._origin_xy[0], world[1] - self._origin_xy[1], 0.0])
+        position = rotation.apply(
+            np.asarray(
+                (world[0] - self._origin_xy[0], world[1] - self._origin_xy[1], 0.0),
+                dtype=np.float64,
+            )
         )
-        return (float(local[0]), float(local[1]), float(_wrap(world[2] - self._origin_yaw)))
+        return (float(position[0]), float(position[1]), float(_wrap(world[2] - self._origin_yaw)))
 
     def _observation(self) -> WbcObservation:
         torso = JointGroupObservation(
@@ -409,14 +435,10 @@ class RoboCasaPandaBackend:
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
             ),
         )
-        base_yaw = self._world_base_pose()[2]
-        cos_yaw, sin_yaw = np.cos(base_yaw), np.sin(base_yaw)
+        # The Omron planar slide joints are already expressed in the chassis
+        # frame, matching the direct plant's base twist.
         qvel = self.data.qvel[self._base_v]
-        base_twist = (
-            float(cos_yaw * qvel[0] + sin_yaw * qvel[1]),
-            float(-sin_yaw * qvel[0] + cos_yaw * qvel[1]),
-            float(qvel[2]),
-        )
+        base_twist = (float(qvel[0]), float(qvel[1]), float(qvel[2]))
         return WbcObservation(
             base_pose=self._base_pose(),
             base_twist=base_twist,

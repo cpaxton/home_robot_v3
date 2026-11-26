@@ -49,11 +49,17 @@ class ContactReading:
 class MuJoCoContactSensor:
     """Read a wrist F/T sensor plus external and self contacts.
 
-    ``base_body`` defines the robot subtree. ``ee_body`` defines the hand
-    subtree; contacts between the hand and a body outside the robot are
-    external, while contacts between two robot bodies are self-collisions.
-    Hand-hand contacts are ignored because a closing gripper's fingers can
-    touch each other intentionally.
+    ``base_body`` defines the robot subtree. ``ee_body`` defines the default
+    hand subtree; pass ``hand_bodies`` for a dual-arm robot so both grippers are
+    treated as intentional manipulation contacts. Contacts between a hand and a
+    body outside the robot are external, while contacts between two robot bodies
+    are self-collisions. Hand-hand contacts within the same gripper are ignored
+    because a closing gripper's fingers can touch each other intentionally;
+    contacts between different hands are self-collisions.
+
+    ``support_bodies`` / ``support_geoms`` identify wheels, casters, or a chassis
+    support that may touch the floor. Support contacts with the world/floor are
+    not collisions; support contacts with any other body still are.
     """
 
     def __init__(
@@ -62,8 +68,10 @@ class MuJoCoContactSensor:
         *,
         base_body: str,
         ee_body: str,
+        hand_bodies: tuple[str, ...] = (),
         finger_bodies: tuple[str, ...] = (),
         support_bodies: tuple[str, ...] = (),
+        support_geoms: tuple[int, ...] = (),
         force_sensor: str | None = None,
         torque_sensor: str | None = None,
     ) -> None:
@@ -75,10 +83,28 @@ class MuJoCoContactSensor:
         self.base_body = int(model.body(base_body).id)
         self.ee_body = int(model.body(ee_body).id)
         self.robot_bodies = self._descendants(self.base_body)
-        self.hand_bodies = self._descendants(self.ee_body)
+        roots = tuple(int(model.body(name).id) for name in hand_bodies) or (self.ee_body,)
+        self.hand_bodies: frozenset[int] = frozenset().union(*(self._descendants(root) for root in roots))
+        self._hand_group = {body: group for group, root in enumerate(roots) for body in self._descendants(root)}
         self.finger_bodies = tuple(int(model.body(name).id) for name in finger_bodies)
         self.finger_bodies_set = tuple(frozenset(self._descendants(body)) for body in self.finger_bodies)
         self.support_bodies = frozenset(int(model.body(name).id) for name in support_bodies)
+        body_support_geoms = [
+            int(index)
+            for index, body in enumerate(self._geom_body)
+            if int(body) in self.support_bodies and int(model.geom_contype[index] | model.geom_conaffinity[index]) != 0
+        ]
+        self.support_geoms = frozenset(body_support_geoms) | frozenset(int(index) for index in support_geoms)
+        self._floor_geoms = frozenset(
+            int(index)
+            for index in range(model.ngeom)
+            if int(model.geom_type[index]) == int(mujoco.mjtGeom.mjGEOM_PLANE)
+        )
+        self._floor_bodies = frozenset(
+            int(index)
+            for index in range(model.nbody)
+            if any(token in str(model.body(index).name).lower() for token in ("floor", "ground"))
+        )
 
         self._force_adr: int | None = None
         self._torque_adr: int | None = None
@@ -148,8 +174,15 @@ class MuJoCoContactSensor:
             second_hand = second_body in self.hand_bodies
             first_robot = first_body in self.robot_bodies
             second_robot = second_body in self.robot_bodies
-            if first_body in self.support_bodies or second_body in self.support_bodies:
-                continue
+            first_support = first in self.support_geoms
+            second_support = second in self.support_geoms
+            if first_support or second_support:
+                if first_support and second_support:
+                    continue
+                other_geom = second if first_support else first
+                other_body = second_body if first_support else first_body
+                if other_body == 0 or other_geom in self._floor_geoms or other_body in self._floor_bodies:
+                    continue
             normal, bound = solved_contact_force(
                 model,
                 data,
@@ -161,7 +194,7 @@ class MuJoCoContactSensor:
                 friction=friction[index],
             )
             if first_robot and second_robot:
-                if first_hand and second_hand:
+                if first_hand and second_hand and self._hand_group.get(first_body) == self._hand_group.get(second_body):
                     # A closing gripper may touch its own fingers; that is not
                     # an external contact or a posture self-collision.
                     continue

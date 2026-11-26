@@ -18,7 +18,7 @@ result.
 | Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | 0.97 | 0.951 held-out (v3) |
 | Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 1.00 | 0.960 held-out (v3) |
 | RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 1.00 | 1.000 held-out (v3) |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 1.000 clean (v2) / 0.978 robust (v3) |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 0.942 clean (v2, re-gated) / 0.978 robust (v3) |
 
 Teacher success is a ceiling, not a policy result. Held-out numbers use 50
 episodes per subtask on a fresh evaluation seed (30000).
@@ -46,25 +46,45 @@ Multi-seed gate (50 episodes per subtask; aggregate success):
 | Stretch | 0.953 | 0.940 | 0.960 | 0.951 |
 | Sourccey | 0.952 | 0.960 | 0.968 | 0.960 |
 | RB-Y1 | 1.000 | 1.000 | 1.000 | 1.000 |
-| PandaOmron (clean) | 1.000 | 1.000 | 0.987 | 0.996 |
+| PandaOmron (clean) | 0.947 | 0.973 | 0.907 | 0.942 |
 | PandaOmron (robust) | 0.973 | 0.980 | 0.980 | 0.978 |
 
 A combined-weighted Mars retrain (6 s combined, 60% collection weight) reached
 0.956 mean (0.967/0.933/0.967), statistically the same as the retained 0.955.
 The original Mars 3 s/5 s and 40/20/40 protocol stays.
 
+Strict coverage gates: `configs/wbc/multirobot_cases.json` passes
+`free_space_reach` and `base_arm` for Mars, Stretch, Sourccey, and RB-Y1 with
+measured collisions and settled tracking. Stretch has one measured
+self-collision in 150 combined episodes (6.85 N; `max_collision_rate: 0.01`);
+the other rows have zero. The robust Panda checkpoint passes its separate gate;
+the clean checkpoint fails the combined base/arm gate (0.827 < 0.85).
+
 Artifacts and the per-task breakdown are in
 `logs/eval/wbc_multirobot_20261126/` (`manifest.json`, checkpoints, held-out
-JSON). The clean Panda and Mars rows are the original v2 gates; the other rows
-are current layout-v3 evaluations with v2 checkpoints migrated (zero contact
-inputs, gripper-force columns rescaled). See the narrative
-[training report](wbc_training_report_20261126.md).
+JSON) and the strict re-gate under `logs/eval/wbc_multirobot_20261126/strict/`.
+The clean Panda row was re-gated from the shipped checkpoint: the old 0.996
+row was not reproducible (the checkpoint gives 0.947/0.973/0.907 at the three
+seeds). All rows are current layout-v3 evaluations with v2 checkpoints
+migrated (zero contact inputs, gripper-force columns rescaled); the strict
+re-gate also records measured collisions and settled tracking error. See the
+narrative [training report](wbc_training_report_20261126.md).
 
 ## What landed
 
 - `wbc_robots.py`: robot/profile registry and RoboCasa names.
 - `wbc_backends.py`: direct-MuJoCo vs RoboCasa factory.
-- `wbc_robocasa.py`: explicit registration hooks; missing adapters fail closed.
+- `wbc_robocasa.py`: explicit registration hooks; PandaOmron now registers the
+  native Omron+Panda adapter, while missing adapters still fail closed.
+- `wbc_contact.py`: measured external/self contacts for Stretch, Sourccey,
+  RB-Y1, and RoboCasa too. Support-floor contacts are excluded; intentional
+  hand-object contacts are reported separately, not as collisions.
+- `wbc_coverage.py`: no metric defaults; every gate row must carry measured
+  collisions, and tracking is the mean over the last 10 steps with final/max
+  fields reported.
+- `wbc_dagger.py`: checkpoints store the full task contract; evaluators rebuild
+  that suite instead of the current defaults. Legacy checkpoints can be
+  migrated with `scripts/stamp_wbc_contract.py`.
 - `wbc_stretch.py`: wheel/freejoint plant through `ManipulationControl`; five
   contract motion axes plus gripper. Resets to a raised, collision-free ready
   pose (the packaged zero pose folds the wrist into the chassis), resamples

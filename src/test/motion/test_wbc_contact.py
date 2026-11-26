@@ -86,3 +86,58 @@ def test_wrist_sensor_reports_external_torque_in_ee_frame():
     reading = sensor.read(data)
     assert np.allclose(reading.contact.wrench[:3], 0.0, atol=1e-6)
     assert np.allclose(reading.contact.wrench[3:], [0.0, 0.0, 2.0], atol=1e-6)
+
+
+def test_pandaomron_alias_resolution_covers_robocasa_names():
+    from emet.controller.manipulation.wbc_profiles import (
+        PANDAOMRON_EE_LINK_ALIASES,
+        PANDAOMRON_GRIPPER_JOINT_ALIASES,
+        resolve_body_name,
+        resolve_joint_names,
+    )
+
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="robot0_right_hand">
+          <joint name="gripper0_right_finger_joint1"/>
+          <geom type="box" size="0.01 0.01 0.01"/>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    assert resolve_body_name(model, "right_hand", PANDAOMRON_EE_LINK_ALIASES) == "robot0_right_hand"
+    assert resolve_joint_names(
+        model,
+        ("panda_finger_joint1",),
+        PANDAOMRON_GRIPPER_JOINT_ALIASES,
+    ) == ("gripper0_right_finger_joint1",)
+
+
+def test_support_contact_with_world_is_not_a_collision():
+    xml = """
+    <mujoco>
+      <worldbody>
+        <geom name="floor" type="plane" size="1 1 0.1"/>
+        <body name="base" pos="0 0 0.1">
+          <body name="wheel" pos="0 0 -0.1">
+            <joint name="wheel_joint" type="hinge"/>
+            <geom name="wheel_geom" type="sphere" size="0.1"/>
+          </body>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    sensor = MuJoCoContactSensor(
+        model,
+        base_body="base",
+        ee_body="base",
+        support_bodies=("wheel",),
+    )
+    mujoco.mj_forward(model, data)
+    reading = sensor.read(data)
+    assert reading.self_collision is False
+    assert reading.collision_force == 0.0

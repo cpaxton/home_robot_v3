@@ -6,11 +6,14 @@
 **Multi-robot WBC backend matrix (2026-11-26):** [MuJoCo plants and trained policies for Mars/Stretch/Sourccey/RB-Y1/PandaOmron](wbc_multirobot_20261125.md)
 records the direct-MuJoCo backend and the trained policy gates: 50
 episodes/subtask, three seeds, means Mars 0.955, Stretch 0.951, Sourccey
-0.960, RB-Y1 1.000, PandaOmron 0.996 clean / 0.978 robust. The Sourccey/RB-Y1
+0.960, RB-Y1 1.000, PandaOmron 0.942 clean / 0.978 robust. The Sourccey/RB-Y1
 0.33 plateau was full-range resets, 30 BC epochs, and simultaneous dual-arm
-targets, not the adapter. The hard-posture export exposed stale successful-grasp
-records; only one genuine reach failure remains, so that family is planned
-until #267 adds more failure data.
+targets, not the adapter. Strict coverage gates now pass for all four
+non-Panda robots (measured collisions, settled tracking); the robust Panda
+checkpoint passes its separate gate, while the clean checkpoint does not. The
+hard-posture export exposed stale successful-grasp records; only one genuine
+reach failure remains, so that family is planned until #267 adds more failure
+data.
 
 **RoboCasa WBC adapter (2026-11-26):** [PandaOmron reach smoke in PickPlaceCounterToCabinet](wbc_robocasa_20261126.md)
 writes contract torques/velocities directly into the RoboCasa sim; an 8 cm

@@ -128,6 +128,35 @@ def test_default_subtask_windows_and_collection_weights():
     assert sourccey["combined_right"].weight == pytest.approx(0.3)
 
 
+def test_contract_round_trip_preserves_subtask_semantics():
+    from emet.rl.manipulation.wbc_dagger import subtasks_from_contract
+
+    contract = {
+        "schema_version": 1,
+        "robot": "pandaomron",
+        "control_dt": 0.05,
+        "success_hold_s": 0.25,
+        "collision_force_n": 10.0,
+        "subtasks": [
+            {
+                "name": "arm",
+                "arm_goal": True,
+                "base_goal": False,
+                "hold_base": True,
+                "target_range": 0.15,
+                "horizon_s": 5.0,
+                "base_goal_mode": "forward",
+                "weight": 0.25,
+                "active_arms": None,
+            }
+        ],
+    }
+    tasks = subtasks_from_contract(contract)
+    assert tasks == (WbcSubtask("arm", True, False, True, 0.15, 5.0, "forward", 0.25),)
+    with pytest.raises(ValueError, match="subtasks"):
+        subtasks_from_contract({"schema_version": 1, "subtasks": []})
+
+
 def test_default_subtasks_accepts_robot_aliases():
     assert [task.name for task in default_subtasks("mars")] == [task.name for task in default_subtasks("innate_mars")]
     assert [task.name for task in default_subtasks("rb_y1")] == [task.name for task in default_subtasks("rby1")]

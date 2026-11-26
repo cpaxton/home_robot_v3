@@ -35,9 +35,10 @@ Deliberate limitations:
   even though the profile declares 0.4 m/s.
 - Steer scrubbing on a rigid three-wheel platform can lift the base a couple of
   centimetres during a large in-place steer change. Slower commands reduce it.
-- There is no upper-body collision geometry in this proxy, so ``collision`` and
-  ``contact_force`` are reported as unavailable, not as a measured false/zero.
-  Wheel-floor contacts are support, not failure.
+- Collision evidence is measured from the proxy's MuJoCo contacts. Wheel-floor
+  contacts are support; chassis/arm contacts with the scene and non-gripper
+  self-collisions are reported as collisions. The proxy has limited upper-body
+  collision geometry, so this measures what the model contains, not hardware.
 - Arm targets are sampled by FK at the sampled base goal, then both are
   restored to the reset state. A teacher can therefore drive the base first and
   still reach the world-frame arm targets, but a policy that moves the base
@@ -68,6 +69,7 @@ from emet.controller.manipulation.wbc_contract import (
     normalized_action_vector,
 )
 from emet.controller.manipulation.wbc_profiles import rby1_sim_profile
+from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
 from emet.utils.assets import get_robot_mjcf_path
 
 _TIMESTEP_S = 0.002
@@ -350,6 +352,20 @@ class Rby1WbcBackend:
         self._ee_body = {
             arm.name: _element_id(self.model, mujoco.mjtObj.mjOBJ_BODY, arm.ee_link) for arm in self.profile.arms
         }
+        self._contact_sensor = MuJoCoContactSensor(
+            self.model,
+            base_body=_BASE_BODY,
+            ee_body=self.profile.arms[0].ee_link,
+            hand_bodies=tuple(arm.ee_link for arm in self.profile.arms),
+            finger_bodies=(
+                "left_gripper_finger_link1",
+                "left_gripper_finger_link2",
+                "right_gripper_finger_link1",
+                "right_gripper_finger_link2",
+            ),
+            support_bodies=_WHEEL_BODIES,
+        )
+        self.collision_measured = True
 
         velocity_limits = np.asarray(self.profile.base.velocity_limits, dtype=np.float64)
         if self.profile.base.acceleration_limits is None:
@@ -543,14 +559,16 @@ class Rby1WbcBackend:
             safe_qvel = self.data.qvel.copy()
             safe_time = float(self.data.time)
         mujoco.mj_forward(self.model, self.data)
+        contact = self._contact_sensor.read(self.data)
         self._elapsed += self.control_dt
         info = {
             "elapsed_s": float(self._elapsed),
             "sim_time": float(self.data.time),
             "invalid_physics": bool(invalid),
-            "collision": None,
-            "collision_measured": False,
-            "contact_force": None,
+            "collision": contact.self_collision,
+            "collision_measured": True,
+            "contact_force": contact.collision_force,
+            "hand_contact_force": contact.hand_force,
             "ncon": int(self.data.ncon),
             "model_fingerprint": self.model_fingerprint,
             "base_command": tuple(float(v) for v in self._base_command),

@@ -413,12 +413,71 @@ def rby1_sim_profile() -> EmbodimentProfile:
     )
 
 
+# PandaOmron profiles use simulation-neutral canonical names so the same
+# checkpoint can drive direct MuJoCo and RoboCasa. Adapters resolve those names
+# against their model with these aliases instead of silently bypassing the
+# profile.
+PANDAOMRON_EE_LINK_ALIASES: dict[str, tuple[str, ...]] = {
+    "right_hand": ("robot0_right_hand", "gripper0_right_eef"),
+}
+PANDAOMRON_GRIPPER_JOINT_ALIASES: dict[str, tuple[str, ...]] = {
+    "panda_finger_joint1": ("gripper0_finger_joint1", "gripper0_right_finger_joint1"),
+    "panda_finger_joint2": ("gripper0_finger_joint2", "gripper0_right_finger_joint2"),
+}
+
+
+def _model_has_body(model: Any, name: str) -> bool:
+    try:
+        model.body(name)
+    except (KeyError, ValueError):
+        return False
+    return True
+
+
+def _model_has_joint(model: Any, name: str) -> bool:
+    try:
+        model.joint(name)
+    except (KeyError, ValueError):
+        return False
+    return True
+
+
+def resolve_body_name(model: Any, name: str, aliases: dict[str, tuple[str, ...]] | None = None) -> str:
+    """Resolve a canonical profile body name against a concrete model."""
+    if _model_has_body(model, name):
+        return name
+    for alias in (aliases or {}).get(name, ()):
+        if _model_has_body(model, alias):
+            return alias
+    raise ValueError(f"model has no body for profile name {name!r} or its aliases")
+
+
+def resolve_joint_names(
+    model: Any, names: tuple[str, ...], aliases: dict[str, tuple[str, ...]] | None = None
+) -> tuple[str, ...]:
+    """Resolve canonical profile joint names against a concrete model."""
+    resolved: list[str] = []
+    lookup = aliases or {}
+    for name in names:
+        if _model_has_joint(model, name):
+            resolved.append(name)
+            continue
+        match = next((alias for alias in lookup.get(name, ()) if _model_has_joint(model, alias)), None)
+        if match is None:
+            raise ValueError(f"model has no joint for profile name {name!r} or its aliases")
+        resolved.append(match)
+    return tuple(resolved)
+
+
 def pandaomron_sim_profile() -> EmbodimentProfile:
     """PandaOmron / Omron LD-60 profile used by RoboCasa.
 
     RoboCasa composes the Omron holonomic base, a 1-DOF torso height, one
     7-DOF Panda arm, and a two-finger gripper. Joint names are canonical here;
-    the RoboCasa adapter is responsible for the ``robot0_`` prefixes.
+    adapters resolve ``right_hand`` and ``panda_finger_joint*`` through
+    :data:`PANDAOMRON_EE_LINK_ALIASES` and
+    :data:`PANDAOMRON_GRIPPER_JOINT_ALIASES` instead of hardcoding a divergent
+    schema.
     """
     torso = JointGroupSpec(
         name="torso",
@@ -819,6 +878,8 @@ def sim_profile(robot: str) -> EmbodimentProfile:
 
 
 __all__ = [
+    "PANDAOMRON_EE_LINK_ALIASES",
+    "PANDAOMRON_GRIPPER_JOINT_ALIASES",
     "apply_actuator_identification",
     "example_mars_profile",
     "example_rby1_profile",
@@ -828,6 +889,8 @@ __all__ = [
     "mars_sim_profile",
     "pandaomron_sim_profile",
     "rby1_sim_profile",
+    "resolve_body_name",
+    "resolve_joint_names",
     "sim_profile",
     "sourccey_sim_profile",
     "stretch_sim_profile",

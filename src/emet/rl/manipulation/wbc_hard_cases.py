@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -78,6 +79,25 @@ def _joint_value_map(names: Sequence[str], values: Sequence[float]) -> dict[str,
     return {str(name): float(value) for name, value in zip(names, values, strict=True)}
 
 
+def _name_tokens(name: str) -> tuple[str, ...]:
+    return tuple(token for token in re.split(r"[^a-z0-9]+", str(name).lower()) if token)
+
+
+def _joint_name_matches(record_name: str, contract_name: str) -> bool:
+    """Match a recorded joint to a contract joint without bare suffix matching.
+
+    RoboCasa records use ``robot0_jointN`` where the contract uses ``jointN``;
+    token-delimited suffix matching supports that prefix. It does not let
+    ``left_arm_joint1`` satisfy an unrelated joint whose name merely ends in
+    ``1``.
+    """
+    recorded = _name_tokens(record_name)
+    contract = _name_tokens(contract_name)
+    if not recorded or not contract:
+        return False
+    return recorded == contract or (len(recorded) > len(contract) and recorded[-len(contract) :] == contract)
+
+
 def _ordered_arm_q(
     names: Sequence[str], values: Sequence[float], joint_names: Sequence[str]
 ) -> tuple[float, ...] | None:
@@ -86,18 +106,55 @@ def _ordered_arm_q(
     for joint in joint_names:
         value = values_by_name.get(str(joint))
         if value is None:
-            # RoboCasa records use robot0_jointN; the contract uses jointN.
-            # Require the full ``jointN`` token and skip ambiguous matches.
-            suffix = str(joint).split("_")[-1]
-            suffix = suffix if suffix.startswith("joint") else f"joint{suffix}"
-            candidates = [v for name, v in values_by_name.items() if name.endswith(suffix)]
-            if len(candidates) != 1:
+            matches = [v for name, v in values_by_name.items() if _joint_name_matches(name, str(joint))]
+            if len(matches) != 1:
                 return None
-            value = candidates[0]
-        if value is None:
-            return None
+            value = matches[0]
         ordered.append(float(value))
     return tuple(ordered)
+
+
+def _arm_for_record(
+    record_joints: Sequence[str],
+    robot: str,
+    *,
+    arm: str | None,
+    joint_names: Sequence[str] | None,
+) -> tuple[str, tuple[str, ...]] | None:
+    """Resolve the contract arm and joint order for one failure record."""
+    profile = get_wbc_robot(robot).profile_factory()
+    arms = {spec.name: spec for spec in profile.arms}
+    if joint_names is not None:
+        requested = tuple(str(name) for name in joint_names)
+        if arm is not None:
+            if arm not in arms:
+                raise ValueError(f"unknown arm {arm!r} for {robot}")
+            if tuple(joint.name for joint in profile.joint_group(arms[arm].joint_group).joints) != requested:
+                raise ValueError(f"joint_names do not match the {robot} {arm} arm")
+            return arm, requested
+        matches = [
+            name
+            for name, spec in arms.items()
+            if tuple(joint.name for joint in profile.joint_group(spec.joint_group).joints) == requested
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"joint_names match {len(matches)} arms for {robot}; pass --arm explicitly")
+        return matches[0], requested
+
+    if arm is not None:
+        if arm not in arms:
+            raise ValueError(f"unknown arm {arm!r} for {robot}")
+        spec = arms[arm]
+        return arm, tuple(joint.name for joint in profile.joint_group(spec.joint_group).joints)
+
+    matches: list[tuple[str, tuple[str, ...]]] = []
+    for name, spec in arms.items():
+        contract_joints = tuple(joint.name for joint in profile.joint_group(spec.joint_group).joints)
+        if _ordered_arm_q(record_joints, [0.0] * len(record_joints), contract_joints) is not None:
+            matches.append((name, contract_joints))
+    if len(matches) != 1:
+        return None
+    return matches[0]
 
 
 def _canonical_robot(name: str) -> str:
@@ -114,26 +171,26 @@ def hard_cases_from_failure_records(
     records: Iterable[dict[str, Any]],
     *,
     robot: str,
-    arm: str = "right",
+    arm: str | None = None,
     joint_names: Sequence[str] | None = None,
     max_cases: int = 64,
 ) -> list[WbcHardCase]:
     """Extract unique arm postures from manipulation-failure JSONL records.
 
-    ``joint_names`` is the contract arm order. It defaults to ``joint1..joint7``
-    for the Panda profile; callers for other robots should pass their profile's
-    arm joint names explicitly.
+    The arm and contract joint order are inferred from the recorded joint
+    names. Pass ``arm`` to force one side or ``joint_names`` to force an order;
+    ambiguous multi-arm records are skipped instead of being mislabeled as the
+    right arm.
     """
     if max_cases < 1:
         raise ValueError("max_cases must be positive")
-    names = tuple(str(name) for name in (joint_names or tuple(f"joint{i}" for i in range(1, 8))))
+    requested_robot = _canonical_robot(robot)
     cases: list[WbcHardCase] = []
     seen: set[tuple[float, ...]] = set()
     for index, record in enumerate(records):
         attempt = record.get("attempt") or {}
         context = record.get("context") or {}
         record_robot = _canonical_robot(str(context.get("robot_id") or ""))
-        requested_robot = _canonical_robot(robot)
         if requested_robot and record_robot and record_robot != requested_robot:
             continue
         # Only a failed reach is a hard case. Place failures can carry the
@@ -146,6 +203,15 @@ def hard_cases_from_failure_records(
         waypoints = attempt.get("planned_waypoints") or []
         if not record_joints or not trace or not waypoints:
             continue
+        resolved = _arm_for_record(
+            record_joints,
+            record_robot or requested_robot,
+            arm=arm,
+            joint_names=joint_names,
+        )
+        if resolved is None:
+            continue
+        case_arm, names = resolved
         initial = attempt.get("initial_q")
         if not initial and isinstance(trace[0], dict):
             initial = trace[0].get("qpos")
@@ -160,11 +226,12 @@ def hard_cases_from_failure_records(
         if key in seen:
             continue
         seen.add(key)
+        op = attempt.get("op") or context.get("op")
         case = WbcHardCase(
             name=f"failure-{index:03d}-{context.get('object_query') or 'object'}-"
             f"{context.get('receptacle_query') or 'receptacle'}",
-            robot=record_robot or robot,
-            arm=str(arm),
+            robot=record_robot or requested_robot,
+            arm=case_arm,
             initial_q=initial_q,
             target_q=target_q,
             failure_mode=str(attempt.get("failure_mode") or context.get("message") or ""),
@@ -175,7 +242,7 @@ def hard_cases_from_failure_records(
                 "receptacle_query": context.get("receptacle_query"),
                 "failure_mode": attempt.get("failure_mode"),
                 "message": context.get("message"),
-                "op": attempt.get("op"),
+                "op": op,
                 "reached": attempt.get("reached"),
                 "error_m": attempt.get("error_m"),
             },
@@ -183,7 +250,6 @@ def hard_cases_from_failure_records(
                 key: (attempt.get("op") if key == "op" else context[key])
                 for key in (
                     "robot_id",
-                    "op",
                     "object_query",
                     "receptacle_query",
                     "object_body",
@@ -193,8 +259,9 @@ def hard_cases_from_failure_records(
                     "scene",
                     "job_id",
                 )
-                if (attempt.get("op") if key == "op" else context.get(key)) is not None
-            },
+                if context.get(key) is not None
+            }
+            | ({} if op is None else {"op": op}),
         )
         cases.append(case)
         if len(cases) >= max_cases:
@@ -252,8 +319,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Export WBC hard cases from manipulation failures")
     parser.add_argument("--records", type=Path, required=True)
     parser.add_argument("--robot", required=True)
-    parser.add_argument("--arm", default="right")
-    parser.add_argument("--joints", default="", help="comma-separated contract arm joints; default joint1..7")
+    parser.add_argument("--arm", default=None, help="contract arm name; default: infer from joint names")
+    parser.add_argument(
+        "--joints", default="", help="comma-separated contract arm joints; default: infer from the profile"
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-cases", type=int, default=64)
     parser.add_argument("--split", choices=("train", "test", "validation"), default="train")

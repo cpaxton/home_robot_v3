@@ -67,6 +67,20 @@ def test_pandaomron_reports_measured_contact_state():
     backend.close()
 
 
+def test_robocasa_target_and_base_frames_share_the_reset_origin():
+    from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
+
+    backend = RoboCasaPandaBackend(None, base_backoff=0.0)
+    backend._origin_xy = np.asarray((1.0, 2.0))
+    backend._origin_yaw = np.pi / 2
+    backend._world_base_pose = lambda: (2.0, 2.0, np.pi / 2)  # type: ignore[method-assign]
+    assert np.allclose(backend._base_pose(), (0.0, -1.0, 0.0), atol=1e-9)
+    local = backend._local_pose((2.0, 2.0, 1.0, 1.0, 0.0, 0.0, 0.0))
+    assert np.allclose(local[:3], (0.0, -1.0, 1.0), atol=1e-9)
+    world, _ = backend._world_pose(local)
+    assert np.allclose(world, (2.0, 2.0, 1.0), atol=1e-9)
+
+
 @pytest.mark.sim
 def test_pandaomron_env_reports_contact_availability():
     backend = PandaOmronWbcBackend(seed=0, base_goal_probability=0.0)

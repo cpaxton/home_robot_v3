@@ -503,18 +503,25 @@ class WbcGymEnv(gym.Env):
             vector = vector.copy()
             vector[: self.profile.base.action_dim] = 0.0
         contract_action = action_from_normalized_vector(vector, self.profile)
+        # The mask describes the action that is about to be applied, not the
+        # next target sampled by the backend.
+        action_mask = active_action_mask(self._observation, self.profile)
+        if self.hold_base:
+            action_mask[: self.profile.base.action_dim] = False
         command = self.adapter.command(contract_action, self._observation)
         next_observation, backend_terminated, info = self.backend.step(command, self.control_dt)
         next_observation.validate(self.profile)
         raw_force = info.get("contact_force")
         raw_collision = info.get("collision")
-        collision_measured = raw_force is not None or raw_collision is not None
-        contact_force = 0.0 if raw_force is None else float(raw_force)
-        collision = (
-            bool(raw_collision)
-            if raw_collision is not None
-            else contact_force > self.collision_force_n
+        collision_measured = (
+            bool(info["collision_measured"])
+            if "collision_measured" in info
+            else raw_force is not None or raw_collision is not None
         )
+        contact_force = 0.0 if raw_force is None else float(raw_force)
+        collision = bool(raw_collision) if raw_collision is not None else contact_force > self.collision_force_n
+        if not collision_measured:
+            collision = False
         reward, components = reach_reward(
             contract_action,
             next_observation,
@@ -528,9 +535,6 @@ class WbcGymEnv(gym.Env):
         self._success_time = self._success_time + self.control_dt if success else 0.0
         terminated = bool(backend_terminated) or (success and self._success_time >= self.success_hold_s)
         truncated = (not terminated) and self._elapsed >= self.horizon_s
-        action_mask = active_action_mask(next_observation, self.profile)
-        if self.hold_base:
-            action_mask[: self.profile.base.action_dim] = False
         info = {
             **info,
             "profile_fingerprint": self.profile.fingerprint,

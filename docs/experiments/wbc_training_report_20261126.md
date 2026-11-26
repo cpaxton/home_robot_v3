@@ -85,10 +85,11 @@ with the exact profile fingerprint and (after migration) the observation layout.
 
 ## 4. Results
 
-Held-out clean suite: 50 episodes per subtask, three fresh seeds. Rows except
-Mars are from the current layout-v3 evaluator with v2 checkpoints migrated
-(zero contact inputs, gripper-force columns rescaled). The Mars row is the
-original v2 gate; a v3 seed-30000 rerun matched 0.973.
+Held-out clean suite: 50 episodes per subtask, three fresh seeds. All rows are
+from the strict re-gate: v2 checkpoints are migrated to layout v3 (zero contact
+inputs, gripper-force columns rescaled), collisions are measured, and tracking
+is the settled-window mean. The previously reported Panda clean 0.996 row was
+not reproducible from the shipped checkpoint; it re-gates to **0.942**.
 
 | Robot | 30000 | 40000 | 50000 | Mean | Weak task |
 |---|---|---|---|---|---|
@@ -96,12 +97,27 @@ original v2 gate; a v3 seed-30000 rerun matched 0.973.
 | Stretch | 0.953 | 0.940 | 0.960 | **0.951** | arm |
 | Sourccey | 0.952 | 0.960 | 0.968 | **0.960** | combined_left |
 | RB-Y1 | 1.000 | 1.000 | 1.000 | **1.000** | combined_right |
+| PandaOmron (clean) | 0.947 | 0.973 | 0.907 | **0.942** | combined |
 | PandaOmron (robust) | 0.973 | 0.980 | 0.980 | **0.978** | combined |
 
-Panda coverage gate (strict, layout v3): `free_space_reach` and `base_arm`
-pass with 150 episodes per case; `hard_posture`, `shelf_entry`,
-`carry_payload`, and `contact_recovery` are planned/not gated. The gate result
-is generated with `scripts/emit_wbc_coverage.py` and consumed by
+Strict re-gate provenance (150 episodes per subtask, measured collisions,
+settled tracking):
+
+| Robot | Mean success | Collisions | Settled tracking mean | Gate |
+|---|---|---|---|---|
+| Mars | 0.956 | 0 | 0.008 m | multirobot pass |
+| Stretch | 0.951 | 1 | 0.012 m | multirobot pass (combined allows 1/150) |
+| Sourccey | 0.960 | 0 | 0.010 m | multirobot pass |
+| RB-Y1 | 1.000 | 0 | 0.009 m | multirobot pass |
+| PandaOmron (clean) | 0.942 | 0 | 0.014 m | fails combined `base_arm` (0.827 < 0.85) |
+| PandaOmron (robust) | 0.978 | 0 | 0.012 m | Panda gate pass |
+
+`configs/wbc/multirobot_cases.json` gates Mars, Stretch, Sourccey, and RB-Y1;
+`configs/wbc/pandaomron_cases.json` gates PandaOmron. `free_space_reach` and
+`base_arm` pass for the promoted policies; `hard_posture`, `shelf_entry`,
+`carry_payload`, and `contact_recovery` are planned/not gated. The clean Panda
+checkpoint is not promoted. Gate results are generated with
+`scripts/emit_wbc_coverage.py` and consumed by
 `python -m emet.rl.manipulation.wbc_coverage`.
 
 ## 5. RoboCasa reach adapter
@@ -145,11 +161,19 @@ needs:
   claim is retracted. `dagger_train` rejects non-train and empty hard-case
   files.
 - **Coverage gate schema.** The gate now rejects missing, non-scalar, or
-  non-finite metrics (NaN/Inf), missing tracking/duration, list-valued episode
-  counts, and invalid contact rates. `scripts/emit_wbc_coverage.py` converts
-  `eval_wbc_policy.py` and `eval_wbc_hard_cases.py` reports into strict
-  per-case rows; tracking is the settled final-step error, not a transient
-  average over the base stage.
+  non-finite metrics (NaN/Inf), missing tracking/duration/collisions,
+  list-valued episode counts, and invalid contact rates. There are no
+  zero-collision or zero-duration defaults. `scripts/emit_wbc_coverage.py`
+  converts `eval_wbc_policy.py` and `eval_wbc_hard_cases.py` reports into
+  strict per-case rows; tracking is the mean error over the last 10 steps
+  (0.5 s) after the first successful step (last 10 steps for a failed episode),
+  with final-step and max fields reported separately. Every row must certify
+  `collision_measured=True`.
+- **Collision measurement.** Stretch, Sourccey, RB-Y1, and RoboCasa now read
+  solved MuJoCo contacts instead of hardcoding `collision=False`. Wheel/caster
+  floor contacts are support; intentional hand-object contacts are not
+  collisions; chassis/arm contact and non-gripper self-collision are. The
+  direct Mars and Panda plants already had measured contact paths.
 - **Checkpoint compatibility.** Layout v3 added contact channels. `WbcPPO.load`
   migrates v2 checkpoints by remapping the first-layer observation columns and
   zeroing the new contact inputs; migrated checkpoints are marked in metadata.
