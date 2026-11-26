@@ -258,8 +258,9 @@ def test_backend_factory_routes_mujoco_and_robocasa():
     backend = make_wbc_backend("mars", sim="mujoco", seed=0)
     assert backend.profile.meta("robot") == "innate_mars"
     backend.close()
-    with pytest.raises(NotImplementedError, match="packaged direct-MuJoCo"):
-        make_wbc_backend("pandaomron", sim="mujoco")
+    panda = make_wbc_backend("pandaomron", sim="mujoco", seed=0)
+    assert panda.profile.meta("robot") == "pandaomron"
+    panda.close()
     with pytest.raises(NotImplementedError, match="not registered"):
         make_wbc_backend("rby1", sim="robocasa")
     with pytest.raises(ValueError, match="unknown WBC simulator"):

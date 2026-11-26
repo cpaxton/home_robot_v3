@@ -81,14 +81,14 @@ WBC_ROBOTS: dict[str, WbcRobot] = {
     "pandaomron": WbcRobot(
         "pandaomron",
         pandaomron_sim_profile,
-        False,
+        True,
         "PandaOmron",
-        "RoboCasa Omron + Panda composition; direct MJCF is not packaged.",
+        "RoboCasa Omron + Panda composition with a direct composed MuJoCo plant.",
     ),
     "panda_omron": WbcRobot(
         "pandaomron",
         pandaomron_sim_profile,
-        False,
+        True,
         "PandaOmron",
         "Alias for pandaomron.",
     ),

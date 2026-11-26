@@ -14,7 +14,7 @@ This is simulator-only.
 | Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | base only (1/3) | not run |
 | Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 3/3 | 8 iterations, 0.33 |
 | RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 3/3 | 8 iterations, 0.33 |
-| PandaOmron | `pandaomron_sim_profile()` | none packaged | not run | RoboCasa hook only |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | base teacher 5/5; arm not settled | none |
 
 Teacher smoke is one episode per subtask (`arm`, `base`, `combined`), not a
 qualified result. Sourccey/RB-Y1 DAgger used the Mars-scale 4k teacher / 2k
@@ -32,6 +32,11 @@ actor / 40 epoch / 8 iteration configuration.
   4-DOF torso, two 6-DOF arms, two grippers.
 - `pandaomron_sim_profile()`: Omron holonomic base, 1-DOF torso, 7-DOF Panda
   arm, two-finger gripper.
+- `wbc_pandaomron.py`: composes the Robosuite Omron base + Panda arm + gripper
+  into a direct MuJoCo model. The arm/torso are torque motors, so the plant uses
+  `TorqueAdapter`; the base is velocity-controlled. The visual floor is
+  collision-disabled because the Omron base has no wheels and otherwise pins
+  against the floor.
 
 ## Observed limitations
 
@@ -46,9 +51,11 @@ actor / 40 epoch / 8 iteration configuration.
 - **RB-Y1:** the packaged wheels are visual-only; the backend adds wheel
   collision proxies and a steer/wheel swerve mapping. The direct plant is a
   training proxy, not RoboCasa benchmark parity.
-- **PandaOmron:** no packaged direct MJCF; RoboCasa composes Omron + Panda and
-  uses an OSC/JOINT_POSITION composite controller. The hook is registered but
-  no adapter or policy exists yet.
+- **PandaOmron:** direct model is composed from Robosuite assets; the Omron
+  base teacher passes 5/5, but the torque PD arm teacher still oscillates
+  around the orientation/position tolerance. RoboCasa's benchmark composite
+  controller is OSC/JOINT_POSITION; the adapter and trained policy do not exist
+  yet.
 
 ## Next experiments
 

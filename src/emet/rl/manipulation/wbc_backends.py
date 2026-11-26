@@ -31,6 +31,10 @@ def make_direct_mujoco_backend(robot: str, **kwargs: Any):
         from emet.rl.manipulation.wbc_rby1 import Rby1WbcBackend
 
         return Rby1WbcBackend(**kwargs)
+    if key == "pandaomron":
+        from emet.rl.manipulation.wbc_pandaomron import PandaOmronWbcBackend
+
+        return PandaOmronWbcBackend(**kwargs)
     raise NotImplementedError(
         f"{key} has no packaged direct-MuJoCo WBC plant; use the RoboCasa hook or add an MJCF adapter"
     )

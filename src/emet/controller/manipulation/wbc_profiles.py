@@ -430,6 +430,7 @@ def pandaomron_sim_profile() -> EmbodimentProfile:
                 0.2,
                 2000.0,
                 kind="prismatic",
+                control_mode="torque",
                 kp_eff=1000.0,
                 kd_eff=200.0,
                 max_lead=0.02,
@@ -445,7 +446,7 @@ def pandaomron_sim_profile() -> EmbodimentProfile:
         (-0.0175, 3.7525),
         (-2.8973, 2.8973),
     )
-    panda_torque = (87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0)
+    panda_torque = (80.0, 80.0, 80.0, 80.0, 12.0, 12.0, 12.0)
     arm = JointGroupSpec(
         name="panda_arm",
         role="arm",
@@ -455,6 +456,7 @@ def pandaomron_sim_profile() -> EmbodimentProfile:
                 panda_limits[index],
                 2.0,
                 panda_torque[index],
+                control_mode="torque",
                 kp_eff=1000.0,
                 kd_eff=200.0,
                 max_lead=0.05,
@@ -475,7 +477,7 @@ def pandaomron_sim_profile() -> EmbodimentProfile:
                 gripper=GripperSpec(
                     name="right_gripper",
                     joint_names=("panda_finger_joint1", "panda_finger_joint2"),
-                    command_limits=((0.0, 0.04), (0.0, 0.04)),
+                    command_limits=((0.0, 0.04), (-0.04, 0.0)),
                 ),
             ),
         ),

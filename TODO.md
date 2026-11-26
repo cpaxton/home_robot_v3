@@ -1283,8 +1283,10 @@ position-servo actuator adapter.
 - [ ] Wire the adapter into the robot-side WBC transport.
 - [x] Sim-matched profiles for Mars, Stretch, Sourccey, RB-Y1 (Galaxea R1 proxy), and PandaOmron, with registry/MJCF validation.
 - [x] Direct-MuJoCo WBC plant adapters for Stretch/Sourccey/RB-Y1; Stretch/Sourccey/RB-Y1 backend sim tests pass.
+- [x] PandaOmron direct-MuJoCo plant composed from Robosuite Omron + Panda assets; base teacher passes.
 - [ ] Stretch arm teacher: PD arm tracking does not settle to the contract tolerance; needs IK/feedforward or a longer/looser curriculum.
-- [ ] Robot-parameterized DAgger runs for Sourccey/RB-Y1; smoke runs in progress.
+- [ ] PandaOmron arm teacher: torque PD oscillates around the orientation/position tolerance; needs a computed-torque/IK teacher.
+- [ ] Robot-parameterized DAgger runs for Sourccey/RB-Y1 plateau at base-only 0.33; single-arm/high-DOF curriculum needed.
 - [ ] RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint contract; hooks fail closed until registered.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.

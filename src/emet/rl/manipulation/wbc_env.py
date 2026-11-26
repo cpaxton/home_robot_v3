@@ -364,6 +364,8 @@ class WbcGymEnv(gym.Env):
             raise ValueError("environment timings must be positive and thresholds nonnegative")
         if success_hold_s > horizon_s:
             raise ValueError("success hold cannot exceed the episode horizon")
+        if adapter is None:
+            adapter = getattr(backend, "preferred_adapter", None)
         self.adapter = adapter if adapter is not None else PositionServoAdapter(self.profile)
         if self.adapter.profile != self.profile:
             raise ValueError("adapter profile does not match backend profile")
