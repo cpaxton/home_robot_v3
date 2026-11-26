@@ -52,6 +52,21 @@ def test_feedback_must_arrive_after_the_partial_tool_result(runner, monkeypatch,
         runner.wait_partial(SimpleNamespace(poll=lambda: 1), tmp_path, float('inf'))
 
 
+def test_terminal_refusal_finishes_without_waiting_for_partial(runner, monkeypatch, tmp_path):
+    import json
+
+    from emet.controller.task.tamp.api import response
+
+    receipt = response("execute_task_plan", status="error", code="unknown_plan")
+    failed = {"role": "tool", "content": "[execute_task_plan] " + json.dumps(receipt)}
+    feedback = {"role": "assistant", "forced_final": True, "content": "Execution refused."}
+    monkeypatch.setattr(runner, "rows_at", lambda _: [failed, feedback])
+    poll = Mock(return_value=None)
+    with pytest.raises(RuntimeError, match="unexpected_terminal_feedback:execute_task_plan:unknown_plan"):
+        runner.wait_partial(SimpleNamespace(poll=poll), tmp_path, float("inf"))
+    poll.assert_not_called()
+
+
 def test_fault_bootstrap_requires_native_simulation(monkeypatch, tmp_path):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'scripts'))
     bootstrap = importlib.import_module('tamp_partial_agent_bootstrap')

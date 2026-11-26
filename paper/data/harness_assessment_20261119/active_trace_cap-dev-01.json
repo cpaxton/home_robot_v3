@@ -1,0 +1,98 @@
+{
+  "source_sha": "c9a8cf413aa181be61d2538359a68e11805aec6f",
+  "episode_id": "cap-dev-01",
+  "frames": [
+    {
+      "tag": "initial",
+      "path": "/tmp/emet-harness-run-20261119/active-cap-dev-01/cap-dev-01/initial.png",
+      "sha256": "6081d33eb08986ea9d30be23d0781f856e47e0a8bcd2a126d7d1646e5c660bc2",
+      "image_timing": {
+        "head_cam_left": {
+          "timestamp_ns": 100645390271476,
+          "clock_domain": "mujoco_render_monotonic",
+          "clock_id": "3b9b65c96005535b8306cf53ad916f321f432a4b36f218b27c88dbeebd244179",
+          "source": "renderer_scene_capture",
+          "available": true,
+          "capture_interval_ns": [
+            100645390271476,
+            100645456813020
+          ],
+          "depth_capture_interval_ns": [
+            100645484273742,
+            100645490322004
+          ]
+        }
+      }
+    },
+    {
+      "tag": "turn-3-after",
+      "path": "/tmp/emet-harness-run-20261119/active-cap-dev-01/cap-dev-01/turn-3-after.png",
+      "sha256": "972f4f491021322c2b55258be6b4cc8406420345f6f2210f96e0dee951e86582",
+      "image_timing": {
+        "head_cam_left": {
+          "timestamp_ns": 100699628136488,
+          "clock_domain": "mujoco_render_monotonic",
+          "clock_id": "3b9b65c96005535b8306cf53ad916f321f432a4b36f218b27c88dbeebd244179",
+          "source": "renderer_scene_capture",
+          "available": true,
+          "capture_interval_ns": [
+            100699628136488,
+            100699688150620
+          ],
+          "depth_capture_interval_ns": [
+            100699717444064,
+            100699724455115
+          ]
+        }
+      }
+    }
+  ],
+  "frame": "world",
+  "measured_xyt": [
+    [
+      1.1916880352789156,
+      0.001690365405983762,
+      0.007443954676143847
+    ],
+    [
+      1.19168803539816,
+      0.0016903652292720006,
+      0.0074439516260719095
+    ],
+    [
+      1.191688024038689,
+      0.0016903630968547918,
+      0.007443853897588077
+    ],
+    [
+      1.191688023435388,
+      0.0016903630870529175,
+      0.007443850684159322
+    ],
+    [
+      1.191687962716187,
+      0.0016903634570188063,
+      0.007443532877295628
+    ],
+    [
+      1.191687962612787,
+      0.0016903634574838365,
+      0.007443532331158623
+    ],
+    [
+      1.1916879452372275,
+      0.0016903635186772497,
+      0.007443440369820517
+    ]
+  ],
+  "measured_tags": [
+    "initial",
+    "turn-1-before",
+    "turn-1-after",
+    "turn-2-before",
+    "turn-2-after",
+    "turn-3-before",
+    "turn-3-after"
+  ],
+  "requests": "/tmp/emet-harness-run-20261119/active-cap-dev-01/cap-dev-01/model_requests"
+}

@@ -1,0 +1,100 @@
+[
+  {
+    "case_id": "cap-dev-01",
+    "frames": [
+      {
+        "index": 0,
+        "rgb": "cap-dev-01/rgb-0.png",
+        "sha256": "d86ff0cf25ff7ae432b8a01da1bf55b05c8f3852c6cf95b046f64343c6bf74b8"
+      },
+      {
+        "index": 1,
+        "rgb": "cap-dev-01/rgb-1.png",
+        "sha256": "15616fd15aafc2bebb6fdbdc9e347a427811a737b9ababb99f21146a824031e9"
+      }
+    ],
+    "responses": {
+      "full_history": {
+        "episode_id": "cap-dev-01",
+        "family": "recall",
+        "arm": "full_history",
+        "reference_answer": "green",
+        "raw": "{\"answer\": \"green\", \"abstain\": false}",
+        "parsed": {
+          "answer": "green",
+          "abstain": false
+        },
+        "valid": true,
+        "correct": true,
+        "error": null,
+        "calls": 2,
+        "wall_s": 3.044261129005463
+      },
+      "current_only": {
+        "episode_id": "cap-dev-01",
+        "family": "recall",
+        "arm": "current_only",
+        "reference_answer": "green",
+        "raw": "{\"answer\": \"black\", \"abstain\": false}",
+        "parsed": {
+          "answer": "black",
+          "abstain": false
+        },
+        "valid": true,
+        "correct": false,
+        "error": null,
+        "calls": 1,
+        "wall_s": 1.866768713996862
+      }
+    }
+  },
+  {
+    "case_id": "cap-dev-02",
+    "frames": [
+      {
+        "index": 0,
+        "rgb": "cap-dev-02/rgb-0.png",
+        "sha256": "263d993da128ab1c5c77d5d3dcf78518027c8a645d0e72fb5f31adf1eed07e4a"
+      },
+      {
+        "index": 1,
+        "rgb": "cap-dev-02/rgb-1.png",
+        "sha256": "15616fd15aafc2bebb6fdbdc9e347a427811a737b9ababb99f21146a824031e9"
+      }
+    ],
+    "responses": {
+      "current_only": {
+        "episode_id": "cap-dev-02",
+        "family": "recall",
+        "arm": "current_only",
+        "reference_answer": "abstain",
+        "raw": "{\"answer\": \"black\", \"abstain\": false}",
+        "parsed": {
+          "answer": "black",
+          "abstain": false
+        },
+        "valid": true,
+        "correct": false,
+        "error": null,
+        "calls": 1,
+        "wall_s": 1.866848937002942
+      },
+      "full_history": {
+        "episode_id": "cap-dev-02",
+        "family": "recall",
+        "arm": "full_history",
+        "reference_answer": "abstain",
+        "raw": "{\"answer\": \"black\", \"abstain\": false}",
+        "parsed": {
+          "answer": "black",
+          "abstain": false
+        },
+        "valid": true,
+        "correct": false,
+        "error": null,
+        "calls": 2,
+        "wall_s": 2.99482418000116
+      }
+    }
+  }
+]

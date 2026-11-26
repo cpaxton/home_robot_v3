@@ -55,6 +55,12 @@ def wait_partial(proc, out, deadline):
                 final = next((r for r in rows[i+1:] if r.get('forced_final')), None)
                 if final:
                     return receipt, final
+        if any(row.get('forced_final') for row in rows):
+            failures = failure_boundaries(rows)
+            if failures:
+                failure = failures[-1]
+                raise RuntimeError(f"unexpected_terminal_feedback:{failure['tool']}:{failure['code']}")
+            raise RuntimeError('expected_partial_feedback_not_observed')
         if proc.poll() is not None:
             break
         time.sleep(.1)
