@@ -126,3 +126,11 @@ def test_default_subtask_windows_and_collection_weights():
     assert sourccey["base"].weight == pytest.approx(0.1)
     assert sourccey["combined_left"].weight == pytest.approx(0.3)
     assert sourccey["combined_right"].weight == pytest.approx(0.3)
+
+
+def test_default_subtasks_accepts_robot_aliases():
+    assert [task.name for task in default_subtasks("mars")] == [task.name for task in default_subtasks("innate_mars")]
+    assert [task.name for task in default_subtasks("rb_y1")] == [task.name for task in default_subtasks("rby1")]
+    assert [task.name for task in default_subtasks("panda_omron")] == [
+        task.name for task in default_subtasks("pandaomron")
+    ]

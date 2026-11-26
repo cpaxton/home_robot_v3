@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import numpy as np
 import pytest
+import torch
 
 from emet.controller.manipulation.wbc_contract import (
     ArmObservation,
@@ -25,8 +26,10 @@ from emet.controller.manipulation.wbc_contract import (
     WbcObservation,
     active_action_mask,
 )
+from emet.controller.manipulation.wbc_profiles import sourccey_sim_profile
 from emet.rl.manipulation.wbc_env import WbcGymEnv, encode_observation, wbc_observation_layout
 from emet.rl.manipulation.wbc_training import (
+    SCHEMA_VERSION,
     WbcActorCritic,
     WbcPPO,
     WbcPPOConfig,
@@ -327,10 +330,14 @@ def test_ppo_updates_and_checkpoint_round_trip(tmp_path):
         checkpoint_path=checkpoint_path,
         checkpoint_every=8,
         metrics_path=metrics_path,
+        checkpoint_metadata={"contract": {"horizon_s": 2.0}},
     )
     assert np.isfinite(list(metrics.values())).all()
     assert checkpoint_path.is_file()
     assert len(metrics_path.read_text(encoding="utf-8").splitlines()) == 2
+    periodic, periodic_metadata = WbcPPO.load(checkpoint_path, profile)
+    assert periodic_metadata["contract"] == {"horizon_s": 2.0}
+    assert periodic.steps_trained >= 8
 
     path = trainer.save(tmp_path / "policy.pt", env, metadata={"test": True})
     loaded, metadata = WbcPPO.load(path, profile)
@@ -347,3 +354,58 @@ def test_ppo_updates_and_checkpoint_round_trip(tmp_path):
     changed = replace(profile, name="fake_contract_robot_changed")
     with pytest.raises(ValueError, match="fingerprint"):
         WbcPPO.load(path, changed)
+
+
+def test_load_migrates_v2_observation_layout(tmp_path):
+    profile = sourccey_sim_profile()
+    old_layout = wbc_observation_layout(profile, include_contact=False)
+    new_layout = wbc_observation_layout(profile)
+    assert old_layout.size < new_layout.size
+    policy = WbcActorCritic(old_layout.size, profile.action_dim, hidden=8)
+    with torch.no_grad():
+        policy.actor[0].weight.zero_()
+        policy.critic[0].weight.zero_()
+        policy.actor[0].weight[0, old_layout.slices["arm.right.joint_position"]] = 1.0
+        policy.actor[0].weight[0, old_layout.slices["arm.right.gripper_force"]] = 1.0
+    payload = {
+        "format": WbcPPO.format,
+        "schema_version": SCHEMA_VERSION,
+        "observation_layout_version": 2,
+        "profile": profile.to_dict(),
+        "profile_fingerprint": profile.fingerprint,
+        "observation_size": old_layout.size,
+        "action_size": profile.action_dim,
+        "config": asdict(WbcPPOConfig(hidden=8)),
+        "steps_trained": 0,
+        "updates": 0,
+        "metadata": {"test": True},
+        "state_dict": {key: value.detach().cpu() for key, value in policy.state_dict().items()},
+        "optimizer_state": None,
+        "reference_actor_state": None,
+        "reference_log_std": None,
+    }
+    path = tmp_path / "v2_policy.pt"
+    torch.save(payload, path)
+    loaded, metadata = WbcPPO.load(path, profile)
+    assert loaded.policy.observation_size == new_layout.size
+    assert metadata["observation_layout_migrated_from"] == 2
+    weight = loaded.policy.actor[0].weight
+    assert torch.allclose(
+        weight[0, new_layout.slices["arm.right.joint_position"]],
+        torch.ones(5),
+    )
+    assert torch.allclose(weight[0, new_layout.slices["arm.right.gripper_force"]], torch.tensor([20.0]))
+    assert torch.count_nonzero(weight[0, new_layout.slices["arm.right.has_contact_state"]]) == 0
+    assert torch.count_nonzero(weight[0, new_layout.slices["arm.left.joint_position"]]) == 0
+
+
+def test_ppo_odd_total_steps_are_consumed():
+    env = WbcGymEnv(_FakeBackend(), horizon_s=2.0, control_dt=0.1, success_hold_s=0.1)
+    config = WbcPPOConfig(hidden=8, rollout_steps=2, epochs=1, batch_size=2, seed=0)
+    trainer = WbcPPO(
+        WbcActorCritic(env.observation_space.shape[0], env.action_space.shape[0], hidden=8),
+        config,
+    )
+    trainer.train(env, total_steps=3)
+    assert trainer.steps_trained == 3
+    env.close()

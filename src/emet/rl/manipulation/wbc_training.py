@@ -137,6 +137,36 @@ class WbcActorCritic(nn.Module):
         return torch.tanh(mean)
 
 
+def _expand_layout_weights(state_dict: dict, old_layout, new_layout) -> dict:
+    """Move v2 observation columns into the v3 layout, zeroing contact inputs.
+
+    v3 also normalizes the gripper-force channel by a fixed physical scale.
+    Rescaling the old column makes ``w_old * force == w_new * (force / scale)``
+    for a migrated policy.
+    """
+    from emet.rl.manipulation.wbc_env import GRIPPER_FORCE_SCALE_N
+
+    expanded: dict = {}
+    migrated = 0
+    for key, value in state_dict.items():
+        if key.endswith("0.weight") and torch.is_tensor(value) and value.ndim == 2:
+            if value.shape[1] != old_layout.size:
+                raise ValueError(f"{key} has {value.shape[1]} observation columns, expected {old_layout.size}")
+            weight = torch.zeros((value.shape[0], new_layout.size), dtype=value.dtype)
+            for name, _ in old_layout.fields:
+                if name not in new_layout.slices:
+                    raise ValueError(f"legacy layout field {name!r} is missing from the new layout")
+                scale = GRIPPER_FORCE_SCALE_N if name.endswith(".gripper_force") else 1.0
+                weight[:, new_layout.slices[name]] = value[:, old_layout.slices[name]] * scale
+            expanded[key] = weight
+            migrated += 1
+        else:
+            expanded[key] = value
+    if migrated == 0:
+        raise ValueError("v2 checkpoint has no first-layer observation weights to migrate")
+    return expanded
+
+
 class WbcPPO:
     """Single-environment PPO with a profile-checked checkpoint format."""
 
@@ -174,6 +204,7 @@ class WbcPPO:
         checkpoint_path: str | Path | None = None,
         checkpoint_every: int = 0,
         metrics_path: str | Path | None = None,
+        checkpoint_metadata: dict | None = None,
     ) -> dict[str, float]:
         """Train for *total_steps* additional steps from the current weights."""
         if type(total_steps) is not int or total_steps < 2:
@@ -192,8 +223,6 @@ class WbcPPO:
             Path(metrics_path).expanduser().parent.mkdir(parents=True, exist_ok=True)
         while completed < total_steps:
             remaining = total_steps - completed
-            if remaining < 2:
-                break
             steps = min(self.config.rollout_steps, remaining)
             rollout = {key: [] for key in ("observation", "next_observation", "action", "log_prob", "value", "reward")}
             episode_end = []
@@ -234,7 +263,11 @@ class WbcPPO:
                 self.save(
                     checkpoint_path,
                     env,
-                    metadata={"steps_trained": self.steps_trained, "updates": self.updates},
+                    metadata={
+                        "steps_trained": self.steps_trained,
+                        "updates": self.updates,
+                        **(checkpoint_metadata or {}),
+                    },
                 )
                 last_checkpoint = self.steps_trained
         if not history:
@@ -331,7 +364,7 @@ class WbcPPO:
             permutation = torch.randperm(len(actions), device=self.device)
             for start in range(0, len(actions), self.config.batch_size):
                 index = permutation[start : start + self.config.batch_size]
-                if len(index) < 2:
+                if len(index) < 1:
                     continue
                 log_prob, entropy, value = self.policy.evaluate(observations[index], actions[index])
                 ratio = (log_prob - old_log_prob[index]).exp()
@@ -407,9 +440,30 @@ class WbcPPO:
             raise ValueError("unsupported whole-body policy checkpoint format")
         if int(payload.get("schema_version", -1)) != SCHEMA_VERSION:
             raise ValueError("whole-body policy schema mismatch")
-        from emet.rl.manipulation.wbc_env import OBSERVATION_LAYOUT_VERSION
+        from emet.rl.manipulation.wbc_env import OBSERVATION_LAYOUT_VERSION, wbc_observation_layout
 
-        if int(payload.get("observation_layout_version", -1)) != OBSERVATION_LAYOUT_VERSION:
+        layout_version = int(payload.get("observation_layout_version", -1))
+        state_dict = payload["state_dict"]
+        optimizer_state = payload.get("optimizer_state")
+        reference_state = payload.get("reference_actor_state")
+        migrated_from = None
+        if layout_version == OBSERVATION_LAYOUT_VERSION:
+            observation_size = int(payload["observation_size"])
+        elif layout_version == 2 and OBSERVATION_LAYOUT_VERSION == 3:
+            old_layout = wbc_observation_layout(profile, include_contact=False)
+            new_layout = wbc_observation_layout(profile)
+            if int(payload["observation_size"]) != old_layout.size:
+                raise ValueError(
+                    "v2 checkpoint observation size does not match the legacy layout; "
+                    "occupancy-conditioned checkpoints need an explicit migration"
+                )
+            state_dict = _expand_layout_weights(state_dict, old_layout, new_layout)
+            if reference_state is not None:
+                reference_state = _expand_layout_weights(reference_state, old_layout, new_layout)
+            observation_size = new_layout.size
+            optimizer_state = None
+            migrated_from = 2
+        else:
             raise ValueError("whole-body policy observation layout mismatch")
         if payload.get("profile_fingerprint") != profile.fingerprint:
             raise ValueError("whole-body policy profile fingerprint mismatch")
@@ -417,14 +471,13 @@ class WbcPPO:
             raise ValueError("whole-body policy profile payload mismatch")
         config = WbcPPOConfig(**payload["config"])
         policy = WbcActorCritic(
-            int(payload["observation_size"]),
+            observation_size,
             int(payload["action_size"]),
             hidden=config.hidden,
         )
-        policy.load_state_dict(payload["state_dict"])
+        policy.load_state_dict(state_dict)
         policy.eval()
         trainer = cls(policy, config, device=device)
-        optimizer_state = payload.get("optimizer_state")
         if optimizer_state is not None:
             try:
                 trainer.optimizer.load_state_dict(optimizer_state)
@@ -437,7 +490,6 @@ class WbcPPO:
                     for key, value in list(state.items()):
                         if torch.is_tensor(value):
                             state[key] = value.to(trainer.device)
-        reference_state = payload.get("reference_actor_state")
         if reference_state is not None:
             trainer.reference_actor = copy.deepcopy(policy.actor).to(trainer.device)
             trainer.reference_actor.load_state_dict(reference_state)
@@ -450,7 +502,10 @@ class WbcPPO:
             trainer.reference_log_std = reference_log_std.to(trainer.device)
         trainer.steps_trained = int(payload.get("steps_trained", 0))
         trainer.updates = int(payload.get("updates", 0))
-        return trainer, dict(payload.get("metadata") or {})
+        metadata = dict(payload.get("metadata") or {})
+        if migrated_from is not None:
+            metadata["observation_layout_migrated_from"] = migrated_from
+        return trainer, metadata
 
 
 @torch.no_grad()
@@ -564,6 +619,8 @@ def main(argv: list[str] | None = None) -> int:
     if device == "cuda" and not torch.cuda.is_available():
         parser.error("CUDA requested but torch.cuda.is_available() is false")
     print(f"WBC device={device}", flush=True)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     from emet.rl.manipulation.wbc_env import WbcGymEnv
     from emet.rl.manipulation.wbc_mujoco import MuJoCoWbcBackend
@@ -582,9 +639,10 @@ def main(argv: list[str] | None = None) -> int:
     adapter = None
     if feedforward_path is not None:
         from emet.controller.manipulation.torque_adapter import PositionServoAdapter
-        from emet.controller.manipulation.wbc_feedforward import FeedforwardModel
+        from emet.controller.manipulation.wbc_feedforward import FeedforwardModel, single_calibration
 
         feedforward = FeedforwardModel.load(feedforward_path)
+        single_calibration(feedforward)
         stiffness = {
             joint.name: joint.kp_eff
             for group in backend.profile.joint_groups
@@ -628,7 +686,9 @@ def main(argv: list[str] | None = None) -> int:
         if trainer.policy.action_size != env.action_space.shape[0]:
             raise ValueError("resumed policy action size does not match the environment")
         previous_contract = resume_metadata.get("contract")
-        if previous_contract is not None and previous_contract != contract_config:
+        if previous_contract is None:
+            raise ValueError("resume checkpoint is missing the task contract; refusing an unverified resume")
+        if previous_contract != contract_config:
             raise ValueError(f"resumed task contract mismatch: {previous_contract} != {contract_config}")
         print(
             f"WBC resumed {args.resume} steps={trainer.steps_trained} updates={trainer.updates}",
@@ -695,6 +755,7 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_path=args.output / "checkpoint.pt" if args.checkpoint_every else None,
         checkpoint_every=args.checkpoint_every,
         metrics_path=metrics_path,
+        checkpoint_metadata={"contract": contract_config},
     )
     evaluation = evaluate_policy(policy, env, episodes=args.eval_episodes, seed=args.seed + 10_000)
     checkpoint = trainer.save(
