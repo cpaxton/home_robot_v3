@@ -118,17 +118,23 @@ block. The missing pieces are a provider and an encoder.
 
 ### Representation
 
-- **Initial map**: a static scene occupancy crop at reset, in the base frame.
-  It is generated from observed/known scene geometry, not object IDs or GT
-  poses. For direct MuJoCo training cases the crop comes from the case JSON.
-  For RoboCasa it comes from the live session's voxel/map crop.
-- **Resolution**: start with 0.05 m, crop 1.6 x 1.6 x 0.8 m -> `(32, 32, 16)`
+- **Initial map**: a static scene occupancy crop at reset. It is generated from
+  observed/known scene geometry, not object IDs or GT poses. For direct MuJoCo
+  training cases the crop comes from the case JSON/npz; for RoboCasa it comes
+  from the live session's voxel/map crop.
+- **Target-centered crop**: center on the active EE target (reach) or the
+  receptacle support target (shelf/carry), not only the base. This keeps the
+  shelf opening, frame, and payload clearance in the same local view.
+- **Resolution**: start at 0.04 m, crop 1.28 x 1.28 x 0.64 m -> `(32, 32, 16)`
   (16,384 cells). A 0.10 m `(16,16,8)` baseline is the cheap ablation.
-- **Frame**: the crop follows the base; `occupancy_origin` is transformed when
+- **Channels**: occupied (0/1), unknown (0/1), normalized ESDF/clearance.
+  The ESDF channel is the key feature for contact-aware torque control; raw
+  occupancy alone makes the policy learn clearance from scratch.
+- **Frame**: the crop follows the target; `occupancy_origin` is transformed when
   the base moves. The map is fixed for the episode in v1; live depth updates
-  are a later ablation, not a prerequisite.
-- **Unknown space**: explicit `unknown` value (e.g. 2), not free. The policy
-  must not treat unseen space as traversable.
+  are a later ablation.
+- **Unknown space**: explicit `unknown` channel, never free. The policy must not
+  treat unseen space as traversable.
 
 ### Encoder
 
@@ -136,19 +142,64 @@ The current `WbcActorCritic` is a flat MLP. Replace it with a multimodal
 encoder:
 
 ```text
-proprio vector ──► MLP ──┐
-                         ├─► shared features ─► actor / critic
-occupancy (1,H,W,D) ──► 3D CNN ──► global pool ┘
+proprio vector ──────────────► MLP ──┐
+                                     ├─► shared features ─► actor / critic
+occupancy (3,H,W,D) ─► 3D CNN ───────┘
 ```
 
-- 3D CNN: `Conv3d(1,16,3,stride=2) -> ELU -> Conv3d(16,32,3,stride=2) -> ELU ->
-  global average pool` (small; the crop is tiny).
-- The layout/checkpoint stores `occupancy_shape` and encoder kind; a checkpoint
-  without occupancy cannot be silently loaded into an occupancy policy.
+Recommended primary:
+
+- `Conv3d(3,16,3,stride=2) -> BN -> ELU`
+- `Conv3d(16,32,3,stride=2) -> BN -> ELU`
+- `Conv3d(32,64,3,stride=2) -> BN -> ELU`
+- global average + max pool -> 64 features
+- proprio MLP `2 x 128`; concat -> 192; actor/critic heads.
+- ~100k parameters; the 32x32x16 crop is small enough for a dense 3D CNN.
+
+Baselines/ablations:
+
+- **2.5D**: BEV heightmap + occupancy in 3-4 z bands + ESDF; 2D CNN. Cheaper,
+  but it loses overhangs/shelf cavities; useful as a sample-efficiency baseline.
+- **Tri-view**: BEV + xz + yz projections with a shared 2D CNN; captures shelf
+  cavities more cheaply than dense 3D but needs a projection convention.
+- **Sparse voxel/PointNet**: later option if the crop grows or resolution
+  increases.
+
+Pretraining:
+
+- Capture many initial maps from **procedural RoboCasa scenes** (layouts,
+  styles, seeds) and train the encoder with a masked-occupancy/clearance
+  auxiliary (predict held-out voxels or ESDF from a partial map). This is
+  self-supervised and uses no policy, object IDs, or GT poses.
+- Then fine-tune the encoder end-to-end with DAgger on free-space, hard-posture,
+  shelf, and carry cases. Freeze the encoder for the first policy BC stage if
+  data is limited; unfreeze for the family fine-tune.
+
+Checkpoint:
+
+- The layout/checkpoint stores `occupancy_shape`, channel order, encoder kind,
+  and crop frame. A checkpoint without occupancy cannot be silently loaded into
+  an occupancy policy.
 - The initial map is observed-only; the teacher may use privileged scene
-  geometry for labels, but the actor branch receives only the map.
-- Ablations: no map, map with unknown/free dropout, 0.1 m vs 0.05 m, static vs
-  live crop.
+  geometry for labels, but the actor branch receives only occupancy/ESDF.
+- Ablations: no map, map with unknown/free dropout, 0.1 m vs 0.04 m, target vs
+  base crop, static vs live crop.
+
+### Procedural capture
+
+Add a capture tool that:
+
+1. Generates RoboCasa kitchen scenes over a fixed layout/style/seed grid.
+2. Places the robot at the family's base reference (counter/sink/cabinet).
+3. Computes the initial target-centered occupancy/ESDF crop from scene
+   collision geometry.
+4. Saves the exact encoder input, origin/resolution, target/base, family, and
+   train/validation/test split to npz/JSON.
+5. Runs the encoder offline to cache features and evaluate reconstruction,
+   clearance prediction, and price/latency.
+
+Test scenes are held out by layout/style/seed; they are never used for encoder
+pretraining or policy DAgger. The same captures feed the coverage gate.
 
 ### Providers
 
