@@ -745,7 +745,7 @@ class KinematicPickPlaceExecutor:
             # loaded torso settles short; solving from the observed q finds the
             # posture that reaches the same target despite that droop.
             lo, hi = self._joint_position_bounds()
-            spec = getattr(self.robot, "_spec", None)
+            spec = getattr(getattr(self, "robot", None), "_spec", None)
             if bool(getattr(spec, "live_ik_correction", True)):
                 from emet.motion.mujoco_arm_ik import solve_position_ik
 
