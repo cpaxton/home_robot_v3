@@ -246,8 +246,26 @@ def _panda_omron_position_servos(xml: str) -> str:
     if actuator is None:
         return xml
     replaced = 0
+    torso_replaced = 0
     for elem in list(actuator):
         name = elem.get("name") or ""
+        if name == "mobilebase0_actuator_torso_height":
+            joint = elem.get("joint") or "mobilebase0_joint_torso_height"
+            new = ET.Element(
+                "position",
+                {
+                    "name": name,
+                    "joint": joint,
+                    "kp": "1000",
+                    "kv": "50",
+                    "ctrllimited": "true",
+                    "ctrlrange": joint_ranges.get(joint, "0 0.34"),
+                },
+            )
+            actuator.remove(elem)
+            actuator.append(new)
+            torso_replaced += 1
+            continue
         if not name.startswith("robot0_torq_j"):
             continue
         joint = elem.get("joint") or ""
@@ -266,8 +284,11 @@ def _panda_omron_position_servos(xml: str) -> str:
         actuator.remove(elem)
         actuator.append(new)
         replaced += 1
-    if replaced:
-        click.secho(f"Converted {replaced} Panda torque motors to position servos", fg="green")
+    if replaced or torso_replaced:
+        click.secho(
+            f"Converted {replaced} Panda torque motors and {torso_replaced} torso motor to position servos",
+            fg="green",
+        )
     return ET.tostring(root, encoding="unicode")
 
 
@@ -434,7 +455,9 @@ def model_generation_wizard(
         fg="green",
     )
 
-    if (use_strip_placeholder_robot or robot_key in ("panda_omron", "pandaomron")) and hasattr(env, "init_robot_base_pos"):
+    if (use_strip_placeholder_robot or robot_key in ("panda_omron", "pandaomron")) and hasattr(
+        env, "init_robot_base_pos"
+    ):
         pos = np.asarray(env.init_robot_base_pos, dtype=float).reshape(-1)
         yaw = 0.0
         if hasattr(env, "init_robot_base_ori"):

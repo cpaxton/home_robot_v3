@@ -104,8 +104,12 @@ class RobotSpec:
     default_arm: str = "left"
     live_ik_correction: bool = True
     grasp_lift_verify_tol_m: float = 0.08
-    placement_retract_m: float = 0.25
-    """Distance to pull the held object toward the base before placement base queries."""
+    placement_retract_m: float = 0.0
+    """Distance to pull the held object toward the base before placement base queries.
+
+    Opt-in: zero preserves the previous placement search for robots that do not
+    need the pre-retract. PandaOmron sets a nonzero value for its carry posture.
+    """
     """Object-center tolerance for the grasp lift check; round objects can sit off the EE TCP."""
     """Re-solve Cartesian IK from the measured posture when open-loop tracking misses.
 

@@ -91,11 +91,13 @@ def write_offline_mjcf_base_xyt(
     z: float | None = None,
     base_body_name: str | None = None,
 ) -> bool:
-    """Write world XYT into a standalone (unmerged) robot MJCF base.
+    """Write world XYT into a standalone or merged robot MJCF base.
 
     Prefers planar slide/hinge joints when all names resolve, otherwise a 7-DoF
-    freejoint. Values are **raw world XYT** — correct for vendored robot MJCFs, not
-    Robocasa-merged models (use :func:`emet.simulation.spawn_planar.write_planar_base_xyt`).
+    freejoint. With ``base_body_name`` the planar joints are solved through FK to
+    the requested world pose, which is required for RoboCasa-merged scenes with
+    transformed ancestors. Without it the values are written directly as raw
+    qpos, which is correct for standalone robot MJCFs.
     """
     x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
     names = tuple(str(n) for n in planar_joint_names) if planar_joint_names else ()
@@ -107,6 +109,12 @@ def write_offline_mjcf_base_xyt(
     if len(names) == 3:
         ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in names]
         if all(jid >= 0 for jid in ids):
+            if base_body_name is None:
+                # Standalone robot MJCF: the planar joints are already in the
+                # robot's world frame, so the raw XYT is the correct qpos.
+                for jid, value in zip(ids, (x, y, th), strict=True):
+                    data.qpos[int(model.jnt_qposadr[jid])] = float(value)
+                return True
             # Merged RoboCasa scenes place the planar base under a transformed
             # ancestor; solve the actual joint FK to world instead of writing raw
             # joint values (which would add the scene's 10 m merge offset).
@@ -119,7 +127,7 @@ def write_offline_mjcf_base_xyt(
                 world_x=x,
                 world_y=y,
                 world_yaw=th,
-                base_body_name=base_body_name or "base_link",
+                base_body_name=base_body_name,
             )
     if freejoint_name:
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(freejoint_name))
@@ -587,6 +595,28 @@ class KinematicPickPlaceExecutor:
             }
         return hold
 
+    def _actuator_for_joint(self, joint_name: str) -> str | None:
+        """Resolve the actuator that drives ``joint_name`` in the loaded model."""
+        names = self._actuator_names()
+        if joint_name in names:
+            return joint_name
+        model = self._model
+        if model is not None:
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(joint_name))
+            if jid >= 0:
+                for aid in range(model.nu):
+                    if model.actuator_trntype[aid] not in (
+                        mujoco.mjtTrn.mjTRN_JOINT,
+                        mujoco.mjtTrn.mjTRN_JOINTINPARENT,
+                    ):
+                        continue
+                    if int(model.actuator_trnid[aid, 0]) != jid:
+                        continue
+                    actuator = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aid)
+                    if actuator is not None and actuator in names:
+                        return str(actuator)
+        return None
+
     def _set_gripper(self, *, open_: bool) -> None:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
@@ -594,15 +624,13 @@ class KinematicPickPlaceExecutor:
         configuration = self.profile.gripper_open_configuration if open_ else ()
         if configuration:
             for name, value in configuration:
-                if name in names:
-                    hold[name] = float(value)
+                actuator = self._actuator_for_joint(name)
+                if actuator is not None:
+                    hold[actuator] = float(value)
         else:
-            keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
-            if not keys:
-                keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]
-            for k in keys:
-                if k in names:
-                    hold[k] = val
+            keys = [n for n in names if "gripper" in n.lower() or "finger" in n.lower() or "jaw" in n.lower()]
+            for key in keys:
+                hold[key] = val
         if hold:
             self.robot.set_actuator_positions(hold)
 
@@ -901,7 +929,7 @@ class KinematicPickPlaceExecutor:
             raise ValueError("placement_support_geometry_missing")
         return scene, payload, support_patches(patches)
 
-    def _retract_for_placement(self, distance_m: float = 0.25) -> bool:
+    def _retract_for_placement(self, distance_m: float = 0.0) -> bool:
         """Pull the held object toward the base before placement base queries.
 
         Placement base endpoints are checked against the robot's current posture.
@@ -959,9 +987,9 @@ class KinematicPickPlaceExecutor:
         if not self._sync_qpos_from_robot():
             raise ValueError("placement_" + (self._last_motion_failure or "missing_joint_state"))
         spec = self.robot._spec
-        self._retract_for_placement(
-            distance_m=float(getattr(spec, "placement_retract_m", 0.25) or 0.25)
-        )
+        retract_m = float(getattr(spec, "placement_retract_m", 0.0) or 0.0)
+        if retract_m > 0.0:
+            self._retract_for_placement(distance_m=retract_m)
         scene, payload, support = self._placement_geometry(body, receptacle)
         rotation = self._data.body(self.ee_body).xmat.reshape(3, 3).copy()
         from emet.motion.placement_surfaces import centers_lowest_first, free_surface_centers, support_patches

@@ -8,6 +8,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import hashlib
 import os
 import random
 import sys
@@ -66,14 +67,19 @@ def _load_default_scene_with_robot(robot_key: str):
     # Robot MJCFs may contain a standalone preview floor. The environment owns
     # the actual floor: two coplanar planes cause z-fighting and duplicate contacts.
     robot_tree = ET.parse(robot_path)
-    preview_planes = [(world, geom) for world in robot_tree.getroot().findall("worldbody")
-                      for geom in world.findall("geom") if geom.get("type") == "plane"]
+    preview_planes = [
+        (world, geom)
+        for world in robot_tree.getroot().findall("worldbody")
+        for geom in world.findall("geom")
+        if geom.get("type") == "plane"
+    ]
     robot_preview_path = None
     if preview_planes:
         for world, geom in preview_planes:
             world.remove(geom)
-        fd_robot, robot_preview_path = tempfile.mkstemp(suffix=".xml", prefix="robot_no_preview_floor_",
-                                                       dir=str(robot_path.parent))
+        fd_robot, robot_preview_path = tempfile.mkstemp(
+            suffix=".xml", prefix="robot_no_preview_floor_", dir=str(robot_path.parent)
+        )
         os.close(fd_robot)
         robot_tree.write(robot_preview_path, encoding="unicode")
         robot_abs = robot_preview_path
@@ -438,10 +444,30 @@ def main(
                 try:
                     import mujoco
 
-                    fd, scene_model_path = tempfile.mkstemp(prefix="emet_scene_", suffix=".mjb")
+                    # Content-address the client-side IK model instead of
+                    # leaking one mkstemp file per server launch. Remote clients
+                    # must share this directory (EMET_SCENE_MODEL_DIR) or the
+                    # session falls back to the scene XML / robot MJCF.
+                    cache_dir = Path(
+                        os.environ.get("EMET_SCENE_MODEL_DIR", Path.home() / ".cache" / "emet" / "scene_models")
+                    ).expanduser()
+                    cache_dir.mkdir(parents=True, exist_ok=True)
+                    fd, temporary = tempfile.mkstemp(prefix="emet_scene_", suffix=".mjb")
                     os.close(fd)
-                    mujoco.mj_saveModel(scene_model, scene_model_path)
-                    logger.info(f"Saved scene model for client-side IK: {scene_model_path}")
+                    try:
+                        mujoco.mj_saveModel(scene_model, temporary)
+                        digest = hashlib.sha256(Path(temporary).read_bytes()).hexdigest()[:20]
+                        cached = cache_dir / f"emet_scene_{digest}.mjb"
+                        if cached.exists():
+                            os.unlink(temporary)
+                        else:
+                            os.replace(temporary, cached)
+                        scene_model_path = str(cached)
+                        logger.info(f"Saved scene model for client-side IK: {scene_model_path}")
+                    except Exception:
+                        if os.path.exists(temporary):
+                            os.unlink(temporary)
+                        raise
                 except Exception as exc:
                     logger.warning(f"Could not save scene model for client-side IK: {exc}")
                     scene_model_path = None

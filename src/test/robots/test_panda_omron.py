@@ -2,8 +2,14 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
+import xml.etree.ElementTree as ET
+
+import mujoco
+
+from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
 from emet.motion.arm_manip_profile import ArmManipProfile
 from emet.robots import get_robot_spec
+from emet.simulation.stretch_mujoco.robocasa_gen import _panda_omron_position_servos
 
 
 def test_panda_omron_uses_the_scene_robot_and_right_arm():
@@ -28,3 +34,78 @@ def test_panda_omron_uses_the_scene_robot_and_right_arm():
         ("gripper0_right_finger_joint1", 0.04),
         ("gripper0_right_finger_joint2", -0.04),
     )
+    assert spec.placement_retract_m == 0.12
+
+
+def test_panda_gripper_configuration_resolves_to_actuators():
+    """The config is joint-named; _set_gripper must map it to actuator names."""
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="hand">
+              <joint name="gripper0_right_finger_joint1" type="slide" range="-0.04 0.04"/>
+              <geom name="finger1" type="box" size="0.01 0.01 0.01"/>
+              <joint name="gripper0_right_finger_joint2" type="slide" range="-0.04 0.04"/>
+              <geom name="finger2" type="box" size="0.01 0.01 0.01"/>
+            </body>
+          </worldbody>
+          <actuator>
+            <position name="gripper0_right_gripper_finger_joint1"
+                      joint="gripper0_right_finger_joint1" kp="1"/>
+            <position name="gripper0_right_gripper_finger_joint2"
+                      joint="gripper0_right_finger_joint2" kp="1"/>
+          </actuator>
+        </mujoco>
+        """
+    )
+
+    class _Robot:
+        _spec = get_robot_spec("panda_omron")
+
+        def __init__(self) -> None:
+            self.sent: dict[str, float] = {}
+
+        def get_joint_state(self, timeout=1.0):
+            return None, None, None
+
+        def set_actuator_positions(self, values):
+            self.sent = dict(values)
+
+    robot = _Robot()
+    executor = object.__new__(KinematicPickPlaceExecutor)
+    executor.robot = robot
+    executor.profile = ArmManipProfile.for_robot("panda_omron", arm="right")
+    executor._model = model
+    executor._data = mujoco.MjData(model)
+    executor.arm = "right"
+    executor._set_gripper(open_=True)
+    assert robot.sent == {
+        "gripper0_right_gripper_finger_joint1": 0.04,
+        "gripper0_right_gripper_finger_joint2": -0.04,
+    }
+
+
+def test_panda_torso_motor_becomes_a_position_servo():
+    xml = """
+    <mujoco>
+      <worldbody>
+        <body name="base">
+          <joint name="mobilebase0_joint_torso_height" type="slide" range="0 0.34"/>
+          <geom name="torso" type="box" size="0.1 0.1 0.1"/>
+        </body>
+      </worldbody>
+      <actuator>
+        <motor name="mobilebase0_actuator_torso_height"
+               joint="mobilebase0_joint_torso_height"/>
+      </actuator>
+    </mujoco>
+    """
+    converted = ET.fromstring(_panda_omron_position_servos(xml))
+    actuator = converted.find("actuator")
+    assert actuator is not None
+    torso = actuator.find("position[@name='mobilebase0_actuator_torso_height']")
+    assert torso is not None
+    assert torso.get("joint") == "mobilebase0_joint_torso_height"
+    assert torso.get("ctrlrange") == "0 0.34"
