@@ -100,6 +100,11 @@ uv run python scripts/stamp_wbc_contract.py \
   --output stamped_best.pt
 ```
 
+`eval_wbc_policy.py` / `eval_wbc_hard_cases.py` also accept
+`--allow-missing-contract` as an explicit escape hatch for an old artifact;
+the manifest records `contract_source=legacy_default_suite` (or
+`legacy_default_timing`). Prefer stamping so the stored contract is checked.
+
 ## 3. Adding a robot
 
 A robot needs a profile, a plant, and a registry entry.
