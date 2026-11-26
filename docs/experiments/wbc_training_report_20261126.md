@@ -113,6 +113,15 @@ reset-anchored robot frame, backs the chassis 0.45 m from the counter, and
 holds the torso height with a PD/bias servo. An 8 cm reach target tracks to
 **1.3 cm / 0.029 rad** in the kitchen scene.
 
+A privileged teacher now labels RoboCasa states: joint-space PD for sampled
+postures (0.48 cm / 0.0115 rad on a sampled target) and a Cartesian PD fallback
+through a finite-difference EE Jacobian for arbitrary task targets. A loaded
+20-episode reach sweep (joint targets ±0.15 rad) is **20/20** with position
+error mean **1.13 cm**, p95 **1.67 cm**, max **1.70 cm**; the 1.3 cm smoke is
+typical, not a marginal one-off. The sweep also writes an
+`observations`/`teacher_actions` dataset for BC/DAgger fine-tuning
+(`/tmp/opencode/wbc_robocasa_sweep_policy/loaded_data.npz`).
+
 This is a reach-tracking result, not task success. The benchmark task still
 needs:
 
