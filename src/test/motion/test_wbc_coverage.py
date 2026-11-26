@@ -209,7 +209,7 @@ def test_coverage_result_rejects_bad_values():
     assert result["episodes"] == 10
     with pytest.raises(ValueError, match="finite"):
         coverage_result(episodes=10, success_rate=float("nan"), tracking_error_m=0.02, duration_s=5.0)
-    with pytest.raises(ValueError, match="positive integer"):
+    with pytest.raises(ValueError, match="integer"):
         coverage_result(episodes=0, success_rate=0.9, tracking_error_m=0.02, duration_s=5.0)
 
 
@@ -243,6 +243,27 @@ def test_task_result_metrics_aggregate_seeds():
     assert row["tracking_error_m"] == pytest.approx(0.03)
     assert row["duration_s"] == pytest.approx(6.0)
     assert row["contact_state_rate"] == pytest.approx(0.75)
+
+    with pytest.raises(ValueError, match="integer"):
+        task_result_metrics(
+            {"1": {"arm": {"episodes": 10.5, "success_rate": 0.9, "tracking_error_m": 0.02, "duration_s": 5.0}}},
+            "arm",
+        )
+    with pytest.raises(ValueError, match="collisions"):
+        task_result_metrics(
+            {
+                "1": {
+                    "arm": {
+                        "episodes": 10,
+                        "success_rate": 0.9,
+                        "collisions": 11,
+                        "tracking_error_m": 0.02,
+                        "duration_s": 5.0,
+                    }
+                }
+            },
+            "arm",
+        )
 
 
 def test_hard_case_metrics_accepts_episode_list_and_fails_missing():

@@ -152,6 +152,15 @@ def _finite_scalar(
     return number, None
 
 
+def _integer_metric(value: Any, *, label: str, minimum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise ValueError(f"{label} must be an integer")
+    number = float(value)
+    if not math.isfinite(number) or not number.is_integer() or number < minimum:
+        raise ValueError(f"{label} must be an integer >= {minimum}")
+    return int(number)
+
+
 def coverage_result(
     *,
     episodes: int,
@@ -162,10 +171,10 @@ def coverage_result(
     contact_state_rate: float | None = None,
 ) -> dict[str, Any]:
     """Build the strict per-case metrics consumed by :func:`gate_report`."""
-    if type(episodes) is not int or episodes < 1:
-        raise ValueError("episodes must be a positive integer")
-    if type(collisions) is not int or collisions < 0 or collisions > episodes:
-        raise ValueError("collisions must be an integer in [0, episodes]")
+    episodes = _integer_metric(episodes, label="episodes", minimum=1)
+    collisions = _integer_metric(collisions, label="collisions", minimum=0)
+    if collisions > episodes:
+        raise ValueError("collisions must be in [0, episodes]")
     success = float(success_rate)
     tracking = float(tracking_error_m)
     duration = float(duration_s)
@@ -200,10 +209,17 @@ def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> d
         rows.append(row)
     if not rows:
         raise ValueError(f"no seed results for task {task!r}")
-    episodes = sum(int(row["episodes"]) for row in rows)
-    if episodes < 1:
-        raise ValueError(f"task {task!r} has no episodes")
-    weights = [int(row["episodes"]) / episodes for row in rows]
+    row_episodes = [
+        _integer_metric(row.get("episodes"), label=f"task {task!r} episodes", minimum=1) for row in rows
+    ]
+    row_collisions = [
+        _integer_metric(row.get("collisions", 0), label=f"task {task!r} collisions", minimum=0) for row in rows
+    ]
+    for seed, count, collisions in zip(seed_results, row_episodes, row_collisions, strict=True):
+        if collisions > count:
+            raise ValueError(f"seed {seed} has more collisions than episodes for task {task!r}")
+    episodes = sum(row_episodes)
+    weights = [count / episodes for count in row_episodes]
     contact = [row.get("contact_state_rate") for row in rows]
     contact_rate = (
         sum(weight * float(value) for weight, value in zip(weights, contact, strict=True))
@@ -213,7 +229,7 @@ def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> d
     return coverage_result(
         episodes=episodes,
         success_rate=sum(weight * float(row["success_rate"]) for weight, row in zip(weights, rows, strict=True)),
-        collisions=sum(int(row["collisions"]) for row in rows),
+        collisions=sum(row_collisions),
         tracking_error_m=sum(
             weight * float(row["tracking_error_m"]) for weight, row in zip(weights, rows, strict=True)
         ),
@@ -229,15 +245,13 @@ def hard_case_metrics(result: dict[str, Any]) -> dict[str, Any]:
     episodes_raw = result.get("episodes")
     if isinstance(episodes_raw, list):
         episodes = len(episodes_raw)
-    elif isinstance(episodes_raw, numbers.Real) and not isinstance(episodes_raw, bool):
-        episodes = int(episodes_raw)
     else:
-        raise ValueError("hard-case episodes must be a list or an integer")
+        episodes = _integer_metric(episodes_raw, label="hard-case episodes", minimum=1)
     contact = result.get("contact_state_rate")
     return coverage_result(
         episodes=episodes,
         success_rate=float(result["success_rate"]),
-        collisions=int(result.get("collisions", 0)),
+        collisions=_integer_metric(result.get("collisions", 0), label="hard-case collisions", minimum=0),
         tracking_error_m=float(result.get("tracking_error_m", float("inf"))),
         duration_s=float(result.get("duration_s", 0.0)),
         contact_state_rate=None if contact is None else float(contact),
