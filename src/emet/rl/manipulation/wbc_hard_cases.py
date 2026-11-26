@@ -180,7 +180,7 @@ def hard_cases_from_failure_records(
                 "error_m": attempt.get("error_m"),
             },
             scene={
-                key: context[key]
+                key: (attempt.get("op") if key == "op" else context[key])
                 for key in (
                     "robot_id",
                     "op",
@@ -193,7 +193,7 @@ def hard_cases_from_failure_records(
                     "scene",
                     "job_id",
                 )
-                if context.get(key) is not None
+                if (attempt.get("op") if key == "op" else context.get(key)) is not None
             },
         )
         cases.append(case)
