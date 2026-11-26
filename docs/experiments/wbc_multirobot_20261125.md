@@ -44,6 +44,10 @@ Multi-seed gate (50 episodes per subtask; aggregate success):
 | PandaOmron (clean) | 1.000 | 1.000 | 0.987 | 0.996 |
 | PandaOmron (robust) | 0.980 | 0.993 | 1.000 | 0.991 |
 
+A combined-weighted Mars retrain (6 s combined, 60% collection weight) reached
+0.956 mean (0.967/0.933/0.967), statistically the same as the retained 0.955.
+The original Mars 3 s/5 s and 40/20/40 protocol stays.
+
 Artifacts and the per-task breakdown are in
 `logs/eval/wbc_multirobot_20261126/` (`manifest.json`, checkpoints, held-out
 JSON). The per-robot policy is selected by a fresh gate, so the 30000 seed for
