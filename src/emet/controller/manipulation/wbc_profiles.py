@@ -20,7 +20,11 @@ The examples cover the four current families:
 
 from __future__ import annotations
 
+import json
 import math
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
 
 from emet.controller.manipulation.wbc_contract import (
     ArmSpec,
@@ -133,6 +137,60 @@ def example_mars_profile() -> EmbodimentProfile:
     )
 
 
+def mars_sim_profile() -> EmbodimentProfile:
+    """Mars profile matched to the retained MuJoCo position actuators.
+
+    This is a simulator profile, not a hardware identification. The example
+    profile intentionally keeps placeholder actuator fields; training against
+    MuJoCo must use the plant's actual ``kp``/``kv``/effort limits or the
+    torque-to-position-lead mapping is wrong by more than an order of magnitude.
+    """
+    from emet.rl.manipulation.profiles import PROFILES
+    from emet.rl.profile import MARS
+
+    base = example_mars_profile()
+    groups = []
+    for group in base.joint_groups:
+        joints = tuple(
+            replace(
+                joint,
+                kp_eff=MARS.arm_kp,
+                kd_eff=MARS.arm_kv,
+                torque_limit=MARS.arm_effort_limit,
+                velocity_limit=MARS.max_joint_speed,
+                max_lead=MARS.max_target_lead,
+            )
+            for joint in group.joints
+        )
+        groups.append(replace(group, joints=joints))
+    metadata = dict(base.metadata)
+    metadata.update(
+        {
+            "limits_source": "mujoco_position_servo",
+            "actuator_model": "retained_mujoco_kp80_kv4_effort2",
+        }
+    )
+    # World-frame EE goals let the sampled base goal actually assist reach.
+    grip_open = PROFILES["innate_mars"].gripper_open
+    arms = tuple(
+        replace(
+            arm,
+            target_frame="world",
+            gripper=(
+                arm.gripper if arm.gripper is None else replace(arm.gripper, command_limits=((-grip_open, grip_open),))
+            ),
+        )
+        for arm in base.arms
+    )
+    return replace(
+        base,
+        base=replace(base.base, velocity_limits=(MARS.max_v, MARS.max_w)),
+        joint_groups=tuple(groups),
+        arms=arms,
+        metadata=tuple(metadata.items()),
+    )
+
+
 def example_sourccey_profile() -> EmbodimentProfile:
     """Sourccey: planar base, lift torso, two 5-DOF arms, two grippers."""
     lift = JointGroupSpec(
@@ -177,13 +235,21 @@ def example_sourccey_profile() -> EmbodimentProfile:
                 name="left",
                 joint_group="left_arm",
                 ee_link="left_Gripper-Finger",
-                gripper=GripperSpec(name="left_gripper", joint_names=("left_gripper",)),
+                gripper=GripperSpec(
+                    name="left_gripper",
+                    joint_names=("left_gripper",),
+                    command_limits=((0.0, 1.0),),
+                ),
             ),
             ArmSpec(
                 name="right",
                 joint_group="right_arm",
                 ee_link="right_Gripper-Finger",
-                gripper=GripperSpec(name="right_gripper", joint_names=("right_gripper",)),
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("right_gripper",),
+                    command_limits=((0.0, 1.0),),
+                ),
             ),
         ),
         torso_group="lift",
@@ -238,6 +304,7 @@ def example_rby1_profile() -> EmbodimentProfile:
                 gripper=GripperSpec(
                     name="left_gripper",
                     joint_names=("left_gripper_finger_joint1", "left_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
                 ),
             ),
             ArmSpec(
@@ -247,6 +314,7 @@ def example_rby1_profile() -> EmbodimentProfile:
                 gripper=GripperSpec(
                     name="right_gripper",
                     joint_names=("right_gripper_finger_joint1", "right_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
                 ),
             ),
         ),
@@ -342,16 +410,97 @@ def example_stretch_profile() -> EmbodimentProfile:
                 name="primary",
                 joint_group="stretch_arm",
                 ee_link="link_grasp_center",
-                gripper=GripperSpec(name="primary_gripper", joint_names=("joint_gripper_slide",)),
+                gripper=GripperSpec(
+                    name="primary_gripper",
+                    joint_names=("joint_gripper_slide",),
+                    command_limits=((-0.020, 0.040),),
+                ),
             ),
         ),
         metadata=(("limits_source", _EXAMPLE), ("robot", "stretch")),
     )
 
 
+_ACTUATOR_FIELDS = frozenset(
+    {
+        "position_limit",
+        "velocity_limit",
+        "torque_limit",
+        "kind",
+        "control_mode",
+        "kp_eff",
+        "kd_eff",
+        "torque_constant",
+        "gear_ratio",
+        "current_limit",
+        "max_lead",
+    }
+)
+
+
+def apply_actuator_identification(
+    profile: EmbodimentProfile,
+    identification: dict[str, Any],
+) -> EmbodimentProfile:
+    """Return a profile with bench-identified per-joint actuator fields applied.
+
+    Identification JSON shape::
+
+        {"embodiment": "example_innate_mars",
+         "source": "bench-2026-12-01",
+         "joints": {"joint3": {"kp_eff": 12.3, "max_lead": 0.02}}}
+
+    Only joint-model fields are accepted. The function fails closed on unknown
+    joints/fields or a mismatched embodiment so a bench file cannot silently
+    alter an unrelated robot.
+    """
+    if not isinstance(identification, dict):
+        raise ValueError("actuator identification must be an object")
+    embodiment = identification.get("embodiment")
+    if embodiment is not None and str(embodiment) != profile.name:
+        raise ValueError(f"actuator identification embodiment {embodiment!r} != profile {profile.name!r}")
+    joints = identification.get("joints")
+    if not isinstance(joints, dict) or not joints:
+        raise ValueError("actuator identification must contain a non-empty joints object")
+    unknown = set(joints) - set(profile.controlled_joint_names)
+    if unknown:
+        raise ValueError(f"actuator identification references unknown joints: {sorted(unknown)}")
+
+    groups = []
+    for group in profile.joint_groups:
+        updated = []
+        for joint in group.joints:
+            raw = joints.get(joint.name)
+            if raw is None:
+                updated.append(joint)
+                continue
+            if not isinstance(raw, dict):
+                raise ValueError(f"actuator identification for {joint.name} must be an object")
+            extra = set(raw) - _ACTUATOR_FIELDS
+            if extra:
+                raise ValueError(f"unknown actuator fields for {joint.name}: {sorted(extra)}")
+            updated.append(replace(joint, **raw))
+        groups.append(replace(group, joints=tuple(updated)))
+
+    metadata = dict(profile.metadata)
+    source = identification.get("source")
+    if source:
+        metadata["actuator_identification"] = str(source)
+    return replace(profile, joint_groups=tuple(groups), metadata=tuple(metadata.items()))
+
+
+def load_actuator_identification(path: str | Path, profile: EmbodimentProfile) -> EmbodimentProfile:
+    """Load a JSON identification file and apply it to *profile*."""
+    data = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+    return apply_actuator_identification(profile, data)
+
+
 __all__ = [
+    "apply_actuator_identification",
     "example_mars_profile",
     "example_rby1_profile",
     "example_sourccey_profile",
     "example_stretch_profile",
+    "load_actuator_identification",
+    "mars_sim_profile",
 ]

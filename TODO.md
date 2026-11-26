@@ -1269,14 +1269,20 @@ arbitrary arm DOF; the policy action is per-arm joint torque with a separate
 position-servo actuator adapter.
 
 - [x] Multi-arm schema, vector layout, per-arm reward, example Mars/Sourccey/RB-Y1/Stretch profiles.
+- [x] Training-ready contract: profile serialization/fingerprint, base/torso targets and reward, normalized action space, occupancy metadata, geodesic orientation tolerance.
 - [x] Position-servo adapter with torque/current/lead clipping and fail-closed actuator fields.
 - [x] Case-library fingerprint includes embodiment/schema; generator emits multi-arm scenarios.
 - [x] External innate-os MuJoCo smoke: adapter vs direct torque, clipping, gravity, contact telemetry. See [innate-sim-validation.md](docs/plans/innate-sim-validation.md).
 - [x] Action-boundary `clamp_action` for base velocity, joint torque, and gripper limits; per-joint `control_mode`; current-limit fail-closed.
 - [x] Innate OS prototype: typed `ArmCommand`/`ArmState`, high-rate state, capability manifest, robot-side adapter, sim effort/contact parity. Fork `cpaxton/innate-os` branch `feat/torque-wbc-interface`; fork PR [cpaxton/innate-os#1](https://github.com/cpaxton/innate-os/pull/1); not hardware-tested. See [innate-os-wbc-interface.md](docs/plans/innate-os-wbc-interface.md).
-- [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits).
-- [ ] Wire the adapter into the robot-side WBC transport and a MuJoCo servo model.
-- [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline.
+- [x] True-torque adapter and bounded example gripper command channels.
+- [x] Contract-native Gym env, adapter-matched Mars MuJoCo backend, PPO trainer, profile-fingerprinted checkpoint, CUDA selection, resumable optimizer/metrics state, optional privileged-teacher BC warm start, BC-checkpoint eval, and BC-KL anchoring during PPO.
+- [x] Failure-record feedforward fit + bench-identification profile patch loader.
+- [x] DAgger subtask suite (arm/base/combined), actor-visited privileged labels, per-task evaluation, and best-checkpoint selection.
+- [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits). The tooling is in place; the hardware sweep remains.
+- [ ] Wire the adapter into the robot-side WBC transport.
+- [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
+  - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.
 - [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
 
 ## TAMP agent execution follow-up (2026-09-29)

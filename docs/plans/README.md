@@ -43,7 +43,7 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 - **[2026-11-11_interaction_memory.md](2026-11-11_interaction_memory.md)** – Proposed MessyMem-informed interaction beliefs, persistent keyframe retrieval, dynamic invalidation, and matched GPT/Qwen evaluation; no runtime/results claim.
 
 - **[ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md)** – Multi-robot, multi-simulator refactor (emet rename, robots/simulators abstraction).
-- **[whole-body-rl-control.md](whole-body-rl-control.md)** – Multi-arm torque contract (schema v2), actuator adapter, bench identification, and training/acceptance plan.
+- **[whole-body-rl-control.md](whole-body-rl-control.md)** – Multi-arm torque contract (schema v2), actuator adapters, calibration, contract-native Gym/MuJoCo/PPO wiring, and training/acceptance plan.
 - **[robocasa_benchmark_landing_20261126.md](robocasa_benchmark_landing_20261126.md)** – Landing order for the PandaOmron RoboCasa bring-up, old-benchmark regression tiers, and the new task gate.
 - **[innate-os-wbc-interface.md](innate-os-wbc-interface.md)** – Mars/innate-os interface review: torque/current capabilities, contact state, sim parity, and multi-robot boundary.
 - **[innate-sim-validation.md](innate-sim-validation.md)** – External innate-os MuJoCo harness for the torque→position-servo adapter and contact telemetry.
