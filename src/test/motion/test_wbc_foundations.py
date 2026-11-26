@@ -44,11 +44,14 @@ from emet.controller.manipulation.wbc_profiles import (
     example_stretch_profile,
     load_actuator_identification,
     mars_sim_profile,
+    pandaomron_sim_profile,
     rby1_sim_profile,
     sim_profile,
     sourccey_sim_profile,
     stretch_sim_profile,
 )
+from emet.controller.manipulation.wbc_robots import get_wbc_robot, wbc_profile_for
+from emet.rl.manipulation.wbc_backends import make_wbc_backend
 
 
 def _observation(profile, *, targets=None, ee_poses=None, failure_mode="", base_target=None, torso_target=None):
@@ -141,6 +144,11 @@ def test_example_profiles_have_bounded_action_channels():
         example_sourccey_profile(),
         example_rby1_profile(),
         example_stretch_profile(),
+        mars_sim_profile(),
+        stretch_sim_profile(),
+        sourccey_sim_profile(),
+        rby1_sim_profile(),
+        pandaomron_sim_profile(),
     ):
         lower, upper = action_bounds(profile)
         assert np.isfinite(lower).all()
@@ -226,6 +234,54 @@ def test_sim_profiles_match_packaged_robot_models():
     assert sourccey_sim_profile().action_dim == 15
     assert rby1_sim_profile().action_dim == 23
     assert rby1_sim_profile().base.kind == "holonomic"
+
+
+def test_robot_registry_and_pandaomron_hook():
+    assert sim_profile("pandaomron").name == "pandaomron_sim"
+    panda = pandaomron_sim_profile()
+    assert panda.base.kind == "holonomic"
+    assert panda.action_dim == 3 + 1 + 7 + 2
+    assert panda.arms[0].ee_link == "right_hand"
+    assert panda.arms[0].gripper.joint_names == ("panda_finger_joint1", "panda_finger_joint2")
+
+    mars = get_wbc_robot("mars")
+    assert mars.name == "innate_mars"
+    assert mars.direct_mujoco is True
+    assert wbc_profile_for("mars").name == "example_innate_mars"
+    assert get_wbc_robot("rb-y1").name == "rby1"
+    assert get_wbc_robot("panda_omron").robocasa_robot == "PandaOmron"
+    with pytest.raises(KeyError, match="unknown WBC robot"):
+        get_wbc_robot("not_a_robot")
+
+
+def test_backend_factory_routes_mujoco_and_robocasa():
+    backend = make_wbc_backend("mars", sim="mujoco", seed=0)
+    assert backend.profile.meta("robot") == "innate_mars"
+    backend.close()
+    with pytest.raises(NotImplementedError, match="packaged direct-MuJoCo"):
+        make_wbc_backend("pandaomron", sim="mujoco")
+    with pytest.raises(NotImplementedError, match="not registered"):
+        make_wbc_backend("rby1", sim="robocasa")
+    with pytest.raises(ValueError, match="unknown WBC simulator"):
+        make_wbc_backend("mars", sim="gazebo")
+
+
+def test_robocasa_hooks_fail_closed_then_register():
+    from emet.rl.manipulation.wbc_robocasa import (
+        make_robocasa_backend,
+        register_robocasa_backend,
+        robocasa_hook,
+    )
+
+    hook = robocasa_hook("panda_omron")
+    assert hook.robocasa_robot == "PandaOmron"
+    assert hook.available is False
+    with pytest.raises(NotImplementedError, match="not registered"):
+        make_robocasa_backend("pandaomron")
+
+    register_robocasa_backend("pandaomron", lambda **kwargs: ("adapter", kwargs))
+    assert robocasa_hook("pandaomron").available is True
+    assert make_robocasa_backend("pandaomron", seed=3) == ("adapter", {"seed": 3})
 
 
 def test_actuator_identification_patch_is_validated_and_loaded(tmp_path):
