@@ -79,13 +79,13 @@ uv run python scripts/eval_wbc_policy.py \
   --robot pandaomron \
   --checkpoint logs/eval/wbc_multirobot_20261126/pandaomron/best.pt \
   --output /tmp/wbc_regression/pandaomron \
-  --episodes 2 --seeds 30000 --device cpu
+  --episodes 2 --seeds 30000 --device cpu --allow-missing-contract
 
 uv run python scripts/eval_wbc_policy.py \
   --robot mars \
   --checkpoint logs/eval/wbc_multirobot_20261126/mars/best.pt \
   --output /tmp/wbc_regression/mars \
-  --episodes 2 --seeds 30000 --device cpu
+  --episodes 2 --seeds 30000 --device cpu --allow-missing-contract
 ```
 
 - Smoke: no load error, no crash, finite metrics, `contact_state_rate == 1.0`.
@@ -96,6 +96,13 @@ uv run python scripts/eval_wbc_policy.py \
   aggregate may not drop more than **0.02**, and no task may drop more than
   **0.05**, without an explicit explanation in the PR. A migrated v2 checkpoint
   sees zero contact inputs; it is not evidence for contact-aware control.
+- New checkpoints embed the task contract; `--allow-missing-contract` is only
+  for legacy layout-v2 artifacts. Without it, a mismatched target range, base
+  goal probability, hold-base flag, or subtask set is refused.
+- **Collision availability is measured only for Mars and direct Panda.** Stretch,
+  Sourccey, RB-Y1, and the RoboCasa adapter report `collision_measured=False`
+  rather than a false zero; do not gate `max_collision_rate` on those plants
+  until a contact monitor is wired. Panda active cases have measured contact.
 
 Also run the touched-controller pack:
 
@@ -212,6 +219,9 @@ farther object/cabinet target exits the reach tolerance.
   pass.
 - **Migrated v2 checkpoints have zero contact inputs.** They are compatibility
   baselines, not contact-aware policies.
+- **Unmeasured collision is not zero collision.** Stretch/Sourccey/RB-Y1 and the
+  RoboCasa adapter currently expose `collision_measured=False`; their reports
+  must fail a collision gate instead of passing it.
 - **The hard-posture train split is empty.** Records 014–018 were successful
   grasp attempts from place failures; `hard_posture` stays `planned` until a
   valid `reached=False` split is regenerated.
