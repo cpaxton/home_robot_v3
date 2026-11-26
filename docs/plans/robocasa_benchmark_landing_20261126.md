@@ -35,7 +35,7 @@ Rules:
 | rby1 RoboCasa sink | old | verified sink pick-place; `configs/sim/robocasa_pick_place_rby1_sink.yaml` | Run before claiming RoboCasa regression-free. |
 | TAMP clutter GT+MCTS battery | old | `docs/experiments/tamp_clutter.md`; 24-case battery | Benchmark refresh, not every PR. |
 | OVMM / HM-EQA paper rows | old | `docs/paper_benchmarks.md` | Only when shared agent/memory/TAMP paths change; declared refresh. |
-| PandaOmron RoboCasa reach | new | `docs/experiments/wbc_robocasa_20261126.md`; 1.3 cm / 0.029 rad | Adapter smoke; not task success. |
+| PandaOmron RoboCasa reach | new | `docs/experiments/wbc_robocasa_20261126.md`; 1.3 cm / 0.029 rad smoke; 20/20 loaded sweeps (1.13 cm joint, 0.87 cm Cartesian mean) | Adapter/reach gate; not task success. |
 | PandaOmron RoboCasa pick-place | new | not yet green | Task gate below. |
 
 “Old benchmarks” here means the existing WBC clean suite, the TAMP contract suite,
@@ -124,6 +124,12 @@ NEED_MIB=12000 uv run emet jobs run --name robocasa-panda-reach --need-mib 12000
   uv run python scripts/smoke_wbc_robocasa_panda.py \
   --checkpoint logs/eval/wbc_multirobot_20261126/pandaomron/best.pt \
   --backoff 0.45 --layout 1 --style 1
+
+# Loaded reach sweep (joint targets or Cartesian offsets)
+NEED_MIB=12000 uv run emet jobs run --name robocasa-panda-sweep --need-mib 12000 -- \
+  uv run python scripts/sweep_wbc_robocasa_panda.py \
+  --checkpoint logs/eval/wbc_multirobot_20261126/pandaomron/best.pt \
+  --target-mode offset --episodes 20 --output /tmp/wbc_robocasa_sweep
 ```
 
 Acceptance:
@@ -145,18 +151,27 @@ with a paper row.
 ### Phase A — reach adapter (done)
 
 `RoboCasaPandaBackend` drives the native PandaOmron `PickPlaceCounterToCabinet`
-scene and tracks a free-space target. Evidence: 1.3 cm / 0.029 rad, no final-step
-kitchen contact.
+scene and tracks a free-space target. Evidence: 1.3 cm / 0.029 rad smoke; a
+20-episode loaded joint-target sweep is 20/20 at 1.13 cm mean / 1.67 cm p95,
+and a 20-episode Cartesian-offset sweep is 20/20 at 0.87 cm mean / 1.54 cm p95.
+This is reach tracking, not task success.
+
+The backend now also has a privileged joint-PD teacher with gravity bias and a
+Cartesian PD fallback, plus `scripts/sweep_wbc_robocasa_panda.py` for loaded
+scene sweeps and NPZ teacher labels. Use those labels for BC/DAgger only if a
+farther object/cabinet target exits the reach tolerance.
 
 ### Phase B — task-target bridge
 
 - Feed object/receptacle/grasp targets from the task/TAMP layer into
-  `set_ee_target`.
+  `set_ee_target`; the Cartesian PD teacher already supports arbitrary world
+  poses.
 - Feed base goals for counter approach and retreat.
 - Keep the actor on measured observations; GT task targets may be teacher-side
   only and must be tagged.
 - Gate: target reaches the pre-grasp pose without contact in both
-  `PickPlaceCounterToSink` and `PickPlaceCounterToCabinet`.
+  `PickPlaceCounterToSink` and `PickPlaceCounterToCabinet`; run a farther-target
+  sweep and fine-tune from the saved NPZ only if the tail crosses 2 cm.
 
 ### Phase C — carry, contact, and place
 

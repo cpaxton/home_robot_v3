@@ -18,6 +18,8 @@ success and no GT actor inputs.
       -0.05 tolerance without explanation).
 - [ ] Old rby1 RoboCasa sink row via `emet jobs`; record success, release, and
       displacement. Do not substitute the Panda reach smoke for this row.
+- [x] Panda RoboCasa reach adapter + loaded joint/Cartesian sweeps (20/20,
+      <=1.7 cm p95). Not task success.
 - [ ] New Panda task-target bridge, base goals, carry/contact, and merged-scene
       adapters for Stretch/Sourccey/RB-Y1; gate sink and cabinet separately.
 - [ ] Regenerate a valid `reached=False` hard-posture train/test split;
