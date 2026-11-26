@@ -226,13 +226,14 @@ def _apply_scene_qpos0(model, scene_qpos: dict[str, np.ndarray]) -> int:
 
 
 def _panda_omron_position_servos(xml: str) -> str:
-    """Replace Panda arm torque motors with position servos for kinematic TAMP.
+    """Replace Panda torque motors with position servos for kinematic TAMP.
 
     RoboCasa's PandaOmron is torque-actuated; the emet kinematic executor sends
     joint-position targets. Keep the mobile-base velocity actuators and gripper
-    position actuators unchanged. One-time PD gains are explicit here; the
-    failure-to-control loop still measures and corrects the resulting tracking
-    error.
+    position actuators unchanged, preserve the original actuator order, and
+    carry each motor's torque ``ctrlrange`` over as the position servo's
+    ``forcerange``. This scene is for kinematic TAMP, not dynamic RoboCasa
+    parity.
     """
     import xml.etree.ElementTree as ET
 
@@ -245,44 +246,60 @@ def _panda_omron_position_servos(xml: str) -> str:
     actuator = root.find("actuator")
     if actuator is None:
         return xml
+
+    def position_servo(original: ET.Element, *, name: str, joint: str, ctrlrange: str) -> ET.Element:
+        attrs = {
+            "name": name,
+            "joint": joint,
+            "kp": "1000",
+            "kv": "50",
+            "ctrllimited": "true",
+            "ctrlrange": ctrlrange,
+        }
+        # A motor's ctrlrange is a torque range; preserve it as force authority.
+        # An explicit forcelimited="false" wins (the torso motor has no force cap).
+        if original.get("forcelimited") == "false":
+            attrs["forcelimited"] = "false"
+        elif original.get("forcerange") is not None:
+            attrs["forcerange"] = original.get("forcerange")
+            attrs["forcelimited"] = original.get("forcelimited") or "true"
+        elif original.tag == "motor" and original.get("ctrlrange"):
+            attrs["forcelimited"] = "true"
+            attrs["forcerange"] = original.get("ctrlrange")
+        elif original.get("forcelimited") is not None:
+            attrs["forcelimited"] = original.get("forcelimited")
+        if original.get("gear") is not None:
+            attrs["gear"] = original.get("gear")
+        return ET.Element("position", attrs)
+
     replaced = 0
     torso_replaced = 0
-    for elem in list(actuator):
+    for index, elem in enumerate(list(actuator)):
         name = elem.get("name") or ""
         if name == "mobilebase0_actuator_torso_height":
             joint = elem.get("joint") or "mobilebase0_joint_torso_height"
-            new = ET.Element(
-                "position",
-                {
-                    "name": name,
-                    "joint": joint,
-                    "kp": "1000",
-                    "kv": "50",
-                    "ctrllimited": "true",
-                    "ctrlrange": joint_ranges.get(joint, "0 0.34"),
-                },
+            new = position_servo(
+                elem,
+                name=name,
+                joint=joint,
+                ctrlrange=joint_ranges.get(joint, "0 0.34"),
             )
             actuator.remove(elem)
-            actuator.append(new)
+            actuator.insert(index, new)
             torso_replaced += 1
             continue
         if not name.startswith("robot0_torq_j"):
             continue
         joint = elem.get("joint") or ""
         suffix = name.removeprefix("robot0_torq_j")
-        new = ET.Element(
-            "position",
-            {
-                "name": f"robot0_joint{suffix}_act",
-                "joint": joint,
-                "kp": "1000",
-                "kv": "50",
-                "ctrllimited": "true",
-                "ctrlrange": joint_ranges.get(joint, "-3.14 3.14"),
-            },
+        new = position_servo(
+            elem,
+            name=f"robot0_joint{suffix}_act",
+            joint=joint,
+            ctrlrange=joint_ranges.get(joint, "-3.14 3.14"),
         )
         actuator.remove(elem)
-        actuator.append(new)
+        actuator.insert(index, new)
         replaced += 1
     if replaced or torso_replaced:
         click.secho(

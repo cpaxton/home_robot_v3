@@ -120,7 +120,7 @@ def write_offline_mjcf_base_xyt(
             # joint values (which would add the scene's 10 m merge offset).
             from emet.simulation.spawn_planar import write_planar_base_xyt
 
-            return write_planar_base_xyt(
+            if write_planar_base_xyt(
                 model,
                 data,
                 joint_names=(names[0], names[1], names[2]),
@@ -128,7 +128,10 @@ def write_offline_mjcf_base_xyt(
                 world_y=y,
                 world_yaw=th,
                 base_body_name=base_body_name,
-            )
+            ):
+                return True
+            # Fall through to a freejoint when the planar solve fails; returning
+            # False here used to leave the base stale even for freejoint robots.
     if freejoint_name:
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(freejoint_name))
         if jid >= 0:
@@ -218,6 +221,7 @@ class KinematicPickPlaceExecutor:
         self.link_bodies = list(self.profile.link_bodies)
         self._model: mujoco.MjModel | None = None
         self._data: mujoco.MjData | None = None
+        self._scene_model_loaded = False
         self._collision: VoxelMapArmCollisionChecker | AabbArmCollisionChecker | PlacementCollisionChecker | None = None
         self._last_cmd_q: np.ndarray | None = None
         self.last_plan_waypoints: list[np.ndarray] = []
@@ -303,12 +307,24 @@ class KinematicPickPlaceExecutor:
             session = (get_session() if callable(get_session) else None) or {}
             scene_model_path = session.get("scene_model_path")
             if scene_model_path and Path(str(scene_model_path)).is_file():
-                self._model = mujoco.MjModel.from_binary_path(str(scene_model_path))
-                self._data = mujoco.MjData(self._model)
-                mujoco.mj_forward(self._model, self._data)
-                return True
+                try:
+                    self._model = mujoco.MjModel.from_binary_path(str(scene_model_path))
+                    self._data = mujoco.MjData(self._model)
+                    self._scene_model_loaded = True
+                    mujoco.mj_forward(self._model, self._data)
+                    return True
+                except Exception as exc:
+                    self._model = None
+                    self._data = None
+                    self._scene_model_loaded = False
+                    logger.warning(
+                        f"KinematicPickPlace: could not load scene model {scene_model_path}: {exc}"
+                    )
         if not mjcf:
-            logger.error("KinematicPickPlace: robot spec missing mjcf_path")
+            logger.error(
+                "KinematicPickPlace: no usable scene model and no mjcf_path; "
+                "kinematic manipulation is unavailable"
+            )
             return False
         path = Path(str(mjcf))
         if not path.is_file():
@@ -316,6 +332,7 @@ class KinematicPickPlaceExecutor:
             return False
         self._model = mujoco.MjModel.from_xml_path(str(path))
         self._data = mujoco.MjData(self._model)
+        self._scene_model_loaded = False
         mujoco.mj_forward(self._model, self._data)
         if self.manip_collision == "voxel" and self.voxel_map is not None:
             self._collision = VoxelMapArmCollisionChecker.from_voxel_map(
@@ -381,15 +398,18 @@ class KinematicPickPlaceExecutor:
                 z = float(np.asarray(state["base_xyz"], dtype=np.float64).reshape(-1)[2])
             except Exception:
                 pass
-        write_offline_mjcf_base_xyt(
+        spec = getattr(self.robot, "_spec", None)
+        written = write_offline_mjcf_base_xyt(
             self._model,
             self._data,
             world,
             planar_joint_names=self._planar_joint_names(),
             freejoint_name=getattr(self.profile, "base_freejoint_name", None),
             z=z,
-            base_body_name=getattr(getattr(self.robot, "_spec", None), "base_link_name", None),
+            base_body_name=getattr(spec, "base_link_name", None) if getattr(self, "_scene_model_loaded", False) else None,
         )
+        if not written:
+            logger.warning("KinematicPickPlace: could not sync the measured base pose into the offline model")
 
     def _actuator_to_joint_name(self, aname: str) -> str | None:
         m = re.match(r"(left|right)_arm(\d+)$", aname)
@@ -620,17 +640,22 @@ class KinematicPickPlaceExecutor:
     def _set_gripper(self, *, open_: bool) -> None:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
-        val = self.profile.gripper_open if open_ else self.profile.gripper_closed
-        configuration = self.profile.gripper_open_configuration if open_ else ()
+        configuration = self.profile.gripper_open_configuration
         if configuration:
-            for name, value in configuration:
+            # Keep open and close on the same joint->actuator path. A robot with
+            # a configured open pose but differently named close actuators used
+            # to open and never close.
+            for name, open_value in configuration:
                 actuator = self._actuator_for_joint(name)
-                if actuator is not None:
-                    hold[actuator] = float(value)
+                if actuator is None:
+                    logger.warning(f"Gripper configuration joint {name!r} has no resolvable actuator; skipping")
+                    continue
+                hold[actuator] = float(open_value if open_ else self.profile.gripper_closed)
         else:
+            value = self.profile.gripper_open if open_ else self.profile.gripper_closed
             keys = [n for n in names if "gripper" in n.lower() or "finger" in n.lower() or "jaw" in n.lower()]
             for key in keys:
-                hold[key] = val
+                hold[key] = value
         if hold:
             self.robot.set_actuator_positions(hold)
 

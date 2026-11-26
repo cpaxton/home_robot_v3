@@ -265,6 +265,10 @@ def plan_pick_place(
             poses.extend(approach_candidates_for_object_xy(
                 obj_xy, standoff=radius, mode=mode, arm=arm, count=8))
         logger.info(f'TAMP approach search: {len(poses)} candidates over radii={radii}')
+    if not poses:
+        return TaskPlan([], object_gt_body, receptacle_gt_body,
+                        object_query=object_query, receptacle_query=receptacle_query,
+                        success=False, message='no_approach_candidates', expanded_nodes=expanded)
     clear = [True] * len(poses)
     if use_scene_query:
         try:
@@ -282,6 +286,10 @@ def plan_pick_place(
             return TaskPlan([], object_gt_body, receptacle_gt_body,
                             object_query=object_query, receptacle_query=receptacle_query,
                             success=False, message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
+    if not clear:
+        return TaskPlan([], object_gt_body, receptacle_gt_body,
+                        object_query=object_query, receptacle_query=receptacle_query,
+                        success=False, message='no_approach_candidates', expanded_nodes=expanded)
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None

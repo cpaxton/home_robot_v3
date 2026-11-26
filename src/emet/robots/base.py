@@ -101,26 +101,26 @@ class RobotSpec:
     # Per-arm chains for bimanual robots; ``arm_chains[arm]`` wins over ``arm_chain``.
     arm_chains: "dict[str, ArmChain]" = field(default_factory=dict)
     advertise_kinematic_manip: bool = False
+    """If True, :class:`~emet.simulation.robosuite_server.RobosuiteZmqServer` advertises
+    ``capabilities.kinematic_manip`` when an :class:`~emet.motion.arm_manip_profile.ArmManipProfile`
+    also resolves. Default False so offline IK discovery (xlerobot, franka, …) does not
+    switch live DynaMem/OVMM pick/place from teleport to latch."""
     default_arm: str = "left"
+    """Arm side used when a robot exposes a single arm or the caller does not choose one."""
     live_ik_correction: bool = True
+    """Re-solve Cartesian IK from the measured posture when open-loop tracking misses.
+
+    Disable for position-servo robots whose measured posture is already the
+    authoritative reference and where a second IK branch can oscillate.
+    """
     grasp_lift_verify_tol_m: float = 0.08
+    """Object-center tolerance for the grasp lift check; round objects can sit off the EE TCP."""
     placement_retract_m: float = 0.0
     """Distance to pull the held object toward the base before placement base queries.
 
     Opt-in: zero preserves the previous placement search for robots that do not
     need the pre-retract. PandaOmron sets a nonzero value for its carry posture.
     """
-    """Object-center tolerance for the grasp lift check; round objects can sit off the EE TCP."""
-    """Re-solve Cartesian IK from the measured posture when open-loop tracking misses.
-
-    Disable for position-servo robots whose measured posture is already the
-    authoritative reference and where a second IK branch can oscillate.
-    """
-    """Arm side used when a robot exposes a single arm or the caller does not choose one."""
-    """If True, :class:`~emet.simulation.robosuite_server.RobosuiteZmqServer` advertises
-    ``capabilities.kinematic_manip`` when an :class:`~emet.motion.arm_manip_profile.ArmManipProfile`
-    also resolves. Default False so offline IK discovery (xlerobot, franka, …) does not
-    switch live DynaMem/OVMM pick/place from teleport to latch."""
     tamp_approach: str = "front"
     """TAMP table standoff. ``front`` = Galaxea/rby1 (stand in +Y, yaw=−π/2 so +X faces
     the object). ``side`` = arms hang on ±X (Sourccey): left yaw=+π/2, right yaw=−π/2 so

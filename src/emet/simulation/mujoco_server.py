@@ -42,6 +42,36 @@ DEFAULT_SCENE_NO_ROBOT = (
 # --robot stretch, so that emet serve mujoco --robot rby1 works without pinocchio/hppfcl.
 
 
+def _write_scene_model_cache(scene_model, cache_dir: str | Path) -> Path:
+    """Write a content-addressed ``.mjb`` for client-side IK.
+
+    The temporary file lives in the cache directory, so ``os.replace`` is a
+    same-filesystem atomic rename even when ``/tmp`` is a different mount.
+    """
+    import mujoco
+
+    directory = Path(cache_dir).expanduser()
+    directory.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix="emet_scene_", suffix=".mjb", dir=directory)
+    os.close(fd)
+    try:
+        mujoco.mj_saveModel(scene_model, temporary)
+        digest = hashlib.sha256()
+        with open(temporary, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        cached = directory / f"emet_scene_{digest.hexdigest()[:20]}.mjb"
+        if cached.exists():
+            os.unlink(temporary)
+        else:
+            os.replace(temporary, cached)
+        return cached
+    except Exception:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+        raise
+
+
 def _get_stretch_server():
     """Lazy import of the Stretch MuJoCo ZMQ server (avoids loading pinocchio for non-stretch robots)."""
     from emet.simulation.mujoco_server_stretch import MujocoZmqServer
@@ -440,34 +470,18 @@ def main(
                 robot=robot,
                 seed=int(seed) if seed is not None else None,
             )
-            if scene_model is not None:
+            scene_provided_robot = str(robot).lower().replace("-", "_") in {"panda_omron", "pandaomron"}
+            if scene_model is not None and scene_provided_robot:
                 try:
-                    import mujoco
-
-                    # Content-address the client-side IK model instead of
-                    # leaking one mkstemp file per server launch. Remote clients
-                    # must share this directory (EMET_SCENE_MODEL_DIR) or the
-                    # session falls back to the scene XML / robot MJCF.
+                    # Only native scene-provided robots need this model. A
+                    # standalone robot has its own MJCF and should not pay the
+                    # serialization cost for a large kitchen scene.
                     cache_dir = Path(
                         os.environ.get("EMET_SCENE_MODEL_DIR", Path.home() / ".cache" / "emet" / "scene_models")
                     ).expanduser()
-                    cache_dir.mkdir(parents=True, exist_ok=True)
-                    fd, temporary = tempfile.mkstemp(prefix="emet_scene_", suffix=".mjb")
-                    os.close(fd)
-                    try:
-                        mujoco.mj_saveModel(scene_model, temporary)
-                        digest = hashlib.sha256(Path(temporary).read_bytes()).hexdigest()[:20]
-                        cached = cache_dir / f"emet_scene_{digest}.mjb"
-                        if cached.exists():
-                            os.unlink(temporary)
-                        else:
-                            os.replace(temporary, cached)
-                        scene_model_path = str(cached)
-                        logger.info(f"Saved scene model for client-side IK: {scene_model_path}")
-                    except Exception:
-                        if os.path.exists(temporary):
-                            os.unlink(temporary)
-                        raise
+                    cached = _write_scene_model_cache(scene_model, cache_dir)
+                    scene_model_path = str(cached)
+                    logger.info(f"Saved scene model for client-side IK: {scene_model_path}")
                 except Exception as exc:
                     logger.warning(f"Could not save scene model for client-side IK: {exc}")
                     scene_model_path = None
