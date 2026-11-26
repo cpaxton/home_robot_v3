@@ -32,6 +32,21 @@ because the warm-start checkpoint tied the later iterations at 1.00 in-suite.
 Iteration 2 is the promoted artifact (1.000 held-out); the loop now prefers the
 later checkpoint on a tie.
 
+Multi-seed gate (50 episodes per subtask; aggregate success):
+
+| Robot | seed 30000 | seed 40000 | seed 50000 | Mean |
+|---|---|---|---|---|
+| Mars | 0.973 | 0.920 | 0.973 | 0.955 |
+| Stretch | 0.953 | 0.940 | 0.960 | 0.951 |
+| Sourccey | 0.952 | 0.960 | 0.968 | 0.960 |
+| RB-Y1 | 0.996 | 0.996 | 1.000 | 0.997 |
+| PandaOmron | 1.000 | 1.000 | 0.987 | 0.996 |
+
+Artifacts and the per-task breakdown are in
+`logs/eval/wbc_multirobot_20261126/` (`manifest.json`, checkpoints, held-out
+JSON). The per-robot policy is selected by a fresh gate, so the 30000 seed for
+PandaOmron is a validation seed rather than a fully untouched test.
+
 ## What landed
 
 - `wbc_robots.py`: robot/profile registry and RoboCasa names.
