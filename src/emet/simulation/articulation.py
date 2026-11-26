@@ -120,7 +120,9 @@ def articulation_for_query(session, query):
     Returns ``None`` when the query matches zero or multiple fixture groups.
     The group's body names stay internal; callers receive only state/actions.
     """
-    token = str(query or "").strip().lower()
+    from emet.simulation.fixture_tokens import robocasa_fixture_token
+
+    token = robocasa_fixture_token(str(query or "").strip().lower())
     if not token:
         return None
     groups = session.get("sim_articulations")

@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from emet.controller.task.tamp.task_search import TaskPlan, execute_task_plan, plan_pick_place_mcts
+from emet.simulation.fixture_tokens import robocasa_fixture_token as _robocasa_fixture_token
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -124,22 +125,8 @@ def resolve_body_alias(body: str | None, placements: dict[str, dict[str, Any]]) 
     return next((candidate for candidate in _body_aliases(body) if candidate in placements), None)
 
 
-# RoboCasa task-name → fixture-key aliases (task names use long words, the wizard
-# fixture scan uses short group keys like ``cab`` / ``counter`` / ``sink``).
-_ROBOCASA_FIXTURE_ALIASES: dict[str, str] = {
-    "cabinet": "cab",
-    "countertop": "counter",
-    "toaster": "toaster",
-    "toasteroven": "toasteroven",
-    "standmixer": "standmixer",
-    "fridgedrawer": "fridgedrawer",
-    "fridgeshelf": "fridgeshelf",
-    "electrickettle": "electrickettle",
-    "coffeemachine": "coffeemachine",
-}
-def _robocasa_fixture_token(name: str) -> str:
-    token = str(name).strip().lower().replace(" ", "")
-    return _ROBOCASA_FIXTURE_ALIASES.get(token, token)
+# RoboCasa task-name → fixture-key aliases live in a neutral module so the
+# articulation matcher and teacher use the same normal form.
 
 
 def _match_placement_by_category(
@@ -272,17 +259,39 @@ def build_semantic_task_refs(tasks: list[Any]) -> list[AgentTaskRef]:
     ]
 
 
+def _token_matches_fixture(body: str, info: dict[str, Any], token: str) -> bool:
+    """Exact or token-delimited fixture match; never a bare substring."""
+    want = _robocasa_fixture_token(token)
+    if not want:
+        return False
+    for raw in (body, info.get("cat")):
+        label = str(raw or "").strip().lower()
+        if not label:
+            continue
+        if label == want or label.startswith(want + "_"):
+            return True
+        if _robocasa_fixture_token(label) == want:
+            return True
+    return False
+
+
 def _nearest_object_to_start(
     placements: dict[str, dict[str, Any]],
     objects: list[str],
     start_receptacle: str,
-) -> str:
-    """Pick the task object nearest its start counter when the category is shared."""
-    from emet.eval.ovmm_find_phase import bodies_matching_category
+) -> str | None:
+    """Pick the task object nearest its start counter when the category is shared.
 
-    starts = bodies_matching_category(placements, start_receptacle) if start_receptacle else []
+    Fail closed when the start receptacle has no token-delimited match. A loose
+    substring match would let ``cab`` select a ``cable`` fixture.
+    """
+    starts = [
+        body
+        for body, info in placements.items()
+        if isinstance(info, dict) and _token_matches_fixture(body, info, start_receptacle)
+    ] if start_receptacle else []
     if not starts:
-        return sorted(objects)[0]
+        return None
     try:
         start_positions = [
             np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3)[:2]
@@ -290,7 +299,7 @@ def _nearest_object_to_start(
             if body in placements
         ]
         if not start_positions:
-            return sorted(objects)[0]
+            return None
         return min(
             objects,
             key=lambda body: (
@@ -302,7 +311,7 @@ def _nearest_object_to_start(
             ),
         )
     except (KeyError, TypeError, ValueError):
-        return sorted(objects)[0]
+        return None
 
 
 def privileged_task_from_semantic(
@@ -317,6 +326,8 @@ def privileged_task_from_semantic(
     if not objects:
         return None
     object_body = _nearest_object_to_start(live, objects, ref.start_receptacle)
+    if object_body is None:
+        return None
     goal = _match_placement_by_category(live, ref.receptacle_query, reference_body=object_body)
     if goal is None:
         return None

@@ -1009,6 +1009,14 @@ class KinematicPickPlaceExecutor:
 
     def planning_attempt(self, op: str, code: str) -> dict[str, Any]:
         """Structured record for an operation that failed before arm motion."""
+        synced = False
+        if self._model is not None and self._data is not None:
+            sync = getattr(self, "_sync_qpos_from_robot", None)
+            if callable(sync):
+                try:
+                    synced = bool(sync())
+                except Exception:
+                    synced = False
         q = list(self._current_arm_qpos())
         ee = None
         if self._model is not None and self._data is not None:
@@ -1037,6 +1045,7 @@ class KinematicPickPlaceExecutor:
             "target_xyz": target,
             "joint_names": list(getattr(self, "joint_names", []) or []),
             "initial_q": q,
+            "initial_q_synced": synced,
             "planned_waypoints": [],
             "trace": [{"qpos": q, "ee_xyz": ee}],
             "placement_search": placement,

@@ -561,9 +561,9 @@ def test_privileged_task_from_semantic_resolves_gt_for_teacher():
     privileged = privileged_task_from_semantic(
         ref,
         {
-            "obj_main": {"cat": "sugar_cube"},
-            "counter_main": {"cat": "counter"},
-            "cab_main": {"cat": "cab"},
+            "obj_main": {"cat": "sugar_cube", "pos": [0.0, 0.0, 1.0]},
+            "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 1.0]},
+            "cab_main": {"cat": "cab", "pos": [0.0, 3.0, 1.0]},
         },
     )
     assert privileged is not None
@@ -812,6 +812,30 @@ def test_semantic_access_query_matches_one_fixture_without_exposing_a_body():
     }
 
 
+def test_privileged_teacher_fails_closed_without_a_delimited_start_match():
+    from emet.controller.task.tamp.agent_bridge import AgentTaskRef, privileged_task_from_semantic
+
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 1.0]},
+        "cable_main": {"cat": "cable", "pos": [0.0, 1.0, 1.0]},
+    }
+    ref = AgentTaskRef(
+        ref="query",
+        object_query="mug",
+        receptacle_query="cab",
+        start_receptacle="cab",
+        semantic_only=True,
+    )
+    assert privileged_task_from_semantic(ref, placements) is None
+
+
+def test_articulation_query_accepts_the_cabinet_alias():
+    from emet.simulation.articulation import articulation_for_query
+
+    session = {"sim_articulations": [{"bodies": ["cab_main"], "supported": True, "state": "open"}]}
+    assert articulation_for_query(session, "cabinet") is session["sim_articulations"][0]
+
+
 def test_articulation_query_requires_a_token_delimiter():
     from emet.simulation.articulation import articulation_for_query
 
@@ -857,5 +881,6 @@ def test_planning_attempt_records_pre_motion_q_and_empty_waypoints():
     assert attempt["op"] == "place"
     assert attempt["failure_mode"] == "placement_geometry_missing"
     assert attempt["initial_q"] == pytest.approx([0.1, 0.2])
+    assert attempt["initial_q_synced"] is False
     assert attempt["trace"][0]["qpos"] == pytest.approx([0.1, 0.2])
     assert attempt["planned_waypoints"] == []
