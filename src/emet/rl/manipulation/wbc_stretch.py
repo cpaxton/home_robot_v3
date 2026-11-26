@@ -289,8 +289,9 @@ class StretchWbcBackend:
             mujoco.mj_forward(self.model, self.data)
         self._elapsed += self.control_dt
         info = {
-            "contact_force": 0.0,
-            "collision": False,
+            "contact_force": None,
+            "collision": None,
+            "collision_measured": False,
             "invalid_physics": invalid,
             "elapsed_s": self._elapsed,
             "sim_time": float(self.data.time),

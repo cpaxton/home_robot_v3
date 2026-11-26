@@ -506,7 +506,15 @@ class WbcGymEnv(gym.Env):
         command = self.adapter.command(contract_action, self._observation)
         next_observation, backend_terminated, info = self.backend.step(command, self.control_dt)
         next_observation.validate(self.profile)
-        collision = bool(info.get("collision", False)) or float(info.get("contact_force", 0.0)) > self.collision_force_n
+        raw_force = info.get("contact_force")
+        raw_collision = info.get("collision")
+        collision_measured = raw_force is not None or raw_collision is not None
+        contact_force = 0.0 if raw_force is None else float(raw_force)
+        collision = (
+            bool(raw_collision)
+            if raw_collision is not None
+            else contact_force > self.collision_force_n
+        )
         reward, components = reach_reward(
             contract_action,
             next_observation,
@@ -529,7 +537,8 @@ class WbcGymEnv(gym.Env):
             "reward_terms": components,
             "action_mask": action_mask,
             "success": success,
-            "collision": collision,
+            "collision": collision if collision_measured else None,
+            "collision_measured": collision_measured,
             **self.contact_info(next_observation),
         }
         self._observation = next_observation

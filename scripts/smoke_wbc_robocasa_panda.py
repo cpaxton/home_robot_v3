@@ -85,6 +85,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"reset contact {first} | {second} dist={contact.dist:.3f}", flush=True)
     success = False
     info: dict = {}
+    final_contacts: list[tuple[str, str, float]] = []
+    final_arm_q = np.zeros(0)
+    final_target = np.zeros(3)
+    final_ee = np.zeros(3)
     try:
         for step in range(int(round(args.horizon / 0.05))):
             if args.teacher:
@@ -111,17 +115,23 @@ def main(argv: list[str] | None = None) -> int:
             if terminated or truncated:
                 break
     finally:
+        # Snapshot before close; the underlying Robosuite env owns this data.
+        final_arm_q = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
+        final_target = np.asarray(backend._target_ee[:3], dtype=np.float64).copy()
+        final_ee = np.asarray(backend._observation().arms[0].ee_pose[:3], dtype=np.float64).copy()
+        for index in range(backend.data.ncon):
+            contact = backend.data.contact[index]
+            first = backend.model.body(int(backend.model.geom_bodyid[contact.geom1])).name
+            second = backend.model.body(int(backend.model.geom_bodyid[contact.geom2])).name
+            if first.startswith(("robot0", "gripper0")) or second.startswith(("robot0", "gripper0")):
+                final_contacts.append((first, second, float(contact.dist)))
         wbc.close()
-    for index in range(backend.data.ncon):
-        contact = backend.data.contact[index]
-        first = backend.model.body(int(backend.model.geom_bodyid[contact.geom1])).name
-        second = backend.model.body(int(backend.model.geom_bodyid[contact.geom2])).name
-        if first.startswith(("robot0", "gripper0")) or second.startswith(("robot0", "gripper0")):
-            print(f"final contact {first} | {second} dist={contact.dist:.3f}", flush=True)
+    for first, second, distance in final_contacts:
+        print(f"final contact {first} | {second} dist={distance:.3f}", flush=True)
     print(
-        f"final arm_q={np.round(backend.data.qpos[backend._arm_q], 3)} "
-        f"target={np.round(backend._target_ee[:3], 3)} "
-        f"ee={np.round(backend._observation().arms[0].ee_pose[:3], 3)}",
+        f"final arm_q={np.round(final_arm_q, 3)} "
+        f"target={np.round(final_target, 3)} "
+        f"ee={np.round(final_ee, 3)}",
         flush=True,
     )
     print(f"tracking_success={success} final={info.get('reward_terms', {})}")

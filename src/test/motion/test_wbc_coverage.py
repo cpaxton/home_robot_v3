@@ -249,6 +249,11 @@ def test_task_result_metrics_aggregate_seeds():
             {"1": {"arm": {"episodes": 10.5, "success_rate": 0.9, "tracking_error_m": 0.02, "duration_s": 5.0}}},
             "arm",
         )
+    with pytest.raises(KeyError):
+        task_result_metrics(
+            {"1": {"arm": {"episodes": 10, "success_rate": 0.9, "tracking_error_m": 0.02, "duration_s": 5.0}}},
+            "arm",
+        )
     with pytest.raises(ValueError, match="collisions"):
         task_result_metrics(
             {
@@ -279,6 +284,8 @@ def test_hard_case_metrics_accepts_episode_list_and_fails_missing():
     assert row["episodes"] == 2
     with pytest.raises(KeyError):
         task_result_metrics({"1": {"arm": {"episodes": 10}}}, "arm")
+    with pytest.raises(KeyError):
+        hard_case_metrics({"episodes": 2, "success_rate": 0.5, "tracking_error_m": 0.04})
 
 
 def test_panda_hard_cases_are_split_without_leakage():

@@ -35,6 +35,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--horizon", type=float, default=5.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument(
+        "--allow-missing-contract",
+        action="store_true",
+        help="allow a legacy checkpoint without saved task-contract metadata",
+    )
     args = parser.parse_args(argv)
 
     if args.episodes_per_case < 1:
@@ -61,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("checkpoint observation size does not match the hard-case environment")
     if policy.action_size != env.action_space.shape[0]:
         raise ValueError("checkpoint action size does not match the hard-case environment")
+    previous_contract = metadata.get("contract")
+    if previous_contract is None:
+        if not args.allow_missing_contract:
+            raise ValueError("checkpoint is missing the task contract; pass --allow-missing-contract for legacy artifacts")
+    elif str(previous_contract.get("robot") or "") not in ("", robot.name):
+        raise ValueError(f"checkpoint task contract robot mismatch: {previous_contract.get('robot')} != {robot.name}")
     results: dict[str, dict] = {}
     try:
         for case in cases:
@@ -76,7 +87,9 @@ def main(argv: list[str] | None = None) -> int:
                 observation, _ = loaded
                 done, success, steps = False, False, 0
                 collision = False
+                collision_is_measured = True
                 contact_available = 0
+                pos_errors: list[float] = []
                 info: dict = {}
                 while not done:
                     with torch.no_grad():
@@ -90,29 +103,35 @@ def main(argv: list[str] | None = None) -> int:
                     observation, _, terminated, truncated, info = env.step(action)
                     success |= bool(info.get("success", False))
                     collision |= bool(info.get("collision", False))
+                    collision_is_measured &= bool(info.get("collision_measured", True))
                     contact_available += bool(info.get("contact_state_available", False))
+                    pos_error = float(info.get("reward_terms", {}).get("pos_err", float("nan")))
+                    if np.isfinite(pos_error):
+                        pos_errors.append(pos_error)
                     done = bool(terminated or truncated)
                     steps += 1
                 terms = info.get("reward_terms", {})
+                settled = pos_errors[-2:]
                 episodes.append(
                     {
                         "success": bool(success),
                         "steps": steps,
-                        "collisions": int(collision),
+                        "collisions": int(collision) if collision_is_measured else None,
+                        "collision_measured": bool(collision_is_measured),
                         "duration_s": float(info.get("elapsed_s", steps * 0.05)),
                         "contact_state_rate": contact_available / max(steps, 1),
-                        "pos_err": float(terms.get("pos_err", float("nan"))),
+                        "pos_err": float(np.mean(settled)) if settled else float("inf"),
+                        "pos_err_max": max(settled) if settled else float("inf"),
                         "quat_err": float(terms.get("quat_err", float("nan"))),
                     }
                 )
+            measured = all(episode["collision_measured"] for episode in episodes)
             results[case.name] = {
                 "success_rate": float(np.mean([episode["success"] for episode in episodes])),
-                "collisions": int(sum(episode["collisions"] for episode in episodes)),
-                "tracking_error_m": float(
-                    np.mean([episode["pos_err"] for episode in episodes if np.isfinite(episode["pos_err"])])
-                )
-                if any(np.isfinite(episode["pos_err"]) for episode in episodes)
-                else float("inf"),
+                "collisions": int(sum(episode["collisions"] for episode in episodes)) if measured else None,
+                "collision_measured": bool(measured),
+                "tracking_error_m": float(np.mean([episode["pos_err"] for episode in episodes])),
+                "tracking_error_max_m": float(np.max([episode["pos_err_max"] for episode in episodes])),
                 "duration_s": float(np.mean([episode["duration_s"] for episode in episodes])),
                 "contact_state_rate": float(np.mean([episode["contact_state_rate"] for episode in episodes])),
                 "episodes": episodes,

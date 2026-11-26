@@ -403,8 +403,9 @@ class SourcceyWbcBackend:
         if not invalid:
             mujoco.mj_forward(self.model, self.data)
         info = {
-            "contact_force": 0.0,
-            "collision": False,
+            "contact_force": None,
+            "collision": None,
+            "collision_measured": False,
             "elapsed_s": float(self._elapsed),
             "sim_time": float(self.data.time),
             "invalid_physics": bool(invalid),

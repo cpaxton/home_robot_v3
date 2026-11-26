@@ -36,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--episodes", type=int, default=50)
     parser.add_argument("--seeds", type=_parse_seeds, default=(30000, 40000, 50000))
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument(
+        "--allow-missing-contract",
+        action="store_true",
+        help="allow a legacy checkpoint without saved task-contract metadata",
+    )
     args = parser.parse_args(argv)
 
     if args.episodes < 1:
@@ -48,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("checkpoint observation size does not match the evaluation environment")
     if trainer.policy.action_size != env.action_space.shape[0]:
         raise ValueError("checkpoint action size does not match the evaluation environment")
+    previous_contract = metadata.get("contract")
+    if previous_contract is None:
+        if not args.allow_missing_contract:
+            raise ValueError("checkpoint is missing the task contract; pass --allow-missing-contract for legacy artifacts")
+    elif previous_contract != env.contract():
+        raise ValueError(f"checkpoint task contract mismatch: {previous_contract} != {env.contract()}")
     args.output.mkdir(parents=True, exist_ok=True)
     seed_results: dict[str, dict] = {}
     aggregates: list[float] = []

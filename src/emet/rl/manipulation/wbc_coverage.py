@@ -211,7 +211,7 @@ def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> d
         raise ValueError(f"no seed results for task {task!r}")
     row_episodes = [_integer_metric(row.get("episodes"), label=f"task {task!r} episodes", minimum=1) for row in rows]
     row_collisions = [
-        _integer_metric(row.get("collisions", 0), label=f"task {task!r} collisions", minimum=0) for row in rows
+        _integer_metric(row["collisions"], label=f"task {task!r} collisions", minimum=0) for row in rows
     ]
     for seed, count, collisions in zip(seed_results, row_episodes, row_collisions, strict=True):
         if collisions > count:
@@ -249,9 +249,9 @@ def hard_case_metrics(result: dict[str, Any]) -> dict[str, Any]:
     return coverage_result(
         episodes=episodes,
         success_rate=float(result["success_rate"]),
-        collisions=_integer_metric(result.get("collisions", 0), label="hard-case collisions", minimum=0),
-        tracking_error_m=float(result.get("tracking_error_m", float("inf"))),
-        duration_s=float(result.get("duration_s", 0.0)),
+        collisions=_integer_metric(result["collisions"], label="hard-case collisions", minimum=0),
+        tracking_error_m=float(result["tracking_error_m"]),
+        duration_s=float(result["duration_s"]),
         contact_state_rate=None if contact is None else float(contact),
     )
 

@@ -96,6 +96,8 @@ def synthetic_obstacle_target(
                         occ[x, y, z] = 1
 
     if profile is None:
+        if target_base is not None or target_torso is not None:
+            raise ValueError("target_base/target_torso require an embodiment profile")
         target_pos = _free_target(rng, lo, hi, boxes)
         goal: dict[str, Any] = {
             "kind": "ee_target",
