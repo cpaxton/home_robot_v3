@@ -1286,14 +1286,14 @@ position-servo actuator adapter.
 - [x] Sim-matched profiles for Mars, Stretch, Sourccey, RB-Y1 (Galaxea R1 proxy), and PandaOmron, with registry/MJCF validation.
 - [x] Direct-MuJoCo WBC plant adapters for Stretch/Sourccey/RB-Y1; Stretch/Sourccey/RB-Y1 backend sim tests pass.
 - [x] PandaOmron direct-MuJoCo plant composed from Robosuite Omron + Panda assets; arm/base teacher 1.0, combined 0.9.
-- [x] Stretch teacher: raised collision-free ready pose, collision-filtered targets, chassis-riding combined goal, and a 5 s/7 s reach window; teacher 1.0, Stretch DAgger 0.90 in-suite / 0.84 held-out over 50 episodes per subtask.
+- [x] Stretch teacher/policy: raised collision-free ready pose, collision-filtered targets, chassis-riding combined goal, and a 5 s/8 s reach window; teacher 0.97, DAgger 0.953 held-out over 50 episodes/subtask (arm 0.94, base 1.0, combined 0.92). Artifact: `/tmp/opencode/wbc_stretch_combined/`.
 - [x] PandaOmron arm teacher: collision-free ready pose and 300/30 torque gains removed the 20 Hz limit cycle; arm/base 1.0, combined 0.9.
-- [x] PandaOmron policy: DAgger best in-suite 1.00; 0.927 held-out over 50 episodes/subtask (arm 1.0, base 1.0, combined 0.78). Artifact: `/tmp/opencode/wbc_pandaomron_full/`.
+- [x] PandaOmron policy: promoted iteration 2 reaches 1.000 held-out over 50 episodes/subtask; the aggregate-selection `best.pt` is the 0.927 warm start. Artifact: `/tmp/opencode/wbc_pandaomron_combined/policy_iter2.pt`.
 - [x] Single-arm subtask suite for Sourccey/RB-Y1 (`arm_left`/`arm_right`/`combined_left`/`combined_right`).
 - [x] Home-posture resets for Sourccey/RB-Y1 removed the full-range joint distribution that made BC unlearnable.
 - [x] RB-Y1 full-suite policy: 0.996 held-out over 50 episodes/subtask (combined_right 0.98, everything else 1.0). Artifact: `/tmp/opencode/wbc_rby1_multi/`.
-- [ ] Sourccey held-out gate and combined_left improvement; full-suite DAgger is at 0.86 in-suite. Artifact: `/tmp/opencode/wbc_sourccey_ready/`.
-- [ ] Stretch combined improvement: 0.62 held-out; arm 0.90, base 1.0.
+- [x] Sourccey full-suite policy: 0.952 held-out over 50 episodes/subtask (arms/base 1.0, combined_left 0.86, combined_right 0.90). Artifact: `/tmp/opencode/wbc_sourccey_combined/`.
+- [ ] Hard-case/failure-posture DAgger gate for the promoted Panda policy (coverage split and sink postures are wired).
 - [ ] RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint contract; hooks fail closed until registered.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.

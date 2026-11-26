@@ -98,3 +98,31 @@ def test_cap_dataset_bounds_size_and_keeps_pairs():
     assert capped_observations.shape == (20, 2)
     assert capped_actions.shape == (20,)
     assert np.array_equal(capped_observations[:, 0], capped_actions)
+
+
+def test_selection_score_balances_the_weakest_subtask():
+    from emet.rl.manipulation.wbc_dagger import _selection_score
+
+    evaluation = {
+        "aggregate": {"success_rate": 0.84},
+        "left": {"success_rate": 0.9},
+        "right": {"success_rate": 0.5},
+    }
+    assert _selection_score(evaluation, "aggregate") == pytest.approx(0.84)
+    assert _selection_score(evaluation, "balanced") == pytest.approx(0.84 + 0.25 * 0.5)
+    with pytest.raises(ValueError, match="unknown checkpoint selection"):
+        _selection_score(evaluation, "min")
+
+
+def test_default_subtask_windows_and_collection_weights():
+    mars = {task.name: task for task in default_subtasks("innate_mars")}
+    assert mars["arm"].horizon_s == 3.0
+    assert mars["combined"].horizon_s == 5.0
+    stretch = {task.name: task for task in default_subtasks("stretch")}
+    assert stretch["arm"].horizon_s == 5.0
+    assert stretch["combined"].horizon_s == 8.0
+    assert stretch["combined"].weight == pytest.approx(0.6)
+    sourccey = {task.name: task for task in default_subtasks("sourccey")}
+    assert sourccey["base"].weight == pytest.approx(0.1)
+    assert sourccey["combined_left"].weight == pytest.approx(0.3)
+    assert sourccey["combined_right"].weight == pytest.approx(0.3)
