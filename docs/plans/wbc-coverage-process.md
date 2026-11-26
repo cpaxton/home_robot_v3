@@ -68,6 +68,25 @@ Every case is a JSON object (or one entry in a registry):
 - No body IDs, object poses, contact labels, or other GT fields may appear in
   the actor observation. Occupancy is **geometry**, not object identity.
 
+## Data provenance
+
+A coverage case is only as good as its record:
+
+- A failure attempt must carry the **pre-motion** `initial_q`. The post-motion
+  trace is not the reset state.
+- The record must identify the operation (`op`) so place/approach planning
+  failures are not replayed as the previous grasp attempt.
+- Semantic fields (`object_query`, `receptacle_query`) are always present;
+  GT bodies are allowed only under `EMET_GT_TEACHER` and are tagged
+  `privileged`.
+- The case-library load/add/save is file-locked; concurrent jobs cannot
+  overwrite each other.
+- Hard cases are split train/test before any replay; the test case is never
+  injected into DAgger.
+
+The semantic/GT audit fixes in #267 provide the pre-motion and per-op record
+shape; the hard-case exporter uses `initial_q` when present.
+
 ## Training stages
 
 1. **Teacher ceiling** per family. A family with no teacher above its ceiling
