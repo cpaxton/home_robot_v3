@@ -134,11 +134,11 @@ backend before they are fully represented.
 
 Current gate: the teacher reaches all six postures in 2–23 steps (6/6). The
 promoted clean policy succeeds on 4/6 with a properly initialized reset. A
-hard-case-only specialist reaches 6/6 but forgets the clean arm task
-(0.2–0.4). The earlier 1/6 measurement was a harness bug: `load_hard_case` must
-follow a normal reset, otherwise the torso and gripper stay at model defaults;
-the evaluation script now resets first. A mixed hard-case/clean fine-tune is
-the next step.
+hard-case-only specialist reaches 6/6 at iteration 3 with clean arm 0.6; later
+iterations collapse clean arm to 0.0, so it is not promoted alone. The earlier
+1/6 measurement was a harness bug: `load_hard_case` must follow a normal reset,
+otherwise the torso and gripper stay at model defaults; the evaluation script
+now resets first. A mixed hard-case/clean fine-tune is running.
 
 ## Next experiments
 
