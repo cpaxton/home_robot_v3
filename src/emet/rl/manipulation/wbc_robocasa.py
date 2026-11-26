@@ -34,6 +34,13 @@ class RoboCasaHook:
         return self.factory is not None
 
 
+def _pandaomron_factory(**kwargs: Any):
+    """Lazily build the native Omron + Panda RoboCasa adapter."""
+    from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
+
+    return RoboCasaPandaBackend(**kwargs)
+
+
 _HOOKS: dict[str, RoboCasaHook] = {
     "innate_mars": RoboCasaHook(
         "innate_mars",
@@ -58,7 +65,8 @@ _HOOKS: dict[str, RoboCasaHook] = {
     "pandaomron": RoboCasaHook(
         "pandaomron",
         "PandaOmron",
-        notes="Omron + Panda composite controller; adapter not yet registered.",
+        _pandaomron_factory,
+        "Native Omron + Panda direct-write reach adapter; task targets are supplied by a skill layer.",
     ),
 }
 

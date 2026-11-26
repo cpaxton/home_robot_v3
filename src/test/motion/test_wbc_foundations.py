@@ -299,9 +299,10 @@ def test_robocasa_hooks_fail_closed_then_register():
 
     hook = robocasa_hook("panda_omron")
     assert hook.robocasa_robot == "PandaOmron"
-    assert hook.available is False
+    assert hook.available is True
+    assert hook.factory is not None
     with pytest.raises(NotImplementedError, match="not registered"):
-        make_robocasa_backend("pandaomron")
+        make_robocasa_backend("rby1")
 
     register_robocasa_backend("pandaomron", lambda **kwargs: ("adapter", kwargs))
     assert robocasa_hook("pandaomron").available is True
@@ -791,13 +792,13 @@ def test_synthetic_generator_multi_arm_profile():
 
 
 def test_synthetic_generator_rejects_targets_without_a_profile():
-    with pytest.raises(ValueError, match="require an embodiment"):
+    with pytest.raises(ValueError, match="require a profile"):
         synthetic_obstacle_target(
             np.random.default_rng(14),
             profile=None,
             target_base=(0.1, 0.0, 0.0),
         )
-    with pytest.raises(ValueError, match="require an embodiment"):
+    with pytest.raises(ValueError, match="require a profile"):
         synthetic_obstacle_target(
             np.random.default_rng(15),
             profile=None,
@@ -823,6 +824,12 @@ def test_synthetic_generator_adds_base_and_torso_targets():
             np.random.default_rng(13),
             profile=profile,
             target_torso=(0.5,),
+        )
+
+    with pytest.raises(ValueError, match="require a profile"):
+        synthetic_obstacle_target(
+            np.random.default_rng(14),
+            target_base=(0.7, -0.3, 0.25),
         )
 
 

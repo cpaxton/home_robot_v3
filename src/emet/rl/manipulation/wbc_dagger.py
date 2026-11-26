@@ -33,6 +33,13 @@ from emet.rl.manipulation.wbc_training import (
     collect_teacher_data,
 )
 
+# Tracking quality is measured over the last half-second at 20 Hz after the
+# first successful step (or the last half-second of a failed episode). A
+# successful episode's single final step is almost always inside the success
+# tolerance, so the settled window is what distinguishes a clean reach from a
+# transient near-tolerance success.
+TRACKING_WINDOW_STEPS = 10
+
 
 @dataclass(frozen=True)
 class WbcSubtask:
@@ -100,6 +107,45 @@ def default_subtasks(robot: str = "innate_mars") -> tuple[WbcSubtask, ...]:
     )
 
 
+def subtasks_from_contract(contract: dict[str, Any]) -> tuple[WbcSubtask, ...]:
+    """Reconstruct a task suite from a checkpoint contract.
+
+    Evaluators must use the stored contract instead of silently rebuilding the
+    default suite: a checkpoint trained with a different target range, base-goal
+    probability, or hold-base setting would otherwise be evaluated on a task it
+    never saw.
+    """
+    if not isinstance(contract, dict):
+        raise ValueError("checkpoint contract must be a mapping")
+    if int(contract.get("schema_version", 0)) != 1:
+        raise ValueError(f"unsupported checkpoint contract schema: {contract.get('schema_version')!r}")
+    raw_tasks = contract.get("subtasks")
+    if not isinstance(raw_tasks, list) or not raw_tasks:
+        raise ValueError("checkpoint contract has no subtasks")
+    tasks: list[WbcSubtask] = []
+    for raw in raw_tasks:
+        if not isinstance(raw, dict):
+            raise ValueError("checkpoint contract subtask must be a mapping")
+        try:
+            task = WbcSubtask(
+                name=str(raw["name"]),
+                arm_goal=bool(raw["arm_goal"]),
+                base_goal=bool(raw["base_goal"]),
+                hold_base=bool(raw["hold_base"]),
+                target_range=float(raw["target_range"]),
+                horizon_s=float(raw["horizon_s"]),
+                base_goal_mode=str(raw["base_goal_mode"]),
+                weight=float(raw["weight"]),
+                active_arms=None if raw.get("active_arms") is None else tuple(str(v) for v in raw["active_arms"]),
+            )
+        except KeyError as exc:
+            raise ValueError(f"checkpoint contract subtask is missing {exc.args[0]!r}") from exc
+        tasks.append(task)
+    if len({task.name for task in tasks}) != len(tasks):
+        raise ValueError("checkpoint contract has duplicate subtask names")
+    return tuple(tasks)
+
+
 class WbcTaskSuiteEnv(gym.Env):
     """Sample one subtask environment per episode and preserve its identity."""
 
@@ -112,10 +158,12 @@ class WbcTaskSuiteEnv(gym.Env):
         robot: str = "innate_mars",
         seed: int = 0,
         control_dt: float = 0.05,
+        success_hold_s: float = 0.25,
         collision_force_n: float = 10.0,
         hard_cases: Sequence[Any] = (),
         hard_case_probability: float = 0.0,
     ) -> None:
+        robot = get_wbc_robot(robot).name
         if subtasks is None:
             subtasks = default_subtasks(robot)
         if not subtasks:
@@ -125,8 +173,9 @@ class WbcTaskSuiteEnv(gym.Env):
             raise ValueError("duplicate subtask names")
         if not 0.0 <= float(hard_case_probability) <= 1.0:
             raise ValueError("hard_case_probability must be in [0, 1]")
-        self.robot = str(robot)
+        self.robot = robot
         self.control_dt = float(control_dt)
+        self.success_hold_s = float(success_hold_s)
         self.collision_force_n = float(collision_force_n)
         self.hard_cases = tuple(hard_cases)
         self.hard_case_probability = float(hard_case_probability)
@@ -151,6 +200,7 @@ class WbcTaskSuiteEnv(gym.Env):
                 backend,
                 horizon_s=task.horizon_s,
                 control_dt=control_dt,
+                success_hold_s=success_hold_s,
                 collision_force_n=collision_force_n,
                 hold_base=task.hold_base,
             )
@@ -167,12 +217,14 @@ class WbcTaskSuiteEnv(gym.Env):
         self.active_name: str | None = None
 
     def contract(self) -> dict[str, Any]:
-        """Task identity saved with checkpoints and checked by evaluators."""
+        """Task contract stored with a checkpoint and checked by evaluators."""
         return {
+            "schema_version": 1,
             "robot": self.robot,
-            "subtasks": [asdict(task) for task in self.subtasks],
             "control_dt": self.control_dt,
+            "success_hold_s": self.success_hold_s,
             "collision_force_n": self.collision_force_n,
+            "subtasks": [asdict(task) for task in self.subtasks],
         }
 
     @property
@@ -297,13 +349,16 @@ def evaluate_suite(
     results: dict[str, Any] = {}
     all_returns, all_success = [], []
     all_contact_available, all_contact_steps = 0, 0
-    all_collisions, all_collision_measured, all_tracking, all_tracking_max, all_durations = [], [], [], [], []
+    all_collisions, all_tracking, all_durations = [], [], []
+    all_tracking_final, all_tracking_settled_max, all_tracking_episode_max = [], [], []
+    all_collision_measured: list[bool] = []
     for name in env.names:
         returns, successes, lengths = [], [], []
-        collisions, collision_measured, tracking_errors, tracking_max, durations = [], [], [], [], []
+        collisions, tracking_errors, durations = [], [], []
+        tracking_final, tracking_settled_max, tracking_episode_max = [], [], []
+        collision_measured = True
         contact_available, contact_steps = 0, 0
         control_dt = float(env.envs[name].control_dt)
-        settle_steps = max(1, int(np.ceil(float(env.envs[name].success_hold_s) / control_dt)))
         for episode in range(episodes_per_task):
             observation, _ = env.reset(
                 seed=seed + episode,
@@ -313,6 +368,7 @@ def evaluate_suite(
             collision = False
             collision_is_measured = True
             pos_errors: list[float] = []
+            first_success_index: int | None = None
             info: dict = {}
             done = False
             while not done:
@@ -334,30 +390,40 @@ def evaluate_suite(
                 contact_available += bool(info.get("contact_state_available", False))
                 collision |= bool(info.get("collision", False))
                 collision_is_measured &= bool(info.get("collision_measured", True))
+                collision_measured &= bool(info.get("collision_measured", False))
                 pos_error = float(info.get("reward_terms", {}).get("pos_err", float("nan")))
                 if np.isfinite(pos_error):
                     pos_errors.append(pos_error)
+                if info.get("success", False) and first_success_index is None:
+                    first_success_index = max(0, len(pos_errors) - 1)
                 success |= bool(info.get("success", False))
                 done = bool(terminated or truncated)
             elapsed = float(info.get("elapsed_s", steps * control_dt))
+            settled_errors = pos_errors if first_success_index is None else pos_errors[first_success_index:]
+            settled = settled_errors[-TRACKING_WINDOW_STEPS:]
             returns.append(total)
             successes.append(float(success))
             lengths.append(steps)
             collisions.append(int(collision))
-            collision_measured.append(bool(collision_is_measured))
-            settled = pos_errors[-settle_steps:]
+            collision_measured_episode = bool(collision_is_measured)
+            collision_measured = collision_measured and collision_measured_episode
             tracking_errors.append(float(np.mean(settled)) if settled else float("inf"))
-            tracking_max.append(max(settled) if settled else float("inf"))
+            tracking_final.append(pos_errors[-1] if pos_errors else float("inf"))
+            tracking_settled_max.append(max(settled) if settled else float("inf"))
+            tracking_episode_max.append(max(pos_errors) if pos_errors else float("inf"))
             durations.append(elapsed if np.isfinite(elapsed) else steps * control_dt)
         results[name] = {
             "episodes": float(episodes_per_task),
             "success_rate": float(np.mean(successes)),
             "mean_return": float(np.mean(returns)),
             "mean_steps": float(np.mean(lengths)),
-            "collisions": int(sum(collisions)) if all(collision_measured) else None,
-            "collision_measured": bool(all(collision_measured)),
+            "collisions": int(sum(collisions)) if collision_measured else None,
+            "collision_measured": bool(collision_measured),
             "tracking_error_m": float(np.mean(tracking_errors)),
-            "tracking_error_max_m": float(np.max(tracking_max)),
+            "tracking_error_max_m": float(max(tracking_settled_max)),
+            "tracking_error_final_m": float(np.mean(tracking_final)),
+            "tracking_error_settled_max_m": float(max(tracking_settled_max)),
+            "tracking_error_episode_max_m": float(max(tracking_episode_max)),
             "duration_s": float(np.mean(durations)),
             "contact_state_rate": float(contact_available / max(contact_steps, 1)),
         }
@@ -366,9 +432,11 @@ def evaluate_suite(
         all_contact_available += contact_available
         all_contact_steps += contact_steps
         all_collisions.extend(collisions)
-        all_collision_measured.extend(collision_measured)
         all_tracking.extend(tracking_errors)
-        all_tracking_max.extend(tracking_max)
+        all_tracking_final.extend(tracking_final)
+        all_tracking_settled_max.extend(tracking_settled_max)
+        all_tracking_episode_max.extend(tracking_episode_max)
+        all_collision_measured.append(bool(collision_measured))
         all_durations.extend(durations)
     results["aggregate"] = {
         "episodes": float(len(all_returns)),
@@ -377,7 +445,10 @@ def evaluate_suite(
         "collisions": int(sum(all_collisions)) if all(all_collision_measured) else None,
         "collision_measured": bool(all(all_collision_measured)),
         "tracking_error_m": float(np.mean(all_tracking)),
-        "tracking_error_max_m": float(np.max(all_tracking_max)),
+        "tracking_error_max_m": float(max(all_tracking_settled_max)),
+        "tracking_error_final_m": float(np.mean(all_tracking_final)),
+        "tracking_error_settled_max_m": float(max(all_tracking_settled_max)),
+        "tracking_error_episode_max_m": float(max(all_tracking_episode_max)),
         "duration_s": float(np.mean(all_durations)),
         "contact_state_rate": float(all_contact_available / max(all_contact_steps, 1)),
     }
@@ -440,6 +511,7 @@ def dagger_train(
         hard_cases=hard_cases,
         hard_case_probability=hard_case_probability,
     )
+    contract = env.contract()
     config = WbcPPOConfig(
         hidden=hidden,
         batch_size=batch_size,
@@ -463,7 +535,11 @@ def dagger_train(
         initial = evaluate_suite(env, policy, episodes_per_task=eval_episodes, seed=seed + 10_000)
         history.append({"stage": "init_eval", **initial})
         best_score = _selection_score(initial, selection)
-        trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "init", "evaluation": initial, "contract": env.contract()})
+        trainer.save(
+            best_path,
+            env.envs[env.names[0]],
+            metadata={"stage": "init", "contract": contract, "evaluation": initial},
+        )
         print(
             f"DAgger init_eval aggregate={initial['aggregate']['success_rate']:.2f} score={best_score:.2f}",
             flush=True,
@@ -501,7 +577,11 @@ def dagger_train(
     )
     if _selection_score(evaluation, selection) >= best_score:
         best_score = _selection_score(evaluation, selection)
-        trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "teacher_bc", "evaluation": evaluation, "contract": env.contract()})
+        trainer.save(
+            best_path,
+            env.envs[env.names[0]],
+            metadata={"stage": "teacher_bc", "contract": contract, "evaluation": evaluation},
+        )
 
     for iteration in range(1, iterations + 1):
         observations, actions, counts = collect_dagger_data(
@@ -534,7 +614,11 @@ def dagger_train(
         history.append(record)
         with metrics_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, sort_keys=True) + "\n")
-        trainer.save(output / f"policy_iter{iteration}.pt", env.envs[env.names[0]], metadata={**record, "contract": env.contract()})
+        trainer.save(
+            output / f"policy_iter{iteration}.pt",
+            env.envs[env.names[0]],
+            metadata={**record, "contract": contract},
+        )
         print(
             f"DAgger iter={iteration} samples={record['samples']} loss={bc['bc_loss']:.5f} "
             f"aggregate={evaluation['aggregate']['success_rate']:.2f} counts={counts}",
@@ -543,10 +627,10 @@ def dagger_train(
         score = _selection_score(evaluation, selection)
         if score >= best_score:
             best_score = score
-            trainer.save(best_path, env.envs[env.names[0]], metadata={**record, "contract": env.contract()})
+            trainer.save(best_path, env.envs[env.names[0]], metadata={**record, "contract": contract})
 
     final = history[-1]
-    trainer.save(output / "final.pt", env.envs[env.names[0]], metadata={**final, "contract": env.contract()})
+    trainer.save(output / "final.pt", env.envs[env.names[0]], metadata={**final, "contract": contract})
     (output / "dagger_report.json").write_text(json.dumps(history, indent=2, sort_keys=True) + "\n")
     env.close()
     return history
@@ -641,4 +725,5 @@ __all__ = [
     "default_subtasks",
     "evaluate_suite",
     "main",
+    "subtasks_from_contract",
 ]

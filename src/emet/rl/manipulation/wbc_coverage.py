@@ -165,16 +165,26 @@ def coverage_result(
     *,
     episodes: int,
     success_rate: float,
-    collisions: int = 0,
+    collisions: int,
+    collision_measured: bool,
     tracking_error_m: float,
     duration_s: float,
+    tracking_error_final_m: float | None = None,
+    tracking_error_settled_max_m: float | None = None,
+    tracking_error_episode_max_m: float | None = None,
     contact_state_rate: float | None = None,
 ) -> dict[str, Any]:
-    """Build the strict per-case metrics consumed by :func:`gate_report`."""
+    """Build the strict per-case metrics consumed by :func:`gate_report`.
+
+    There are no metric defaults. A report that omits collisions or claims a
+    zero collision count without measuring contacts must fail the gate.
+    """
     episodes = _integer_metric(episodes, label="episodes", minimum=1)
     collisions = _integer_metric(collisions, label="collisions", minimum=0)
     if collisions > episodes:
         raise ValueError("collisions must be in [0, episodes]")
+    if not isinstance(collision_measured, bool):
+        raise ValueError("collision_measured must be a boolean")
     success = float(success_rate)
     tracking = float(tracking_error_m)
     duration = float(duration_s)
@@ -186,9 +196,21 @@ def coverage_result(
         "episodes": episodes,
         "success_rate": success,
         "collisions": collisions,
+        "collision_measured": collision_measured,
         "tracking_error_m": tracking,
         "duration_s": duration,
     }
+    for label, value in (
+        ("tracking_error_final_m", tracking_error_final_m),
+        ("tracking_error_settled_max_m", tracking_error_settled_max_m),
+        ("tracking_error_episode_max_m", tracking_error_episode_max_m),
+    ):
+        if value is None:
+            continue
+        number = float(value)
+        if not math.isfinite(number) or number < 0.0:
+            raise ValueError(f"{label} must be finite and nonnegative")
+        result[label] = number
     if contact_state_rate is not None:
         contact = float(contact_state_rate)
         if not math.isfinite(contact) or not 0.0 <= contact <= 1.0:
@@ -211,11 +233,14 @@ def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> d
         raise ValueError(f"no seed results for task {task!r}")
     row_episodes = [_integer_metric(row.get("episodes"), label=f"task {task!r} episodes", minimum=1) for row in rows]
     row_collisions = [
-        _integer_metric(row["collisions"], label=f"task {task!r} collisions", minimum=0) for row in rows
+        _integer_metric(row.get("collisions"), label=f"task {task!r} collisions", minimum=0) for row in rows
     ]
     for seed, count, collisions in zip(seed_results, row_episodes, row_collisions, strict=True):
         if collisions > count:
             raise ValueError(f"seed {seed} has more collisions than episodes for task {task!r}")
+    measured = [row.get("collision_measured") for row in rows]
+    if any(value is not True for value in measured):
+        raise ValueError(f"task {task!r} results do not certify measured collisions")
     episodes = sum(row_episodes)
     weights = [count / episodes for count in row_episodes]
     contact = [row.get("contact_state_rate") for row in rows]
@@ -224,13 +249,32 @@ def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> d
         if all(value is not None for value in contact)
         else None
     )
+
+    def weighted_optional(label: str) -> float | None:
+        values = [row.get(label) for row in rows]
+        if any(value is None for value in values):
+            return None
+        return sum(weight * float(value) for weight, value in zip(weights, values, strict=True))
+
     return coverage_result(
         episodes=episodes,
         success_rate=sum(weight * float(row["success_rate"]) for weight, row in zip(weights, rows, strict=True)),
         collisions=sum(row_collisions),
+        collision_measured=True,
         tracking_error_m=sum(
             weight * float(row["tracking_error_m"]) for weight, row in zip(weights, rows, strict=True)
         ),
+        tracking_error_final_m=weighted_optional("tracking_error_final_m"),
+        tracking_error_settled_max_m=max(
+            float(row["tracking_error_settled_max_m"]) for row in rows if "tracking_error_settled_max_m" in row
+        )
+        if all("tracking_error_settled_max_m" in row for row in rows)
+        else None,
+        tracking_error_episode_max_m=max(
+            float(row["tracking_error_episode_max_m"]) for row in rows if "tracking_error_episode_max_m" in row
+        )
+        if all("tracking_error_episode_max_m" in row for row in rows)
+        else None,
         duration_s=sum(weight * float(row["duration_s"]) for weight, row in zip(weights, rows, strict=True)),
         contact_state_rate=contact_rate,
     )
@@ -246,11 +290,25 @@ def hard_case_metrics(result: dict[str, Any]) -> dict[str, Any]:
     else:
         episodes = _integer_metric(episodes_raw, label="hard-case episodes", minimum=1)
     contact = result.get("contact_state_rate")
+    collisions = _integer_metric(result["collisions"], label="hard-case collisions", minimum=0)
+    measured = result.get("collision_measured")
+    if not isinstance(measured, bool):
+        raise ValueError("hard-case result is missing measured collision provenance")
     return coverage_result(
         episodes=episodes,
         success_rate=float(result["success_rate"]),
-        collisions=_integer_metric(result["collisions"], label="hard-case collisions", minimum=0),
+        collisions=collisions,
+        collision_measured=measured,
         tracking_error_m=float(result["tracking_error_m"]),
+        tracking_error_final_m=None
+        if "tracking_error_final_m" not in result
+        else float(result["tracking_error_final_m"]),
+        tracking_error_settled_max_m=None
+        if "tracking_error_settled_max_m" not in result
+        else float(result["tracking_error_settled_max_m"]),
+        tracking_error_episode_max_m=None
+        if "tracking_error_episode_max_m" not in result
+        else float(result["tracking_error_episode_max_m"]),
         duration_s=float(result["duration_s"]),
         contact_state_rate=None if contact is None else float(contact),
     )
@@ -266,6 +324,8 @@ def _case_gate(case: CoverageCase, result: dict[str, Any]) -> list[str]:
     if not math.isfinite(episodes_float) or not episodes_float.is_integer() or episodes_float < 1:
         return [f"{case.id}: episodes must be a positive integer"]
     episodes = int(episodes_float)
+    if result.get("collision_measured") is not True:
+        failures.append(f"{case.id}: collisions were not measured")
     success, error = _finite_scalar(case.id, "success_rate", result.get("success_rate"))
     if error:
         failures.append(error)

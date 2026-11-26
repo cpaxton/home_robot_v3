@@ -42,6 +42,7 @@ from emet.controller.manipulation.wbc_contract import (
     normalized_action_vector,
 )
 from emet.controller.manipulation.wbc_profiles import sourccey_sim_profile
+from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
 from emet.utils.assets import get_robot_mjcf_path
 
 _ARM_SUFFIXES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
@@ -182,6 +183,20 @@ class SourcceyWbcBackend:
             self._gripper_open[arm_spec.name] = tuple(opens)
 
         self._ee_body = {arm.name: int(self.model.body(arm.ee_link).id) for arm in self.profile.arms}
+        support_bodies = tuple(
+            str(self.model.body(index).name)
+            for index in range(self.model.nbody)
+            if "wheel" in str(self.model.body(index).name).lower()
+        )
+        self._contact_sensor = MuJoCoContactSensor(
+            self.model,
+            base_body="base_root",
+            ee_body=self.profile.arms[0].ee_link,
+            hand_bodies=tuple(arm.ee_link for arm in self.profile.arms),
+            finger_bodies=("Gripper_Finger_v1_1", "Gripper_Finger_v1_2"),
+            support_bodies=support_bodies,
+        )
+        self.collision_measured = True
 
         velocity_limits = np.asarray(self.profile.base.velocity_limits, dtype=np.float64)
         if self.profile.base.acceleration_limits is None:
@@ -402,10 +417,12 @@ class SourcceyWbcBackend:
         invalid = not (np.isfinite(self.data.qpos).all() and np.isfinite(self.data.qvel).all())
         if not invalid:
             mujoco.mj_forward(self.model, self.data)
+        contact = self._contact_sensor.read(self.data)
         info = {
-            "contact_force": None,
-            "collision": None,
-            "collision_measured": False,
+            "contact_force": contact.collision_force,
+            "collision": contact.self_collision,
+            "collision_measured": True,
+            "hand_contact_force": contact.hand_force,
             "elapsed_s": float(self._elapsed),
             "sim_time": float(self.data.time),
             "invalid_physics": bool(invalid),

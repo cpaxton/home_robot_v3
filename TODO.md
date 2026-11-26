@@ -1297,6 +1297,9 @@ position-servo actuator adapter.
 - [x] PandaOmron RoboCasa reach adapter: native `PickPlaceCounterToCabinet` smoke tracks an 8 cm target to 1.3 cm / 0.029 rad after a 0.45 m chassis backoff. Not task success; see `docs/experiments/wbc_robocasa_20261126.md`.
 - [x] RoboCasa privileged teacher (joint PD + Cartesian fallback) and a loaded 20-episode reach sweep: 20/20, position mean 1.13 cm, p95 1.67 cm; loaded observations/teacher labels at `/tmp/opencode/wbc_robocasa_sweep_policy/loaded_data.npz`.
 - [x] RoboCasa Cartesian-offset reach sweep: 20/20, mean 0.87 cm, p95 1.54 cm; loaded data at `/tmp/opencode/wbc_robocasa_sweep_cartesian/`.
+- [x] Measured collision provenance for Stretch/Sourccey/RB-Y1/RoboCasa; coverage rows require `collision_measured=True` and missing metrics fail closed.
+- [x] Settled tracking window (last 10 steps) with final/max reporting; checkpoint task contracts and explicit legacy stamping; RoboCasa base/EE frames share the reset-anchored yaw.
+- [x] Register the native PandaOmron RoboCasa adapter and resolve profile EE/gripper aliases in both Panda plants.
 - [ ] RoboCasa object/cabinet task-target sweep and a DAgger fine-tune from the loaded data only if the task-target tail crosses 2 cm.
 - [ ] RoboCasa task-target bridge (object/receptacle/grasp targets and base goals) and merged-scene adapters for Stretch/Sourccey/RB-Y1; the generic hook stays fail-closed until a task adapter registers.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.

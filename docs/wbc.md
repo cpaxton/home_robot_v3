@@ -68,10 +68,37 @@ uv run python -m emet.rl.manipulation.wbc_coverage \
   --out /tmp/wbc-gate-report.json
 ```
 
+For the other four robots, one registry consumes per-robot reports:
+
+```bash
+uv run python scripts/emit_wbc_coverage.py \
+  --cases configs/wbc/multirobot_cases.json \
+  --policy-report innate_mars=/tmp/wbc-gate/mars \
+  --policy-report stretch=/tmp/wbc-gate/stretch \
+  --policy-report sourccey=/tmp/wbc-gate/sourccey \
+  --policy-report rby1=/tmp/wbc-gate/rby1 \
+  --out /tmp/wbc-multirobot-coverage.json
+uv run python -m emet.rl.manipulation.wbc_coverage \
+  --cases configs/wbc/multirobot_cases.json \
+  --results /tmp/wbc-multirobot-coverage.json \
+  --out /tmp/wbc-multirobot-gate-report.json
+```
+
 A checkpoint must load with the exact profile fingerprint. Layout-v2
 checkpoints are migrated to v3 automatically: old observation columns are
 remapped, new contact inputs are zeroed, and the normalized gripper-force
-columns are rescaled.
+columns are rescaled. New DAgger checkpoints also store the task contract
+(subtask goals, target range, base-goal probability, hold-base, control period,
+success hold, collision threshold). `eval_wbc_policy.py` and
+`eval_wbc_hard_cases.py` refuse to evaluate a checkpoint without one, so a
+held-out row cannot silently use a different task. Legacy DAgger checkpoints can
+be migrated explicitly:
+
+```bash
+uv run python scripts/stamp_wbc_contract.py \
+  --checkpoint old_best.pt --robot pandaomron \
+  --output stamped_best.pt
+```
 
 ## 3. Adding a robot
 
@@ -161,8 +188,10 @@ failure postures and must be rejected. The 2026-11-25 sink had five such stale
 records (014–018); only `failure-019` was genuine.
 
 The exporter uses `attempt.trace[0].qpos` (or `attempt.initial_q`) as the
-starting posture and `attempt.planned_waypoints[-1]` as the target posture,
-mapping `robot0_jointN` to the contract arm joint order. `context.op`,
+starting posture and `attempt.planned_waypoints[-1]` as the target posture. It
+infers the arm and contract joint order from the recorded joint names, so a
+Sourccey/RB-Y1 left-arm record is not mislabeled as the right arm; ambiguous
+multi-arm records are skipped unless `--arm` is supplied. `attempt.op`,
 `attempt.failure_mode`, `error_m`, object/receptacle bodies, layout/style, and
 job id are retained as provenance.
 
@@ -292,17 +321,30 @@ uv run python -m emet.rl.manipulation.wbc_dagger \
   for RoboCasa.
 - No object ids, GT poses, or teacher targets in the actor observation.
 - Coverage metrics are finite scalars: episodes/collisions integer, success and
-  errors finite. Missing tracking/duration fails closed.
+  errors finite. Missing tracking/duration/collisions fails closed, and
+  collision counts require `collision_measured=True`.
+- The checkpoint stores the exact task contract; evaluate scripts reconstruct
+  that suite instead of the current defaults.
 
 ## 5. Evaluation and promotion
 
 - **Held-out clean gate:** 50 episodes per subtask, three fresh seeds.
-  `evaluate_suite` reports success, collisions, final-step tracking error,
-  duration, and contact-state rate.
+  `evaluate_suite` reports success, measured collisions, settled tracking error,
+  final error, settled-window max, episode max, duration, and contact-state rate.
+  The gate's `tracking_error_m` is the mean over the last 0.5 s (10 steps) after
+  the first successful step (last 10 steps for a failed episode), not the single
+  final step.
+- **Collision provenance:** every gate row must carry
+  `collision_measured=True`. Stretch, Sourccey, RB-Y1, PandaOmron, and RoboCasa
+  now measure external/self contacts from solved MuJoCo contacts. Wheel/caster
+  floor contacts are support; intentional hand-object contacts are not
+  collisions; chassis/arm contact and non-gripper self-collision are. A report
+  that says `collisions=0` without this flag fails.
 - **Coverage gate:** per-family cases with `min_success`,
   `max_collision_rate`, `max_tracking_error_m`, optional `max_duration_s`, and
-  contact-state requirements. A policy is promoted only when active test cases
-  pass and older families do not regress.
+  contact-state requirements. Missing metrics raise; there are no zero
+  defaults. A policy is promoted only when active test cases pass and older
+  families do not regress.
 - **Hard posture:** currently `planned`; the first failure sink contained stale
   successful grasps, so the train split is empty. Regenerate after #267.
 - **Checkpoint selection:** `--selection balanced` ranks by aggregate plus the
@@ -313,8 +355,12 @@ uv run python -m emet.rl.manipulation.wbc_dagger \
 ## 6. RoboCasa adapter
 
 `RoboCasaPandaBackend` wraps a Robosuite/RoboCasa env and writes contract
-torques/velocities directly to the Omron + Panda actuators. It uses a
-reset-anchored robot frame, a 0.45 m chassis backoff, and a torso PD/bias hold.
+torques/velocities directly to the Omron + Panda actuators. It is registered
+through `make_wbc_backend("pandaomron", sim="robocasa", env=...)`. It uses a
+reset-anchored robot frame for both EE and base observations (including a yaw
+rotation), a 0.45 m chassis backoff, and a torso PD/bias hold. The profile keeps
+canonical names (`right_hand`, `panda_finger_joint*`); the direct and RoboCasa
+plants resolve them through explicit alias maps and verify the result.
 
 - **Teacher:** joint-space PD for sampled postures; Cartesian PD through a
   finite-difference EE Jacobian for task targets. Privileged only.
@@ -335,8 +381,9 @@ reset-anchored robot frame, a 0.45 m chassis backoff, and a torso PD/bias hold.
   absent.
 - **Multi-calibration feedforward:** rejected until nearest-posture torque
   selection exists.
-- **Coverage gate fails on tracking:** the gate uses the settled final-step EE
-  error, not a transient average over the base stage.
+- **Coverage gate fails on tracking:** the gate uses the mean EE error over the
+  last 10 steps, with final and max fields reported for diagnosis. It is not a
+  transient average over the base stage, and it is not just the final step.
 - **RoboCasa reach drifts:** verify the chassis backoff, torso hold, and target
   frame; the teacher should track to sub-centimeter error in the same scene.
 

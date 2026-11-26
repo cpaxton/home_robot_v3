@@ -227,11 +227,13 @@ silently training against the wrong controller.
 | Innate Mars | `mars_sim_profile()` | trained DAgger 0.973 held-out | not a RoboCasa target |
 | Stretch 3 | `stretch_sim_profile()` | trained DAgger 0.953 held-out | `Stretch` |
 | Sourccey | `sourccey_sim_profile()` | trained DAgger 0.952 held-out | `Sourccey` |
-| RB-Y1 | `rby1_sim_profile()` | trained DAgger 0.996 held-out | Galaxea R1 proxy path |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; clean 1.000 / robust 0.991 held-out | `PandaOmron` hook |
+| RB-Y1 | `rby1_sim_profile()` | trained DAgger 1.000 held-out | Galaxea R1 proxy path |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; clean 0.942 / robust 0.978 held-out | native `PandaOmron` reach adapter |
 
 Held-out numbers are 50 episodes per subtask on a fresh seed. All are direct
-MuJoCo results; none is a RoboCasa benchmark result.
+MuJoCo results; none is a RoboCasa benchmark result. Strict coverage gates pass
+for Mars, Stretch, Sourccey, and RB-Y1, and for the robust Panda checkpoint; the
+clean Panda checkpoint is not promoted.
 Backend/teacher/DAgger details:
 [wbc_multirobot_20261125.md](../experiments/wbc_multirobot_20261125.md).
 

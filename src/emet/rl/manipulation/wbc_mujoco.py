@@ -262,6 +262,7 @@ class MuJoCoWbcBackend:
                 terminated = True
         info = {
             "contact_force": float(evidence.get("force", 0.0)),
+            "collision_measured": True,
             "wheel_lift": bool(evidence.get("wheel_lift", False)),
             "invalid_physics": invalid,
             "invalid_state": invalid_state,

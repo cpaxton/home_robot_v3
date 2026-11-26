@@ -17,15 +17,18 @@ import argparse
 import json
 from pathlib import Path
 
+from emet.controller.manipulation.wbc_robots import get_wbc_robot
 from emet.rl.manipulation.wbc_coverage import (
     hard_case_metrics,
     load_coverage,
     task_result_metrics,
 )
+from emet.rl.manipulation.wbc_dagger import default_subtasks
 
 
-def _task_for_source(source: str) -> str:
+def _task_for_source(source: str, robot: str) -> str:
     text = source.lower()
+    known = {task.name for task in default_subtasks(robot)}
     for task in (
         "combined_left",
         "combined_right",
@@ -36,6 +39,11 @@ def _task_for_source(source: str) -> str:
         "base",
     ):
         if task in text:
+            if task not in known:
+                raise ValueError(
+                    f"coverage source {source!r} maps to subtask {task!r}, "
+                    f"which is not in the {robot} suite {sorted(known)}"
+                )
             return task
     raise ValueError(f"cannot map coverage source to a WBC subtask: {source!r}")
 
@@ -46,6 +54,27 @@ def _load_policy_report(path: Path) -> dict[str, dict]:
     if not isinstance(manifest, dict) or not isinstance(manifest.get("seed_results"), dict):
         raise ValueError(f"{manifest_path} has no seed_results mapping")
     return manifest["seed_results"]
+
+
+def _load_policy_reports(specs: list[str]) -> dict[str, dict[str, dict]]:
+    """Load ``PATH`` or ``ROBOT=PATH`` policy reports.
+
+    A plain path applies to every case; a robot-qualified path lets one gate
+    consume the per-robot held-out reports without merging their JSON by hand.
+    """
+    reports: dict[str, dict[str, dict]] = {}
+    for spec in specs:
+        if "=" in spec:
+            robot_raw, path_raw = spec.split("=", 1)
+            robot = get_wbc_robot(robot_raw).name
+            key = robot
+        else:
+            path_raw = spec
+            key = ""
+        if key in reports:
+            raise ValueError(f"duplicate policy report for {key or 'all robots'}")
+        reports[key] = _load_policy_report(Path(path_raw))
+    return reports
 
 
 def _hard_case_result(report: dict, source: str) -> dict:
@@ -62,13 +91,19 @@ def _hard_case_result(report: dict, source: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Convert WBC evaluator reports to coverage-gate rows")
     parser.add_argument("--cases", type=Path, required=True, help="coverage registry JSON")
-    parser.add_argument("--policy-report", type=Path, help="directory with manifest.json or the manifest path")
+    parser.add_argument(
+        "--policy-report",
+        action="append",
+        default=[],
+        metavar="[ROBOT=]PATH",
+        help="directory with manifest.json or the manifest path; repeat with ROBOT= for a multi-robot gate",
+    )
     parser.add_argument("--hard-case-report", type=Path, help="eval_wbc_hard_cases.py JSON")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
     cases = load_coverage(args.cases)
-    seed_results = _load_policy_report(args.policy_report) if args.policy_report else None
+    policy_reports = _load_policy_reports(args.policy_report)
     hard_report = (
         json.loads(args.hard_case_report.expanduser().read_text(encoding="utf-8")) if args.hard_case_report else None
     )
@@ -81,9 +116,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError(f"{case.id} requires --hard-case-report")
             rows[case.id] = hard_case_metrics(_hard_case_result(hard_report, case.source))
         elif case.family in {"free_space_reach", "base_arm"}:
+            seed_results = policy_reports.get(case.robot) or policy_reports.get("")
             if seed_results is None:
-                raise ValueError(f"{case.id} requires --policy-report")
-            rows[case.id] = task_result_metrics(seed_results, _task_for_source(case.source))
+                raise ValueError(f"{case.id} requires --policy-report for {case.robot!r}")
+            rows[case.id] = task_result_metrics(seed_results, _task_for_source(case.source, case.robot))
         else:
             raise ValueError(f"{case.id}: no result emitter for active family {case.family!r}")
     if not rows:

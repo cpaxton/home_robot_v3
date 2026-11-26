@@ -32,7 +32,13 @@ from emet.controller.manipulation.wbc_contract import (
     WbcObservation,
     normalized_action_vector,
 )
-from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
+from emet.controller.manipulation.wbc_profiles import (
+    PANDAOMRON_EE_LINK_ALIASES,
+    PANDAOMRON_GRIPPER_JOINT_ALIASES,
+    pandaomron_sim_profile,
+    resolve_body_name,
+    resolve_joint_names,
+)
 from emet.rl.manipulation.wbc_contact import ContactReading, MuJoCoContactSensor
 
 _BASE_JOINTS = (
@@ -113,6 +119,12 @@ class PandaOmronWbcBackend:
 
         self.model, self.model_fingerprint = _build_model()
         self.data = mujoco.MjData(self.model)
+        gripper = self.profile.arms[0].gripper
+        assert gripper is not None
+        if resolve_body_name(self.model, self.profile.arms[0].ee_link, PANDAOMRON_EE_LINK_ALIASES) != _EE_BODY:
+            raise ValueError("direct Panda EE aliases do not match the composed model")
+        if resolve_joint_names(self.model, gripper.joint_names, PANDAOMRON_GRIPPER_JOINT_ALIASES) != _GRIPPER_JOINTS:
+            raise ValueError("direct Panda gripper aliases do not match the composed model")
         self._contact_sensor = MuJoCoContactSensor(
             self.model,
             base_body="robot0_base",
@@ -235,6 +247,7 @@ class PandaOmronWbcBackend:
             terminated,
             {
                 **contact.to_info(),
+                "collision_measured": True,
                 "contact_state_available": True,
                 "wheel_lift": False,
                 "invalid_physics": terminated,

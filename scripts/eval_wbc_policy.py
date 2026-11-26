@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 
 from emet.controller.manipulation.wbc_robots import get_wbc_robot, wbc_profile_for
-from emet.rl.manipulation.wbc_dagger import WbcTaskSuiteEnv, evaluate_suite
+from emet.rl.manipulation.wbc_dagger import WbcTaskSuiteEnv, evaluate_suite, subtasks_from_contract
 from emet.rl.manipulation.wbc_training import WbcPPO
 
 
@@ -48,17 +48,37 @@ def main(argv: list[str] | None = None) -> int:
     robot = get_wbc_robot(args.robot)
     profile = wbc_profile_for(args.robot)
     trainer, metadata = WbcPPO.load(args.checkpoint, profile, device=args.device)
-    env = WbcTaskSuiteEnv(robot=robot.name, seed=0)
+    contract = (metadata or {}).get("contract")
+    contract_source = "metadata"
+    if contract is not None and "schema_version" not in contract:
+        contract = None
+    if contract is None:
+        if not args.allow_missing_contract:
+            raise ValueError(
+                "checkpoint has no versioned task contract; re-save it with scripts/stamp_wbc_contract.py "
+                "before evaluating, or pass --allow-missing-contract for a legacy artifact"
+            )
+        contract_source = "legacy_default_suite"
+        env = WbcTaskSuiteEnv(robot=robot.name, seed=0)
+        contract = env.contract()
+    else:
+        if contract.get("robot") != robot.name:
+            raise ValueError(f"checkpoint contract robot {contract.get('robot')!r} != requested {robot.name!r}")
+        subtasks = subtasks_from_contract(contract)
+        env = WbcTaskSuiteEnv(
+            subtasks,
+            robot=robot.name,
+            seed=0,
+            control_dt=float(contract["control_dt"]),
+            success_hold_s=float(contract["success_hold_s"]),
+            collision_force_n=float(contract["collision_force_n"]),
+        )
+        if env.contract() != contract:
+            raise ValueError(f"checkpoint task contract mismatch: {contract} != {env.contract()}")
     if trainer.policy.observation_size != env.observation_space.shape[0]:
         raise ValueError("checkpoint observation size does not match the evaluation environment")
     if trainer.policy.action_size != env.action_space.shape[0]:
         raise ValueError("checkpoint action size does not match the evaluation environment")
-    previous_contract = metadata.get("contract")
-    if previous_contract is None:
-        if not args.allow_missing_contract:
-            raise ValueError("checkpoint is missing the task contract; pass --allow-missing-contract for legacy artifacts")
-    elif previous_contract != env.contract():
-        raise ValueError(f"checkpoint task contract mismatch: {previous_contract} != {env.contract()}")
     args.output.mkdir(parents=True, exist_ok=True)
     seed_results: dict[str, dict] = {}
     aggregates: list[float] = []
@@ -82,6 +102,8 @@ def main(argv: list[str] | None = None) -> int:
         "profile_fingerprint": profile.fingerprint,
         "episodes_per_task": int(args.episodes),
         "seeds": list(args.seeds),
+        "contract": contract,
+        "contract_source": contract_source,
         "mean_aggregate": sum(aggregates) / len(aggregates),
         "min_aggregate": min(aggregates),
         "seed_results": seed_results,

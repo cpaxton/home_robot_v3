@@ -20,9 +20,10 @@ setpoint.
 
 Deliberate limitations:
 
-- There is no collision termination. The plant resets to a collision-free
-  ready pose; the packaged table/object contacts are ignored, so ``info``
-  reports zero contact force.
+- Collision evidence is measured from solved MuJoCo contacts. Wheel-floor and
+  caster-floor contacts are support; chassis/arm contacts with the table or
+  scene and non-gripper self-collisions are reported as collisions. A hand
+  contact is treated as intentional reach/grasp contact, not a collision.
 - The arm target is sampled by forward kinematics at the reset base pose. If a
   base goal is also sampled the world-frame EE target does not move with the
   base, so a both-goals episode is a reach-after-drive task.
@@ -53,6 +54,7 @@ from emet.controller.manipulation.wbc_profiles import stretch_sim_profile
 from emet.rl.manipulation.control import ManipulationControl
 from emet.rl.manipulation.models import build_manipulation_model
 from emet.rl.manipulation.profiles import PROFILES
+from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
 
 # The packaged scene's zero posture folds the wrist into the chassis, so the
 # plant resets to a raised ready pose instead. Lift and the virtual telescope
@@ -150,6 +152,23 @@ class StretchWbcBackend:
         self.control.base_bias_compensation_enabled = False
 
         arm_spec = self.profile.arms[0]
+        base_body = int(self.model.body("base_link").id)
+        support_geoms = tuple(
+            index
+            for index in range(self.model.ngeom)
+            if int(self.model.geom_bodyid[index]) == base_body
+            and int(self.model.geom_type[index]) == int(mujoco.mjtGeom.mjGEOM_SPHERE)
+        )
+        self._contact_sensor = MuJoCoContactSensor(
+            self.model,
+            base_body="base_link",
+            ee_body=arm_spec.ee_link,
+            hand_bodies=("link_SG3_gripper_body",),
+            finger_bodies=("link_gripper_finger_left", "link_gripper_finger_right"),
+            support_bodies=("base_link", "link_left_wheel", "link_right_wheel", "link_docking_station"),
+            support_geoms=support_geoms,
+        )
+        self.collision_measured = True
         self._joints = self.profile.joint_group(arm_spec.joint_group).joints
         expected_names = tuple(joint.name for joint in self._joints)
         if expected_names != ("lift", "arm", "wrist_yaw", "wrist_pitch", "wrist_roll"):
@@ -287,11 +306,13 @@ class StretchWbcBackend:
                 break
         if not invalid:
             mujoco.mj_forward(self.model, self.data)
+        contact = self._contact_sensor.read(self.data)
         self._elapsed += self.control_dt
         info = {
-            "contact_force": None,
-            "collision": None,
-            "collision_measured": False,
+            "contact_force": contact.collision_force,
+            "collision": contact.self_collision,
+            "collision_measured": True,
+            "hand_contact_force": contact.hand_force,
             "invalid_physics": invalid,
             "elapsed_s": self._elapsed,
             "sim_time": float(self.data.time),

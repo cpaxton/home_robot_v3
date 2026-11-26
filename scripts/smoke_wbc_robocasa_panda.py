@@ -129,9 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     for first, second, distance in final_contacts:
         print(f"final contact {first} | {second} dist={distance:.3f}", flush=True)
     print(
-        f"final arm_q={np.round(final_arm_q, 3)} "
-        f"target={np.round(final_target, 3)} "
-        f"ee={np.round(final_ee, 3)}",
+        f"final arm_q={np.round(final_arm_q, 3)} target={np.round(final_target, 3)} ee={np.round(final_ee, 3)}",
         flush=True,
     )
     print(f"tracking_success={success} final={info.get('reward_terms', {})}")

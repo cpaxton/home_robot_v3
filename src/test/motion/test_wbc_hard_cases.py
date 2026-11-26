@@ -49,6 +49,33 @@ def test_hard_cases_extract_contract_joint_order():
     assert cases[0].source["op"] == "grasp"
 
 
+def test_hard_cases_infer_dual_arm_side_and_contract_order():
+    initial = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5)
+    target = (0.2, 0.1, 0.4, -1.9, 0.0, 2.4)
+    record = _record(initial, target, robot="rb_y1")
+    record["attempt"]["joint_names"] = [f"left_arm_joint{i}" for i in range(1, 7)]
+    cases = hard_cases_from_failure_records([record], robot="rb_y1")
+    assert len(cases) == 1
+    assert cases[0].arm == "left"
+    assert cases[0].initial_q == initial
+    assert cases[0].target_q == target
+
+
+def test_hard_cases_do_not_match_unrelated_numeric_suffixes():
+    initial = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5)
+    target = (0.2, 0.1, 0.4, -1.9, 0.0, 2.4)
+    record = _record(initial, target, robot="rb_y1")
+    record["attempt"]["joint_names"] = [
+        "left_elbow_1",
+        "left_elbow_2",
+        "left_elbow_3",
+        "left_elbow_4",
+        "left_elbow_5",
+        "left_elbow_6",
+    ]
+    assert hard_cases_from_failure_records([record], robot="rb_y1") == []
+
+
 def test_hard_cases_skip_other_robots_and_noop_targets():
     q = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5, 0.7)
     cases = hard_cases_from_failure_records(
@@ -73,18 +100,20 @@ def test_hard_cases_normalize_robot_aliases():
     for requested in ("pandaomron", "panda_omron", "PandaOmron"):
         cases = hard_cases_from_failure_records([_record(initial, target)], robot=requested)
         assert len(cases) == 1, requested
-    assert hard_cases_from_failure_records([_record(initial, target, robot="rby1")], robot="rb_y1") == [
-        hard_cases_from_failure_records([_record(initial, target, robot="rby1")], robot="rby1")[0]
-    ]
+    rby1 = _record(initial[:6], target[:6], robot="rby1")
+    rby1["attempt"]["joint_names"] = [f"right_arm_joint{i}" for i in range(1, 7)]
+    assert hard_cases_from_failure_records([rby1], robot="rb_y1") == hard_cases_from_failure_records(
+        [rby1], robot="rby1"
+    )
 
 
 def test_hard_cases_capture_scene_context():
     initial = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5, 0.7)
     target = (0.2, 0.1, 0.4, -1.9, 0.0, 2.4, 0.8)
     record = _record(initial, target)
+    record["attempt"]["op"] = "grasp"
     record["context"].update(
         {
-            "op": "grasp",
             "object_body": "obj_main",
             "receptacle_body": "cab_main",
             "layout": 1,
@@ -92,6 +121,7 @@ def test_hard_cases_capture_scene_context():
         }
     )
     case = hard_cases_from_failure_records([record], robot="pandaomron")[0]
+    assert case.source["op"] == "grasp"
     assert case.scene["op"] == "grasp"
     assert case.scene["object_body"] == "obj_main"
     assert case.scene["receptacle_body"] == "cab_main"
