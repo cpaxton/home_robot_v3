@@ -470,7 +470,12 @@ def main(
                 robot=robot,
                 seed=int(seed) if seed is not None else None,
             )
-            scene_provided_robot = str(robot).lower().replace("-", "_") in {"panda_omron", "pandaomron"}
+            from emet.robots import get_robot_spec
+
+            robot_spec = get_robot_spec(str(robot))
+            scene_provided_robot = bool(
+                robot_spec is not None and getattr(robot_spec, "scene_provides_mjcf", False)
+            )
             if scene_model is not None and scene_provided_robot:
                 try:
                     # Only native scene-provided robots need this model. A
