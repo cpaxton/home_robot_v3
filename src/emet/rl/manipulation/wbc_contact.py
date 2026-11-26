@@ -72,7 +72,6 @@ class MuJoCoContactSensor:
         self.model = model
         self._body_parent = np.asarray(model.body_parentid, dtype=np.int32).copy()
         self._geom_body = np.asarray(model.geom_bodyid, dtype=np.int32).copy()
-        self._body_mass = np.asarray(model.body_mass, dtype=np.float64).copy()
         self.base_body = int(model.body(base_body).id)
         self.ee_body = int(model.body(ee_body).id)
         self.robot_bodies = self._descendants(self.base_body)
