@@ -1,5 +1,11 @@
 # Paper experiments — master index
 
+**Multi-robot WBC backend matrix (2026-11-25):** [MuJoCo plants for Mars/Stretch/Sourccey/RB-Y1 + PandaOmron hook](wbc_multirobot_20261125.md)
+records the direct-MuJoCo backend expansion. Teachers are 3/3 on Mars,
+Sourccey, and RB-Y1; Stretch is base-only. Sourccey/RB-Y1 DAgger plateaus at
+base-only 0.33, so dual-arm/high-DOF IK remains open. PandaOmron is a RoboCasa
+hook only; no policy is promoted.
+
 **Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)
 records a simulator-only Mars result: 0.973 aggregate held-out success over
 50 episodes per subtask (arm 1.0, base 1.0, combined 0.92) against a 0.98

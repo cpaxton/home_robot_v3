@@ -21,8 +21,8 @@ import gymnasium as gym
 import numpy as np
 import torch
 
+from emet.rl.manipulation.wbc_backends import make_wbc_backend
 from emet.rl.manipulation.wbc_env import WbcGymEnv
-from emet.rl.manipulation.wbc_mujoco import MuJoCoWbcBackend
 from emet.rl.manipulation.wbc_training import (
     WbcActorCritic,
     WbcPPO,
@@ -77,6 +77,7 @@ class WbcTaskSuiteEnv(gym.Env):
         self,
         subtasks: tuple[WbcSubtask, ...] = default_subtasks(),
         *,
+        robot: str = "innate_mars",
         seed: int = 0,
         control_dt: float = 0.05,
         collision_force_n: float = 10.0,
@@ -92,7 +93,9 @@ class WbcTaskSuiteEnv(gym.Env):
         self.weights /= self.weights.sum()
         self.envs: dict[str, WbcGymEnv] = {}
         for index, task in enumerate(self.subtasks):
-            backend = MuJoCoWbcBackend(
+            backend = make_wbc_backend(
+                robot,
+                sim="mujoco",
                 seed=seed + index,
                 control_dt=control_dt,
                 target_range=task.target_range,
@@ -252,6 +255,7 @@ def evaluate_suite(
 def dagger_train(
     *,
     output: str | Path,
+    robot: str = "innate_mars",
     subtasks: tuple[WbcSubtask, ...] = default_subtasks(),
     iterations: int = 4,
     teacher_steps: int = 2048,
@@ -270,7 +274,7 @@ def dagger_train(
         raise ValueError("iterations must be nonnegative")
     output = Path(output).expanduser()
     output.mkdir(parents=True, exist_ok=True)
-    env = WbcTaskSuiteEnv(subtasks, seed=seed)
+    env = WbcTaskSuiteEnv(subtasks, robot=robot, seed=seed)
     config = WbcPPOConfig(
         hidden=hidden,
         batch_size=batch_size,
@@ -367,6 +371,7 @@ def dagger_train(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="DAgger over the WBC subtask suite")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--robot", default="innate_mars")
     parser.add_argument("--iterations", type=int, default=4)
     parser.add_argument("--teacher-steps", type=int, default=2048)
     parser.add_argument("--dagger-steps", type=int, default=1024)
@@ -392,9 +397,10 @@ def main(argv: list[str] | None = None) -> int:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cuda" and not torch.cuda.is_available():
         parser.error("CUDA requested but torch.cuda.is_available() is false")
-    print(f"DAgger device={device} subtasks={requested}", flush=True)
+    print(f"DAgger device={device} robot={args.robot} subtasks={requested}", flush=True)
     dagger_train(
         output=args.output,
+        robot=args.robot,
         subtasks=subtasks,
         iterations=args.iterations,
         teacher_steps=args.teacher_steps,

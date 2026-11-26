@@ -413,23 +413,79 @@ def rby1_sim_profile() -> EmbodimentProfile:
     )
 
 
-_SIM_PROFILE_FACTORIES = {
-    "innate_mars": mars_sim_profile,
-    "mars": mars_sim_profile,
-    "stretch": stretch_sim_profile,
-    "sourccey": sourccey_sim_profile,
-    "rby1": rby1_sim_profile,
-    "rb_y1": rby1_sim_profile,
-}
+def pandaomron_sim_profile() -> EmbodimentProfile:
+    """PandaOmron / Omron LD-60 profile used by RoboCasa.
 
-
-def sim_profile(robot: str) -> EmbodimentProfile:
-    """Return the sim-matched profile for a supported robot key."""
-    key = robot.lower().replace("-", "_")
-    try:
-        return _SIM_PROFILE_FACTORIES[key]()
-    except KeyError as exc:
-        raise KeyError(f"no WBC sim profile for robot {robot!r}") from exc
+    RoboCasa composes the Omron holonomic base, a 1-DOF torso height, one
+    7-DOF Panda arm, and a two-finger gripper. Joint names are canonical here;
+    the RoboCasa adapter is responsible for the ``robot0_`` prefixes.
+    """
+    torso = JointGroupSpec(
+        name="torso",
+        role="torso",
+        joints=(
+            JointSpec(
+                "joint_torso_height",
+                (0.0, 0.34),
+                0.2,
+                2000.0,
+                kind="prismatic",
+                kp_eff=1000.0,
+                kd_eff=200.0,
+                max_lead=0.02,
+            ),
+        ),
+    )
+    panda_limits = (
+        (-2.8973, 2.8973),
+        (-1.7628, 1.7628),
+        (-2.8973, 2.8973),
+        (-3.0718, -0.0698),
+        (-2.8973, 2.8973),
+        (-0.0175, 3.7525),
+        (-2.8973, 2.8973),
+    )
+    panda_torque = (87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0)
+    arm = JointGroupSpec(
+        name="panda_arm",
+        role="arm",
+        joints=tuple(
+            JointSpec(
+                f"joint{index + 1}",
+                panda_limits[index],
+                2.0,
+                panda_torque[index],
+                kp_eff=1000.0,
+                kd_eff=200.0,
+                max_lead=0.05,
+            )
+            for index in range(7)
+        ),
+    )
+    return EmbodimentProfile(
+        name="pandaomron_sim",
+        base=BaseSpec(name="base", kind="holonomic", velocity_limits=(0.5, 0.5, 1.0)),
+        joint_groups=(torso, arm),
+        arms=(
+            ArmSpec(
+                name="right",
+                joint_group="panda_arm",
+                ee_link="right_hand",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("panda_finger_joint1", "panda_finger_joint2"),
+                    command_limits=((0.0, 0.04), (0.0, 0.04)),
+                ),
+            ),
+        ),
+        torso_group="torso",
+        metadata=(
+            ("limits_source", "robocasa_robot"),
+            ("robot", "pandaomron"),
+            ("sim_model", "omron_ld60_panda"),
+        ),
+    )
 
 
 def example_sourccey_profile() -> EmbodimentProfile:
@@ -736,6 +792,27 @@ def load_actuator_identification(path: str | Path, profile: EmbodimentProfile) -
     return apply_actuator_identification(profile, data)
 
 
+_SIM_PROFILE_FACTORIES = {
+    "innate_mars": mars_sim_profile,
+    "mars": mars_sim_profile,
+    "stretch": stretch_sim_profile,
+    "sourccey": sourccey_sim_profile,
+    "rby1": rby1_sim_profile,
+    "rb_y1": rby1_sim_profile,
+    "pandaomron": pandaomron_sim_profile,
+    "panda_omron": pandaomron_sim_profile,
+}
+
+
+def sim_profile(robot: str) -> EmbodimentProfile:
+    """Return the sim-matched profile for a supported robot key."""
+    key = robot.lower().replace("-", "_")
+    try:
+        return _SIM_PROFILE_FACTORIES[key]()
+    except KeyError as exc:
+        raise KeyError(f"no WBC sim profile for robot {robot!r}") from exc
+
+
 __all__ = [
     "apply_actuator_identification",
     "example_mars_profile",
@@ -744,6 +821,7 @@ __all__ = [
     "example_stretch_profile",
     "load_actuator_identification",
     "mars_sim_profile",
+    "pandaomron_sim_profile",
     "rby1_sim_profile",
     "sim_profile",
     "sourccey_sim_profile",

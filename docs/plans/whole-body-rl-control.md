@@ -206,6 +206,31 @@ the direct-MuJoCo base must map `(vx, vy, yaw_rate)` through its three
 steer/wheel modules, and the RoboCasa RB-Y1 adapter is the benchmark source of
 truth for that robot.
 
+### Robot and RoboCasa matrix
+
+`wbc_robots.py` is the robot registry; `wbc_robocasa.py` is the explicit
+RoboCasa/Robosuite hook boundary. A missing adapter fails closed rather than
+silently training against the wrong controller.
+
+| Robot | Sim profile | Direct MuJoCo | RoboCasa hook |
+|---|---|---|---|
+| Innate Mars | `mars_sim_profile()` | trained DAgger result | not a RoboCasa target |
+| Stretch 3 | `stretch_sim_profile()` | adapter + base teacher smoke; arm teacher not settled | `Stretch` |
+| Sourccey | `sourccey_sim_profile()` | adapter + 3/3 teacher smoke | `Sourccey` |
+| RB-Y1 | `rby1_sim_profile()` | adapter + 3/3 teacher smoke | Galaxea R1 proxy path |
+| PandaOmron | `pandaomron_sim_profile()` | no packaged direct MJCF | `PandaOmron` hook |
+
+Direct-MuJoCo smoke status is a teacher-only check (one episode per subtask),
+not a trained policy result. Mars remains the only fully trained WBC result.
+Backend/teacher/DAgger details:
+[wbc_multirobot_20261125.md](../experiments/wbc_multirobot_20261125.md).
+
+PandaOmron is an Omron holonomic base + 1-DOF torso height + one 7-DOF Panda
+arm + two-finger gripper. Its RoboCasa composite controller is OSC/JOINT_POSITION,
+not the torque contract, so the adapter must map between the benchmark action
+space and the contract explicitly. The hook exists now; it is not yet a trained
+PandaOmron result.
+
 | Robot | Base | Torso | Arms | Grippers | Action dim |
 |---|---|---|---:|---:|---:|
 | Innate Mars | planar 2 | — | 1 × 5 | 1 × 1 | 8 |
@@ -393,7 +418,8 @@ actor-visited-state loop that plain BC needs:
 
 ```bash
 python -m emet.rl.manipulation.wbc_dagger \
-  --iterations 4 --teacher-steps 2048 --dagger-steps 1024 \
+  --robot innate_mars --iterations 4 \
+  --teacher-steps 2048 --dagger-steps 1024 \
   --bc-epochs 30 --eval-episodes 10 --device auto --output runs/wbc-dagger
 ```
 
@@ -547,6 +573,9 @@ better than the retained velocity baseline.
 | [`wbc_training.py`](../../src/emet/rl/manipulation/wbc_training.py) | PPO trainer and profile-checked checkpoint |
 | [`wbc_calibration.py`](../../src/emet/rl/manipulation/wbc_calibration.py) | Failure-sink -> feedforward library/CLI |
 | [`wbc_dagger.py`](../../src/emet/rl/manipulation/wbc_dagger.py) | Subtask suite, actor-visited teacher labeling, DAgger loop |
+| [`wbc_robots.py`](../../src/emet/controller/manipulation/wbc_robots.py) | Robot/profile registry and RoboCasa names |
+| [`wbc_backends.py`](../../src/emet/rl/manipulation/wbc_backends.py) | Direct-MuJoCo / RoboCasa backend factory |
+| [`wbc_robocasa.py`](../../src/emet/rl/manipulation/wbc_robocasa.py) | Explicit RoboCasa/Robosuite registration hooks |
 | [`scripts/fit_wbc_feedforward.py`](../../scripts/fit_wbc_feedforward.py) | Operator feedforward-fit CLI with dry-run/contamination flags |
 | [`src/test/motion/test_wbc_foundations.py`](../../src/test/motion/test_wbc_foundations.py) | Contract, multi-arm, case library, generator tests |
 | [`src/test/motion/test_torque_adapter.py`](../../src/test/motion/test_torque_adapter.py) | Adapter mapping, limits, fail-closed tests |
