@@ -130,6 +130,7 @@ def test_sourccey_single_arm_goal_disables_the_other_arm():
     try:
         observation = backend.reset(seed=0)
         assert observation.arm("left").ee_target is None
+        assert observation.arm("left").target_mask == (False, False)
         assert observation.arm("right").ee_target is not None
         assert backend._target_q["left"] == pytest.approx(backend._start_q["left"])
     finally:
