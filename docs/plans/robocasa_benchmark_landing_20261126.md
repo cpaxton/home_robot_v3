@@ -89,6 +89,8 @@ uv run python scripts/eval_wbc_policy.py \
 ```
 
 - Smoke: no load error, no crash, finite metrics, `contact_state_rate == 1.0`.
+  On the #266 head (2026-11-26): Panda 2 episodes seed 30000 = 0.833 aggregate;
+  Mars = 1.000. These are compatibility checks, not performance gates.
 - Full gate: 50 episodes/subtask × seeds 30000/40000/50000 for all five robots.
 - Regression tolerance against `logs/eval/wbc_multirobot_20261126/manifest.json`:
   aggregate may not drop more than **0.02**, and no task may drop more than
