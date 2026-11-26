@@ -76,6 +76,7 @@ class ObservationLayout:
     fields: tuple[tuple[str, int], ...]
     slices: dict[str, slice]
     occupancy_shape: tuple[int, int, int] | None = None
+    include_contact: bool = True
 
     @property
     def size(self) -> int:
@@ -102,6 +103,7 @@ def wbc_observation_layout(
     profile: EmbodimentProfile,
     *,
     occupancy_shape: tuple[int, int, int] | None = None,
+    include_contact: bool = True,
 ) -> ObservationLayout:
     """Build the canonical scalar layout for one embodiment.
 
@@ -175,13 +177,14 @@ def wbc_observation_layout(
                     (f"{prefix}.gripper_force", m),
                 ]
             )
-        fields.extend(
-            [
-                (f"{prefix}.has_contact_state", 1),
-                (f"{prefix}.contact_flag", 1),
-                (f"{prefix}.contact_wrench", CONTACT_WRENCH_DIM),
-            ]
-        )
+        if include_contact:
+            fields.extend(
+                [
+                    (f"{prefix}.has_contact_state", 1),
+                    (f"{prefix}.contact_flag", 1),
+                    (f"{prefix}.contact_wrench", CONTACT_WRENCH_DIM),
+                ]
+            )
     if shape is not None:
         fields.extend([("has_occupancy", 1), ("occupancy", int(np.prod(shape)))])
 
@@ -190,7 +193,13 @@ def wbc_observation_layout(
     for name, width in fields:
         slices[name] = slice(offset, offset + width)
         offset += width
-    return ObservationLayout(profile=profile, fields=tuple(fields), slices=slices, occupancy_shape=shape)
+    return ObservationLayout(
+        profile=profile,
+        fields=tuple(fields),
+        slices=slices,
+        occupancy_shape=shape,
+        include_contact=include_contact,
+    )
 
 
 def encode_observation(
@@ -344,23 +353,24 @@ def encode_observation(
                 ]
             put(f"{prefix}.gripper_force", force)
 
-        contact = arm.contact
-        put(f"{prefix}.has_contact_state", [contact is not None])
-        put(f"{prefix}.contact_flag", [bool(contact.in_contact) if contact is not None else False])
-        if contact is None:
-            wrench = (0.0,) * CONTACT_WRENCH_DIM
-        elif normalize:
-            wrench = tuple(
-                float(np.clip(value / scale, -CONTACT_OBSERVATION_CLIP, CONTACT_OBSERVATION_CLIP))
-                for value, scale in zip(
-                    contact.wrench,
-                    (CONTACT_FORCE_SCALE_N,) * 3 + (CONTACT_TORQUE_SCALE_NM,) * 3,
-                    strict=True,
+        if layout.include_contact:
+            contact = arm.contact
+            put(f"{prefix}.has_contact_state", [contact is not None])
+            put(f"{prefix}.contact_flag", [bool(contact.in_contact) if contact is not None else False])
+            if contact is None:
+                wrench = (0.0,) * CONTACT_WRENCH_DIM
+            elif normalize:
+                wrench = tuple(
+                    float(np.clip(value / scale, -CONTACT_OBSERVATION_CLIP, CONTACT_OBSERVATION_CLIP))
+                    for value, scale in zip(
+                        contact.wrench,
+                        (CONTACT_FORCE_SCALE_N,) * 3 + (CONTACT_TORQUE_SCALE_NM,) * 3,
+                        strict=True,
+                    )
                 )
-            )
-        else:
-            wrench = contact.wrench
-        put(f"{prefix}.contact_wrench", wrench)
+            else:
+                wrench = contact.wrench
+            put(f"{prefix}.contact_wrench", wrench)
 
     if layout.occupancy_shape is not None:
         put("has_occupancy", [observation.occupancy is not None])

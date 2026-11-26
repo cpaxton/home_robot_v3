@@ -63,9 +63,7 @@ def test_fit_excludes_implausible_outlier(tmp_path):
         tmp_path,
         [_record([1.0, 0.5], [0.0, 0.5]), _record([1.2, 0.5], [0.2, 0.5])],
     )
-    model = fit_feedforward(
-        load_manipulation_attempts(path), min_samples=2, max_abs_bias=0.5, cluster_distance=0.3
-    )
+    model = fit_feedforward(load_manipulation_attempts(path), min_samples=2, max_abs_bias=0.5, cluster_distance=0.3)
     assert "torso_joint1" not in model.joint_bias
     assert model.joint_bias["torso_joint2"] == pytest.approx(0.0)
 
@@ -73,9 +71,7 @@ def test_fit_excludes_implausible_outlier(tmp_path):
 def test_model_round_trips_and_biases_by_joint_name(tmp_path):
     model = FeedforwardModel(
         embodiment="rby1",
-        calibrations=(
-            FeedforwardCalibration(reference_q={"torso_joint1": 0.0}, joint_bias={"torso_joint1": 0.3}),
-        ),
+        calibrations=(FeedforwardCalibration(reference_q={"torso_joint1": 0.0}, joint_bias={"torso_joint1": 0.3}),),
         samples=2,
     )
     path = model.save(tmp_path / "ff.json")
@@ -109,9 +105,7 @@ def test_executor_applies_feedforward_to_the_final_settle(monkeypatch):
     monkeypatch.setattr(
         kpp,
         "plan_arm_joint_path",
-        lambda *a, **k: SimpleNamespace(
-            success=True, planner="linear", detail=None, waypoints=[np.zeros(2), final_q]
-        ),
+        lambda *a, **k: SimpleNamespace(success=True, planner="linear", detail=None, waypoints=[np.zeros(2), final_q]),
     )
 
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
@@ -125,9 +119,7 @@ def test_executor_applies_feedforward_to_the_final_settle(monkeypatch):
     ex._last_cmd_q = None
     ex._feedforward = FeedforwardModel(
         embodiment="rby1",
-        calibrations=(
-            FeedforwardCalibration(reference_q={"torso_joint1": -0.25}, joint_bias={"torso_joint1": 0.2}),
-        ),
+        calibrations=(FeedforwardCalibration(reference_q={"torso_joint1": -0.25}, joint_bias={"torso_joint1": 0.2}),),
         samples=1,
     )
     ex._joint_position_bounds = lambda: (np.full(2, -np.inf), np.full(2, np.inf))
@@ -145,6 +137,7 @@ def test_executor_applies_feedforward_to_the_final_settle(monkeypatch):
         np.testing.assert_allclose(call.args[0], expected)
     assert ex.last_attempt["reached"] is True
 
+
 def test_bias_is_skipped_outside_the_calibrated_posture():
     model = FeedforwardModel(
         embodiment="rby1",
@@ -153,6 +146,7 @@ def test_bias_is_skipped_outside_the_calibrated_posture():
     )
     np.testing.assert_allclose(apply_bias([1.1], ["j"], model), [1.6])
     np.testing.assert_allclose(apply_bias([2.0], ["j"], model), [2.0])
+
 
 def test_posture_table_selects_the_nearest_calibration():
     model = FeedforwardModel(
@@ -187,9 +181,7 @@ def test_lift_outside_the_tight_envelope_does_not_inherit_pregrasp_bias():
         ),
     )
     # Measured pregrasp is 0.015 rad from the reference and gets the correction.
-    np.testing.assert_allclose(
-        apply_bias([0.7074], ["torso_joint3"], model), [1.0758], atol=1e-4
-    )
+    np.testing.assert_allclose(apply_bias([0.7074], ["torso_joint3"], model), [1.0758], atol=1e-4)
     # The lift is 0.168 rad away; with the 0.12 envelope it must pass through.
     np.testing.assert_allclose(apply_bias([0.8605], ["torso_joint3"], model), [0.8605])
 
@@ -245,3 +237,23 @@ def test_executor_resolves_ik_from_the_measured_posture_when_tracking_fails(monk
     # The live solve starts from the measured qpos, not the commanded plan.
     np.testing.assert_allclose(solved[0][0], [0.4, 0.2])
     np.testing.assert_allclose(ex._stream_arm_q.call_args_list[-1].args[0], [0.5, 0.3])
+
+
+def test_single_calibration_rejects_multi_posture_tables():
+    from emet.controller.manipulation.wbc_feedforward import single_calibration
+
+    model = FeedforwardModel(
+        embodiment="rby1",
+        calibrations=(
+            FeedforwardCalibration(reference_q={"torso_joint1": 0.0}, joint_bias={"torso_joint1": 0.1}),
+            FeedforwardCalibration(reference_q={"torso_joint1": 1.0}, joint_bias={"torso_joint1": 0.2}),
+        ),
+    )
+    with pytest.raises(ValueError, match="exactly one calibration"):
+        single_calibration(model)
+    assert single_calibration(
+        FeedforwardModel(
+            embodiment="rby1",
+            calibrations=(FeedforwardCalibration(reference_q={"torso_joint1": 0.0}, joint_bias={"torso_joint1": 0.1}),),
+        )
+    ).joint_bias["torso_joint1"] == pytest.approx(0.1)

@@ -22,9 +22,10 @@ import gymnasium as gym
 import numpy as np
 import torch
 
+from emet.controller.manipulation.wbc_robots import get_wbc_robot
 from emet.rl.manipulation.wbc_backends import make_wbc_backend
 from emet.rl.manipulation.wbc_env import WbcGymEnv
-from emet.rl.manipulation.wbc_hard_cases import load_hard_cases
+from emet.rl.manipulation.wbc_hard_cases import hard_case_split, load_hard_cases
 from emet.rl.manipulation.wbc_training import (
     WbcActorCritic,
     WbcPPO,
@@ -75,6 +76,7 @@ def default_subtasks(robot: str = "innate_mars") -> tuple[WbcSubtask, ...]:
     with two arms use single-arm subtasks: a simultaneous ten-plus-DOF reach is
     a much harder imitation target than either arm alone.
     """
+    robot = get_wbc_robot(robot).name
     if robot in {"sourccey", "rby1"}:
         return (
             WbcSubtask("arm_left", True, False, True, 0.15, 3.0, "forward", 0.15, ("left",)),
@@ -294,7 +296,7 @@ def evaluate_suite(
             )
             total, steps, success = 0.0, 0, False
             collision = False
-            pos_error_sum, pos_error_steps = 0.0, 0
+            final_pos_error = float("nan")
             info: dict = {}
             done = False
             while not done:
@@ -317,8 +319,7 @@ def evaluate_suite(
                 collision |= bool(info.get("collision", False))
                 pos_error = float(info.get("reward_terms", {}).get("pos_err", float("nan")))
                 if np.isfinite(pos_error):
-                    pos_error_sum += pos_error
-                    pos_error_steps += 1
+                    final_pos_error = pos_error
                 success |= bool(info.get("success", False))
                 done = bool(terminated or truncated)
             elapsed = float(info.get("elapsed_s", steps * control_dt))
@@ -326,7 +327,7 @@ def evaluate_suite(
             successes.append(float(success))
             lengths.append(steps)
             collisions.append(int(collision))
-            tracking_errors.append(pos_error_sum / pos_error_steps if pos_error_steps else float("inf"))
+            tracking_errors.append(final_pos_error if np.isfinite(final_pos_error) else float("inf"))
             durations.append(elapsed if np.isfinite(elapsed) else steps * control_dt)
         results[name] = {
             "episodes": float(episodes_per_task),
@@ -403,6 +404,9 @@ def dagger_train(
         raise ValueError(f"unknown checkpoint selection mode: {selection!r}")
     output = Path(output).expanduser()
     output.mkdir(parents=True, exist_ok=True)
+    # Seed before constructing the actor; WbcPPO.train seeds only its rollouts.
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     env = WbcTaskSuiteEnv(
         subtasks,
         robot=robot,
@@ -558,7 +562,17 @@ def main(argv: list[str] | None = None) -> int:
     if unknown:
         parser.error(f"unknown subtasks: {sorted(unknown)}")
     subtasks = tuple(tasks[name] for name in requested)
-    hard_cases = load_hard_cases(args.hard_cases) if args.hard_cases else []
+    if args.hard_case_probability < 0.0 or args.hard_case_probability > 1.0:
+        parser.error("--hard-case-probability must be in [0, 1]")
+    hard_cases = []
+    if args.hard_cases is not None:
+        if hard_case_split(args.hard_cases) != "train":
+            parser.error("--hard-cases must be a file with split='train'")
+        hard_cases = load_hard_cases(args.hard_cases)
+        if not hard_cases:
+            parser.error("--hard-cases train file contains no cases")
+    if args.hard_case_probability > 0 and not hard_cases:
+        parser.error("--hard-case-probability requires non-empty --hard-cases")
     device = args.device
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -2,6 +2,10 @@
 
 Date: 2026-11-26 (started 2026-11-25)
 
+Narrative training report (method, curriculum, gates, and roadmap):
+[wbc_training_report_20261126.md](wbc_training_report_20261126.md). This matrix
+is the result index.
+
 Scope: direct-MuJoCo WBC plants for Mars, Stretch, Sourccey, RB-Y1, and
 PandaOmron. This is simulator-only; none of these is a RoboCasa benchmark
 result.
@@ -10,11 +14,11 @@ result.
 
 | Robot | Profile | Direct MuJoCo backend | Teacher | DAgger status |
 |---|---|---|---|---|
-| Innate Mars | `mars_sim_profile()` | `MuJoCoWbcBackend` | 1.00 | 0.973 held-out |
-| Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | 0.97 | 0.953 held-out |
-| Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 1.00 | 0.952 held-out |
-| RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 1.00 | 0.996 held-out |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 1.000 clean / 0.991 robust held-out |
+| Innate Mars | `mars_sim_profile()` | `MuJoCoWbcBackend` | 1.00 | 0.955 mean (v2 gate) |
+| Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | 0.97 | 0.951 held-out (v3) |
+| Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 1.00 | 0.960 held-out (v3) |
+| RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 1.00 | 1.000 held-out (v3) |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 1.000 clean (v2) / 0.978 robust (v3) |
 
 Teacher success is a ceiling, not a policy result. Held-out numbers use 50
 episodes per subtask on a fresh evaluation seed (30000).
@@ -22,15 +26,16 @@ episodes per subtask on a fresh evaluation seed (30000).
 | Robot | Arm subtask(s) | Base | Combined | Aggregate |
 |---|---|---|---|---|
 | Innate Mars | arm 1.00 | 1.00 | 0.92 | **0.973** |
-| Stretch 3 | arm 0.94 | 1.00 | 0.92 | **0.953** |
-| PandaOmron (clean) | right 1.00 | 1.00 | 1.00 | **1.000** |
-| PandaOmron (robust) | right 1.00 | 1.00 | 0.94–1.00 | **0.991** |
-| RB-Y1 | left 1.00, right 1.00 | 1.00 | left 1.00, right 0.98 | **0.996** |
+| Stretch 3 | arm 0.94 | 1.00 | 0.92 | **0.951** |
+| PandaOmron (clean) | right 1.00 | 1.00 | 1.00 | **1.000** (v2) |
+| PandaOmron (robust) | right 1.00 | 1.00 | 0.94–1.00 | **0.978** (v3) |
+| RB-Y1 | left 1.00, right 1.00 | 1.00 | left 1.00, right 1.00 | **1.000** |
 | Sourccey | left 1.00, right 1.00 | 1.00 | left 0.86, right 0.90 | **0.952** |
 
 The PandaOmron `best.pt` from the aggregate-only selection gate is 0.927
 because the warm-start checkpoint tied the later iterations at 1.00 in-suite.
-Iteration 2 is the promoted artifact (1.000 held-out); the loop now prefers the
+Iteration 2 is the clean promoted artifact (1.000 held-out); the separately
+promoted robust checkpoint is the mixed hard/clean run. The loop now prefers the
 later checkpoint on a tie.
 
 Multi-seed gate (50 episodes per subtask; aggregate success):
@@ -40,9 +45,9 @@ Multi-seed gate (50 episodes per subtask; aggregate success):
 | Mars | 0.973 | 0.920 | 0.973 | 0.955 |
 | Stretch | 0.953 | 0.940 | 0.960 | 0.951 |
 | Sourccey | 0.952 | 0.960 | 0.968 | 0.960 |
-| RB-Y1 | 0.996 | 0.996 | 1.000 | 0.997 |
+| RB-Y1 | 1.000 | 1.000 | 1.000 | 1.000 |
 | PandaOmron (clean) | 1.000 | 1.000 | 0.987 | 0.996 |
-| PandaOmron (robust) | 0.980 | 0.993 | 1.000 | 0.991 |
+| PandaOmron (robust) | 0.973 | 0.980 | 0.980 | 0.978 |
 
 A combined-weighted Mars retrain (6 s combined, 60% collection weight) reached
 0.956 mean (0.967/0.933/0.967), statistically the same as the retained 0.955.
@@ -50,8 +55,10 @@ The original Mars 3 s/5 s and 40/20/40 protocol stays.
 
 Artifacts and the per-task breakdown are in
 `logs/eval/wbc_multirobot_20261126/` (`manifest.json`, checkpoints, held-out
-JSON). The per-robot policy is selected by a fresh gate, so the 30000 seed for
-PandaOmron is a validation seed rather than a fully untouched test.
+JSON). The clean Panda and Mars rows are the original v2 gates; the other rows
+are current layout-v3 evaluations with v2 checkpoints migrated (zero contact
+inputs, gripper-force columns rescaled). See the narrative
+[training report](wbc_training_report_20261126.md).
 
 ## What landed
 
@@ -125,42 +132,24 @@ most of the gap.
   zero arm posture self-collides with the wrist; the ready-pose reset and
   300/30 torque gains are required at 20 Hz.
 
-## Hard cases
+## Hard-case data correction (PandaOmron)
 
-`wbc_hard_cases.py` exports recorded arm postures from the manipulation failure
-sink into DAgger cases: the actor starts at the posture it actually reached when
-the attempt failed, and the teacher is asked to reach the recorded target
-posture. `--hard-cases` and `--hard-case-probability` inject them into arm and
-combined subtasks; base-only subtasks are excluded. The first export is
-`configs/eval/wbc_pandaomron_hard_cases.json` (six Panda sink/cabinet records).
+The 2026-11-25 manipulation-failure sink contains 20 records. Records 014–018
+are `place_failed` attempts whose `attempt` field is the preceding **successful
+grasp** (`reached=True`, `failure_mode=None`); they are stale last-attempt
+entries, not failure postures. Only record 019 is a genuine reach failure
+(`reached=False`, `tracking_failed`, `error_m=0.42`).
 
-These are free-space arm postures, not contact/carry geometry. Shelf-entry and
-carry failures still need a dedicated carry subtask or an obstacle-conditioned
-backend before they are fully represented.
+The exporter now requires an explicit `reached=False` and canonicalizes robot
+aliases (`panda_omron`, `rb_y1`, `mars`). The regenerated train split is empty;
+the one genuine case is evaluation-only (`split='test'`), and the
+`hard_posture` family is marked planned until #267 supplies genuine reach
+failures. `dagger_train --hard-cases` rejects non-train files and empty train
+files.
 
-The hard-case export is split into five training postures (014–018) and one
-held-out test posture (019). The teacher reaches all six in 2–23 steps.
-
-- Clean policy (`pandaomron/best.pt`): 4/5 hard-train, 0/1 held-out test.
-- Robust policy (`pandaomron_robust/best.pt`): mixed fine-tune on the five
-  training postures at 25% injection; 5/5 hard-train, **1/1 held-out test**.
-  Clean multi-seed mean is 0.991 (seed 30000 combined 0.94 vs 1.00 for the
-  clean policy), so the robust checkpoint trades a little clean combined
-  success for hard-posture generalization.
-
-The earlier 1/6 measurement was a harness bug: `load_hard_case` must follow a
-normal reset, otherwise the torso and gripper stay at model defaults; the
-evaluation script now resets first.
-
-## RoboCasa reach adapter (PandaOmron)
-
-The first RoboCasa adapter writes contract torques/velocities directly into the
-native RoboCasa `PandaOmron` sim. In `PickPlaceCounterToCabinet` (layout 1,
-style 1) it tracks an 8 cm end-effector target to **1.3 cm / 0.029 rad** after
-backing the chassis 0.45 m from the counter. This is reach tracking, not task
-success; object/receptacle targets, base motion, and the merged-scene
-Stretch/Sourccey/RB-Y1 adapters remain. Details:
-[wbc_robocasa_20261126.md](wbc_robocasa_20261126.md).
+The earlier “5/5 train, 1/1 test” hard-case claim is retracted. The mixed
+checkpoint's clean-suite result is reported separately; it is not evidence for
+a hard-case-trained policy.
 
 ## Next experiments
 
@@ -181,7 +170,9 @@ Artifacts:
 - Sourccey: `/tmp/opencode/wbc_sourccey_combined/` (`best.pt`, iteration 4,
   0.952 held-out); earlier specialists are superseded.
 - RB-Y1: `/tmp/opencode/wbc_rby1_multi/` (`best.pt`, `heldout_50.json`).
-- PandaOmron: `/tmp/opencode/wbc_pandaomron_combined/` (`policy_iter2.pt`,
-  1.000 held-out; `best.pt` is the 0.927 warm start).
+- PandaOmron clean: `/tmp/opencode/wbc_pandaomron_combined/policy_iter2.pt`
+  (1.000 clean held-out).
+- PandaOmron robust: `/tmp/opencode/wbc_panda_mixed_heldout/best.pt` (0.991
+  clean mean, 5/5 hard-train, 1/1 held-out hard test).
 - The earlier dual-arm plateau runs remain under `/tmp/opencode/wbc_sourccey_full/`
   and `/tmp/opencode/wbc_rby1_full/`; they are superseded.

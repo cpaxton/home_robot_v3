@@ -209,9 +209,7 @@ def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> d
         rows.append(row)
     if not rows:
         raise ValueError(f"no seed results for task {task!r}")
-    row_episodes = [
-        _integer_metric(row.get("episodes"), label=f"task {task!r} episodes", minimum=1) for row in rows
-    ]
+    row_episodes = [_integer_metric(row.get("episodes"), label=f"task {task!r} episodes", minimum=1) for row in rows]
     row_collisions = [
         _integer_metric(row.get("collisions", 0), label=f"task {task!r} collisions", minimum=0) for row in rows
     ]
