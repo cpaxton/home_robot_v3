@@ -92,6 +92,7 @@ def test_hard_cases_capture_scene_context():
         }
     )
     case = hard_cases_from_failure_records([record], robot="pandaomron")[0]
+    assert case.scene["op"] == "grasp"
     assert case.scene["object_body"] == "obj_main"
     assert case.scene["receptacle_body"] == "cab_main"
     assert case.scene["layout"] == 1
