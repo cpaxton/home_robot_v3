@@ -2,166 +2,6 @@
   "cases": [
     {
       "arm": "right",
-      "failure_mode": "place_failed:no_collision_free_placement",
-      "initial_q": [
-        0.008039584482833744,
-        -0.2098252474488596,
-        -0.008335277368547231,
-        -2.4869742105213337,
-        -0.005961732909665714,
-        2.8324714213914377,
-        0.7760088696245887
-      ],
-      "name": "failure-014-sugar_cube-cab",
-      "robot": "panda_omron",
-      "source": {
-        "failure_mode": null,
-        "job_id": "20261125_230333_9f6fbf",
-        "message": "place_failed:no_collision_free_placement",
-        "object_query": "sugar_cube",
-        "receptacle_query": "cab",
-        "record_index": 14
-      },
-      "target_q": [
-        0.00798940857719013,
-        -0.22474208513722196,
-        -0.008468690379162131,
-        -2.4641584318078356,
-        -0.005903154320549992,
-        2.8336496068708237,
-        0.7760201366762178
-      ]
-    },
-    {
-      "arm": "right",
-      "failure_mode": "place_failed:no_collision_free_placement",
-      "initial_q": [
-        0.0029861477164085854,
-        -0.14986076331509332,
-        -0.016297395683024497,
-        -2.6102397796394587,
-        0.0017667237761121108,
-        2.7891106222569726,
-        0.7832165782738916
-      ],
-      "name": "failure-015-pear-sink",
-      "robot": "panda_omron",
-      "source": {
-        "failure_mode": null,
-        "job_id": "20261125_230621_556ae8",
-        "message": "place_failed:no_collision_free_placement",
-        "object_query": "pear",
-        "receptacle_query": "sink",
-        "record_index": 15
-      },
-      "target_q": [
-        0.00829861860188802,
-        -0.24542889384436603,
-        -0.008734382597253242,
-        -2.4664860520831895,
-        -0.010568630104740788,
-        2.837788213863046,
-        0.7703648689191332
-      ]
-    },
-    {
-      "arm": "right",
-      "failure_mode": "grasp_failed:attach_verify_failed",
-      "initial_q": [
-        0.008384073115144454,
-        -0.22208303680501984,
-        -0.005705317299716936,
-        -2.4977449852982563,
-        -0.010546804021745753,
-        2.8341040452275763,
-        0.7692867839224148
-      ],
-      "name": "failure-016-pear-sink",
-      "robot": "panda_omron",
-      "source": {
-        "failure_mode": null,
-        "job_id": "20261125_231615_596d39",
-        "message": "grasp_failed:attach_verify_failed",
-        "object_query": "pear",
-        "receptacle_query": "sink",
-        "record_index": 16
-      },
-      "target_q": [
-        0.006772465127751894,
-        -0.2501259340471882,
-        -0.007156724268372364,
-        -2.4662743763731325,
-        -0.010629829944229296,
-        2.8434374661781483,
-        0.7691778503645744
-      ]
-    },
-    {
-      "arm": "right",
-      "failure_mode": "place_failed:no_collision_free_placement",
-      "initial_q": [
-        0.021503860379174882,
-        -0.10512851371280187,
-        0.006754605446982582,
-        -2.503737885000363,
-        -0.009118741953094603,
-        2.8889524081044073,
-        0.7616680490441697
-      ],
-      "name": "failure-017-pear-sink",
-      "robot": "panda_omron",
-      "source": {
-        "failure_mode": null,
-        "job_id": "20261125_231937_061374",
-        "message": "place_failed:no_collision_free_placement",
-        "object_query": "pear",
-        "receptacle_query": "sink",
-        "record_index": 17
-      },
-      "target_q": [
-        0.005607589601003727,
-        -0.24761434193420095,
-        -0.006944765386138005,
-        -2.4843559880575996,
-        -0.008753019503954433,
-        2.8924546988784967,
-        0.7614565646028083
-      ]
-    },
-    {
-      "arm": "right",
-      "failure_mode": "place_failed:placement_geometry_unavailable",
-      "initial_q": [
-        -0.015055741795405064,
-        -0.06964886652441743,
-        0.006570770440499533,
-        -2.237799431593748,
-        -0.005313295769729039,
-        2.567326840933654,
-        0.6646195571517224
-      ],
-      "name": "failure-018-pear-sink",
-      "robot": "panda_omron",
-      "source": {
-        "failure_mode": null,
-        "job_id": "20261125_232623_3e7c85",
-        "message": "place_failed:placement_geometry_unavailable",
-        "object_query": "pear",
-        "receptacle_query": "sink",
-        "record_index": 18
-      },
-      "target_q": [
-        -0.009399116206771193,
-        -0.20131410948617057,
-        0.008571613366045519,
-        -2.3110365137528106,
-        -0.0062433533880549424,
-        2.5132704850440755,
-        0.6631180512749608
-      ]
-    },
-    {
-      "arm": "right",
       "failure_mode": "tracking_failed",
       "initial_q": [
         0.01933235559413383,
@@ -173,12 +13,15 @@
         0.6568383701568696
       ],
       "name": "failure-019-pear-sink",
-      "robot": "panda_omron",
+      "robot": "pandaomron",
       "source": {
+        "error_m": 0.41858239868705277,
         "failure_mode": "tracking_failed",
         "job_id": "20261125_233017_3e5d1e",
         "message": "grasp_failed:lift_tracking_failed",
         "object_query": "pear",
+        "op": "grasp",
+        "reached": false,
         "receptacle_query": "sink",
         "record_index": 19
       },
@@ -193,5 +36,6 @@
       ]
     }
   ],
-  "schema_version": 1
+  "schema_version": 1,
+  "split": "test"
 }

@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import numbers
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,6 +82,11 @@ class CoverageCase:
             raise ValueError(f"case {self.id} max_collision_rate must be in [0, 1]")
         if thresholds["max_tracking_error_m"] < 0:
             raise ValueError(f"case {self.id} max_tracking_error_m must be nonnegative")
+        for key, value in thresholds.items():
+            if not math.isfinite(float(value)):
+                raise ValueError(f"case {self.id} gate {key} must be finite")
+        if "max_duration_s" in thresholds and float(thresholds["max_duration_s"]) <= 0:
+            raise ValueError(f"case {self.id} max_duration_s must be positive")
 
     def thresholds(self) -> dict[str, float]:
         merged = dict(_DEFAULT_GATES[self.family])
@@ -132,32 +139,160 @@ def load_coverage(path: str | Path) -> list[CoverageCase]:
     return cases
 
 
+def _finite_scalar(
+    case_id: str, label: str, value: Any, *, minimum: float | None = None
+) -> tuple[float | None, str | None]:
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return None, f"{case_id}: {label} must be a finite scalar"
+    number = float(value)
+    if not math.isfinite(number):
+        return None, f"{case_id}: {label} must be finite"
+    if minimum is not None and number < minimum:
+        return None, f"{case_id}: {label} {number:.3f} < {minimum:.3f}"
+    return number, None
+
+
+def coverage_result(
+    *,
+    episodes: int,
+    success_rate: float,
+    collisions: int = 0,
+    tracking_error_m: float,
+    duration_s: float,
+    contact_state_rate: float | None = None,
+) -> dict[str, Any]:
+    """Build the strict per-case metrics consumed by :func:`gate_report`."""
+    if type(episodes) is not int or episodes < 1:
+        raise ValueError("episodes must be a positive integer")
+    if type(collisions) is not int or collisions < 0 or collisions > episodes:
+        raise ValueError("collisions must be an integer in [0, episodes]")
+    success = float(success_rate)
+    tracking = float(tracking_error_m)
+    duration = float(duration_s)
+    if not all(math.isfinite(value) for value in (success, tracking, duration)):
+        raise ValueError("coverage metrics must be finite")
+    if not 0.0 <= success <= 1.0 or tracking < 0.0 or duration < 0.0:
+        raise ValueError("coverage metrics are out of range")
+    result: dict[str, Any] = {
+        "episodes": episodes,
+        "success_rate": success,
+        "collisions": collisions,
+        "tracking_error_m": tracking,
+        "duration_s": duration,
+    }
+    if contact_state_rate is not None:
+        contact = float(contact_state_rate)
+        if not math.isfinite(contact) or not 0.0 <= contact <= 1.0:
+            raise ValueError("contact_state_rate must be finite and in [0, 1]")
+        result["contact_state_rate"] = contact
+    return result
+
+
+def task_result_metrics(seed_results: dict[str, dict[str, Any]], task: str) -> dict[str, Any]:
+    """Aggregate per-seed task results into one coverage-gate row."""
+    rows = []
+    for seed, result in seed_results.items():
+        if not isinstance(result, dict) or task not in result:
+            raise ValueError(f"seed {seed} is missing task result {task!r}")
+        row = result[task]
+        if not isinstance(row, dict):
+            raise ValueError(f"seed {seed} task {task!r} is not a mapping")
+        rows.append(row)
+    if not rows:
+        raise ValueError(f"no seed results for task {task!r}")
+    episodes = sum(int(row["episodes"]) for row in rows)
+    if episodes < 1:
+        raise ValueError(f"task {task!r} has no episodes")
+    weights = [int(row["episodes"]) / episodes for row in rows]
+    contact = [row.get("contact_state_rate") for row in rows]
+    contact_rate = (
+        sum(weight * float(value) for weight, value in zip(weights, contact, strict=True))
+        if all(value is not None for value in contact)
+        else None
+    )
+    return coverage_result(
+        episodes=episodes,
+        success_rate=sum(weight * float(row["success_rate"]) for weight, row in zip(weights, rows, strict=True)),
+        collisions=sum(int(row["collisions"]) for row in rows),
+        tracking_error_m=sum(
+            weight * float(row["tracking_error_m"]) for weight, row in zip(weights, rows, strict=True)
+        ),
+        duration_s=sum(weight * float(row["duration_s"]) for weight, row in zip(weights, rows, strict=True)),
+        contact_state_rate=contact_rate,
+    )
+
+
+def hard_case_metrics(result: dict[str, Any]) -> dict[str, Any]:
+    """Convert a hard-case evaluator case result into a coverage-gate row."""
+    if not isinstance(result, dict):
+        raise ValueError("hard-case result must be a mapping")
+    episodes_raw = result.get("episodes")
+    if isinstance(episodes_raw, list):
+        episodes = len(episodes_raw)
+    elif isinstance(episodes_raw, numbers.Real) and not isinstance(episodes_raw, bool):
+        episodes = int(episodes_raw)
+    else:
+        raise ValueError("hard-case episodes must be a list or an integer")
+    contact = result.get("contact_state_rate")
+    return coverage_result(
+        episodes=episodes,
+        success_rate=float(result["success_rate"]),
+        collisions=int(result.get("collisions", 0)),
+        tracking_error_m=float(result.get("tracking_error_m", float("inf"))),
+        duration_s=float(result.get("duration_s", 0.0)),
+        contact_state_rate=None if contact is None else float(contact),
+    )
+
+
 def _case_gate(case: CoverageCase, result: dict[str, Any]) -> list[str]:
     thresholds = case.thresholds()
     failures: list[str] = []
-    episodes = int(result.get("episodes") or 0)
-    if episodes < 1:
-        return [f"{case.id}: no evaluation episodes"]
-    success = float(result.get("success_rate", 0.0))
-    collisions = int(result.get("collisions") or 0)
-    error = float(result.get("tracking_error_m", float("inf")))
-    duration = float(result.get("duration_s", 0.0) or 0.0)
-    if success < thresholds["min_success"]:
-        failures.append(f"{case.id}: success {success:.2f} < {thresholds['min_success']:.2f}")
-    collision_rate = collisions / episodes
+    raw_episodes = result.get("episodes")
+    if isinstance(raw_episodes, bool) or not isinstance(raw_episodes, numbers.Real):
+        return [f"{case.id}: episodes must be a positive integer"]
+    episodes_float = float(raw_episodes)
+    if not math.isfinite(episodes_float) or not episodes_float.is_integer() or episodes_float < 1:
+        return [f"{case.id}: episodes must be a positive integer"]
+    episodes = int(episodes_float)
+    success, error = _finite_scalar(case.id, "success_rate", result.get("success_rate"))
+    if error:
+        failures.append(error)
+    elif not 0.0 <= success <= 1.0:
+        failures.append(f"{case.id}: success_rate must be in [0, 1]")
+    collisions, error = _finite_scalar(case.id, "collisions", result.get("collisions"), minimum=0.0)
+    if error:
+        failures.append(error)
+    elif not float(collisions).is_integer() or int(collisions) > episodes:
+        failures.append(f"{case.id}: collisions must be an integer in [0, episodes]")
+    tracking, error = _finite_scalar(case.id, "tracking_error_m", result.get("tracking_error_m"), minimum=0.0)
+    if error:
+        failures.append(error)
+    duration, error = _finite_scalar(case.id, "duration_s", result.get("duration_s"), minimum=0.0)
+    if error:
+        failures.append(error)
+    if failures:
+        return failures
+    if float(success) < thresholds["min_success"]:
+        failures.append(f"{case.id}: success {float(success):.2f} < {thresholds['min_success']:.2f}")
+    collision_rate = int(collisions) / episodes
     if collision_rate > thresholds["max_collision_rate"]:
         failures.append(f"{case.id}: collision rate {collision_rate:.2f} > {thresholds['max_collision_rate']:.2f}")
-    if error > thresholds["max_tracking_error_m"]:
-        failures.append(f"{case.id}: tracking {error:.3f} m > {thresholds['max_tracking_error_m']:.3f} m")
+    if float(tracking) > thresholds["max_tracking_error_m"]:
+        failures.append(f"{case.id}: tracking {float(tracking):.3f} m > {thresholds['max_tracking_error_m']:.3f} m")
     max_duration = thresholds.get("max_duration_s")
-    if max_duration is not None and duration > float(max_duration):
-        failures.append(f"{case.id}: duration {duration:.1f}s > {float(max_duration):.1f}s")
+    if max_duration is not None and float(duration) > float(max_duration):
+        failures.append(f"{case.id}: duration {float(duration):.1f}s > {float(max_duration):.1f}s")
     if case.contact == "required":
         rate = result.get("contact_state_rate")
-        if rate is None:
-            failures.append(f"{case.id}: contact state missing from result")
-        elif float(rate) < 1.0:
-            failures.append(f"{case.id}: contact state rate {float(rate):.2f} < 1.00")
+        contact, error = _finite_scalar(case.id, "contact_state_rate", rate, minimum=0.0)
+        if error:
+            failures.append(f"{case.id}: contact state missing or invalid from result")
+        elif float(contact) < 1.0:
+            failures.append(f"{case.id}: contact state rate {float(contact):.2f} < 1.00")
+    elif result.get("contact_state_rate") is not None:
+        _, error = _finite_scalar(case.id, "contact_state_rate", result.get("contact_state_rate"), minimum=0.0)
+        if error:
+            failures.append(error)
     return failures
 
 
