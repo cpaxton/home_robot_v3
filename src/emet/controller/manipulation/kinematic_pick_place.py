@@ -859,6 +859,7 @@ class KinematicPickPlaceExecutor:
 
     def _search_placement(self, body, receptacle, *, approach_base):
         from emet.motion.placement import (
+            base_candidates_from_approach_hint,
             placement_base_candidates,
             plan_placement_paths,
         )
@@ -881,8 +882,28 @@ class KinematicPickPlaceExecutor:
         spec = self.robot._spec
         mode = str(getattr(spec, "tamp_approach", "front") or "front")
         offset = (np.pi / 2 if self.arm == "left" else -np.pi / 2) if mode == "side" else 0.
-        poses = placement_base_candidates(np.asarray(support).mean(axis=(0, 1))[:2], current_xyt=current,
-                                           yaw_offset=offset) if approach_base else [current]
+        center_xy = np.asarray(support).mean(axis=(0, 1))[:2]
+        if approach_base:
+            get_session = getattr(self.robot, "get_emet_session", None)
+            session = (get_session() if callable(get_session) else None) or {}
+            environment = session.get("environment") or {}
+            hint = environment.get("spawn_hint_xyt") or session.get("spawn_hint_xyt")
+            front_poses = []
+            if hint is not None:
+                placements = self._placements() or {}
+                bounds = (placements.get(receptacle) or {}).get("bounds")
+                if bounds is not None:
+                    front_poses = base_candidates_from_approach_hint(hint, center_xy, bounds)
+            ring = placement_base_candidates(center_xy, current_xyt=current, yaw_offset=offset)
+            # Prefer the known approach side, then the measured/current pose, then
+            # the full ring. The endpoint check still validates every candidate.
+            poses = []
+            for pose in (*front_poses, *ring):
+                if not any(np.linalg.norm(np.asarray(pose[:2]) - np.asarray(kept[:2])) < 0.02
+                           for kept in poses):
+                    poses.append(pose)
+        else:
+            poses = [current]
         state = getattr(self.robot, "_state", {})
         clear = None
         if state.get("sim_base_pose_query") is True:
@@ -913,15 +934,37 @@ class KinematicPickPlaceExecutor:
                 base_writer={"planar_joint_names": self._planar_joint_names(),
                              "freejoint_name": self.profile.base_freejoint_name})
             logger.info(f"Placement snapshot: {snapshot}")
-        result = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,
-            ee_body=self.ee_body, robot_body=spec.base_link_name, scene=scene, payload=payload,
-            object_centers=centers, base_candidates=poses, set_base=set_base, contact_bodies=contacts,
-            rrt_max_iter=self.rrt_max_iter)
-        if clear is not None and not all(clear):
-            result.rejections["base_endpoint_rejected"] = sum(not value for value in clear)
-        if not centers:
-            result.rejections["surface_search_budget_exhausted" if surface_search.budget_exhausted
-                              else "no_accepted_surface_candidate"] = 1
+        def _search(mode: str):
+            search = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,
+                ee_body=self.ee_body, robot_body=spec.base_link_name, scene=scene, payload=payload,
+                object_centers=centers, base_candidates=poses, set_base=set_base, contact_bodies=contacts,
+                rrt_max_iter=self.rrt_max_iter, preplace_mode=mode)
+            if clear is not None and not all(clear):
+                search.rejections["base_endpoint_rejected"] = sum(not value for value in clear)
+            if not centers:
+                search.rejections["surface_search_budget_exhausted" if surface_search.budget_exhausted
+                                  else "no_accepted_surface_candidate"] = 1
+            logger.info(f"Placement search mode={mode} paths={len(search.paths)} "
+                        f"rejections={search.rejections}")
+            return search
+
+        result = _search("top")
+        if not result.paths:
+            entry = (self._placements() or {}).get(receptacle) or {}
+            bounds = np.asarray(entry.get("bounds"), dtype=np.float64)
+            center_z = float(np.asarray(support).mean(axis=(0, 1))[2])
+            interior = (
+                bounds.shape == (2, 3)
+                and np.isfinite(bounds).all()
+                and bounds[0, 2] + 0.05 < center_z < bounds[1, 2] - 0.05
+            )
+            if interior:
+                horizontal = _search("horizontal")
+                if horizontal.paths:
+                    result = horizontal
+                else:
+                    for key, value in horizontal.rejections.items():
+                        result.rejections[key] = result.rejections.get(key, 0) + value
         self.last_placement_search = result
         self._placement_support_bounds = np.array(support, dtype=float, copy=True)
         logger.info(f"Placement search source={result.geometry_source} paths={len(result.paths)} "

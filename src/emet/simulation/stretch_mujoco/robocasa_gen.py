@@ -188,6 +188,43 @@ def _robosuite_robot_for(robot_name: str) -> str:
     return robot_name
 
 
+def _scene_qpos_by_name(model, data, *, robot_prefix: str = "") -> dict[str, np.ndarray]:
+    """Reset-time qpos for every non-robot joint, keyed by joint name.
+
+    RoboCasa opens cabinet doors/drawers in ``env.reset()``. That state lives in
+    ``data.qpos``; the final exported model is rebuilt from XML, so copying by
+    name is what survives the robot replacement and cleanup.
+    """
+    values: dict[str, np.ndarray] = {}
+    for j in range(model.njnt):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j)
+        if not name or (robot_prefix and name.startswith(robot_prefix)):
+            continue
+        jtype = model.jnt_type[j]
+        width = 7 if jtype == mujoco.mjtJoint.mjJNT_FREE else 4 if jtype == mujoco.mjtJoint.mjJNT_BALL else 1
+        adr = int(model.jnt_qposadr[j])
+        values[name] = np.asarray(data.qpos[adr : adr + width], dtype=np.float64).copy()
+    return values
+
+
+def _apply_scene_qpos0(model, scene_qpos: dict[str, np.ndarray]) -> int:
+    """Write reset-time scene joint positions into the final model's qpos0."""
+    applied = 0
+    for j in range(model.njnt):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j)
+        value = scene_qpos.get(name) if name else None
+        if value is None:
+            continue
+        jtype = model.jnt_type[j]
+        width = 7 if jtype == mujoco.mjtJoint.mjJNT_FREE else 4 if jtype == mujoco.mjtJoint.mjJNT_BALL else 1
+        if int(value.size) != width:
+            continue
+        adr = int(model.jnt_qposadr[j])
+        model.qpos0[adr : adr + width] = value
+        applied += 1
+    return applied
+
+
 def model_generation_wizard(
     task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
@@ -268,8 +305,14 @@ def model_generation_wizard(
     )
     print(colored("Spawning environment...\n", "yellow"))
 
-    model = env.sim.model._model
+    env_model = env.sim.model._model
     xml = env.sim.model.get_xml()
+    robot_prefix = ""
+    try:
+        robot_prefix = str(env.robots[0].robot_model.naming_prefix)
+    except (AttributeError, IndexError, TypeError):
+        robot_prefix = ""
+    scene_qpos = _scene_qpos_by_name(env_model, env.sim.data, robot_prefix=robot_prefix)
 
     click.secho(f"\nMaking Object Placements for task [{task}]...\n", fg="yellow")
     object_placements_info = {}
@@ -337,6 +380,11 @@ def model_generation_wizard(
         xml = xml_remove_all_tags(xml, "key")
 
     model = mujoco.MjModel.from_xml_string(xml)
+    applied = _apply_scene_qpos0(model, scene_qpos)
+    click.secho(
+        f"Preserved {applied} non-robot joint positions (doors/drawers/objects) in qpos0",
+        fg="green",
+    )
 
     if use_strip_placeholder_robot and hasattr(env, "init_robot_base_pos"):
         pos = np.asarray(env.init_robot_base_pos, dtype=float).reshape(-1)

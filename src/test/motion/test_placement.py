@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from emet.motion.placement import (
+    base_candidates_from_approach_hint,
     placement_base_candidates,
     plan_placement_paths,
     validated_dense_path,
@@ -208,6 +209,41 @@ def test_executor_search_accepts_observed_geometry_without_gt_query(rig, query):
     executor.robot.move_base_to.assert_not_called()
 
 
+def test_horizontal_preplace_offsets_the_approach_outward(rig, monkeypatch):
+    model, data, payload = rig
+    targets = []
+
+    def fake_ik(*_args, target_pos, **_kwargs):
+        targets.append(np.asarray(target_pos, dtype=np.float64).copy())
+        return SimpleNamespace(success=False)
+
+    monkeypatch.setattr("emet.motion.placement.solve_pose_ik", fake_ik)
+    common = {
+        "joint_names": ("x", "y", "z"),
+        "ee_body": "tool",
+        "robot_body": "base",
+        "scene": PlacementScene([], source="ground_truth"),
+        "payload": payload,
+        "object_centers": [[0.7, 0.2, 0.1]],
+        "base_candidates": [[0.0, 0.0, 0.0]],
+        "set_base": set_base,
+        "contact_bodies": ("tool",),
+        "max_ik_calls_per_base": 1,
+    }
+    plan_placement_paths(model, data, **common, preplace_mode="horizontal", horizontal_preplace_m=0.2)
+    assert targets
+    rotated = payload.vertices_ee @ np.eye(3)
+    center_offset = (rotated.min(axis=0) + rotated.max(axis=0)) / 2
+    place = np.array([0.7, 0.2, 0.1]) - center_offset
+    expected_xy = place[:2] - place[:2] / np.linalg.norm(place[:2]) * 0.2
+    np.testing.assert_allclose(targets[0][:2], expected_xy, atol=1e-9)
+    assert targets[0][2] == pytest.approx(place[2])
+
+    targets.clear()
+    plan_placement_paths(model, data, **common, preplace_mode="top")
+    assert targets and targets[0][2] == pytest.approx(place[2] + 0.12)
+
+
 def test_planning_budget_and_live_endpoint_rejection(rig):
     model, data, payload = rig
     common = {"joint_names": ("x", "y", "z"), "ee_body": "tool", "robot_body": "base",
@@ -358,3 +394,33 @@ def test_snapshot_never_drops_unknown_space_predicate(rig, tmp_path):
         base_writer={"freejoint_name": "base_pose"})
     with pytest.raises(ValueError, match="Unsupported"):
         replay_snapshot(path)
+
+
+def test_approach_hint_puts_the_cabinet_base_on_the_open_side():
+    poses = base_candidates_from_approach_hint(
+        [0.59684214, -0.83209373, 1.57079633],
+        [2.25, -0.19],
+        [[1.75, -0.37, 1.39], [2.75, 0.0, 2.31]],
+    )
+    # Hint is outside the front (-y) face and much farther from the left face;
+    # the middle candidate is centered on the cabinet at the hint's depth.
+    assert np.allclose(poses[1], [2.25, -0.83209373, np.pi / 2])
+    assert all(pose[1] < -0.37 for pose in poses)
+    assert abs(poses[1][2] - np.pi / 2) < 1e-6
+
+
+def test_approach_hint_uses_a_side_face_when_that_is_nearest():
+    poses = base_candidates_from_approach_hint(
+        [0.8, -0.19, 0.0],
+        [2.25, -0.19],
+        [[1.75, -0.37, 1.39], [2.75, 0.0, 2.31]],
+    )
+    assert np.allclose(poses[1], [0.8, -0.19, 0.0])
+
+
+def test_approach_hint_inside_the_receptacle_is_ignored():
+    assert base_candidates_from_approach_hint(
+        [2.25, -0.19, 0.0],
+        [2.25, -0.19],
+        [[1.75, -0.37, 1.39], [2.75, 0.0, 2.31]],
+    ) == []
