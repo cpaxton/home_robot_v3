@@ -281,15 +281,21 @@ def evaluate_suite(
     results: dict[str, Any] = {}
     all_returns, all_success = [], []
     all_contact_available, all_contact_steps = 0, 0
+    all_collisions, all_tracking, all_durations = [], [], []
     for name in env.names:
         returns, successes, lengths = [], [], []
+        collisions, tracking_errors, durations = [], [], []
         contact_available, contact_steps = 0, 0
+        control_dt = float(env.envs[name].control_dt)
         for episode in range(episodes_per_task):
             observation, _ = env.reset(
                 seed=seed + episode,
                 options={"subtask": name, "hard_case": False},
             )
             total, steps, success = 0.0, 0, False
+            collision = False
+            pos_error_sum, pos_error_steps = 0.0, 0
+            info: dict = {}
             done = False
             while not done:
                 if teacher:
@@ -308,26 +314,44 @@ def evaluate_suite(
                 steps += 1
                 contact_steps += 1
                 contact_available += bool(info.get("contact_state_available", False))
+                collision |= bool(info.get("collision", False))
+                pos_error = float(info.get("reward_terms", {}).get("pos_err", float("nan")))
+                if np.isfinite(pos_error):
+                    pos_error_sum += pos_error
+                    pos_error_steps += 1
                 success |= bool(info.get("success", False))
                 done = bool(terminated or truncated)
+            elapsed = float(info.get("elapsed_s", steps * control_dt))
             returns.append(total)
             successes.append(float(success))
             lengths.append(steps)
+            collisions.append(int(collision))
+            tracking_errors.append(pos_error_sum / pos_error_steps if pos_error_steps else float("inf"))
+            durations.append(elapsed if np.isfinite(elapsed) else steps * control_dt)
         results[name] = {
             "episodes": float(episodes_per_task),
             "success_rate": float(np.mean(successes)),
             "mean_return": float(np.mean(returns)),
             "mean_steps": float(np.mean(lengths)),
+            "collisions": int(sum(collisions)),
+            "tracking_error_m": float(np.mean(tracking_errors)),
+            "duration_s": float(np.mean(durations)),
             "contact_state_rate": float(contact_available / max(contact_steps, 1)),
         }
         all_returns.extend(returns)
         all_success.extend(successes)
         all_contact_available += contact_available
         all_contact_steps += contact_steps
+        all_collisions.extend(collisions)
+        all_tracking.extend(tracking_errors)
+        all_durations.extend(durations)
     results["aggregate"] = {
         "episodes": float(len(all_returns)),
         "success_rate": float(np.mean(all_success)),
         "mean_return": float(np.mean(all_returns)),
+        "collisions": int(sum(all_collisions)),
+        "tracking_error_m": float(np.mean(all_tracking)),
+        "duration_s": float(np.mean(all_durations)),
         "contact_state_rate": float(all_contact_available / max(all_contact_steps, 1)),
     }
     return results

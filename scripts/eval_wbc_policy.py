@@ -44,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
     profile = wbc_profile_for(args.robot)
     trainer, metadata = WbcPPO.load(args.checkpoint, profile, device=args.device)
     env = WbcTaskSuiteEnv(robot=robot.name, seed=0)
+    if trainer.policy.observation_size != env.observation_space.shape[0]:
+        raise ValueError("checkpoint observation size does not match the evaluation environment")
+    if trainer.policy.action_size != env.action_space.shape[0]:
+        raise ValueError("checkpoint action size does not match the evaluation environment")
     args.output.mkdir(parents=True, exist_ok=True)
     seed_results: dict[str, dict] = {}
     aggregates: list[float] = []

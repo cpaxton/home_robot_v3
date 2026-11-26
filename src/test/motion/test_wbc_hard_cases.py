@@ -25,6 +25,7 @@ def _record(initial, target, *, robot="panda_omron", mode="tracking_failed"):
             "trace": [{"qpos": list(initial)}],
             "planned_waypoints": [list(target)],
             "failure_mode": mode,
+            "reached": False,
         },
         "context": {
             "robot_id": robot,
@@ -53,6 +54,26 @@ def test_hard_cases_skip_other_robots_and_noop_targets():
         robot="panda_omron",
     )
     assert cases == []
+
+
+def test_hard_cases_skip_successful_last_attempts():
+    initial = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5, 0.7)
+    target = (0.2, 0.1, 0.4, -1.9, 0.0, 2.4, 0.8)
+    record = _record(initial, target)
+    record["attempt"]["reached"] = True
+    record["attempt"]["failure_mode"] = None
+    assert hard_cases_from_failure_records([record], robot="pandaomron") == []
+
+
+def test_hard_cases_normalize_robot_aliases():
+    initial = (0.1, 0.2, 0.3, -2.0, 0.0, 2.5, 0.7)
+    target = (0.2, 0.1, 0.4, -1.9, 0.0, 2.4, 0.8)
+    for requested in ("pandaomron", "panda_omron", "PandaOmron"):
+        cases = hard_cases_from_failure_records([_record(initial, target)], robot=requested)
+        assert len(cases) == 1, requested
+    assert hard_cases_from_failure_records([_record(initial, target, robot="rby1")], robot="rb_y1") == [
+        hard_cases_from_failure_records([_record(initial, target, robot="rby1")], robot="rby1")[0]
+    ]
 
 
 def test_hard_cases_json_roundtrip(tmp_path):

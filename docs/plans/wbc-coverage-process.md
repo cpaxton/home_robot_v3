@@ -294,6 +294,23 @@ Rules:
 - The same gate runs on every checkpoint in CI/GPU jobs; results are stored next
   to the checkpoint.
 
+The evaluators are connected to the gate through
+`scripts/emit_wbc_coverage.py`, which maps the held-out policy manifest and the
+hard-case report to the strict row shape above. Missing or non-scalar metrics
+fail instead of defaulting:
+
+```bash
+python scripts/emit_wbc_coverage.py \
+  --cases configs/wbc/pandaomron_cases.json \
+  --policy-report OUT/heldout \
+  --hard-case-report OUT/hard_cases.json \
+  --out OUT/coverage_results.json
+python -m emet.rl.manipulation.wbc_coverage \
+  --cases configs/wbc/pandaomron_cases.json \
+  --results OUT/coverage_results.json \
+  --out OUT/coverage_report.json
+```
+
 Recommended starting thresholds:
 
 | Family | Success | Collision | Tracking |
@@ -312,11 +329,15 @@ lowered to make a checkpoint pass.
 
 - PandaOmron teacher: 1.00 in-suite; DAgger baseline reached 1.00 at iteration
   5 (10 evaluation episodes). Not a held-out promotion.
-- Six Panda failure postures exported; five train, one held out.
-- Hard-case fine-tune completed from the baseline `best.pt`: teacher 1.00,
-  BC 0.97, DAgger iterations 1.00/0.97/0.93/1.00 in-suite. This is a
-  pre-contact layout-v2 checkpoint; the held-out `failure-019` gate and a
-  layout-v3 retrain are still pending.
+- Only `failure-019` is a genuine pre-motion tracking failure (`reached=False`)
+  in the current sink. The other five records were place failures carrying a
+  successful grasp as `last_attempt` (`reached=True`); the exporter now rejects
+  them, so the train split is empty and `hard_posture` is **planned**, not
+  gated.
+- The earlier hard-case fine-tune (teacher 1.00, BC 0.97, DAgger
+  1.00/0.97/0.93/1.00 in-suite) used those five invalid postures. It is not
+  promotion evidence and must be rerun after a valid train/test split is
+  regenerated on the layout-v3 contact observation.
 - Measured contact state is implemented for PandaOmron: wrist F/T wrench,
   per-finger normal loads, contact flag, and self/external contact separation.
   Observation layout version is 3; older checkpoints must be retrained.
@@ -326,7 +347,9 @@ lowered to make a checkpoint pass.
 
 ## Next milestones
 
-1. Case registry + gate (`wbc_coverage.py`), split hard cases train/test.
+1. Regenerate a valid hard-posture train/test split from `reached=False`
+   tracking failures on the current sink; keep `hard_posture` planned until
+   both splits have real records.
 2. Occupancy case provider + 3D CNN actor; no-map ablation.
 3. Shelf-entry and carry cases generated from RoboCasa placements (teacher
    privileged; actor map-only).

@@ -33,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--episodes-per-case", type=int, default=1)
     parser.add_argument("--horizon", type=float, default=5.0)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args(argv)
 
@@ -46,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     policy = trainer.policy
     device = trainer.device
     cases = load_hard_cases(args.cases)
+    if not cases:
+        raise ValueError(f"no hard cases in {args.cases}")
     backend = make_wbc_backend(
         robot.name,
         sim="mujoco",
@@ -54,19 +57,25 @@ def main(argv: list[str] | None = None) -> int:
         base_goal_probability=0.0,
     )
     env = WbcGymEnv(backend, horizon_s=args.horizon, control_dt=0.05, success_hold_s=0.1)
+    if policy.observation_size != env.observation_space.shape[0]:
+        raise ValueError("checkpoint observation size does not match the hard-case environment")
+    if policy.action_size != env.action_space.shape[0]:
+        raise ValueError("checkpoint action size does not match the hard-case environment")
     results: dict[str, dict] = {}
     try:
         for case in cases:
             episodes = []
-            for _ in range(args.episodes_per_case):
+            for episode_index in range(args.episodes_per_case):
                 # A hard case overrides an initialized reset; load_hard_case
-                # alone leaves the torso/gripper at model defaults.
-                env.reset(seed=0)
+                # alone leaves the torso/gripper at model defaults. Vary the
+                # reset seed so repeated episodes see different scene layouts.
+                env.reset(seed=args.seed + episode_index)
                 loaded = env.load_hard_case(case)
                 if loaded is None:
                     raise ValueError(f"{robot.name} backend does not support hard cases")
                 observation, _ = loaded
                 done, success, steps = False, False, 0
+                collision = False
                 contact_available = 0
                 info: dict = {}
                 while not done:
@@ -80,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     observation, _, terminated, truncated, info = env.step(action)
                     success |= bool(info.get("success", False))
+                    collision |= bool(info.get("collision", False))
                     contact_available += bool(info.get("contact_state_available", False))
                     done = bool(terminated or truncated)
                     steps += 1
@@ -88,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "success": bool(success),
                         "steps": steps,
+                        "collisions": int(collision),
+                        "duration_s": float(info.get("elapsed_s", steps * 0.05)),
                         "contact_state_rate": contact_available / max(steps, 1),
                         "pos_err": float(terms.get("pos_err", float("nan"))),
                         "quat_err": float(terms.get("quat_err", float("nan"))),
@@ -95,6 +107,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             results[case.name] = {
                 "success_rate": float(np.mean([episode["success"] for episode in episodes])),
+                "collisions": int(sum(episode["collisions"] for episode in episodes)),
+                "tracking_error_m": float(
+                    np.mean([episode["pos_err"] for episode in episodes if np.isfinite(episode["pos_err"])])
+                )
+                if any(np.isfinite(episode["pos_err"]) for episode in episodes)
+                else float("inf"),
+                "duration_s": float(np.mean([episode["duration_s"] for episode in episodes])),
                 "contact_state_rate": float(np.mean([episode["contact_state_rate"] for episode in episodes])),
                 "episodes": episodes,
             }
@@ -106,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         env.close()
 
+    if not results:
+        raise ValueError("hard-case evaluation produced no case results")
     aggregate = float(np.mean([value["success_rate"] for value in results.values()]))
     manifest = {
         "robot": robot.name,

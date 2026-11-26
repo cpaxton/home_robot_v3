@@ -568,11 +568,12 @@ def main(argv: list[str] | None = None) -> int:
     from emet.rl.manipulation.wbc_env import WbcGymEnv
     from emet.rl.manipulation.wbc_mujoco import MuJoCoWbcBackend
 
+    base_goal_probability = 0.0 if args.hold_base else float(args.base_goal_probability)
     backend = MuJoCoWbcBackend(
         seed=args.seed,
         control_dt=args.control_dt,
         target_range=args.target_range,
-        base_goal_probability=args.base_goal_probability,
+        base_goal_probability=base_goal_probability,
         base_goal_mode=args.base_goal_mode,
     )
     feedforward_path = args.feedforward
@@ -607,7 +608,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     contract_config = {
         "target_range": float(args.target_range),
-        "base_goal_probability": float(args.base_goal_probability),
+        "base_goal_probability": float(base_goal_probability),
         "base_goal_mode": str(args.base_goal_mode),
         "hold_base": bool(args.hold_base),
         "horizon_s": float(args.horizon),

@@ -13,12 +13,15 @@
         0.6568383701568696
       ],
       "name": "failure-019-pear-sink",
-      "robot": "panda_omron",
+      "robot": "pandaomron",
       "source": {
+        "error_m": 0.41858239868705277,
         "failure_mode": "tracking_failed",
         "job_id": "20261125_233017_3e5d1e",
         "message": "grasp_failed:lift_tracking_failed",
         "object_query": "pear",
+        "op": "grasp",
+        "reached": false,
         "receptacle_query": "sink",
         "record_index": 19
       },
@@ -33,5 +36,6 @@
       ]
     }
   ],
-  "schema_version": 1
+  "schema_version": 1,
+  "split": "test"
 }
