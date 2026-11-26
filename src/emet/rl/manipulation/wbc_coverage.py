@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 FAMILIES = (
     "free_space_reach",
@@ -30,6 +31,7 @@ FAMILIES = (
 SPLITS = ("train", "validation", "test")
 STATUSES = ("active", "planned")
 OCCUPANCY = ("none", "optional", "required")
+CONTACT = ("none", "optional", "required")
 
 _DEFAULT_GATES: dict[str, dict[str, float]] = {
     "free_space_reach": {"min_success": 0.90, "max_collision_rate": 0.0, "max_tracking_error_m": 0.03},
@@ -51,6 +53,7 @@ class CoverageCase:
     status: str
     source: str
     occupancy: str = "none"
+    contact: str = "none"
     gate: dict[str, float] = field(default_factory=dict)
     notes: str = ""
 
@@ -65,6 +68,8 @@ class CoverageCase:
             raise ValueError(f"unknown case status: {self.status!r}")
         if self.occupancy not in OCCUPANCY:
             raise ValueError(f"unknown occupancy requirement: {self.occupancy!r}")
+        if self.contact not in CONTACT:
+            raise ValueError(f"unknown contact requirement: {self.contact!r}")
         thresholds = self.thresholds()
         for key in ("min_success", "max_collision_rate", "max_tracking_error_m"):
             if key not in thresholds:
@@ -90,12 +95,13 @@ class CoverageCase:
             "status": self.status,
             "source": self.source,
             "occupancy": self.occupancy,
+            "contact": self.contact,
             "gate": dict(self.gate),
             "notes": self.notes,
         }
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> "CoverageCase":
+    def from_dict(cls, raw: dict[str, Any]) -> CoverageCase:
         return cls(
             id=str(raw["id"]),
             family=str(raw["family"]),
@@ -104,6 +110,7 @@ class CoverageCase:
             status=str(raw["status"]),
             source=str(raw["source"]),
             occupancy=str(raw.get("occupancy") or "none"),
+            contact=str(raw.get("contact") or "none"),
             gate={str(key): float(value) for key, value in (raw.get("gate") or {}).items()},
             notes=str(raw.get("notes") or ""),
         )
@@ -139,16 +146,18 @@ def _case_gate(case: CoverageCase, result: dict[str, Any]) -> list[str]:
         failures.append(f"{case.id}: success {success:.2f} < {thresholds['min_success']:.2f}")
     collision_rate = collisions / episodes
     if collision_rate > thresholds["max_collision_rate"]:
-        failures.append(
-            f"{case.id}: collision rate {collision_rate:.2f} > {thresholds['max_collision_rate']:.2f}"
-        )
+        failures.append(f"{case.id}: collision rate {collision_rate:.2f} > {thresholds['max_collision_rate']:.2f}")
     if error > thresholds["max_tracking_error_m"]:
-        failures.append(
-            f"{case.id}: tracking {error:.3f} m > {thresholds['max_tracking_error_m']:.3f} m"
-        )
+        failures.append(f"{case.id}: tracking {error:.3f} m > {thresholds['max_tracking_error_m']:.3f} m")
     max_duration = thresholds.get("max_duration_s")
     if max_duration is not None and duration > float(max_duration):
         failures.append(f"{case.id}: duration {duration:.1f}s > {float(max_duration):.1f}s")
+    if case.contact == "required":
+        rate = result.get("contact_state_rate")
+        if rate is None:
+            failures.append(f"{case.id}: contact state missing from result")
+        elif float(rate) < 1.0:
+            failures.append(f"{case.id}: contact state rate {float(rate):.2f} < 1.00")
     return failures
 
 
@@ -189,9 +198,7 @@ def gate_report(
         }
     return {
         "schema_version": 1,
-        "passed": not failures and not missing and any(
-            item["status"] == "gated" for item in families.values()
-        ),
+        "passed": not failures and not missing and any(item["status"] == "gated" for item in families.values()),
         "families": families,
         "missing_results": missing,
         "failures": failures,

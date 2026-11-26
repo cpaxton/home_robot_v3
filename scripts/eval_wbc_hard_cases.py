@@ -67,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError(f"{robot.name} backend does not support hard cases")
                 observation, _ = loaded
                 done, success, steps = False, False, 0
+                contact_available = 0
                 info: dict = {}
                 while not done:
                     with torch.no_grad():
@@ -79,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     observation, _, terminated, truncated, info = env.step(action)
                     success |= bool(info.get("success", False))
+                    contact_available += bool(info.get("contact_state_available", False))
                     done = bool(terminated or truncated)
                     steps += 1
                 terms = info.get("reward_terms", {})
@@ -86,12 +88,14 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "success": bool(success),
                         "steps": steps,
+                        "contact_state_rate": contact_available / max(steps, 1),
                         "pos_err": float(terms.get("pos_err", float("nan"))),
                         "quat_err": float(terms.get("quat_err", float("nan"))),
                     }
                 )
             results[case.name] = {
                 "success_rate": float(np.mean([episode["success"] for episode in episodes])),
+                "contact_state_rate": float(np.mean([episode["contact_state_rate"] for episode in episodes])),
                 "episodes": episodes,
             }
             print(

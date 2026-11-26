@@ -16,6 +16,7 @@ from emet.controller.manipulation.wbc_contract import (
     ArmObservation,
     ArmSpec,
     BaseSpec,
+    ContactObservation,
     EmbodimentProfile,
     GripperObservation,
     GripperSpec,
@@ -140,6 +141,36 @@ def test_layout_encodes_targets_and_presence_flags():
     encoded = encode_observation(with_target, profile, layout=layout)
     assert encoded[layout.slices["has_base_target"]][0] == 1.0
     assert encoded[layout.slices["base_target"]][2] == pytest.approx(0.1)
+
+
+def test_layout_encodes_measured_contact_and_gripper_force():
+    profile = _fake_profile()
+    observation = _FakeBackend()._observation()
+    layout = wbc_observation_layout(profile)
+    contact = ContactObservation(
+        in_contact=True,
+        wrench=(10.0, -20.0, 30.0, 1.0, 2.0, 3.0),
+        source="ft_sensor",
+    )
+    arm = replace(
+        observation.arms[0],
+        contact=contact,
+        gripper=GripperObservation(position=(0.0,), velocity=(0.0,), force=(10.0,)),
+    )
+    with_contact = replace(observation, arms=(arm,))
+    vector = encode_observation(with_contact, profile, layout=layout)
+    assert vector[layout.slices["arm.primary.has_contact_state"]][0] == 1.0
+    assert vector[layout.slices["arm.primary.contact_flag"]][0] == 1.0
+    assert np.allclose(
+        vector[layout.slices["arm.primary.contact_wrench"]],
+        (0.2, -0.4, 0.6, 0.1, 0.2, 0.3),
+    )
+    assert vector[layout.slices["arm.primary.gripper_force"]][0] == pytest.approx(0.5)
+
+    missing = encode_observation(observation, profile, layout=layout)
+    assert missing[layout.slices["arm.primary.has_contact_state"]][0] == 0.0
+    assert missing[layout.slices["arm.primary.contact_flag"]][0] == 0.0
+    assert np.all(missing[layout.slices["arm.primary.contact_wrench"]] == 0.0)
 
 
 def test_layout_includes_occupancy_when_requested():

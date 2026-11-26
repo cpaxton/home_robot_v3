@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -18,7 +17,7 @@ from emet.rl.manipulation.wbc_coverage import (
 )
 
 
-def _case(case_id, family, split="test", status="active", occupancy="none"):
+def _case(case_id, family, split="test", status="active", occupancy="none", contact="none"):
     return {
         "id": case_id,
         "family": family,
@@ -27,6 +26,7 @@ def _case(case_id, family, split="test", status="active", occupancy="none"):
         "status": status,
         "source": "test",
         "occupancy": occupancy,
+        "contact": contact,
         "gate": {},
     }
 
@@ -78,6 +78,53 @@ def test_gate_passes_all_active_test_cases():
     )
     assert report["passed"] is True
     assert report["families"]["free_space_reach"]["passed"] is True
+
+
+def test_gate_requires_measured_contact_state_for_contact_families():
+    case = CoverageCase(
+        id="contact",
+        family="contact_recovery",
+        robot="pandaomron",
+        split="test",
+        status="active",
+        source="test",
+        contact="required",
+    )
+    missing = gate_report(
+        [case],
+        {"contact": {"episodes": 10, "success_rate": 0.9, "collisions": 0, "tracking_error_m": 0.02}},
+    )
+    assert missing["passed"] is False
+    assert any("contact state missing" in failure for failure in missing["failures"])
+
+    passed = gate_report(
+        [case],
+        {
+            "contact": {
+                "episodes": 10,
+                "success_rate": 0.9,
+                "collisions": 0,
+                "tracking_error_m": 0.02,
+                "contact_state_rate": 1.0,
+            }
+        },
+    )
+    assert passed["passed"] is True
+
+    absent = gate_report(
+        [case],
+        {
+            "contact": {
+                "episodes": 10,
+                "success_rate": 0.9,
+                "collisions": 0,
+                "tracking_error_m": 0.02,
+                "contact_state_rate": 0.0,
+            }
+        },
+    )
+    assert absent["passed"] is False
+    assert any("contact state rate" in failure for failure in absent["failures"])
 
 
 def test_gate_rejects_missing_results_and_family_regressions():

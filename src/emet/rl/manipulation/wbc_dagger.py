@@ -280,8 +280,10 @@ def evaluate_suite(
     device = None if policy is None else next(policy.parameters()).device
     results: dict[str, Any] = {}
     all_returns, all_success = [], []
+    all_contact_available, all_contact_steps = 0, 0
     for name in env.names:
         returns, successes, lengths = [], [], []
+        contact_available, contact_steps = 0, 0
         for episode in range(episodes_per_task):
             observation, _ = env.reset(
                 seed=seed + episode,
@@ -304,6 +306,8 @@ def evaluate_suite(
                 observation, reward, terminated, truncated, info = env.step(action)
                 total += float(reward)
                 steps += 1
+                contact_steps += 1
+                contact_available += bool(info.get("contact_state_available", False))
                 success |= bool(info.get("success", False))
                 done = bool(terminated or truncated)
             returns.append(total)
@@ -314,13 +318,17 @@ def evaluate_suite(
             "success_rate": float(np.mean(successes)),
             "mean_return": float(np.mean(returns)),
             "mean_steps": float(np.mean(lengths)),
+            "contact_state_rate": float(contact_available / max(contact_steps, 1)),
         }
         all_returns.extend(returns)
         all_success.extend(successes)
+        all_contact_available += contact_available
+        all_contact_steps += contact_steps
     results["aggregate"] = {
         "episodes": float(len(all_returns)),
         "success_rate": float(np.mean(all_success)),
         "mean_return": float(np.mean(all_returns)),
+        "contact_state_rate": float(all_contact_available / max(all_contact_steps, 1)),
     }
     return results
 
