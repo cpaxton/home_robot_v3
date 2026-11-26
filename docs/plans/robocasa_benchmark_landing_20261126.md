@@ -32,7 +32,7 @@ Rules:
 |---|---|---|---|
 | WBC clean multi-robot suite | old | `logs/eval/wbc_multirobot_20261126/manifest.json`; 5 robots, 50 episodes/subtask × 3 seeds | Full rerun before promotion. Smoke only for compatibility. |
 | TAMP contract suite | old | `.github/workflows/tamp.yml`; 14 files | Every PR. All pass. |
-| rby1 RoboCasa sink | old | verified sink pick-place; `configs/sim/robocasa_pick_place_rby1_sink.yaml` | Run before claiming RoboCasa regression-free. |
+| rby1 RoboCasa sink | old | teacher-path sink pick-place; `configs/sim/robocasa_pick_place_rby1_sink.yaml` | Run before claiming RoboCasa regression-free. |
 | TAMP clutter GT+MCTS battery | old | `docs/experiments/tamp_clutter.md`; 24-case battery | Benchmark refresh, not every PR. |
 | OVMM / HM-EQA paper rows | old | `docs/paper_benchmarks.md` | Only when shared agent/memory/TAMP paths change; declared refresh. |
 | PandaOmron RoboCasa reach | new | `docs/experiments/wbc_robocasa_20261126.md`; 1.3 cm / 0.029 rad smoke; 20/20 loaded sweeps (1.13 cm joint, 0.87 cm Cartesian mean) | Adapter/reach gate; not task success. |
@@ -141,6 +141,9 @@ Acceptance:
 
 - Old rby1 sink still reports task success, measured release, and the expected
   object displacement. A code-only smoke is not a benchmark pass.
+  The recorded command uses `EMET_GT_TEACHER=1` for task grounding: label it a
+  **teacher-path mechanical success**, not a no-GT benchmark pass. A no-GT row
+  requires the same `scene_tasks → plan → execute` path with the teacher off.
 - Panda reach tracks the target within the documented tolerance and reports no
   final-step kitchen contact. This is a tracking result, not pick-place success.
 
@@ -214,8 +217,10 @@ farther object/cabinet target exits the reach tolerance.
   valid `reached=False` split is regenerated.
 - **Tier 1 smoke is not a performance gate.** Two episodes catch load/crash
   regressions; the 50×3 comparison is the actual old-benchmark gate.
-- **rby1 sink is the old benchmark anchor.** Do not replace it with the Panda
-  reach smoke in result tables.
+- **rby1 sink is the old benchmark anchor, but the recorded run is teacher-path.**
+  Do not replace it with the Panda reach smoke, and do not report it as a no-GT
+  result. `EMET_GT_TEACHER=1` is task grounding; the actor/assessment path still
+  needs the teacher-off run.
 - **The local Sourccey `tamp_approach="side"` edit is not part of the PR stack.**
   It makes the existing front-approach test fail and must be reviewed separately.
 
