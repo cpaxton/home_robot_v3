@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
             for episode_index in range(args.episodes_per_case):
                 # A hard case overrides an initialized reset; load_hard_case
                 # alone leaves the torso/gripper at model defaults. Vary the
-                # reset seed so repeated episodes see different scene layouts.
+                # reset seed so repeated episodes are not bit-identical.
                 env.reset(seed=args.seed + episode_index)
                 loaded = env.load_hard_case(case)
                 if loaded is None:
