@@ -235,6 +235,19 @@ def test_contract_env_reset_step_and_action_mask():
     assert not truncated
 
 
+def test_env_marks_unmeasured_collision_as_unavailable():
+    class _UnmeasuredBackend(_FakeBackend):
+        def step(self, command, dt):
+            observation, _, _ = super().step(command, dt)
+            return observation, False, {"collision": None, "contact_force": None}
+
+    env = WbcGymEnv(_UnmeasuredBackend(), horizon_s=2.0, control_dt=0.1, success_hold_s=0.1)
+    env.reset(seed=0)
+    _, _, _, _, info = env.step(np.zeros(env.action_space.shape, dtype=np.float32))
+    assert info["collision"] is None
+    assert info["collision_measured"] is False
+
+
 def test_env_hold_base_ignores_base_actions():
     env = WbcGymEnv(_FakeBackend(), horizon_s=2.0, control_dt=0.1, success_hold_s=0.1, hold_base=True)
     env.reset(seed=0)

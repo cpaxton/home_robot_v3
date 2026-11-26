@@ -87,8 +87,13 @@ def _ordered_arm_q(
         value = values_by_name.get(str(joint))
         if value is None:
             # RoboCasa records use robot0_jointN; the contract uses jointN.
+            # Require the full ``jointN`` token and skip ambiguous matches.
             suffix = str(joint).split("_")[-1]
-            value = next((v for name, v in values_by_name.items() if name.endswith(suffix)), None)
+            suffix = suffix if suffix.startswith("joint") else f"joint{suffix}"
+            candidates = [v for name, v in values_by_name.items() if name.endswith(suffix)]
+            if len(candidates) != 1:
+                return None
+            value = candidates[0]
         if value is None:
             return None
         ordered.append(float(value))

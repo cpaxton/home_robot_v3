@@ -790,6 +790,21 @@ def test_synthetic_generator_multi_arm_profile():
     assert rec.meta["embodiment"] == profile.name
 
 
+def test_synthetic_generator_rejects_targets_without_a_profile():
+    with pytest.raises(ValueError, match="require an embodiment"):
+        synthetic_obstacle_target(
+            np.random.default_rng(14),
+            profile=None,
+            target_base=(0.1, 0.0, 0.0),
+        )
+    with pytest.raises(ValueError, match="require an embodiment"):
+        synthetic_obstacle_target(
+            np.random.default_rng(15),
+            profile=None,
+            target_torso=(0.1,),
+        )
+
+
 def test_synthetic_generator_adds_base_and_torso_targets():
     profile = example_sourccey_profile()
     rec = synthetic_obstacle_target(

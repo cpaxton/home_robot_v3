@@ -263,8 +263,9 @@ class RoboCasaPandaBackend:
             self._observation(),
             invalid,
             {
-                "contact_force": 0.0,
-                "collision": False,
+                "contact_force": None,
+                "collision": None,
+                "collision_measured": False,
                 "invalid_physics": invalid,
                 "elapsed_s": self._elapsed,
                 "ncon": int(self.data.ncon),
@@ -382,11 +383,11 @@ class RoboCasaPandaBackend:
 
     def _base_pose(self) -> tuple[float, float, float]:
         world = self._world_base_pose()
-        return (
-            float(world[0] - self._origin_xy[0]),
-            float(world[1] - self._origin_xy[1]),
-            float(_wrap(world[2] - self._origin_yaw)),
+        rotation = Rotation.from_euler("z", -self._origin_yaw)
+        local = rotation.apply(
+            np.array([world[0] - self._origin_xy[0], world[1] - self._origin_xy[1], 0.0])
         )
+        return (float(local[0]), float(local[1]), float(_wrap(world[2] - self._origin_yaw)))
 
     def _observation(self) -> WbcObservation:
         torso = JointGroupObservation(

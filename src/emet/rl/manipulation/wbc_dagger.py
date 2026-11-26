@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -125,6 +125,9 @@ class WbcTaskSuiteEnv(gym.Env):
             raise ValueError("duplicate subtask names")
         if not 0.0 <= float(hard_case_probability) <= 1.0:
             raise ValueError("hard_case_probability must be in [0, 1]")
+        self.robot = str(robot)
+        self.control_dt = float(control_dt)
+        self.collision_force_n = float(collision_force_n)
         self.hard_cases = tuple(hard_cases)
         self.hard_case_probability = float(hard_case_probability)
         self.subtasks = tuple(subtasks)
@@ -162,6 +165,15 @@ class WbcTaskSuiteEnv(gym.Env):
         ):
             raise ValueError("subtask environments must share observation/action contracts")
         self.active_name: str | None = None
+
+    def contract(self) -> dict[str, Any]:
+        """Task identity saved with checkpoints and checked by evaluators."""
+        return {
+            "robot": self.robot,
+            "subtasks": [asdict(task) for task in self.subtasks],
+            "control_dt": self.control_dt,
+            "collision_force_n": self.collision_force_n,
+        }
 
     @property
     def active(self) -> WbcGymEnv:
@@ -285,12 +297,13 @@ def evaluate_suite(
     results: dict[str, Any] = {}
     all_returns, all_success = [], []
     all_contact_available, all_contact_steps = 0, 0
-    all_collisions, all_tracking, all_durations = [], [], []
+    all_collisions, all_collision_measured, all_tracking, all_tracking_max, all_durations = [], [], [], [], []
     for name in env.names:
         returns, successes, lengths = [], [], []
-        collisions, tracking_errors, durations = [], [], []
+        collisions, collision_measured, tracking_errors, tracking_max, durations = [], [], [], [], []
         contact_available, contact_steps = 0, 0
         control_dt = float(env.envs[name].control_dt)
+        settle_steps = max(1, int(np.ceil(float(env.envs[name].success_hold_s) / control_dt)))
         for episode in range(episodes_per_task):
             observation, _ = env.reset(
                 seed=seed + episode,
@@ -298,7 +311,8 @@ def evaluate_suite(
             )
             total, steps, success = 0.0, 0, False
             collision = False
-            final_pos_error = float("nan")
+            collision_is_measured = True
+            pos_errors: list[float] = []
             info: dict = {}
             done = False
             while not done:
@@ -319,9 +333,10 @@ def evaluate_suite(
                 contact_steps += 1
                 contact_available += bool(info.get("contact_state_available", False))
                 collision |= bool(info.get("collision", False))
+                collision_is_measured &= bool(info.get("collision_measured", True))
                 pos_error = float(info.get("reward_terms", {}).get("pos_err", float("nan")))
                 if np.isfinite(pos_error):
-                    final_pos_error = pos_error
+                    pos_errors.append(pos_error)
                 success |= bool(info.get("success", False))
                 done = bool(terminated or truncated)
             elapsed = float(info.get("elapsed_s", steps * control_dt))
@@ -329,15 +344,20 @@ def evaluate_suite(
             successes.append(float(success))
             lengths.append(steps)
             collisions.append(int(collision))
-            tracking_errors.append(final_pos_error if np.isfinite(final_pos_error) else float("inf"))
+            collision_measured.append(bool(collision_is_measured))
+            settled = pos_errors[-settle_steps:]
+            tracking_errors.append(float(np.mean(settled)) if settled else float("inf"))
+            tracking_max.append(max(settled) if settled else float("inf"))
             durations.append(elapsed if np.isfinite(elapsed) else steps * control_dt)
         results[name] = {
             "episodes": float(episodes_per_task),
             "success_rate": float(np.mean(successes)),
             "mean_return": float(np.mean(returns)),
             "mean_steps": float(np.mean(lengths)),
-            "collisions": int(sum(collisions)),
+            "collisions": int(sum(collisions)) if all(collision_measured) else None,
+            "collision_measured": bool(all(collision_measured)),
             "tracking_error_m": float(np.mean(tracking_errors)),
+            "tracking_error_max_m": float(np.max(tracking_max)),
             "duration_s": float(np.mean(durations)),
             "contact_state_rate": float(contact_available / max(contact_steps, 1)),
         }
@@ -346,14 +366,18 @@ def evaluate_suite(
         all_contact_available += contact_available
         all_contact_steps += contact_steps
         all_collisions.extend(collisions)
+        all_collision_measured.extend(collision_measured)
         all_tracking.extend(tracking_errors)
+        all_tracking_max.extend(tracking_max)
         all_durations.extend(durations)
     results["aggregate"] = {
         "episodes": float(len(all_returns)),
         "success_rate": float(np.mean(all_success)),
         "mean_return": float(np.mean(all_returns)),
-        "collisions": int(sum(all_collisions)),
+        "collisions": int(sum(all_collisions)) if all(all_collision_measured) else None,
+        "collision_measured": bool(all(all_collision_measured)),
         "tracking_error_m": float(np.mean(all_tracking)),
+        "tracking_error_max_m": float(np.max(all_tracking_max)),
         "duration_s": float(np.mean(all_durations)),
         "contact_state_rate": float(all_contact_available / max(all_contact_steps, 1)),
     }
@@ -439,7 +463,7 @@ def dagger_train(
         initial = evaluate_suite(env, policy, episodes_per_task=eval_episodes, seed=seed + 10_000)
         history.append({"stage": "init_eval", **initial})
         best_score = _selection_score(initial, selection)
-        trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "init", "evaluation": initial})
+        trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "init", "evaluation": initial, "contract": env.contract()})
         print(
             f"DAgger init_eval aggregate={initial['aggregate']['success_rate']:.2f} score={best_score:.2f}",
             flush=True,
@@ -477,7 +501,7 @@ def dagger_train(
     )
     if _selection_score(evaluation, selection) >= best_score:
         best_score = _selection_score(evaluation, selection)
-        trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "teacher_bc", "evaluation": evaluation})
+        trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "teacher_bc", "evaluation": evaluation, "contract": env.contract()})
 
     for iteration in range(1, iterations + 1):
         observations, actions, counts = collect_dagger_data(
@@ -510,7 +534,7 @@ def dagger_train(
         history.append(record)
         with metrics_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, sort_keys=True) + "\n")
-        trainer.save(output / f"policy_iter{iteration}.pt", env.envs[env.names[0]], metadata=record)
+        trainer.save(output / f"policy_iter{iteration}.pt", env.envs[env.names[0]], metadata={**record, "contract": env.contract()})
         print(
             f"DAgger iter={iteration} samples={record['samples']} loss={bc['bc_loss']:.5f} "
             f"aggregate={evaluation['aggregate']['success_rate']:.2f} counts={counts}",
@@ -519,10 +543,10 @@ def dagger_train(
         score = _selection_score(evaluation, selection)
         if score >= best_score:
             best_score = score
-            trainer.save(best_path, env.envs[env.names[0]], metadata=record)
+            trainer.save(best_path, env.envs[env.names[0]], metadata={**record, "contract": env.contract()})
 
     final = history[-1]
-    trainer.save(output / "final.pt", env.envs[env.names[0]], metadata=final)
+    trainer.save(output / "final.pt", env.envs[env.names[0]], metadata={**final, "contract": env.contract()})
     (output / "dagger_report.json").write_text(json.dumps(history, indent=2, sort_keys=True) + "\n")
     env.close()
     return history
