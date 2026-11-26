@@ -152,6 +152,16 @@ The earlier 1/6 measurement was a harness bug: `load_hard_case` must follow a
 normal reset, otherwise the torso and gripper stay at model defaults; the
 evaluation script now resets first.
 
+## RoboCasa reach adapter (PandaOmron)
+
+The first RoboCasa adapter writes contract torques/velocities directly into the
+native RoboCasa `PandaOmron` sim. In `PickPlaceCounterToCabinet` (layout 1,
+style 1) it tracks an 8 cm end-effector target to **1.3 cm / 0.029 rad** after
+backing the chassis 0.45 m from the counter. This is reach tracking, not task
+success; object/receptacle targets, base motion, and the merged-scene
+Stretch/Sourccey/RB-Y1 adapters remain. Details:
+[wbc_robocasa_20261126.md](wbc_robocasa_20261126.md).
+
 ## Next experiments
 
 1. RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint

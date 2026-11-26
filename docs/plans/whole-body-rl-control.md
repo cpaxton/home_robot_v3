@@ -236,7 +236,9 @@ both clear the direct-MuJoCo suite. A robust mixed hard/clean checkpoint also
 passes the held-out failure-posture test (5/5 train, 1/1 test) at 0.991 clean
 multi-seed. Its RoboCasa composite controller is
 OSC/JOINT_POSITION, not the torque contract, so the benchmark adapter must map
-explicitly. The hook exists; it is not yet a RoboCasa adapter.
+explicitly. A reach-tracking RoboCasa adapter now drives the native `PandaOmron` kitchen
+sim; benchmark task targets and the merged-scene Stretch/Sourccey/RB-Y1
+adapters are still open.
 
 | Robot | Base | Torso | Arms | Grippers | Action dim |
 |---|---|---|---:|---:|---:|

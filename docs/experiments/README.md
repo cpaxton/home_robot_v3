@@ -1,10 +1,17 @@
 # Paper experiments — master index
 
-**Multi-robot WBC backend matrix (2026-11-25):** [MuJoCo plants for Mars/Stretch/Sourccey/RB-Y1 + PandaOmron hook](wbc_multirobot_20261125.md)
-records the direct-MuJoCo backend expansion. Teachers are 3/3 on Mars,
-Sourccey, and RB-Y1; Stretch is base-only. Sourccey/RB-Y1 DAgger plateaus at
-base-only 0.33, so dual-arm/high-DOF IK remains open. PandaOmron is a RoboCasa
-hook only; no policy is promoted.
+**Multi-robot WBC backend matrix (2026-11-26):** [MuJoCo plants and trained policies for Mars/Stretch/Sourccey/RB-Y1/PandaOmron](wbc_multirobot_20261125.md)
+records the direct-MuJoCo backend and the trained policy gates: 50
+episodes/subtask, three seeds, means Mars 0.955, Stretch 0.951, Sourccey
+0.960, RB-Y1 0.997, PandaOmron 0.996 clean / 0.991 robust. The Sourccey/RB-Y1
+0.33 plateau was full-range resets, 30 BC epochs, and simultaneous dual-arm
+targets, not the adapter. Panda also passes a held-out failure-posture case
+(5/5 train, 1/1 test).
+
+**RoboCasa WBC adapter (2026-11-26):** [PandaOmron reach smoke in PickPlaceCounterToCabinet](wbc_robocasa_20261126.md)
+writes contract torques/velocities directly into the RoboCasa sim; an 8 cm
+target tracks to 1.3 cm / 0.029 rad in the kitchen scene. Task targets, base
+motion, and the merged-scene adapters for Stretch/Sourccey/RB-Y1 remain open.
 
 **Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)
 records a simulator-only Mars result: 0.973 aggregate held-out success over
