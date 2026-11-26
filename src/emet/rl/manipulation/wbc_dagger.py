@@ -15,7 +15,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import gymnasium as gym
 import numpy as np
@@ -23,6 +23,7 @@ import torch
 
 from emet.rl.manipulation.wbc_backends import make_wbc_backend
 from emet.rl.manipulation.wbc_env import WbcGymEnv
+from emet.rl.manipulation.wbc_hard_cases import load_hard_cases
 from emet.rl.manipulation.wbc_training import (
     WbcActorCritic,
     WbcPPO,
@@ -102,6 +103,8 @@ class WbcTaskSuiteEnv(gym.Env):
         seed: int = 0,
         control_dt: float = 0.05,
         collision_force_n: float = 10.0,
+        hard_cases: Sequence[Any] = (),
+        hard_case_probability: float = 0.0,
     ) -> None:
         if subtasks is None:
             subtasks = default_subtasks(robot)
@@ -110,6 +113,10 @@ class WbcTaskSuiteEnv(gym.Env):
         names = [task.name for task in subtasks]
         if len(set(names)) != len(names):
             raise ValueError("duplicate subtask names")
+        if not 0.0 <= float(hard_case_probability) <= 1.0:
+            raise ValueError("hard_case_probability must be in [0, 1]")
+        self.hard_cases = tuple(hard_cases)
+        self.hard_case_probability = float(hard_case_probability)
         self.subtasks = tuple(subtasks)
         self.names = tuple(task.name for task in subtasks)
         self.weights = np.asarray([task.weight for task in subtasks], dtype=np.float64)
@@ -167,6 +174,19 @@ class WbcTaskSuiteEnv(gym.Env):
             name = self.names[index]
         self.active_name = name
         observation, info = self.envs[name].reset(seed=seed)
+        if self.hard_cases and self.np_random.random() < self.hard_case_probability:
+            task = next(task for task in self.subtasks if task.name == name)
+            active_arms = set(task.active_arms or ())
+            candidates = [] if not task.arm_goal else [
+                case for case in self.hard_cases
+                if not active_arms or str(getattr(case, "arm", "")) in active_arms
+            ]
+            if candidates:
+                case = candidates[int(self.np_random.integers(len(candidates)))]
+                loaded = self.envs[name].load_hard_case(case)
+                if loaded is not None:
+                    observation, hard_info = loaded
+                    info = {**info, **hard_info, "hard_case": getattr(case, "name", "")}
         return observation, {**info, "subtask": name}
 
     def step(self, action):
@@ -308,6 +328,8 @@ def dagger_train(
     seed: int = 0,
     device: str = "cpu",
     noise_std: float = 0.05,
+    hard_cases: Sequence[Any] = (),
+    hard_case_probability: float = 0.0,
 ) -> dict[str, Any]:
     """Teacher warm start, then DAgger iterations over the subtask suite."""
     if type(iterations) is not int or iterations < 0:
@@ -318,7 +340,13 @@ def dagger_train(
         subtasks = default_subtasks(robot)
     output = Path(output).expanduser()
     output.mkdir(parents=True, exist_ok=True)
-    env = WbcTaskSuiteEnv(subtasks, robot=robot, seed=seed)
+    env = WbcTaskSuiteEnv(
+        subtasks,
+        robot=robot,
+        seed=seed,
+        hard_cases=hard_cases,
+        hard_case_probability=hard_case_probability,
+    )
     config = WbcPPOConfig(
         hidden=hidden,
         batch_size=batch_size,
@@ -448,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--noise-std", type=float, default=0.05)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--subtasks", default=None, help="comma-separated suite; defaults to the robot's full suite")
+    parser.add_argument("--hard-cases", type=Path, help="JSON hard cases exported from manipulation failures")
+    parser.add_argument("--hard-case-probability", type=float, default=0.0)
     args = parser.parse_args(argv)
 
     tasks = {task.name: task for task in default_subtasks(args.robot)}
@@ -458,6 +488,7 @@ def main(argv: list[str] | None = None) -> int:
     if unknown:
         parser.error(f"unknown subtasks: {sorted(unknown)}")
     subtasks = tuple(tasks[name] for name in requested)
+    hard_cases = load_hard_cases(args.hard_cases) if args.hard_cases else []
     device = args.device
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -481,6 +512,8 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         device=device,
         noise_std=args.noise_std,
+        hard_cases=hard_cases,
+        hard_case_probability=args.hard_case_probability,
     )
     return 0
 
