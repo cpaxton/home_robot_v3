@@ -243,7 +243,8 @@ def collect_dagger_data(
         raise ValueError("noise_std must be nonnegative")
     device = next(policy.parameters()).device
     rng = np.random.default_rng(seed)
-    observation, _ = env.reset(seed=seed)
+    episode = 0
+    observation, _ = env.reset(seed=seed + episode)
     observations, actions = [], []
     counts = dict.fromkeys(env.names, 0)
     for _ in range(steps):
@@ -263,7 +264,8 @@ def collect_dagger_data(
         counts[env.active_name] += 1
         observation, _, terminated, truncated, _ = env.step(action.astype(np.float32))
         if terminated or truncated:
-            observation, _ = env.reset()
+            episode += 1
+            observation, _ = env.reset(seed=seed + episode)
     return np.asarray(observations, dtype=np.float32), np.asarray(actions, dtype=np.float32), counts
 
 
