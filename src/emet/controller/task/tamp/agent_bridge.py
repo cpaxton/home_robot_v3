@@ -170,7 +170,12 @@ def _match_placement_by_category(
         cat = str(info.get("cat") or "").lower()
         if k == want or cat == want:
             exact.append(str(key))
-        elif k and len(k) >= 3 and (k.startswith(want) or want.startswith(k)):
+        elif (
+            k.startswith(want + "_")
+            or want.startswith(k + "_")
+            or cat.startswith(want + "_")
+            or want.startswith(cat + "_")
+        ):
             prefix.append(str(key))
     for group in (exact, prefix):
         if group:
