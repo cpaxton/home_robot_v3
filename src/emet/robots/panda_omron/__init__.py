@@ -52,7 +52,12 @@ def _arm_chain() -> ArmChain:
         ee_body="gripper0_right_eef",
         actuator_names=PANDA_OMRON_ARM_ACTUATORS,
         link_bodies=tuple(f"robot0_link{i}" for i in range(1, 8)),
-        gripper_bodies=("gripper0_right_leftfinger", "gripper0_right_rightfinger"),
+        gripper_bodies=(
+            "robot0_right_hand",
+            "gripper0_right_right_gripper",
+            "gripper0_right_leftfinger",
+            "gripper0_right_rightfinger",
+        ),
         # PandaOmron.init_qpos from robosuite.
         home_arm_q=(
             0.0,
@@ -90,6 +95,9 @@ class PandaOmronBackend(RobotBackend):
             footprint=Footprint(width=0.50, length=0.50, width_offset=0.0, length_offset=0.0),
             planar_base_joint_names=PANDA_OMRON_BASE_JOINTS,
             default_arm="right",
+            live_ik_correction=False,
+            grasp_lift_verify_tol_m=0.12,
+            placement_retract_m=0.12,
             arm_chains={"right": _arm_chain()},
             advertise_kinematic_manip=True,
             tamp_approach="front",

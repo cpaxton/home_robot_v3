@@ -89,6 +89,7 @@ def write_offline_mjcf_base_xyt(
     planar_joint_names: Sequence[str] | None = None,
     freejoint_name: str | None = None,
     z: float | None = None,
+    base_body_name: str | None = None,
 ) -> bool:
     """Write world XYT into a standalone (unmerged) robot MJCF base.
 
@@ -106,9 +107,20 @@ def write_offline_mjcf_base_xyt(
     if len(names) == 3:
         ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in names]
         if all(jid >= 0 for jid in ids):
-            for jid, val in zip(ids, (x, y, th), strict=True):
-                data.qpos[int(model.jnt_qposadr[jid])] = float(val)
-            return True
+            # Merged RoboCasa scenes place the planar base under a transformed
+            # ancestor; solve the actual joint FK to world instead of writing raw
+            # joint values (which would add the scene's 10 m merge offset).
+            from emet.simulation.spawn_planar import write_planar_base_xyt
+
+            return write_planar_base_xyt(
+                model,
+                data,
+                joint_names=(names[0], names[1], names[2]),
+                world_x=x,
+                world_y=y,
+                world_yaw=th,
+                base_body_name=base_body_name or "base_link",
+            )
     if freejoint_name:
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(freejoint_name))
         if jid >= 0:
@@ -149,11 +161,16 @@ class KinematicPickPlaceExecutor:
         ik_max_iters: int = 150,
         pregrasp_standoff_m: float = 0.12,
         place_xy_tol_m: float = 0.12,
-        grasp_lift_verify_tol_m: float = 0.08,
+        grasp_lift_verify_tol_m: float | None = None,
         visualizer: Any | None = None,
         placement_geometry_provider: Any | None = None,
     ) -> None:
         self.robot = robot
+        spec = getattr(robot, "_spec", None)
+        if grasp_lift_verify_tol_m is None:
+            grasp_lift_verify_tol_m = float(
+                getattr(spec, "grasp_lift_verify_tol_m", 0.08) or 0.08
+            )
         if arm is None:
             spec = getattr(robot, "_spec", None)
             arm = str(getattr(spec, "default_arm", "left") or "left") if spec is not None else "left"
@@ -363,6 +380,7 @@ class KinematicPickPlaceExecutor:
             planar_joint_names=self._planar_joint_names(),
             freejoint_name=getattr(self.profile, "base_freejoint_name", None),
             z=z,
+            base_body_name=getattr(getattr(self.robot, "_spec", None), "base_link_name", None),
         )
 
     def _actuator_to_joint_name(self, aname: str) -> str | None:
@@ -726,42 +744,44 @@ class KinematicPickPlaceExecutor:
             # plan did not track. The plan can be kinematically valid while the
             # loaded torso settles short; solving from the observed q finds the
             # posture that reaches the same target despite that droop.
-            from emet.motion.mujoco_arm_ik import solve_position_ik
-
             lo, hi = self._joint_position_bounds()
-            gain = 1.0
-            previous_error = measured_error if np.isfinite(measured_error) else float("inf")
-            for _ in range(6):
-                if not self._sync_qpos_from_robot():
-                    break
-                q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
-                solution = solve_position_ik(
-                    self._model,
-                    self._data,
-                    ee_body=self.ee_body,
-                    joint_names=self.joint_names,
-                    target_pos=np.asarray(target_xyz_world, dtype=np.float64),
-                    tol_m=min(0.01, self.ik_tol_m * 0.25),
-                    max_iters=self.ik_max_iters,
-                )
-                if not solution.success:
-                    break
-                q_ik = np.asarray(solution.qpos, dtype=np.float64)[qadr]
-                step = np.clip(gain * (q_ik - q_obs), -0.35, 0.35)
-                if float(np.max(np.abs(step))) < 1e-3:
-                    break
-                q_cmd = np.clip(q_obs + step, lo, hi)
-                for _ in range(8):
-                    self._stream_arm_q(q_cmd)
-                    self._sleep(0.05)
-                reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
-                if reached:
-                    break
-                # A full IK step can overshoot at the edge of reach; back off
-                # when the measured error stops improving instead of oscillating.
-                if measured_error >= previous_error * 0.98:
-                    gain = max(0.25, gain * 0.5)
-                previous_error = measured_error
+            spec = getattr(self.robot, "_spec", None)
+            if bool(getattr(spec, "live_ik_correction", True)):
+                from emet.motion.mujoco_arm_ik import solve_position_ik
+
+                gain = 1.0
+                previous_error = measured_error if np.isfinite(measured_error) else float("inf")
+                for _ in range(6):
+                    if not self._sync_qpos_from_robot():
+                        break
+                    q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
+                    solution = solve_position_ik(
+                        self._model,
+                        self._data,
+                        ee_body=self.ee_body,
+                        joint_names=self.joint_names,
+                        target_pos=np.asarray(target_xyz_world, dtype=np.float64),
+                        tol_m=min(0.01, self.ik_tol_m * 0.25),
+                        max_iters=self.ik_max_iters,
+                    )
+                    if not solution.success:
+                        break
+                    q_ik = np.asarray(solution.qpos, dtype=np.float64)[qadr]
+                    step = np.clip(gain * (q_ik - q_obs), -0.35, 0.35)
+                    if float(np.max(np.abs(step))) < 1e-3:
+                        break
+                    q_cmd = np.clip(q_obs + step, lo, hi)
+                    for _ in range(8):
+                        self._stream_arm_q(q_cmd)
+                        self._sleep(0.05)
+                    reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+                    if reached:
+                        break
+                    # A full IK step can overshoot at the edge of reach; back off
+                    # when the measured error stops improving instead of oscillating.
+                    if measured_error >= previous_error * 0.98:
+                        gain = max(0.25, gain * 0.5)
+                    previous_error = measured_error
             if not reached:
                 # Cartesian re-solve can fail at a singular/stretched posture.
                 # Fall back to the bounded joint residual instead of giving up.
@@ -881,6 +901,53 @@ class KinematicPickPlaceExecutor:
             raise ValueError("placement_support_geometry_missing")
         return scene, payload, support_patches(patches)
 
+    def _retract_for_placement(self, distance_m: float = 0.25) -> bool:
+        """Pull the held object toward the base before placement base queries.
+
+        Placement base endpoints are checked against the robot's current posture.
+        With the arm extended at the lift target, otherwise-clear bases fail on
+        robot/payload collision. Re-solving IK to a point closer to the base is
+        measured, not a blind joint tuck.
+        """
+        from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_position_ik
+
+        if self._model is None or self._data is None:
+            return False
+        if not self._sync_qpos_from_robot():
+            return False
+        ee = np.asarray(self._data.body(self.ee_body).xpos, dtype=np.float64).copy()
+        base = self._world_base_xyt()
+        if base is None:
+            return False
+        outward = ee[:2] - np.asarray(base[:2], dtype=np.float64)
+        norm = float(np.linalg.norm(outward))
+        if norm <= float(distance_m) + 0.05:
+            return True
+        target = ee.copy()
+        target[:2] -= outward / norm * float(distance_m)
+        solution = solve_position_ik(
+            self._model,
+            self._data,
+            ee_body=self.ee_body,
+            joint_names=self.joint_names,
+            target_pos=target,
+            tol_m=min(0.015, self.ik_tol_m * 0.5),
+            max_iters=self.ik_max_iters,
+        )
+        if not solution.success:
+            return False
+        qadr = joint_qpos_addrs(self._model, self.joint_names)
+        q_cmd = np.asarray(solution.qpos, dtype=np.float64)[qadr]
+        for _ in range(10):
+            self._stream_arm_q(q_cmd)
+            self._sleep(0.05)
+        self._wait_measured_ee(target, timeout_s=4.0)
+        logger.info(
+            f"Placement pre-retract: ee={np.round(ee, 3).tolist()} "
+            f"target={np.round(target, 3).tolist()}"
+        )
+        return True
+
     def _search_placement(self, body, receptacle, *, approach_base):
         from emet.motion.placement import (
             base_candidates_from_approach_hint,
@@ -891,6 +958,10 @@ class KinematicPickPlaceExecutor:
 
         if not self._sync_qpos_from_robot():
             raise ValueError("placement_" + (self._last_motion_failure or "missing_joint_state"))
+        spec = self.robot._spec
+        self._retract_for_placement(
+            distance_m=float(getattr(spec, "placement_retract_m", 0.25) or 0.25)
+        )
         scene, payload, support = self._placement_geometry(body, receptacle)
         rotation = self._data.body(self.ee_body).xmat.reshape(3, 3).copy()
         from emet.motion.placement_surfaces import centers_lowest_first, free_surface_centers, support_patches
@@ -944,7 +1015,8 @@ class KinematicPickPlaceExecutor:
 
         def set_base(model, data, pose):
             return write_offline_mjcf_base_xyt(model, data, pose,
-                planar_joint_names=self._planar_joint_names(), freejoint_name=self.profile.base_freejoint_name)
+                planar_joint_names=self._planar_joint_names(), freejoint_name=self.profile.base_freejoint_name,
+                base_body_name=spec.base_link_name)
 
         contacts = (self.ee_body, *self.profile.gripper_contact_bodies())
         snapshot_root = os.environ.get("EMET_PLACEMENT_DIAGNOSTICS_DIR")
@@ -956,7 +1028,8 @@ class KinematicPickPlaceExecutor:
                 joint_names=self.joint_names, ee_body=self.ee_body, robot_body=spec.base_link_name,
                 contact_bodies=contacts, rrt_max_iter=self.rrt_max_iter,
                 base_writer={"planar_joint_names": self._planar_joint_names(),
-                             "freejoint_name": self.profile.base_freejoint_name})
+                             "freejoint_name": self.profile.base_freejoint_name,
+                             "base_body_name": spec.base_link_name})
             logger.info(f"Placement snapshot: {snapshot}")
         def _search(mode: str):
             search = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,

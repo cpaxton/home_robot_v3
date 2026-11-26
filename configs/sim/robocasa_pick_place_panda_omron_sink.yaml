@@ -1,0 +1,10 @@
+# PandaOmron + open-approach sink task (low receptacle, no cabinet aisle).
+kind: robocasa
+robot: panda_omron
+robocasa_task: PickPlaceCounterToSink
+robocasa_style: 1
+robocasa_layout: 1
+headless: true
+port_offset: 0
+seed: 0
+# Set EMET_ROBOCASA_OBJ_GROUPS=pear to pin the object group (default: all).

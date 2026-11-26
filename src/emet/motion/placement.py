@@ -224,8 +224,16 @@ def plan_placement_paths(
         base_state = probe.qpos.copy()
         if checker.configuration_collides(model, probe):
             rejects[checker.last_reason] += 1
+            self_contacts = []
+            if checker.last_reason == "robot_self_collision":
+                for contact in getattr(checker.self_collision, "last_contacts", [])[:3]:
+                    bodies = contact.get("bodies", ())
+                    self_contacts.append([
+                        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(body)) or str(body)
+                        for body in bodies
+                    ])
             logger.info(f"Placement candidate rejected base={pose.tolist()} reason={checker.last_reason} "
-                        f"obstacle_bounds={scene.last_collision_bounds}")
+                        f"obstacle_bounds={scene.last_collision_bounds} self_contacts={self_contacts}")
             continue
         base_ik_calls = 0
         for center in centers:

@@ -257,8 +257,8 @@ def _panda_omron_position_servos(xml: str) -> str:
             {
                 "name": f"robot0_joint{suffix}_act",
                 "joint": joint,
-                "kp": "200",
-                "kv": "20",
+                "kp": "1000",
+                "kv": "50",
                 "ctrllimited": "true",
                 "ctrlrange": joint_ranges.get(joint, "-3.14 3.14"),
             },
