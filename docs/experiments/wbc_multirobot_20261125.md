@@ -133,10 +133,12 @@ carry failures still need a dedicated carry subtask or an obstacle-conditioned
 backend before they are fully represented.
 
 Current gate: the teacher reaches all six postures in 2–23 steps (6/6). The
-promoted clean policy succeeds on 1/6; a 30% hard-case injection fine-tune
-reaches 0–1/6 across iterations and is not promoted. These near-target postures
-need a precision/hold objective or more targeted data; the reach objective does
-not shape small holding torques.
+promoted clean policy succeeds on 4/6 with a properly initialized reset. A
+hard-case-only specialist reaches 6/6 but forgets the clean arm task
+(0.2–0.4). The earlier 1/6 measurement was a harness bug: `load_hard_case` must
+follow a normal reset, otherwise the torso and gripper stay at model defaults;
+the evaluation script now resets first. A mixed hard-case/clean fine-tune is
+the next step.
 
 ## Next experiments
 
