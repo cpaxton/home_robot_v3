@@ -35,6 +35,7 @@ class ArmManipProfile:
     gripper_bodies: tuple[str, ...] = field(default_factory=tuple)
     gripper_open: float = 0.05
     gripper_closed: float = 0.0
+    gripper_open_configuration: tuple[tuple[str, float], ...] = ()
 
     def gripper_contact_bodies(self) -> tuple[str, ...]:
         """Bodies used to test object contact: the fingers/jaws when annotated,
@@ -158,7 +159,8 @@ def _profile_from_arm_chain(spec, chain, *, arm: str) -> ArmManipProfile | None:
     e.g. Stretch before the merged-MJCF robosuite path lands).
     """
     mjcf = getattr(spec, "mjcf_path", None)
-    if not mjcf or not Path(str(mjcf)).is_file():
+    scene_provided = bool(getattr(spec, "scene_provides_mjcf", False))
+    if (not mjcf or not Path(str(mjcf)).is_file()) and not scene_provided:
         return None
     joints = list(getattr(chain, "joint_names", ()) or ())
     if not joints:
@@ -172,15 +174,21 @@ def _profile_from_arm_chain(spec, chain, *, arm: str) -> ArmManipProfile | None:
     if not act_names:
         return None
 
-    import mujoco
+    model = None
+    if mjcf and Path(str(mjcf)).is_file():
+        import mujoco
 
-    model = mujoco.MjModel.from_xml_path(str(mjcf))
-    home_arm_q = list(getattr(chain, "home_arm_q", ()) or ()) or list(_home_q_from_mjcf(model, joints))
+        model = mujoco.MjModel.from_xml_path(str(mjcf))
+    home_arm_q = list(getattr(chain, "home_arm_q", ()) or ())
+    if not home_arm_q and model is not None:
+        home_arm_q = list(_home_q_from_mjcf(model, joints))
     # home_cmd aligned to the arm actuators actually driven (executor indexes home_cmd[i]
     # by profile.actuator_names order).
     home_cmd: list[float] = []
     for aname in act_names:
-        jn = _actuator_joint(spec, aname)
+        jn = _actuator_joint(spec, aname) if model is not None else None
+        if jn is None and str(aname).endswith("_act"):
+            jn = str(aname)[:-4]
         if jn in joints:
             j = joints.index(jn)
             home_cmd.append(float(home_arm_q[j]) if j < len(home_arm_q) else 0.0)
@@ -188,14 +196,14 @@ def _profile_from_arm_chain(spec, chain, *, arm: str) -> ArmManipProfile | None:
             home_cmd.append(0.0)
 
     link_bodies = list(getattr(chain, "link_bodies", ()) or ())
-    if not link_bodies:
+    if not link_bodies and model is not None:
         # Derive the arm subtree bodies so collision sampling is not EE-only.
         root = _find_arm_root(model, joints)
         if root is not None:
             chain_bodies = _arm_chain_bodies(model, root)
             link_bodies = [b for b in chain_bodies if b != root] or [ee_body]
-        else:
-            link_bodies = [ee_body]
+    if not link_bodies:
+        link_bodies = [ee_body]
     gripper_bodies = list(getattr(chain, "gripper_bodies", ()) or ()) or [ee_body]
     return ArmManipProfile(
         robot_ids=(str(getattr(spec, "name", "") or ""),),
@@ -210,6 +218,7 @@ def _profile_from_arm_chain(spec, chain, *, arm: str) -> ArmManipProfile | None:
         gripper_bodies=tuple(gripper_bodies),
         gripper_open=chain.gripper_open,
         gripper_closed=chain.gripper_closed,
+        gripper_open_configuration=tuple(getattr(chain, "gripper_open_configuration", ()) or ()),
     )
 
 

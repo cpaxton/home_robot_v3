@@ -135,7 +135,7 @@ class KinematicPickPlaceExecutor:
         self,
         robot: Any,
         *,
-        arm: str = "left",
+        arm: str | None = None,
         profile: ArmManipProfile | None = None,
         manip_collision: str = "none",
         manip_planner: str = "rrt_connect",
@@ -154,6 +154,9 @@ class KinematicPickPlaceExecutor:
         placement_geometry_provider: Any | None = None,
     ) -> None:
         self.robot = robot
+        if arm is None:
+            spec = getattr(robot, "_spec", None)
+            arm = str(getattr(spec, "default_arm", "left") or "left") if spec is not None else "left"
         self.arm = str(arm).lower()
         if profile is None:
             profile = ArmManipProfile.for_robot(robot_id_from_client(robot), arm=self.arm)
@@ -270,6 +273,15 @@ class KinematicPickPlaceExecutor:
             return True
         spec = getattr(self.robot, "_spec", None) or getattr(self.robot, "get_robot_spec", lambda: None)()
         mjcf = getattr(spec, "mjcf_path", None) if spec is not None else None
+        if not mjcf and spec is not None and bool(getattr(spec, "scene_provides_mjcf", False)):
+            get_session = getattr(self.robot, "get_emet_session", None)
+            session = (get_session() if callable(get_session) else None) or {}
+            scene_model_path = session.get("scene_model_path")
+            if scene_model_path and Path(str(scene_model_path)).is_file():
+                self._model = mujoco.MjModel.from_binary_path(str(scene_model_path))
+                self._data = mujoco.MjData(self._model)
+                mujoco.mj_forward(self._model, self._data)
+                return True
         if not mjcf:
             logger.error("KinematicPickPlace: robot spec missing mjcf_path")
             return False
@@ -546,22 +558,33 @@ class KinematicPickPlaceExecutor:
 
     def _hold_actuator_dict(self) -> dict[str, float]:
         names = self._actuator_names()
+        spec = getattr(self.robot, "_spec", None)
+        base = set(getattr(spec, "base_actuator_names", ()) or ())
         hold: dict[str, float] = {}
         q, _, _ = self.robot.get_joint_state(timeout=1.0)
         if q is not None and len(q) >= len(names):
-            hold = {n: float(q[i]) for i, n in enumerate(names)}
+            hold = {
+                n: (0.0 if n in base else float(q[i]))
+                for i, n in enumerate(names)
+            }
         return hold
 
     def _set_gripper(self, *, open_: bool) -> None:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
         val = self.profile.gripper_open if open_ else self.profile.gripper_closed
-        keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
-        if not keys:
-            keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]
-        for k in keys:
-            if k in names:
-                hold[k] = val
+        configuration = self.profile.gripper_open_configuration if open_ else ()
+        if configuration:
+            for name, value in configuration:
+                if name in names:
+                    hold[name] = float(value)
+        else:
+            keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
+            if not keys:
+                keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]
+            for k in keys:
+                if k in names:
+                    hold[k] = val
         if hold:
             self.robot.set_actuator_positions(hold)
 
@@ -579,11 +602,12 @@ class KinematicPickPlaceExecutor:
         names = self._actuator_names()
         home_ctrl = self.profile.home_cmd
         skip_base = {"steer1", "wheel1", "steer2", "wheel2", "steer3", "wheel3"}
-        cmd = {
+        cmd = self._hold_actuator_dict()
+        cmd.update({
             n: float(home_ctrl[i])
             for i, n in enumerate(self.profile.actuator_names)
             if i < len(home_ctrl) and n in names and n not in skip_base
-        }
+        })
         if cmd:
             # Repeated holds: a single send after nav teleport often loses to contact transients.
             deadline = time.time() + max(float(settle_s), 0.5)

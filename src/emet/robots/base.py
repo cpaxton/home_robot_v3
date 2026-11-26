@@ -76,6 +76,8 @@ class RobotSpec:
     urdf_path: str | None
     footprint: Footprint
     mjcf_path: str | None = None
+    scene_provides_mjcf: bool = False
+    """True when the robot MJCF is supplied by the live scene (e.g. native RoboCasa PandaOmron)."""
     actuator_names: list[str] = field(default_factory=list)
     control_limits: dict[str, float] = field(default_factory=dict)
     """Verified or simulator-only absolute caps, with units in the key names.
@@ -99,6 +101,8 @@ class RobotSpec:
     # Per-arm chains for bimanual robots; ``arm_chains[arm]`` wins over ``arm_chain``.
     arm_chains: "dict[str, ArmChain]" = field(default_factory=dict)
     advertise_kinematic_manip: bool = False
+    default_arm: str = "left"
+    """Arm side used when a robot exposes a single arm or the caller does not choose one."""
     """If True, :class:`~emet.simulation.robosuite_server.RobosuiteZmqServer` advertises
     ``capabilities.kinematic_manip`` when an :class:`~emet.motion.arm_manip_profile.ArmManipProfile`
     also resolves. Default False so offline IK discovery (xlerobot, franka, …) does not
@@ -118,6 +122,13 @@ class RobotSpec:
     """
     dynav_parameter_overrides: dict[str, Any] = field(default_factory=dict)
     """Optional ``dynav_config.yaml`` key overrides applied in ``run_dynagraph`` / ``run_dynamem`` after load."""
+    base_actuator_names: tuple[str, ...] = ()
+    """Velocity/steer actuators that must not be commanded with held joint positions.
+
+    These are zeroed in the kinematic arm hold instead of being filled from the
+    measured joint state (e.g. PandaOmron's planar mobile-base velocity actuators).
+    """
+
     planar_base_joint_names: tuple[str, str, str] | None = None
     """If set, MuJoCo nav uses three scalar joints (slide, slide, hinge yaw) as velocity targets instead
     of a ``base_link`` free joint. Slide axes live on the parent body of the first slide (e.g. ``base_root``);

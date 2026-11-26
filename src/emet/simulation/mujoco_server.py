@@ -11,6 +11,7 @@
 import os
 import random
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -321,6 +322,7 @@ def main(
 
     scene_model = None
     objects_info = None
+    scene_model_path: str | None = None
 
     from emet.utils.port_utils import get_ports
 
@@ -432,6 +434,17 @@ def main(
                 robot=robot,
                 seed=int(seed) if seed is not None else None,
             )
+            if scene_model is not None:
+                try:
+                    import mujoco
+
+                    fd, scene_model_path = tempfile.mkstemp(prefix="emet_scene_", suffix=".mjb")
+                    os.close(fd)
+                    mujoco.mj_saveModel(scene_model, scene_model_path)
+                    logger.info(f"Saved scene model for client-side IK: {scene_model_path}")
+                except Exception as exc:
+                    logger.warning(f"Could not save scene model for client-side IK: {exc}")
+                    scene_model_path = None
         except FileNotFoundError as e:
             _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
             logger.error(
@@ -659,10 +672,11 @@ def main(
                 use_remote_computer=use_remote_computer,
                 verbose=verbose,
                 scene_xml=scene_xml if use_robocasa else None,
-                scene_model=scene_model if not use_robocasa else None,
+                scene_model=scene_model,
                 environment=zmq_environment,
                 scene_source_basename=scene_source_basename,
                 objects_info=objects_info,
+                session_extra={"scene_model_path": scene_model_path} if scene_model_path else None,
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
                 scene_disk_path=spawn_scene_disk,

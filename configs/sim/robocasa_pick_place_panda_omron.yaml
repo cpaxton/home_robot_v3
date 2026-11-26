@@ -1,0 +1,9 @@
+# RoboCasa benchmark robot: Panda arm on an Omron mobile base (native scene).
+kind: robocasa
+robot: panda_omron
+robocasa_task: PickPlaceCounterToCabinet
+robocasa_style: 1
+robocasa_layout: 1
+headless: true
+port_offset: 0
+seed: 0

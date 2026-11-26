@@ -28,6 +28,7 @@ ROBOT_REGISTRY = {
     "sourccey": "emet.robots.sourccey",
     "yor": "emet.robots.yor",
     "nori": "emet.robots.nori",  # Nori A3 bimanual mobile manipulator
+    "panda_omron": "emet.robots.panda_omron",  # RoboCasa benchmark Panda + Omron base
     "nori_a3": "emet.robots.nori",
 }
 

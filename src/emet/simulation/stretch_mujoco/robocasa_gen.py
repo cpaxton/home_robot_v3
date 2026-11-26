@@ -225,6 +225,52 @@ def _apply_scene_qpos0(model, scene_qpos: dict[str, np.ndarray]) -> int:
     return applied
 
 
+def _panda_omron_position_servos(xml: str) -> str:
+    """Replace Panda arm torque motors with position servos for kinematic TAMP.
+
+    RoboCasa's PandaOmron is torque-actuated; the emet kinematic executor sends
+    joint-position targets. Keep the mobile-base velocity actuators and gripper
+    position actuators unchanged. One-time PD gains are explicit here; the
+    failure-to-control loop still measures and corrects the resulting tracking
+    error.
+    """
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml)
+    joint_ranges = {
+        joint.get("name"): joint.get("range")
+        for joint in root.iter("joint")
+        if joint.get("name") and joint.get("range")
+    }
+    actuator = root.find("actuator")
+    if actuator is None:
+        return xml
+    replaced = 0
+    for elem in list(actuator):
+        name = elem.get("name") or ""
+        if not name.startswith("robot0_torq_j"):
+            continue
+        joint = elem.get("joint") or ""
+        suffix = name.removeprefix("robot0_torq_j")
+        new = ET.Element(
+            "position",
+            {
+                "name": f"robot0_joint{suffix}_act",
+                "joint": joint,
+                "kp": "200",
+                "kv": "20",
+                "ctrllimited": "true",
+                "ctrlrange": joint_ranges.get(joint, "-3.14 3.14"),
+            },
+        )
+        actuator.remove(elem)
+        actuator.append(new)
+        replaced += 1
+    if replaced:
+        click.secho(f"Converted {replaced} Panda torque motors to position servos", fg="green")
+    return ET.tostring(root, encoding="unicode")
+
+
 def model_generation_wizard(
     task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
@@ -371,6 +417,8 @@ def model_generation_wizard(
     else:
         xml = _cleanup_for_native_robot(xml)
         xml = ensure_mesh_inertia(xml)
+        if robot_key in ("panda_omron", "pandaomron"):
+            xml = _panda_omron_position_servos(xml)
         click.secho(f"\nKeeping robosuite robot '{rs_robot}' in scene.\n", fg="yellow")
 
     # Strip keyframes from the serialized kitchen model when we swapped in a different robot:
@@ -386,7 +434,7 @@ def model_generation_wizard(
         fg="green",
     )
 
-    if use_strip_placeholder_robot and hasattr(env, "init_robot_base_pos"):
+    if (use_strip_placeholder_robot or robot_key in ("panda_omron", "pandaomron")) and hasattr(env, "init_robot_base_pos"):
         pos = np.asarray(env.init_robot_base_pos, dtype=float).reshape(-1)
         yaw = 0.0
         if hasattr(env, "init_robot_base_ori"):
