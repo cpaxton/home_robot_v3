@@ -33,6 +33,7 @@ from emet.controller.manipulation.wbc_contract import (
     normalized_action_vector,
 )
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
+from emet.rl.manipulation.wbc_contact import ContactReading, MuJoCoContactSensor
 
 _BASE_JOINTS = (
     "mobilebase0_joint_mobile_forward",
@@ -112,6 +113,14 @@ class PandaOmronWbcBackend:
 
         self.model, self.model_fingerprint = _build_model()
         self.data = mujoco.MjData(self.model)
+        self._contact_sensor = MuJoCoContactSensor(
+            self.model,
+            base_body="robot0_base",
+            ee_body=_EE_BODY,
+            finger_bodies=("gripper0_leftfinger", "gripper0_rightfinger"),
+            force_sensor="gripper0_force_ee",
+            torque_sensor="gripper0_torque_ee",
+        )
         self.substeps = int(round(self.control_dt / self.model.opt.timestep))
         if self.substeps < 1 or abs(self.substeps * self.model.opt.timestep - self.control_dt) > 1e-9:
             raise ValueError("control_dt must be an integer number of model timesteps")
@@ -220,11 +229,13 @@ class PandaOmronWbcBackend:
                 break
         mujoco.mj_forward(self.model, self.data)
         self._elapsed += self.control_dt
+        contact = self._contact_sensor.read(self.data)
         return (
-            self._observation(),
+            self._observation(contact=contact),
             terminated,
             {
-                "contact_force": 0.0,
+                **contact.to_info(),
+                "contact_state_available": True,
                 "wheel_lift": False,
                 "invalid_physics": terminated,
                 "elapsed_s": self._elapsed,
@@ -419,7 +430,9 @@ class PandaOmronWbcBackend:
             target_yaw = yaw + self.rng.uniform(-0.3, 0.3)
         return (float(target_x), float(target_y), float(target_yaw))
 
-    def _observation(self) -> WbcObservation:
+    def _observation(self, *, contact: ContactReading | None = None) -> WbcObservation:
+        if contact is None:
+            contact = self._contact_sensor.read(self.data)
         base_pose = self._base_pose()
         base_twist = tuple(float(v) for v in self.data.qvel[self._base_v])
         torso = JointGroupObservation(
@@ -439,7 +452,9 @@ class PandaOmronWbcBackend:
             gripper=GripperObservation(
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
+                force=contact.finger_force,
             ),
+            contact=contact.contact,
         )
         return WbcObservation(
             base_pose=base_pose,

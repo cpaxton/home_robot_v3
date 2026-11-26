@@ -10,8 +10,8 @@ The contract is deliberately **embodiment-first**:
   named arms, optional torso/head groups, and optional grippers. Joint order is
   explicit; there is no implicit "one hand, one gripper" assumption.
 - Observations are real-world-derivable only: joint encoders, odometry, EE pose
-  from forward kinematics, and a local 3D occupancy crop from depth. No GT object
-  pose.
+  from forward kinematics, measured wrist wrench/finger contact state, and a
+  local 3D occupancy crop from depth. No GT object pose or object identity.
 - Actions are base velocity plus **per-arm joint torques**. Torque is the policy
   contract; the actuator adapter decides how a specific robot realizes it
   (position servo + current limit, current control, or true torque).
@@ -41,6 +41,7 @@ SCHEMA_VERSION = 2
 
 # EE poses are (position xyz, quaternion xyzw).
 EE_POSE_DIM = 7
+CONTACT_WRENCH_DIM = 6  # (force xyz, torque xyz) in the EE link frame
 BASE_POSE_DIM = 3
 BASE_MASK_DIM = 3  # (x, y, heading)
 TARGET_MASK_DIM = 2  # (position, orientation)
@@ -577,6 +578,39 @@ class GripperObservation:
 
 
 @dataclass(frozen=True)
+class ContactObservation:
+    """Measured external contact/load at one arm's end effector.
+
+    ``wrench`` is ``(fx, fy, fz, tx, ty, tz)`` in the arm's **EE link frame**,
+    not the task target frame. It is the measured load acting on the distal
+    arm/gripper: a wrist force/torque sensor, or a contact-normal estimate when
+    no F/T sensor exists. The raw sensor is not tared, so it can contain the
+    gripper's own gravity/inertial load as well as a payload and environment
+    contact.
+
+    ``in_contact`` is a measured contact event, not an object identity or a GT
+    contact label. ``source`` names the measurement path for provenance
+    (``ft_sensor``, ``contact_normal``, or ``none``). The actor may consume
+    this; a critic may additionally consume
+    privileged contact labels, but those never enter this field.
+    """
+
+    in_contact: bool
+    wrench: tuple[float, ...] = (0.0,) * CONTACT_WRENCH_DIM
+    source: str = "none"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.in_contact, bool):
+            raise ValueError("contact in_contact must be a bool")
+        if len(self.wrench) != CONTACT_WRENCH_DIM:
+            raise ValueError(f"contact wrench must have length {CONTACT_WRENCH_DIM}")
+        if not all(math.isfinite(float(v)) for v in self.wrench):
+            raise ValueError("contact wrench contains a non-finite value")
+        if not isinstance(self.source, str) or not self.source:
+            raise ValueError("contact source must be a non-empty string")
+
+
+@dataclass(frozen=True)
 class ArmObservation:
     """Measured state and task target for one arm."""
 
@@ -588,6 +622,7 @@ class ArmObservation:
     ee_target: tuple[float, ...] | None = None
     target_mask: tuple[bool, bool] = (True, True)
     gripper: GripperObservation | None = None
+    contact: ContactObservation | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -604,6 +639,8 @@ class ArmObservation:
             raise ValueError(f"{self.name}.target_mask must have length {TARGET_MASK_DIM}")
         if self.ee_target is not None and not any(self.target_mask):
             raise ValueError(f"{self.name}.target_mask must enable position or orientation")
+        if self.contact is not None and not isinstance(self.contact, ContactObservation):
+            raise TypeError(f"{self.name}.contact must be a ContactObservation")
         values = (*self.joint_position, *self.joint_velocity, *self.joint_torque, *self.ee_pose)
         if not all(math.isfinite(float(v)) for v in values):
             raise ValueError(f"{self.name} observation contains a non-finite value")
@@ -750,6 +787,13 @@ class WbcObservation:
                         "velocity": list(a.gripper.velocity),
                         "force": list(a.gripper.force),
                     },
+                    "contact": None
+                    if a.contact is None
+                    else {
+                        "in_contact": a.contact.in_contact,
+                        "wrench": list(a.contact.wrench),
+                        "source": a.contact.source,
+                    },
                 }
                 for a in self.arms
             ],
@@ -796,6 +840,13 @@ class WbcObservation:
                     position=tuple(float(x) for x in a["gripper"]["position"]),
                     velocity=tuple(float(x) for x in a["gripper"].get("velocity", ())),
                     force=tuple(float(x) for x in a["gripper"].get("force", ())),
+                ),
+                contact=None
+                if a.get("contact") is None
+                else ContactObservation(
+                    in_contact=bool(a["contact"].get("in_contact", False)),
+                    wrench=tuple(float(x) for x in a["contact"].get("wrench", (0.0,) * CONTACT_WRENCH_DIM)),
+                    source=str(a["contact"].get("source", "none")),
                 ),
             )
             for a in d["arms"]
@@ -1362,6 +1413,8 @@ __all__ = [
     "ArmSpec",
     "BASE_MASK_DIM",
     "BaseSpec",
+    "CONTACT_WRENCH_DIM",
+    "ContactObservation",
     "ControlMode",
     "EE_POSE_DIM",
     "EmbodimentProfile",

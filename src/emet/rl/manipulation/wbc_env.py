@@ -23,6 +23,7 @@ from scipy.spatial.transform import Rotation
 
 from emet.controller.manipulation.torque_adapter import ActuatorAdapter, PositionServoAdapter, ServoCommand
 from emet.controller.manipulation.wbc_contract import (
+    CONTACT_WRENCH_DIM,
     EmbodimentProfile,
     JointSpec,
     ReachSpec,
@@ -33,7 +34,15 @@ from emet.controller.manipulation.wbc_contract import (
     reach_reward,
 )
 
-OBSERVATION_LAYOUT_VERSION = 2
+OBSERVATION_LAYOUT_VERSION = 3
+
+# Measured contact channels are normalized by fixed physical scales so a
+# checkpoint carries an interpretable force range. The values are clipped only
+# to keep rare impacts from dominating a normalized actor input.
+CONTACT_FORCE_SCALE_N = 50.0
+CONTACT_TORQUE_SCALE_NM = 10.0
+GRIPPER_FORCE_SCALE_N = 20.0
+CONTACT_OBSERVATION_CLIP = 5.0
 
 
 class WbcBackend(Protocol):
@@ -47,7 +56,7 @@ class WbcBackend(Protocol):
     def step(self, command: ServoCommand, dt: float) -> tuple[WbcObservation, bool, dict[str, Any]]:
         """Apply one robot-facing command and return the next observation."""
 
-    def load_hard_case(self, case: Any) -> "WbcObservation | None":
+    def load_hard_case(self, case: Any) -> WbcObservation | None:
         """Start from a recorded failure posture and target, if supported.
 
         The default is unsupported; backends with a direct plant can reproduce
@@ -166,6 +175,13 @@ def wbc_observation_layout(
                     (f"{prefix}.gripper_force", m),
                 ]
             )
+        fields.extend(
+            [
+                (f"{prefix}.has_contact_state", 1),
+                (f"{prefix}.contact_flag", 1),
+                (f"{prefix}.contact_wrench", CONTACT_WRENCH_DIM),
+            ]
+        )
     if shape is not None:
         fields.extend([("has_occupancy", 1), ("occupancy", int(np.prod(shape)))])
 
@@ -320,7 +336,31 @@ def encode_observation(
             put(f"{prefix}.has_gripper_velocity", [bool(gripper.velocity)])
             put(f"{prefix}.gripper_velocity", gripper.velocity or (0.0,) * arm_spec.gripper.dof)
             put(f"{prefix}.has_gripper_force", [bool(gripper.force)])
-            put(f"{prefix}.gripper_force", gripper.force or (0.0,) * arm_spec.gripper.dof)
+            force = gripper.force or (0.0,) * arm_spec.gripper.dof
+            if normalize:
+                force = [
+                    float(np.clip(value / GRIPPER_FORCE_SCALE_N, -CONTACT_OBSERVATION_CLIP, CONTACT_OBSERVATION_CLIP))
+                    for value in force
+                ]
+            put(f"{prefix}.gripper_force", force)
+
+        contact = arm.contact
+        put(f"{prefix}.has_contact_state", [contact is not None])
+        put(f"{prefix}.contact_flag", [bool(contact.in_contact) if contact is not None else False])
+        if contact is None:
+            wrench = (0.0,) * CONTACT_WRENCH_DIM
+        elif normalize:
+            wrench = tuple(
+                float(np.clip(value / scale, -CONTACT_OBSERVATION_CLIP, CONTACT_OBSERVATION_CLIP))
+                for value, scale in zip(
+                    contact.wrench,
+                    (CONTACT_FORCE_SCALE_N,) * 3 + (CONTACT_TORQUE_SCALE_NM,) * 3,
+                    strict=True,
+                )
+            )
+        else:
+            wrench = contact.wrench
+        put(f"{prefix}.contact_wrench", wrench)
 
     if layout.occupancy_shape is not None:
         put("has_occupancy", [observation.occupancy is not None])
@@ -404,7 +444,10 @@ class WbcGymEnv(gym.Env):
         self._elapsed = 0.0
         self._success_time = 0.0
         self._done = False
-        return self.encode(observation), {"profile_fingerprint": self.profile.fingerprint}
+        return self.encode(observation), {
+            "profile_fingerprint": self.profile.fingerprint,
+            **self.contact_info(observation),
+        }
 
     def load_hard_case(self, case: Any):
         """Replace the current reset with a recorded hard-case posture."""
@@ -422,10 +465,21 @@ class WbcGymEnv(gym.Env):
         return self.encode(observation), {
             "profile_fingerprint": self.profile.fingerprint,
             "hard_case": getattr(case, "name", ""),
+            **self.contact_info(observation),
         }
 
     def encode(self, observation: WbcObservation) -> np.ndarray:
         return self.layout.encode(observation, normalize=self.normalize_observations)
+
+    @staticmethod
+    def contact_info(observation: WbcObservation) -> dict[str, bool]:
+        """Report measured contact availability without exposing GT contact."""
+
+        states = [arm.contact for arm in observation.arms if arm.contact is not None]
+        return {
+            "contact_state_available": len(states) == len(observation.arms),
+            "contact_flag": any(state.in_contact for state in states),
+        }
 
     def step(self, action: np.ndarray):
         if self._done or self._observation is None:
@@ -466,6 +520,7 @@ class WbcGymEnv(gym.Env):
             "action_mask": action_mask,
             "success": success,
             "collision": collision,
+            **self.contact_info(next_observation),
         }
         self._observation = next_observation
         self._previous_action = contract_action

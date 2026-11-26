@@ -133,7 +133,7 @@ WbcObservation:
     { name,
       joint_position, joint_velocity, joint_torque?,
       ee_pose, ee_target?, target_mask=(position, orientation),
-      gripper? }
+      gripper?, contact? }
   ]
   occupancy: (H, W, D) uint8 | null
   occupancy_origin?, occupancy_resolution?   # required together
@@ -157,6 +157,14 @@ WbcObservation:
   disagree about geometry. No GT object pose.
 - `joint_torque` is measured/estimated when available; otherwise it is empty.
   The policy must not assume torque feedback exists.
+- `contact` is an optional measured `ContactObservation` in the EE link frame:
+  `in_contact`, a 6D wrench, and a measurement source. It is a wrist F/T sensor
+  or contact-normal estimate, never an object identity or privileged contact
+  label. The raw wrench may include the distal gravity/inertial load. A backend
+  without force sensing leaves it `None`; the layout carries a presence flag so
+  a checkpoint cannot confuse missing contact with zero load.
+- `gripper.force` is the measured per-finger load when available. It is separate
+  from the wrist wrench so a two-finger grasp can report bilateral contact.
 - The training encoder adds derived, sensor-only error features that are not
   part of the semantic contract: base x/y and wrapped heading error, plus EE
   position and orientation (rotation-vector) error per arm. These helped the

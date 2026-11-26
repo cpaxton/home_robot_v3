@@ -20,6 +20,7 @@ from emet.controller.manipulation.wbc_contract import (
     ArmAction,
     ArmObservation,
     BaseSpec,
+    ContactObservation,
     GripperCommand,
     GripperObservation,
     JointGroupObservation,
@@ -136,6 +137,28 @@ def test_single_arm_observation_and_action_round_trip():
     restored_action.validate(profile)
     assert restored_action.arm("primary").joint_torques == action.arm("primary").joint_torques
     assert restored_action.arm("primary").gripper == action.arm("primary").gripper
+
+
+def test_contact_observation_round_trip_and_validation():
+    profile = example_mars_profile()
+    observation = _observation(profile)
+    arm = replace(
+        observation.arms[0],
+        contact=ContactObservation(
+            in_contact=True,
+            wrench=(1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+            source="ft_sensor",
+        ),
+    )
+    observed = replace(observation, arms=(arm,))
+    observed.validate(profile)
+    restored = WbcObservation.from_dict(observed.to_dict())
+    assert restored.arm("primary").contact == arm.contact
+
+    with pytest.raises(ValueError, match="wrench"):
+        ContactObservation(in_contact=True, wrench=(0.0,) * 5)
+    with pytest.raises(ValueError, match="source"):
+        ContactObservation(in_contact=False, source="")
 
 
 def test_example_profiles_have_bounded_action_channels():
@@ -797,9 +820,7 @@ def test_scenario_from_attempt_and_record_scenario(tmp_path, monkeypatch):
         "joint_names": ["torso_joint1", "arm_joint1"],
         "trace": [{"qpos": [0.1, 0.2], "ee_xyz": [0.0, 0.0, 0.5]}],
     }
-    rec = scenario_from_attempt(
-        attempt, context={"object_query": "mug", "receptacle_query": "cab"}
-    )
+    rec = scenario_from_attempt(attempt, context={"object_query": "mug", "receptacle_query": "cab"})
     assert rec.goal["object"] == "mug"
     assert rec.goal["receptacle"] == "cab"
     assert rec.meta["privileged"] is False
