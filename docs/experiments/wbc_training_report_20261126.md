@@ -165,6 +165,9 @@ Remaining review follow-ups: recorded-scenario embodiment fingerprinting is a
 cross-PR gap with #267; hard-case checkpoint selection should use the coverage
 report once genuine cases exist; hard-case data must be regenerated after #267.
 
+Landing order and old-benchmark regression gates are in
+[robocasa_benchmark_landing_20261126.md](../plans/robocasa_benchmark_landing_20261126.md).
+
 ## 7. Reproduce
 
 ```bash
