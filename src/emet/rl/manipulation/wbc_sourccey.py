@@ -78,6 +78,7 @@ class SourcceyWbcBackend:
         arm_goal_probability: float = 1.0,
         base_goal_probability: float = 0.5,
         base_goal_mode: str = "forward",
+        active_arms: tuple[str, ...] | None = None,
     ) -> None:
         self.profile = sourccey_sim_profile() if profile is None else profile
         if self.profile.meta("robot") != "sourccey":
@@ -96,6 +97,15 @@ class SourcceyWbcBackend:
             raise ValueError("base_goal_mode must be forward or any")
         if tuple(arm.name for arm in self.profile.arms) != ("left", "right"):
             raise ValueError("SourcceyWbcBackend requires left and right arm profiles")
+        if active_arms is not None:
+            if not active_arms or len(set(active_arms)) != len(active_arms):
+                raise ValueError("active_arms must be non-empty and unique")
+            unknown_arms = set(active_arms) - {"left", "right"}
+            if unknown_arms:
+                raise ValueError(f"unknown active arms: {sorted(unknown_arms)}")
+            self.active_arms = tuple(active_arms)
+        else:
+            self.active_arms = ("left", "right")
         if self.profile.torso is None or self.profile.torso.joint_names != ("lift",):
             raise ValueError("SourcceyWbcBackend requires the single-joint lift torso group")
         for arm_spec in self.profile.arms:
@@ -298,6 +308,10 @@ class SourcceyWbcBackend:
         poses: dict[str, tuple[float, ...] | None] = {}
         try:
             for arm_spec in self.profile.arms:
+                if arm_spec.name not in self.active_arms:
+                    targets[arm_spec.name] = self._start_q[arm_spec.name].copy()
+                    poses[arm_spec.name] = None
+                    continue
                 group = self.profile.joint_group(arm_spec.joint_group)
                 q0 = np.asarray(
                     [self.data.qpos[self._joint_q[joint.name]] for joint in group.joints],
@@ -460,6 +474,7 @@ class SourcceyWbcBackend:
             torques = tuple(float(self.data.qfrc_actuator[self._joint_v[joint.name]]) for joint in group.joints)
             ee_body = self._ee_body[arm_spec.name]
             gripper_names = self._gripper_joint_names[arm_spec.name]
+            target = self._target_ee.get(arm_spec.name)
             gripper = GripperObservation(
                 position=tuple(float(self.data.qpos[self._joint_q[name]]) for name in gripper_names),
                 velocity=tuple(float(self.data.qvel[self._joint_v[name]]) for name in gripper_names),
@@ -472,8 +487,8 @@ class SourcceyWbcBackend:
                     joint_velocity=velocities,
                     joint_torque=torques,
                     ee_pose=_pose7(self.data.xpos[ee_body], self.data.xmat[ee_body]),
-                    ee_target=self._target_ee.get(arm_spec.name),
-                    target_mask=(True, True),
+                    ee_target=target,
+                    target_mask=(True, True) if target is not None else (False, False),
                     gripper=gripper,
                 )
             )

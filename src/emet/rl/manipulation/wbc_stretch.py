@@ -20,9 +20,9 @@ setpoint.
 
 Deliberate limitations:
 
-- There is no collision termination. The packaged scene spawns in self
-  contact and settles with a small chassis drift, so a contact-force threshold
-  would end episodes on the first frame. ``info`` reports zero contact force.
+- There is no collision termination. The plant resets to a collision-free
+  ready pose; the packaged table/object contacts are ignored, so ``info``
+  reports zero contact force.
 - The arm target is sampled by forward kinematics at the reset base pose. If a
   base goal is also sampled the world-frame EE target does not move with the
   base, so a both-goals episode is a reach-after-drive task.
@@ -54,11 +54,21 @@ from emet.rl.manipulation.control import ManipulationControl
 from emet.rl.manipulation.models import build_manipulation_model
 from emet.rl.manipulation.profiles import PROFILES
 
+# The packaged scene's zero posture folds the wrist into the chassis, so the
+# plant resets to a raised ready pose instead. Lift and the virtual telescope
+# axis are meters; the wrists are radians.
+_READY_Q = np.array([0.50, 0.15, 0.0, 0.20, 0.0])
+
 # Sampling half-widths for the five-axis arm target. Lift and the virtual
 # telescope axis move in meters; the wrists move in radians.
 _TARGET_SCALE = np.array([0.12, 0.12, 0.35, 0.35, 0.50])
 _TARGET_MIN_EE_DISPLACEMENT_M = 0.04
 _TARGET_SAMPLE_ATTEMPTS = 64
+
+# Bodies that may touch the world/environment without rejecting a sampled
+# posture. The arm must not start a reach against its own chassis or the table.
+_NON_ARM_ROBOT_BODIES = frozenset({"base_link", "link_left_wheel", "link_right_wheel"})
+_ENVIRONMENT_PREFIXES = ("table", "object")
 
 # Forward-hemisphere base goal envelope, mirroring the Mars backend.
 _BASE_GOAL_DISTANCE_M = (0.05, 0.12)
@@ -66,14 +76,14 @@ _BASE_GOAL_BEARING_RAD = 0.25
 _BASE_GOAL_YAW_RAD = 0.10
 
 # Teacher staging and gains.
-_BASE_POSITION_GAIN = 2.0
-_BASE_YAW_GAIN = 2.0
-_BASE_LATERAL_GAIN = 1.5
-_BASE_SETTLE_DISTANCE_M = 0.02
-_BASE_SETTLE_HEADING_RAD = 0.05
-_BASE_SETTLE_SPEED_M_S = 0.02
-_BASE_SETTLE_YAW_RATE_RAD_S = 0.05
-_BASE_STAGE_TIMEOUT_S = 2.0
+_BASE_POSITION_GAIN = 4.0
+_BASE_YAW_GAIN = 3.0
+_BASE_LATERAL_GAIN = 3.0
+_BASE_SETTLE_DISTANCE_M = 0.01
+_BASE_SETTLE_HEADING_RAD = 0.02
+_BASE_SETTLE_SPEED_M_S = 0.01
+_BASE_SETTLE_YAW_RATE_RAD_S = 0.02
+_BASE_STAGE_TIMEOUT_S = 2.5
 
 
 def _wrap_angle(value: float) -> float:
@@ -185,6 +195,7 @@ class StretchWbcBackend:
         self._grip_command = 0.0
         self._target_q: np.ndarray | None = None
         self._target_ee: tuple[float, ...] | None = None
+        self._target_ee_local: tuple[np.ndarray, Rotation] | None = None
         self._target_base: tuple[float, float, float] | None = None
         self._teacher_phase = "arm"
         self._elapsed = 0.0
@@ -196,6 +207,8 @@ class StretchWbcBackend:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         mujoco.mj_resetData(self.model, self.data)
+        self._set_arm_q(_READY_Q)
+        self.data.qpos[self._grip_q] = self._grip_open
         mujoco.mj_forward(self.model, self.data)
         self.control.reset()
 
@@ -203,12 +216,15 @@ class StretchWbcBackend:
         self._base_command = np.zeros(2)
         self._grip_command = float(self.data.qpos[self._grip_q])
 
-        if self.rng.random() < self.arm_goal_probability:
-            self._target_q, self._target_ee = self._sample_arm_target()
-        else:
-            self._target_q = self.control.positions().copy()
-            self._target_ee = None
         self._target_base = self._sample_base_target()
+        self._target_q = self.control.positions().copy()
+        self._target_ee: tuple[float, ...] | None = None
+        self._target_ee_local: tuple[np.ndarray, Rotation] | None = None
+        if self.rng.random() < self.arm_goal_probability:
+            self._target_q, target_ee = self._sample_arm_target()
+            self._target_ee_local = self._pose_in_base_frame(target_ee, self.control.base_pose())
+            anchor = self._target_base if self._target_base is not None else self.control.base_pose()
+            self._target_ee = self._pose_from_base_frame(self._target_ee_local, anchor)
         self._teacher_phase = "base" if self._target_base is not None else "arm"
         self._elapsed = 0.0
         # Refresh actuator forces so the first observation matches the reset
@@ -305,6 +321,11 @@ class StretchWbcBackend:
         if base_stage and (self._base_goal_reached() or self._elapsed >= _BASE_STAGE_TIMEOUT_S):
             self._teacher_phase = "arm"
             base_stage = False
+            if self._target_ee_local is not None:
+                # Re-anchor the reach goal to the measured chassis pose. The
+                # base goal is world-fixed, but millimeter-level wheel slip
+                # would otherwise consume the arm's reach tolerance.
+                self._target_ee = self._pose_from_base_frame(self._target_ee_local, self.control.base_pose())
         base_velocity = self._base_teacher_velocity() if base_stage else np.zeros(2)
         if not base_stage and self._target_ee is not None:
             q = self.control.positions()
@@ -345,7 +366,10 @@ class StretchWbcBackend:
                 )
                 self._set_arm_q(q)
                 mujoco.mj_forward(self.model, self.data)
-                if np.linalg.norm(self.data.xpos[self.control.ee] - ee0) >= _TARGET_MIN_EE_DISPLACEMENT_M:
+                if (
+                    np.linalg.norm(self.data.xpos[self.control.ee] - ee0) >= _TARGET_MIN_EE_DISPLACEMENT_M
+                    and not self._posture_blocked()
+                ):
                     target_q = q
                     target_ee = _pose7(self.control.ee_pose())
                     break
@@ -356,6 +380,43 @@ class StretchWbcBackend:
         self._joint_command = q0.copy()
         self._grip_command = float(self.data.qpos[self._grip_q])
         return target_q, target_ee
+
+    def _posture_blocked(self) -> bool:
+        """True when a sampled arm posture contacts the chassis or scene.
+
+        The packaged scene keeps table/object contacts at rest. A target reach
+        that starts against the chassis or table cannot be tracked by the PD
+        teacher, so it is resampled instead of producing an impossible label.
+        """
+        for index in range(self.data.ncon):
+            contact = self.data.contact[index]
+            first = self.model.body(int(self.model.geom_bodyid[contact.geom1])).name
+            second = self.model.body(int(self.model.geom_bodyid[contact.geom2])).name
+            if first == "world" or second == "world":
+                continue
+            if first in _NON_ARM_ROBOT_BODIES and second in _NON_ARM_ROBOT_BODIES:
+                continue
+            if first.startswith(_ENVIRONMENT_PREFIXES) and second.startswith(_ENVIRONMENT_PREFIXES):
+                continue
+            return True
+        return False
+
+    @staticmethod
+    def _pose_in_base_frame(pose: tuple[float, ...], base: tuple[float, float, float]) -> tuple[np.ndarray, Rotation]:
+        """Convert a world pose to planar chassis-relative position/orientation."""
+        rotation = Rotation.from_euler("z", -base[2])
+        position = rotation.apply(np.asarray(pose[:3], dtype=np.float64) - np.array([base[0], base[1], 0.0]))
+        return position, rotation * Rotation.from_quat(pose[3:])
+
+    @staticmethod
+    def _pose_from_base_frame(
+        local: tuple[np.ndarray, Rotation], base: tuple[float, float, float]
+    ) -> tuple[float, ...]:
+        """Convert a chassis-relative pose back to world coordinates."""
+        position, orientation = local
+        rotation = Rotation.from_euler("z", base[2])
+        world_position = rotation.apply(position) + np.array([base[0], base[1], 0.0])
+        return tuple(float(value) for value in np.r_[world_position, (rotation * orientation).as_quat()])
 
     def _sample_base_target(self) -> tuple[float, float, float] | None:
         if self.rng.random() >= self.base_goal_probability:

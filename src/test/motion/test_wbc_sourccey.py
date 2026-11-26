@@ -115,3 +115,24 @@ def test_sourccey_teacher_reaches_sampled_arm_target():
     assert info["success"], info
     assert info["reward_terms"]["pos_err"] < 0.02
     env.close()
+
+
+@pytest.mark.sim
+def test_sourccey_single_arm_goal_disables_the_other_arm():
+    from emet.rl.manipulation.wbc_sourccey import SourcceyWbcBackend
+
+    backend = SourcceyWbcBackend(
+        seed=0,
+        arm_goal_probability=1.0,
+        base_goal_probability=0.0,
+        active_arms=("right",),
+    )
+    try:
+        observation = backend.reset(seed=0)
+        assert observation.arm("left").ee_target is None
+        assert observation.arm("right").ee_target is not None
+        assert backend._target_q["left"] == pytest.approx(backend._start_q["left"])
+    finally:
+        backend.close()
+    with pytest.raises(ValueError, match="unknown active arms"):
+        SourcceyWbcBackend(seed=0, active_arms=("middle",))

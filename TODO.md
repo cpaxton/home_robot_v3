@@ -74,7 +74,9 @@ tracking fix, the failure-data training pipeline, and the open/close skill.
       correlation in each record, (b) object/receptacle categories + grasp target in
       the context, (c) a loader/validation script, and (d) wiring into the in-flight
       RL-WBC training data path. Do not treat the sink as done until the training side
-      consumes it.
+      consumes it. Status: `failure_dataset.py` + `wbc_calibration.py` cover the
+      loader/feedforward fit, and `wbc_training --feedforward` consumes it; episode/job
+      correlation and object/receptacle categories remain.
 - [x] Torso settle: re-command the final IK posture for a bounded settle before the
       measured EE check (`_plan_and_execute_ee`). The recorded failure was PD lag, not
       a joint limit: Galaxea `torso_joint1` range is −1.13..1.83 rad, so the planned
@@ -1283,10 +1285,11 @@ position-servo actuator adapter.
 - [ ] Wire the adapter into the robot-side WBC transport.
 - [x] Sim-matched profiles for Mars, Stretch, Sourccey, RB-Y1 (Galaxea R1 proxy), and PandaOmron, with registry/MJCF validation.
 - [x] Direct-MuJoCo WBC plant adapters for Stretch/Sourccey/RB-Y1; Stretch/Sourccey/RB-Y1 backend sim tests pass.
-- [x] PandaOmron direct-MuJoCo plant composed from Robosuite Omron + Panda assets; base teacher passes.
-- [ ] Stretch arm teacher: PD arm tracking does not settle to the contract tolerance; needs IK/feedforward or a longer/looser curriculum.
-- [ ] PandaOmron arm teacher: torque PD oscillates around the orientation/position tolerance; needs a computed-torque/IK teacher.
-- [ ] Robot-parameterized DAgger runs for Sourccey/RB-Y1 plateau at base-only 0.33; single-arm/high-DOF curriculum needed.
+- [x] PandaOmron direct-MuJoCo plant composed from Robosuite Omron + Panda assets; arm/base teacher 1.0, combined 0.9.
+- [x] Stretch teacher: raised collision-free ready pose, collision-filtered targets, chassis-riding combined goal, and a 5 s/7 s reach window; teacher 1.0, Stretch DAgger 0.90 in-suite / 0.84 held-out over 50 episodes per subtask.
+- [x] PandaOmron arm teacher: collision-free ready pose and 300/30 torque gains removed the 20 Hz limit cycle; arm/base 1.0, combined 0.9.
+- [x] Single-arm subtask suite for Sourccey/RB-Y1 (`arm_left`/`arm_right`/`combined_left`/`combined_right`); Sourccey specialists 0.90 right / 0.70 left in-suite.
+- [ ] Sourccey/RB-Y1 full-suite policy: multi-task fine-tune pending; promote only after held-out per-subtask gates pass. Dual-arm simultaneous reaches remain out of the default suite.
 - [ ] RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint contract; hooks fail closed until registered.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.

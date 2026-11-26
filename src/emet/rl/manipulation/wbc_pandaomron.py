@@ -52,6 +52,11 @@ _GRIPPER_JOINTS = ("gripper0_finger_joint1", "gripper0_finger_joint2")
 _GRIPPER_ACTUATORS = ("gripper0_gripper_finger_joint1", "gripper0_gripper_finger_joint2")
 _BASE_BODY = "mobilebase0_base"
 _EE_BODY = "robot0_right_hand"
+# The composed Panda's zero pose folds the wrist into link5. Robosuite's
+# Panda initial posture is collision-free and keeps the EE in front of the base.
+_READY_Q = np.array([0.0, -0.00365046, 0.0, -2.61799388, 0.0, 2.74159265, 0.78539816])
+_READY_TORSO = 0.2
+_TARGET_MIN_EE_DISPLACEMENT_M = 0.03
 
 
 def _wrap(value: float) -> float:
@@ -148,6 +153,7 @@ class PandaOmronWbcBackend:
         self._target_q: np.ndarray | None = None
         self._target_torso = 0.0
         self._target_ee: tuple[float, ...] | None = None
+        self._target_ee_local: tuple[np.ndarray, Rotation] | None = None
         self._target_base: tuple[float, float, float] | None = None
         self._teacher_phase = "base"
         self._elapsed = 0.0
@@ -157,23 +163,24 @@ class PandaOmronWbcBackend:
             self.rng = np.random.default_rng(seed)
         mujoco.mj_resetData(self.model, self.data)
         self.data.qpos[self._base_q] = 0.0
-        self.data.qpos[self._torso_q] = float(self.rng.uniform(0.0, 0.34))
-        q0 = np.clip(self.rng.uniform(-0.2, 0.2, 7), self._arm_low, self._arm_high)
-        self.data.qpos[self._arm_q] = q0
+        self.data.qpos[self._torso_q] = _READY_TORSO
+        self.data.qpos[self._arm_q] = _READY_Q
         self.data.qpos[self._grip_q] = self._grip_open
         mujoco.mj_forward(self.model, self.data)
+        q0 = _READY_Q.copy()
         self._joint_command = q0.copy()
         self._base_command[:] = 0.0
         self._grip_command = np.asarray(self._grip_open)
         self._target_torso = float(self.data.qpos[self._torso_q])
+        self._target_base = self._sample_base_target()
         self._target_q = q0.copy()
         self._target_ee = None
+        self._target_ee_local = None
         if self.rng.random() < self.arm_goal_probability:
-            self._target_q, self._target_ee = self._sample_arm_target()
-        if self.rng.random() < self.base_goal_probability:
-            self._target_base = self._sample_base_target()
-        else:
-            self._target_base = None
+            self._target_q, target_ee = self._sample_arm_target(self._target_base)
+            anchor = self._target_base if self._target_base is not None else self._base_pose()
+            self._target_ee_local = self._pose_in_base_frame(target_ee, anchor)
+            self._target_ee = target_ee
         self._teacher_phase = "base" if self._target_base is not None else "arm"
         self._elapsed = 0.0
         return self._observation()
@@ -237,9 +244,15 @@ class PandaOmronWbcBackend:
             else float(np.hypot(self._target_base[0] - base[0], self._target_base[1] - base[1]))
         )
         base_heading = 0.0 if self._target_base is None else abs(_wrap(self._target_base[2] - base[2]))
+        base_command = np.zeros(3)
         if self._target_base is not None and self._teacher_phase == "base":
             if base_distance <= 0.03 and base_heading <= 0.05:
                 self._teacher_phase = "arm"
+                if self._target_ee_local is not None:
+                    # Re-anchor the reach target to the measured base pose so
+                    # the base's settle residual does not consume the arm's
+                    # 2 cm reach tolerance.
+                    self._target_ee = self._pose_from_base_frame(self._target_ee_local, base)
             else:
                 dx = self._target_base[0] - base[0]
                 dy = self._target_base[1] - base[1]
@@ -257,9 +270,7 @@ class PandaOmronWbcBackend:
                 if abs(yaw_error) <= 0.03:
                     wz = 0.0
                 else:
-                    wz = float(
-                        np.sign(yaw_error) * min(self._base_limits[2], max(0.3, 2.0 * abs(yaw_error)))
-                    )
+                    wz = float(np.sign(yaw_error) * min(self._base_limits[2], max(0.3, 2.0 * abs(yaw_error))))
                 base_command = np.array([vx, vy, wz])
         else:
             base_command = np.zeros(3)
@@ -302,23 +313,69 @@ class PandaOmronWbcBackend:
             float(np.arctan2(rotation[1, 0], rotation[0, 0])),
         )
 
-    def _sample_arm_target(self) -> tuple[np.ndarray, tuple[float, ...]]:
+    @staticmethod
+    def _pose_in_base_frame(pose: tuple[float, ...], base: tuple[float, float, float]) -> tuple[np.ndarray, Rotation]:
+        rotation = Rotation.from_euler("z", -base[2])
+        position = rotation.apply(np.asarray(pose[:3], dtype=np.float64) - np.array([base[0], base[1], 0.0]))
+        return position, rotation * Rotation.from_quat(pose[3:])
+
+    @staticmethod
+    def _pose_from_base_frame(
+        local: tuple[np.ndarray, Rotation], base: tuple[float, float, float]
+    ) -> tuple[float, ...]:
+        position, orientation = local
+        rotation = Rotation.from_euler("z", base[2])
+        world_position = rotation.apply(position) + np.array([base[0], base[1], 0.0])
+        return tuple(float(value) for value in np.r_[world_position, (rotation * orientation).as_quat()])
+
+    def _posture_blocked(self) -> bool:
+        """True when a sampled arm posture self-collides outside the gripper."""
+        for index in range(self.data.ncon):
+            contact = self.data.contact[index]
+            first = self.model.body(int(self.model.geom_bodyid[contact.geom1])).name
+            second = self.model.body(int(self.model.geom_bodyid[contact.geom2])).name
+            if first == "world" or second == "world":
+                continue
+            if first.startswith("gripper0_") and second.startswith("gripper0_"):
+                continue
+            return True
+        return False
+
+    def _sample_arm_target(
+        self, base_target: tuple[float, float, float] | None = None
+    ) -> tuple[np.ndarray, tuple[float, ...]]:
+        saved_base = self.data.qpos[self._base_q].copy()
+        if base_target is not None:
+            self.data.qpos[self._base_q] = base_target
+            mujoco.mj_forward(self.model, self.data)
         q0 = self.data.qpos[self._arm_q].copy()
         ee0 = self.data.xpos[self._ee_body].copy()
-        for _ in range(64):
-            q = np.clip(q0 + self.rng.uniform(-self.target_range, self.target_range, 7), self._arm_low, self._arm_high)
-            self.data.qpos[self._arm_q] = q
-            mujoco.mj_forward(self.model, self.data)
-            if np.linalg.norm(self.data.xpos[self._ee_body] - ee0) >= 0.03:
-                pose = _pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body])
-                self.data.qpos[self._arm_q] = q0
+        try:
+            for _ in range(64):
+                q = np.clip(
+                    q0 + self.rng.uniform(-self.target_range, self.target_range, 7),
+                    self._arm_low,
+                    self._arm_high,
+                )
+                self.data.qpos[self._arm_q] = q
                 mujoco.mj_forward(self.model, self.data)
-                return q.copy(), pose
-        self.data.qpos[self._arm_q] = q0
-        mujoco.mj_forward(self.model, self.data)
-        return q0.copy(), _pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body])
+                if (
+                    np.linalg.norm(self.data.xpos[self._ee_body] - ee0) >= _TARGET_MIN_EE_DISPLACEMENT_M
+                    and not self._posture_blocked()
+                ):
+                    pose = _pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body])
+                    return q.copy(), pose
+            self.data.qpos[self._arm_q] = q0
+            mujoco.mj_forward(self.model, self.data)
+            return q0.copy(), _pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body])
+        finally:
+            self.data.qpos[self._base_q] = saved_base
+            self.data.qpos[self._arm_q] = q0
+            mujoco.mj_forward(self.model, self.data)
 
     def _sample_base_target(self) -> tuple[float, float, float] | None:
+        if self.rng.random() >= self.base_goal_probability:
+            return None
         x, y, yaw = self._base_pose()
         if self.base_goal_mode == "forward":
             distance = float(self.rng.uniform(0.05, 0.15))

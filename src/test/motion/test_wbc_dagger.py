@@ -75,3 +75,26 @@ def test_suite_teacher_and_separate_evaluation():
     assert result["aggregate"]["episodes"] == 3.0
     assert result["aggregate"]["success_rate"] == 1.0
     env.close()
+
+
+def test_dual_arm_robots_default_to_single_arm_subtasks():
+    tasks = {task.name: task for task in default_subtasks("sourccey")}
+    assert set(tasks) == {"arm_left", "arm_right", "base", "combined_left", "combined_right"}
+    assert tasks["arm_left"].active_arms == ("left",)
+    assert tasks["combined_right"].active_arms == ("right",)
+    assert tasks["arm_left"].arm_goal and not tasks["arm_left"].base_goal
+    assert tasks["combined_left"].arm_goal and tasks["combined_left"].base_goal
+    with pytest.raises(ValueError, match="active_arms"):
+        WbcSubtask("arm", True, False, True, 0.1, 1.0, active_arms=())
+
+
+def test_cap_dataset_bounds_size_and_keeps_pairs():
+    from emet.rl.manipulation.wbc_dagger import _cap_dataset
+
+    index = np.arange(50)
+    observations = np.column_stack([index, index])
+    actions = index.astype(np.float64)
+    capped_observations, capped_actions = _cap_dataset(observations, actions, 20, seed=0)
+    assert capped_observations.shape == (20, 2)
+    assert capped_actions.shape == (20,)
+    assert np.array_equal(capped_observations[:, 0], capped_actions)

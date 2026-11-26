@@ -114,7 +114,7 @@ _BASE_YAW_DAMPING = 0.2
 
 # Arm-target sampling is a joint-space perturbation whose FK pose becomes the
 # world target. A minimum displacement keeps an "arm goal" from being a no-op.
-_ARM_TARGET_RANGE_RAD = 0.35
+_ARM_TARGET_RANGE_RAD = 0.15
 _MIN_EE_DISPLACEMENT_M = 0.03
 _TARGET_SAMPLE_ATTEMPTS = 64
 
@@ -223,6 +223,7 @@ class Rby1WbcBackend:
         base_goal_probability: float = 0.5,
         target_range: float = 0.15,
         base_goal_mode: str = "forward",
+        active_arms: tuple[str, ...] | None = None,
     ) -> None:
         self.profile = rby1_sim_profile() if profile is None else profile
         if self.profile.meta("robot") != "rby1":
@@ -231,6 +232,15 @@ class Rby1WbcBackend:
             raise ValueError("Rby1WbcBackend requires a holonomic three-axis base")
         if tuple(arm.name for arm in self.profile.arms) != ("left", "right"):
             raise ValueError("Rby1WbcBackend requires left and right arm profiles")
+        if active_arms is not None:
+            if not active_arms or len(set(active_arms)) != len(active_arms):
+                raise ValueError("active_arms must be non-empty and unique")
+            unknown_arms = set(active_arms) - {"left", "right"}
+            if unknown_arms:
+                raise ValueError(f"unknown active arms: {sorted(unknown_arms)}")
+            self.active_arms = tuple(active_arms)
+        else:
+            self.active_arms = ("left", "right")
         if self.profile.torso is None:
             raise ValueError("Rby1WbcBackend requires the four-joint torso group")
         if any(arm.target_frame != "world" for arm in self.profile.arms):
@@ -629,6 +639,7 @@ class Rby1WbcBackend:
             group = self.profile.joint_group(arm_spec.joint_group)
             names = self._gripper_names[arm_spec.name]
             ee_body = self._ee_body[arm_spec.name]
+            target = self._target_ee.get(arm_spec.name)
             arms.append(
                 ArmObservation(
                     name=arm_spec.name,
@@ -638,8 +649,8 @@ class Rby1WbcBackend:
                         float(self.data.qfrc_actuator[self._joint_v[joint.name]]) for joint in group.joints
                     ),
                     ee_pose=_pose7(self.data.xpos[ee_body], self.data.xmat[ee_body]),
-                    ee_target=self._target_ee.get(arm_spec.name),
-                    target_mask=(True, True),
+                    ee_target=target,
+                    target_mask=(True, True) if target is not None else (False, False),
                     gripper=GripperObservation(
                         position=tuple(float(self.data.qpos[self._gripper_q[name]]) for name in names),
                         velocity=tuple(float(self.data.qvel[self._gripper_v[name]]) for name in names),
@@ -794,6 +805,10 @@ class Rby1WbcBackend:
         poses: dict[str, tuple[float, ...] | None] = {}
         try:
             for arm_spec in self.profile.arms:
+                if arm_spec.name not in self.active_arms:
+                    targets[arm_spec.name] = self._start_q[arm_spec.name].copy()
+                    poses[arm_spec.name] = None
+                    continue
                 group = self.profile.joint_group(arm_spec.joint_group)
                 ee_body = self._ee_body[arm_spec.name]
                 low = np.asarray([self._joint_limits[joint.name][0] for joint in group.joints], dtype=np.float64)
