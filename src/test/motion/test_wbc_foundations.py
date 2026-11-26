@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -43,6 +44,10 @@ from emet.controller.manipulation.wbc_profiles import (
     example_stretch_profile,
     load_actuator_identification,
     mars_sim_profile,
+    rby1_sim_profile,
+    sim_profile,
+    sourccey_sim_profile,
+    stretch_sim_profile,
 )
 
 
@@ -179,6 +184,48 @@ def test_mars_sim_profile_matches_retained_mujoco_actuator():
         assert joint.velocity_limit == MARS.max_joint_speed
         assert joint.max_lead == MARS.max_target_lead
     assert profile.fingerprint != example_mars_profile().fingerprint
+
+
+def test_sim_profiles_match_packaged_robot_models():
+    import mujoco
+
+    from emet.rl.manipulation.profiles import PROFILES
+    from emet.rl.model import build_model
+
+    repo = Path(__file__).resolve().parents[3]
+    sourccey = mujoco.MjModel.from_xml_path(str(repo / "src/emet/assets/robot/sourccey/sourccey.xml"))
+    rby1 = mujoco.MjModel.from_xml_path(str(repo / "src/emet/assets/robot/galaxea_r1/galaxea_r1.xml"))
+    sourccey_joints = {sourccey.joint(i).name for i in range(sourccey.njnt)}
+    rby1_joints = {rby1.joint(i).name for i in range(rby1.njnt)}
+    mars_joints = {build_model("procedural").joint(i).name for i in range(build_model("procedural").njnt)}
+
+    for robot, profile, model_joints in (
+        ("innate_mars", mars_sim_profile(), mars_joints),
+        ("sourccey", sourccey_sim_profile(), sourccey_joints),
+        ("rby1", rby1_sim_profile(), rby1_joints),
+    ):
+        assert sim_profile(robot).name == profile.name
+        for group in profile.joint_groups:
+            for joint in group.joints:
+                assert joint.name in model_joints, (robot, joint.name)
+        for arm in profile.arms:
+            assert arm.gripper is not None
+            for name in arm.gripper.joint_names:
+                assert name in model_joints, (robot, name)
+
+    stretch = stretch_sim_profile()
+    assert tuple(joint.name for group in stretch.joint_groups for joint in group.joints) == (
+        "lift",
+        "arm",
+        "wrist_yaw",
+        "wrist_pitch",
+        "wrist_roll",
+    )
+    assert set(PROFILES["stretch"].actuators) == {"lift", "arm", "wrist_yaw", "wrist_pitch", "wrist_roll"}
+    assert stretch.action_dim == 8
+    assert sourccey_sim_profile().action_dim == 15
+    assert rby1_sim_profile().action_dim == 23
+    assert rby1_sim_profile().base.kind == "holonomic"
 
 
 def test_actuator_identification_patch_is_validated_and_loaded(tmp_path):

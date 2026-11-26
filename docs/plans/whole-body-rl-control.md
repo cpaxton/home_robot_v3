@@ -193,6 +193,19 @@ values; they are not hardware calibration. `mars_sim_profile()` is the separate
 simulator-matched Mars profile (`kp=80`, `kv=4`, effort `2.0`) used by the
 MuJoCo trainer; the example Mars profile remains the bench-replacement target.
 
+Additional sim-matched profiles are derived from the packaged MJCFs:
+
+- `stretch_sim_profile()` — five motion axes (lift, virtual telescope, three
+  wrists) + gripper;
+- `sourccey_sim_profile()` — planar base, lift, two 5-DOF arms, two grippers;
+- `rby1_sim_profile()` — holonomic base, 4-DOF torso, two 6-DOF arms, two
+  2-finger grippers, matched to the packaged Galaxea R1 proxy.
+
+`sim_profile(robot)` is the registry. RB-Y1 is intentionally a proxy profile;
+the direct-MuJoCo base must map `(vx, vy, yaw_rate)` through its three
+steer/wheel modules, and the RoboCasa RB-Y1 adapter is the benchmark source of
+truth for that robot.
+
 | Robot | Base | Torso | Arms | Grippers | Action dim |
 |---|---|---|---:|---:|---:|
 | Innate Mars | planar 2 | — | 1 × 5 | 1 × 1 | 8 |
