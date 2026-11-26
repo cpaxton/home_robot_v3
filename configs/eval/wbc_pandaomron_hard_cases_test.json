@@ -1,0 +1,37 @@
+{
+  "cases": [
+    {
+      "arm": "right",
+      "failure_mode": "tracking_failed",
+      "initial_q": [
+        0.01933235559413383,
+        -0.5107082266034908,
+        0.03822500451954687,
+        -1.9262128371241134,
+        -0.004631728322668986,
+        2.5988807080934637,
+        0.6568383701568696
+      ],
+      "name": "failure-019-pear-sink",
+      "robot": "panda_omron",
+      "source": {
+        "failure_mode": "tracking_failed",
+        "job_id": "20261125_233017_3e5d1e",
+        "message": "grasp_failed:lift_tracking_failed",
+        "object_query": "pear",
+        "receptacle_query": "sink",
+        "record_index": 19
+      },
+      "target_q": [
+        -0.009834675082628806,
+        -0.19551424959646851,
+        0.009225754383482545,
+        -2.2913145565831208,
+        -0.008550847513890627,
+        2.4759987816888485,
+        0.6543345743168623
+      ]
+    }
+  ],
+  "schema_version": 1
+}
