@@ -218,7 +218,7 @@ silently training against the wrong controller.
 | Stretch 3 | `stretch_sim_profile()` | trained DAgger 0.953 held-out | `Stretch` |
 | Sourccey | `sourccey_sim_profile()` | trained DAgger 0.952 held-out | `Sourccey` |
 | RB-Y1 | `rby1_sim_profile()` | trained DAgger 0.996 held-out | Galaxea R1 proxy path |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; trained DAgger 1.000 held-out | `PandaOmron` hook |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; clean 1.000 / robust 0.991 held-out | `PandaOmron` hook |
 
 Held-out numbers are 50 episodes per subtask on a fresh seed. All are direct
 MuJoCo results; none is a RoboCasa benchmark result.
@@ -232,7 +232,9 @@ assets into a direct MJCF: the Panda arm and torso are torque motors, so it uses
 The plant resets to Robosuite's collision-free Panda initial posture; the
 composed model's zero pose folds the wrist into link 5. Stable 20 Hz tracking
 uses identified 300/30 gains for the arm. The teacher and promoted DAgger policy
-both clear the direct-MuJoCo suite. Its RoboCasa composite controller is
+both clear the direct-MuJoCo suite. A robust mixed hard/clean checkpoint also
+passes the held-out failure-posture test (5/5 train, 1/1 test) at 0.991 clean
+multi-seed. Its RoboCasa composite controller is
 OSC/JOINT_POSITION, not the torque contract, so the benchmark adapter must map
 explicitly. The hook exists; it is not yet a RoboCasa adapter.
 

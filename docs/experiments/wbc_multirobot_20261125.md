@@ -14,7 +14,7 @@ result.
 | Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | 0.97 | 0.953 held-out |
 | Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 1.00 | 0.952 held-out |
 | RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 1.00 | 0.996 held-out |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 1.000 held-out (promoted iteration 2) |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 1.000 clean / 0.991 robust held-out |
 
 Teacher success is a ceiling, not a policy result. Held-out numbers use 50
 episodes per subtask on a fresh evaluation seed (30000).
@@ -23,7 +23,8 @@ episodes per subtask on a fresh evaluation seed (30000).
 |---|---|---|---|---|
 | Innate Mars | arm 1.00 | 1.00 | 0.92 | **0.973** |
 | Stretch 3 | arm 0.94 | 1.00 | 0.92 | **0.953** |
-| PandaOmron | right 1.00 | 1.00 | 1.00 | **1.000** |
+| PandaOmron (clean) | right 1.00 | 1.00 | 1.00 | **1.000** |
+| PandaOmron (robust) | right 1.00 | 1.00 | 0.94–1.00 | **0.991** |
 | RB-Y1 | left 1.00, right 1.00 | 1.00 | left 1.00, right 0.98 | **0.996** |
 | Sourccey | left 1.00, right 1.00 | 1.00 | left 0.86, right 0.90 | **0.952** |
 
@@ -40,7 +41,8 @@ Multi-seed gate (50 episodes per subtask; aggregate success):
 | Stretch | 0.953 | 0.940 | 0.960 | 0.951 |
 | Sourccey | 0.952 | 0.960 | 0.968 | 0.960 |
 | RB-Y1 | 0.996 | 0.996 | 1.000 | 0.997 |
-| PandaOmron | 1.000 | 1.000 | 0.987 | 0.996 |
+| PandaOmron (clean) | 1.000 | 1.000 | 0.987 | 0.996 |
+| PandaOmron (robust) | 0.980 | 0.993 | 1.000 | 0.991 |
 
 Artifacts and the per-task breakdown are in
 `logs/eval/wbc_multirobot_20261126/` (`manifest.json`, checkpoints, held-out
@@ -132,23 +134,29 @@ These are free-space arm postures, not contact/carry geometry. Shelf-entry and
 carry failures still need a dedicated carry subtask or an obstacle-conditioned
 backend before they are fully represented.
 
-Current gate: the teacher reaches all six postures in 2–23 steps (6/6). The
-promoted clean policy succeeds on 4/6 with a properly initialized reset. A
-hard-case-only specialist reaches 6/6 at iteration 3 with clean arm 0.6; later
-iterations collapse clean arm to 0.0, so it is not promoted alone. The earlier
-1/6 measurement was a harness bug: `load_hard_case` must follow a normal reset,
-otherwise the torso and gripper stay at model defaults; the evaluation script
-now resets first. A mixed hard-case/clean fine-tune is running.
+The hard-case export is split into five training postures (014–018) and one
+held-out test posture (019). The teacher reaches all six in 2–23 steps.
+
+- Clean policy (`pandaomron/best.pt`): 4/5 hard-train, 0/1 held-out test.
+- Robust policy (`pandaomron_robust/best.pt`): mixed fine-tune on the five
+  training postures at 25% injection; 5/5 hard-train, **1/1 held-out test**.
+  Clean multi-seed mean is 0.991 (seed 30000 combined 0.94 vs 1.00 for the
+  clean policy), so the robust checkpoint trades a little clean combined
+  success for hard-posture generalization.
+
+The earlier 1/6 measurement was a harness bug: `load_hard_case` must follow a
+normal reset, otherwise the torso and gripper stay at model defaults; the
+evaluation script now resets first.
 
 ## Next experiments
 
 1. RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint
    contract.
-2. Hard-case/failure-posture DAgger: the coverage split and Panda sink
-   postures are wired; train and gate the promoted Panda policy against them.
-3. Broader held-out distributions (seeds, base goals, target ranges) and
-   contact/carry subtasks, which these free-space gates do not cover.
-4. Consider a single embodiment-conditioned policy once per-robot policies are
+2. Broader held-out distributions (seeds, base goals, target ranges) and
+   contact/carry subtasks, which these free-space gates do not cover. The
+   hard-posture family now passes its held-out test; shelf entry, payload
+   carry, and contact recovery still need occupancy/contact observations.
+3. Consider a single embodiment-conditioned policy once per-robot policies are
    stable; the current artifacts are one policy per robot.
 
 Artifacts:
