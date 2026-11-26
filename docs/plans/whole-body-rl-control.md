@@ -218,7 +218,7 @@ silently training against the wrong controller.
 | Stretch 3 | `stretch_sim_profile()` | adapter + base teacher smoke; arm teacher not settled | `Stretch` |
 | Sourccey | `sourccey_sim_profile()` | adapter + 3/3 teacher smoke | `Sourccey` |
 | RB-Y1 | `rby1_sim_profile()` | adapter + 3/3 teacher smoke | Galaxea R1 proxy path |
-| PandaOmron | `pandaomron_sim_profile()` | no packaged direct MJCF | `PandaOmron` hook |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; base teacher passes | `PandaOmron` hook |
 
 Direct-MuJoCo smoke status is a teacher-only check (one episode per subtask),
 not a trained policy result. Mars remains the only fully trained WBC result.
@@ -226,10 +226,13 @@ Backend/teacher/DAgger details:
 [wbc_multirobot_20261125.md](../experiments/wbc_multirobot_20261125.md).
 
 PandaOmron is an Omron holonomic base + 1-DOF torso height + one 7-DOF Panda
-arm + two-finger gripper. Its RoboCasa composite controller is OSC/JOINT_POSITION,
-not the torque contract, so the adapter must map between the benchmark action
-space and the contract explicitly. The hook exists now; it is not yet a trained
-PandaOmron result.
+arm + two-finger gripper. `PandaOmronWbcBackend` composes those Robosuite
+assets into a direct MJCF: the Panda arm and torso are torque motors, so it uses
+`TorqueAdapter`; the base is velocity-controlled and the gripper is positional.
+The base teacher passes its smoke; the arm teacher still oscillates around the
+contract tolerance. Its RoboCasa composite controller is OSC/JOINT_POSITION,
+not the torque contract, so the benchmark adapter must map explicitly. The hook
+exists; it is not yet a trained PandaOmron result.
 
 | Robot | Base | Torso | Arms | Grippers | Action dim |
 |---|---|---|---:|---:|---:|
