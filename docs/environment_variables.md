@@ -19,6 +19,7 @@ See also [MolmoSpaces](molmospaces.md) for install and CLI usage.
 | Variable | Used by | Purpose |
 |----------|---------|---------|
 | `PYTHONPATH` | `emet.utils.pythonpath` (CLI bootstrap, sim `Popen`, `mujoco_server`) | Standard import path. `emet` strips ROS entries and prepends `src/` plus **this venv’s** `python{tag}/site-packages` only (not every `python*` glob). See [pythonpath.md](pythonpath.md). |
+| `EMET_GT_TEACHER` | TAMP / RoboCasa teacher | unset — `1` enables the explicit privileged-GT teacher/critic path (GT bodies in training records only; assessment remains semantic and may return `grounding_unavailable`). |
 | `EMET_CONFIG` | `emet run agent`, `emet run dynagraph`, `emet run dynamem`, `emet stream`, `emet capture` | Packaged default path for unified nested YAML when `--config` is omitted **and** no connection-profile `config` applies. Explicit `--config` wins; else profile `config` (named `--connection` or active profile); else this env / `configs/emet/default.yaml`. See [emet_config.md](emet_config.md) and [cli.md](cli.md) (`emet connect`). |
 
 ## Rerun

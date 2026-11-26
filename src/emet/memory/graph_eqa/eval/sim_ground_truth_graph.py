@@ -13,7 +13,7 @@ import numpy as np
 from emet.memory.graph_eqa.eval.mujoco_align import compare_graph_to_placements_report
 from emet.memory.graph_eqa.graph_memory import GT_BODY_DESC_PREFIX, GraphEQAMemory, is_ground_truth_node
 
-_EMET_INTERNAL_KEYS = frozenset({"_emet_spawn_hint_xyt"})
+_EMET_INTERNAL_KEYS = frozenset({"_emet_spawn_hint_xyt", "_emet_object_category"})
 
 
 def ground_truth_description(body_name: str) -> str:

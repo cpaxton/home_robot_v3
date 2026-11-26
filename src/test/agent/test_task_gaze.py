@@ -101,7 +101,7 @@ def test_chat_description_exposes_task_gaze_without_an_extra_caption_or_tool(mon
     assert "measured_head_pan_tilt_rad" in out.render()
     agent.describe_head_camera_scene_text.assert_not_called()
     agent.robot.head_to.assert_called_once()
-    assert len(tools) == 34
+    assert len(tools) == 35
 
 
 def test_eqa_handler_forwards_explicit_gaze_and_preserves_default_call():
@@ -154,7 +154,7 @@ def test_session_head_arguments_match_the_capture_contract(monkeypatch, supporte
             assert tool.parameters["properties"]["tilt_rad"]["maximum"] == 0.5
         else:
             assert "head aiming is unavailable" in tool.description
-    assert len(chat) == 34  # Capability changes arguments, not the registry.
+    assert len(chat) == 35  # Capability changes arguments, not the registry.
 
 
 def test_synchronous_native_capture_does_not_require_a_zmq_sequence(monkeypatch):

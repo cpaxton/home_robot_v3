@@ -231,6 +231,7 @@ class KinematicPickPlaceExecutor:
         # motion attempt, plus a structured failure record when it does not reach.
         self._motion_trace: list[dict[str, Any]] = []
         self.last_attempt: dict[str, Any] = {}
+        self._attempt_initial_q: list[float] | None = None
 
     def _scaled_dt(self, dt: float) -> float:
         from emet.core.zmq_protocol import motion_wait_timeout_scale, read_sim_to_real_ratio
@@ -436,6 +437,9 @@ class KinematicPickPlaceExecutor:
         self.last_grasp_verification = None
         self.last_placement_search = None
         self.last_surface_search = None
+        self.last_plan_waypoints = []
+        self.last_attempt = {}
+        self._attempt_initial_q = None
         self.last_release_evidence = {"detach_command": "not_attempted", "placement_verified": None}
 
     def _sync_qpos_from_robot(self) -> bool:
@@ -595,6 +599,7 @@ class KinematicPickPlaceExecutor:
             "error_m": float(error_m) if np.isfinite(error_m) else None,
             "failure_mode": self._last_motion_failure,
             "joint_names": list(getattr(self, "joint_names", []) or []),
+            "initial_q": getattr(self, "_attempt_initial_q", None),
             "planned_waypoints": [np.asarray(w, dtype=np.float64).tolist() for w in waypoints],
             "trace": list(self._motion_trace),
         }
@@ -716,6 +721,7 @@ class KinematicPickPlaceExecutor:
             self._set_last_attempt(target_xyz_world, False, float("inf"))
             return False, float('inf')
         q0 = np.array([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
+        self._attempt_initial_q = q0.tolist()
         # The measured pose can sit a few milliradians outside a limit after a
         # settle. Plan from the clamped pose; the measured state stays the truth.
         lo, hi = self._joint_position_bounds()
@@ -1000,6 +1006,41 @@ class KinematicPickPlaceExecutor:
             f"target={np.round(target, 3).tolist()}"
         )
         return True
+
+    def planning_attempt(self, op: str, code: str) -> dict[str, Any]:
+        """Structured record for an operation that failed before arm motion."""
+        q = list(self._current_arm_qpos())
+        ee = None
+        if self._model is not None and self._data is not None:
+            try:
+                ee = np.asarray(self._data.body(self.ee_body).xpos, dtype=np.float64).tolist()
+            except Exception:
+                ee = None
+        target = None
+        support = getattr(self, "_placement_support_bounds", None)
+        if support is not None:
+            try:
+                target = np.asarray(support, dtype=np.float64).mean(axis=(0, 1)).tolist()
+            except Exception:
+                target = None
+        search = getattr(self, "last_placement_search", None)
+        placement = None
+        if search is not None:
+            placement = {
+                "solutions": len(getattr(search, "paths", ()) or ()),
+                "rejections": dict(getattr(search, "rejections", {}) or {}),
+                "scope": str(getattr(search, "collision_scope", "") or ""),
+            }
+        return {
+            "op": str(op),
+            "failure_mode": str(code),
+            "target_xyz": target,
+            "joint_names": list(getattr(self, "joint_names", []) or []),
+            "initial_q": q,
+            "planned_waypoints": [],
+            "trace": [{"qpos": q, "ee_xyz": ee}],
+            "placement_search": placement,
+        }
 
     def _search_placement(self, body, receptacle, *, approach_base):
         from emet.motion.placement import (

@@ -344,7 +344,7 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
             )
             if not matches:
                 stable_scene_task_refs(context, [], None, session_key=session_key, semantic=True)
-            from emet.simulation.articulation import articulation_access
+            from emet.simulation.articulation import articulation_access, articulation_access_for_query
 
             return response(
                 "scene_tasks",
@@ -355,7 +355,11 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
                             "object_name": ref.object_query,
                             "receptacle_name": ref.receptacle_query,
                             "start_receptacle": ref.start_receptacle,
-                            "access": articulation_access(session if live_sim else {}, ref.receptacle_body or ""),
+                            "access": (
+                                articulation_access_for_query(session if live_sim else {}, ref.receptacle_query)
+                                if ref.semantic_only
+                                else articulation_access(session if live_sim else {}, ref.receptacle_body or "")
+                            ),
                         }
                         for ref in task_refs
                     ],

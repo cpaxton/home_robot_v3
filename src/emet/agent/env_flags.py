@@ -22,6 +22,11 @@ import os
 _TRUE = frozenset({"1", "true", "yes", "on"})
 
 
+def env_gt_teacher() -> bool:
+    """Explicit privileged-GT teacher/critic path; never an assessment input."""
+    return os.environ.get("EMET_GT_TEACHER", "").strip().lower() in _TRUE
+
+
 def env_agent_model_debug() -> bool:
     """When set, print which models/clients are used (chat LLM, detectors, EQA VLM, etc.)."""
     v = os.environ.get("EMET_AGENT_MODEL_DEBUG", "").strip().lower()
