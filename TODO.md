@@ -1293,7 +1293,7 @@ position-servo actuator adapter.
 - [x] Home-posture resets for Sourccey/RB-Y1 removed the full-range joint distribution that made BC unlearnable.
 - [x] RB-Y1 full-suite policy: 0.996 held-out over 50 episodes/subtask (combined_right 0.98, everything else 1.0). Artifact: `/tmp/opencode/wbc_rby1_multi/`.
 - [x] Sourccey full-suite policy: 0.952 held-out over 50 episodes/subtask (arms/base 1.0, combined_left 0.86, combined_right 0.90). Artifact: `/tmp/opencode/wbc_sourccey_combined/`.
-- [ ] Hard-case/failure-posture DAgger gate for the promoted Panda policy: teacher 6/6, promoted clean policy 1/6, 30%-injection fine-tune 0–1/6. Needs a precision/hold objective or more targeted data; not promoted.
+- [ ] Hard-case/failure-posture DAgger gate: teacher 6/6, promoted clean policy 4/6, hard-case specialist 6/6 but clean arm drops to 0.2–0.4. A mixed hard/clean fine-tune is in progress; do not promote the specialist alone.
 - [ ] RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint contract; hooks fail closed until registered.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.

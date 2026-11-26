@@ -59,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
         for case in cases:
             episodes = []
             for _ in range(args.episodes_per_case):
+                # A hard case overrides an initialized reset; load_hard_case
+                # alone leaves the torso/gripper at model defaults.
+                env.reset(seed=0)
                 loaded = env.load_hard_case(case)
                 if loaded is None:
                     raise ValueError(f"{robot.name} backend does not support hard cases")
