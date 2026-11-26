@@ -146,6 +146,28 @@ def test_layout_encodes_targets_and_presence_flags():
     assert encoded[layout.slices["base_target"]][2] == pytest.approx(0.1)
 
 
+def test_teacher_collection_reseeds_each_episode():
+    class _SeedEnv:
+        def __init__(self) -> None:
+            self.seeds: list[int | None] = []
+
+        def reset(self, *, seed=None):
+            self.seeds.append(seed)
+            return np.zeros(2, dtype=np.float32), {}
+
+        def step(self, _action):
+            return np.zeros(2, dtype=np.float32), 0.0, True, False, {}
+
+        def teacher_action(self):
+            return np.zeros(2, dtype=np.float32)
+
+    env = _SeedEnv()
+    observations, actions = collect_teacher_data(env, steps=3, seed=10)
+    assert env.seeds == [10, 11, 12, 13]
+    assert observations.shape == (3, 2)
+    assert actions.shape == (3, 2)
+
+
 def test_layout_encodes_measured_contact_and_gripper_force():
     profile = _fake_profile()
     observation = _FakeBackend()._observation()

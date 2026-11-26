@@ -555,7 +555,8 @@ def collect_teacher_data(env, *, steps: int, seed: int = 0) -> tuple[np.ndarray,
         teacher = env.backend.teacher_action
     if type(steps) is not int or steps < 2:
         raise ValueError("teacher steps must be at least two")
-    observation, _ = env.reset(seed=seed)
+    episode = 0
+    observation, _ = env.reset(seed=seed + episode)
     observations, actions = [], []
     for _ in range(steps):
         action = np.asarray(teacher(), dtype=np.float32)
@@ -563,7 +564,8 @@ def collect_teacher_data(env, *, steps: int, seed: int = 0) -> tuple[np.ndarray,
         actions.append(action)
         observation, _, terminated, truncated, _ = env.step(action)
         if terminated or truncated:
-            observation, _ = env.reset()
+            episode += 1
+            observation, _ = env.reset(seed=seed + episode)
     return np.asarray(observations), np.asarray(actions)
 
 
