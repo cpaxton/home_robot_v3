@@ -174,7 +174,8 @@ class WbcTaskSuiteEnv(gym.Env):
             name = self.names[index]
         self.active_name = name
         observation, info = self.envs[name].reset(seed=seed)
-        if self.hard_cases and self.np_random.random() < self.hard_case_probability:
+        use_hard_case = options is None or options.get("hard_case", True) is not False
+        if use_hard_case and self.hard_cases and self.np_random.random() < self.hard_case_probability:
             task = next(task for task in self.subtasks if task.name == name)
             active_arms = set(task.active_arms or ())
             candidates = [] if not task.arm_goal else [
@@ -271,7 +272,10 @@ def evaluate_suite(
     for name in env.names:
         returns, successes, lengths = [], [], []
         for episode in range(episodes_per_task):
-            observation, _ = env.reset(seed=seed + episode, options={"subtask": name})
+            observation, _ = env.reset(
+                seed=seed + episode,
+                options={"subtask": name, "hard_case": False},
+            )
             total, steps, success = 0.0, 0, False
             done = False
             while not done:
