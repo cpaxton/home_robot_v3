@@ -209,6 +209,41 @@ def test_executor_search_accepts_observed_geometry_without_gt_query(rig, query):
     executor.robot.move_base_to.assert_not_called()
 
 
+def test_horizontal_preplace_offsets_the_approach_outward(rig, monkeypatch):
+    model, data, payload = rig
+    targets = []
+
+    def fake_ik(*_args, target_pos, **_kwargs):
+        targets.append(np.asarray(target_pos, dtype=np.float64).copy())
+        return SimpleNamespace(success=False)
+
+    monkeypatch.setattr("emet.motion.placement.solve_pose_ik", fake_ik)
+    common = {
+        "joint_names": ("x", "y", "z"),
+        "ee_body": "tool",
+        "robot_body": "base",
+        "scene": PlacementScene([], source="ground_truth"),
+        "payload": payload,
+        "object_centers": [[0.7, 0.2, 0.1]],
+        "base_candidates": [[0.0, 0.0, 0.0]],
+        "set_base": set_base,
+        "contact_bodies": ("tool",),
+        "max_ik_calls_per_base": 1,
+    }
+    plan_placement_paths(model, data, **common, preplace_mode="horizontal", horizontal_preplace_m=0.2)
+    assert targets
+    rotated = payload.vertices_ee @ np.eye(3)
+    center_offset = (rotated.min(axis=0) + rotated.max(axis=0)) / 2
+    place = np.array([0.7, 0.2, 0.1]) - center_offset
+    expected_xy = place[:2] - place[:2] / np.linalg.norm(place[:2]) * 0.2
+    np.testing.assert_allclose(targets[0][:2], expected_xy, atol=1e-9)
+    assert targets[0][2] == pytest.approx(place[2])
+
+    targets.clear()
+    plan_placement_paths(model, data, **common, preplace_mode="top")
+    assert targets and targets[0][2] == pytest.approx(place[2] + 0.12)
+
+
 def test_planning_budget_and_live_endpoint_rejection(rig):
     model, data, payload = rig
     common = {"joint_names": ("x", "y", "z"), "ee_body": "tool", "robot_body": "base",

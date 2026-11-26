@@ -71,7 +71,9 @@ def base_candidates_from_approach_hint(
     often diagonally offset from the receptacle, so choose the AABB face the
     hint is outside of and nearest to, then place the base on that face's
     centerline at the hint's depth. This keeps a cabinet approach on its open
-    side instead of a collision-free but sealed back side.
+    side instead of a collision-free but sealed back side. The depth is the
+    hint coordinate, not a fixed standoff, so a far hint yields farther base
+    candidates; endpoint collision/clearance validation remains the gate.
     """
     hint = np.asarray(hint_xyt, dtype=float).reshape(-1)
     center = np.asarray(center_xy, dtype=float).reshape(-1)
