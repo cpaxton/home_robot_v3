@@ -191,6 +191,247 @@ def mars_sim_profile() -> EmbodimentProfile:
     )
 
 
+def stretch_sim_profile() -> EmbodimentProfile:
+    """Stretch 3 profile matched to the retained MuJoCo position/tendon actuators.
+
+    The contract uses the controller's five motion axes (``lift``, virtual
+    telescope ``arm``, and three wrist joints) plus the gripper. The virtual
+    ``arm`` position is the sum of the four telescope joints in the backend.
+    """
+    joints = (
+        JointSpec(
+            "lift",
+            (0.0, 1.1),
+            0.1,
+            70.0,
+            kind="prismatic",
+            kp_eff=400.0,
+            kd_eff=100.0,
+            max_lead=0.01,
+        ),
+        JointSpec(
+            "arm",
+            (0.0, 0.52),
+            0.1,
+            56.0,
+            kind="prismatic",
+            kp_eff=150.0,
+            kd_eff=10.0,
+            max_lead=0.01,
+        ),
+        JointSpec("wrist_yaw", (-1.39, 4.42), 0.6, 20.0, kp_eff=20.0, kd_eff=0.0, max_lead=0.05),
+        JointSpec("wrist_pitch", (-1.57, 0.56), 0.6, 50.0, kp_eff=50.0, kd_eff=0.0, max_lead=0.05),
+        JointSpec("wrist_roll", (-3.14, 3.14), 0.6, 20.0, kp_eff=20.0, kd_eff=0.0, max_lead=0.05),
+    )
+    arm = JointGroupSpec(name="stretch_arm", role="arm", joints=joints)
+    return EmbodimentProfile(
+        name="stretch_sim",
+        base=BaseSpec(name="base", kind="planar", velocity_limits=(0.12, 0.5)),
+        joint_groups=(arm,),
+        arms=(
+            ArmSpec(
+                name="primary",
+                joint_group="stretch_arm",
+                ee_link="link_grasp_center",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="primary_gripper",
+                    joint_names=("joint_gripper_slide",),
+                    command_limits=((-0.02, 0.04),),
+                ),
+            ),
+        ),
+        metadata=(("limits_source", "mujoco_servo"), ("robot", "stretch")),
+    )
+
+
+def sourccey_sim_profile() -> EmbodimentProfile:
+    """Sourccey Mk.V profile matched to the packaged MuJoCo MJCF."""
+    lift = JointGroupSpec(
+        name="lift",
+        role="torso",
+        joints=(
+            JointSpec(
+                "lift",
+                (-0.315, -0.0142),
+                0.1,
+                3000.0,
+                kind="prismatic",
+                kp_eff=30000.0,
+                kd_eff=3000.0,
+                max_lead=0.005,
+            ),
+        ),
+    )
+
+    limits = {
+        "left": (
+            (-1.570796, 1.570796),
+            (-2.094395, 2.094395),
+            (-1.570796, 1.570796),
+            (-1.570796, 1.570796),
+            (-3.141593, 3.141593),
+        ),
+        "right": (
+            (-1.570796, 1.570796),
+            (-2.094395, 1.919862),
+            (-1.570796, 1.570796),
+            (-1.570796, 1.570796),
+            (-3.141593, 3.141593),
+        ),
+    }
+    suffixes = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
+
+    def arm(side: str) -> JointGroupSpec:
+        return JointGroupSpec(
+            name=f"{side}_arm",
+            role="arm",
+            joints=tuple(
+                JointSpec(
+                    f"{side}_{suffix}",
+                    limits[side][index],
+                    1.0,
+                    100.0,
+                    kp_eff=500.0,
+                    kd_eff=35.0,
+                    max_lead=0.05,
+                )
+                for index, suffix in enumerate(suffixes)
+            ),
+        )
+
+    return EmbodimentProfile(
+        name="sourccey_sim",
+        base=BaseSpec(name="base", kind="planar", velocity_limits=(0.3, 0.8)),
+        joint_groups=(lift, arm("left"), arm("right")),
+        arms=(
+            ArmSpec(
+                name="left",
+                joint_group="left_arm",
+                ee_link="Gripper_Base_v1_1",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="left_gripper",
+                    joint_names=("left_gripper",),
+                    command_limits=((-0.087266, 1.047198),),
+                ),
+            ),
+            ArmSpec(
+                name="right",
+                joint_group="right_arm",
+                ee_link="Gripper_Base_v1_2",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("right_gripper",),
+                    command_limits=((-0.087266, 1.047198),),
+                ),
+            ),
+        ),
+        torso_group="lift",
+        metadata=(("limits_source", "mujoco_servo"), ("robot", "sourccey")),
+    )
+
+
+def rby1_sim_profile() -> EmbodimentProfile:
+    """RB-Y1 / Galaxea R1 proxy profile matched to the packaged MJCF.
+
+    The base is holonomic in the contract. The direct-MuJoCo plant must map
+    ``(vx, vy, yaw_rate)`` through the three steer/wheel modules; the RoboCasa
+    adapter must use the same profile and base command semantics.
+    """
+    torso = JointGroupSpec(
+        name="torso",
+        role="torso",
+        joints=(
+            JointSpec("torso_joint1", (-1.1345, 1.8326), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+            JointSpec("torso_joint2", (-2.7925, 2.5307), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+            JointSpec("torso_joint3", (-1.8326, 1.5708), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+            JointSpec("torso_joint4", (-3.0543, 3.0543), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+        ),
+    )
+    arm_limits = (
+        (-2.8798, 2.8798),
+        (0.0, 3.2289),
+        (-3.3161, 0.0),
+        (-2.8798, 2.8798),
+        (-1.6581, 1.6581),
+        (-2.8798, 2.8798),
+    )
+    arm_torque = (40.0, 40.0, 40.0, 7.0, 7.0, 7.0)
+    arm_kp = (100.0, 100.0, 100.0, 40.0, 40.0, 40.0)
+    arm_kd = (30.0, 30.0, 30.0, 10.0, 10.0, 10.0)
+
+    def arm(side: str) -> JointGroupSpec:
+        return JointGroupSpec(
+            name=f"{side}_arm",
+            role="arm",
+            joints=tuple(
+                JointSpec(
+                    f"{side}_arm_joint{index + 1}",
+                    arm_limits[index],
+                    1.0,
+                    arm_torque[index],
+                    kp_eff=arm_kp[index],
+                    kd_eff=arm_kd[index],
+                    max_lead=0.05,
+                )
+                for index in range(6)
+            ),
+        )
+
+    return EmbodimentProfile(
+        name="rby1_sim",
+        base=BaseSpec(name="base", kind="holonomic", velocity_limits=(0.4, 0.4, 0.8)),
+        joint_groups=(torso, arm("left"), arm("right")),
+        arms=(
+            ArmSpec(
+                name="left",
+                joint_group="left_arm",
+                ee_link="left_arm_link6",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="left_gripper",
+                    joint_names=("left_gripper_finger_joint1", "left_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
+                ),
+            ),
+            ArmSpec(
+                name="right",
+                joint_group="right_arm",
+                ee_link="right_arm_link6",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("right_gripper_finger_joint1", "right_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
+                ),
+            ),
+        ),
+        torso_group="torso",
+        metadata=(("limits_source", "mujoco_servo"), ("robot", "rby1"), ("sim_model", "galaxea_r1_proxy")),
+    )
+
+
+_SIM_PROFILE_FACTORIES = {
+    "innate_mars": mars_sim_profile,
+    "mars": mars_sim_profile,
+    "stretch": stretch_sim_profile,
+    "sourccey": sourccey_sim_profile,
+    "rby1": rby1_sim_profile,
+    "rb_y1": rby1_sim_profile,
+}
+
+
+def sim_profile(robot: str) -> EmbodimentProfile:
+    """Return the sim-matched profile for a supported robot key."""
+    key = robot.lower().replace("-", "_")
+    try:
+        return _SIM_PROFILE_FACTORIES[key]()
+    except KeyError as exc:
+        raise KeyError(f"no WBC sim profile for robot {robot!r}") from exc
+
+
 def example_sourccey_profile() -> EmbodimentProfile:
     """Sourccey: planar base, lift torso, two 5-DOF arms, two grippers."""
     lift = JointGroupSpec(
@@ -503,4 +744,8 @@ __all__ = [
     "example_stretch_profile",
     "load_actuator_identification",
     "mars_sim_profile",
+    "rby1_sim_profile",
+    "sim_profile",
+    "sourccey_sim_profile",
+    "stretch_sim_profile",
 ]

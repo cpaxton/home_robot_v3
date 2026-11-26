@@ -1281,6 +1281,9 @@ position-servo actuator adapter.
 - [x] DAgger subtask suite (arm/base/combined), actor-visited privileged labels, per-task evaluation, and best-checkpoint selection.
 - [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits). The tooling is in place; the hardware sweep remains.
 - [ ] Wire the adapter into the robot-side WBC transport.
+- [x] Sim-matched profiles for Mars, Stretch, Sourccey, and RB-Y1 (Galaxea R1 proxy), with MJCF joint-name validation.
+- [ ] Direct-MuJoCo WBC plant adapters for Stretch/Sourccey/RB-Y1 and robot-parameterized DAgger runs.
+- [ ] RoboCasa RB-Y1 benchmark adapter using the same profile/checkpoint contract.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.
 - [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
