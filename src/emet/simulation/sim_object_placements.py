@@ -24,7 +24,7 @@ DEFAULT_TABLE_SCENE_PLACEMENTS: dict[str, dict[str, Any]] = {
     "object2": {"cat": "red cylinder", "pos": [0.08, -0.55, 0.6], "quat": [1.0, 0.0, 0.0, 0.0]},
 }
 
-_EMET_INTERNAL_KEYS = frozenset({"_emet_spawn_hint_xyt"})
+_EMET_INTERNAL_KEYS = frozenset({"_emet_spawn_hint_xyt", "_emet_object_category"})
 
 # Bodies we never treat as scene-graph objects when scanning a merged MJCF (per-body mode).
 _SKIP_BODY_RE = re.compile(

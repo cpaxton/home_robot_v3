@@ -131,7 +131,10 @@ def articulation_for_query(session, query):
         if not isinstance(group, dict):
             continue
         bodies = [str(body).lower() for body in (group.get("bodies") or ())]
-        if any(body == token or body.startswith(token + "_") or body.startswith(token) for body in bodies):
+        # Match an exact body or a token-delimited body name (``cab`` ->
+        # ``cab_main``). A bare prefix would also match unrelated names such as
+        # ``cable`` and silently open the wrong fixture.
+        if any(body == token or body.startswith(token + "_") for body in bodies):
             matches.append(group)
     return matches[0] if len(matches) == 1 else None
 
