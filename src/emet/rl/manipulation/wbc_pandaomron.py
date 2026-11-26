@@ -302,6 +302,36 @@ class PandaOmronWbcBackend:
         )
         return np.clip(normalized_action_vector(action, self.profile), -1.0, 1.0).astype(np.float32)
 
+    def load_hard_case(self, case) -> WbcObservation | None:
+        """Reproduce a recorded Panda failure posture and target posture."""
+        robot = str(getattr(case, "robot", "") or "")
+        if robot not in ("", "panda_omron", "pandaomron"):
+            return None
+        initial = np.asarray(getattr(case, "initial_q", ()), dtype=np.float64).reshape(-1)
+        target = np.asarray(getattr(case, "target_q", ()), dtype=np.float64).reshape(-1)
+        if initial.shape != (7,) or target.shape != (7,):
+            return None
+        if not (np.isfinite(initial).all() and np.isfinite(target).all()):
+            return None
+        initial = np.clip(initial, self._arm_low, self._arm_high)
+        target = np.clip(target, self._arm_low, self._arm_high)
+        self.data.qpos[self._arm_q] = initial
+        self.data.qvel[self._arm_v] = 0.0
+        self._joint_command = initial.copy()
+        self._target_q = target.copy()
+        self._target_base = None
+        self._target_ee_local = None
+        self._teacher_phase = "arm"
+        self._target_torso = float(self.data.qpos[self._torso_q])
+        self.data.qpos[self._arm_q] = target
+        mujoco.mj_forward(self.model, self.data)
+        self._target_ee = _pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body])
+        self.data.qpos[self._arm_q] = initial
+        self.data.qvel[self._arm_v] = 0.0
+        mujoco.mj_forward(self.model, self.data)
+        self._elapsed = 0.0
+        return self._observation()
+
     def close(self) -> None:
         return None
 

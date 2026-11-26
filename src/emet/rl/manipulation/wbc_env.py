@@ -47,6 +47,14 @@ class WbcBackend(Protocol):
     def step(self, command: ServoCommand, dt: float) -> tuple[WbcObservation, bool, dict[str, Any]]:
         """Apply one robot-facing command and return the next observation."""
 
+    def load_hard_case(self, case: Any) -> "WbcObservation | None":
+        """Start from a recorded failure posture and target, if supported.
+
+        The default is unsupported; backends with a direct plant can reproduce
+        the recorded arm posture and return the resulting observation.
+        """
+        return None
+
     def close(self) -> None:
         """Release simulator/robot resources."""
 
@@ -397,6 +405,24 @@ class WbcGymEnv(gym.Env):
         self._success_time = 0.0
         self._done = False
         return self.encode(observation), {"profile_fingerprint": self.profile.fingerprint}
+
+    def load_hard_case(self, case: Any):
+        """Replace the current reset with a recorded hard-case posture."""
+        observation = self.backend.load_hard_case(case)
+        if observation is None:
+            return None
+        observation.validate(self.profile)
+        if self.hold_base and observation.base_target is not None:
+            raise ValueError("hold_base=True requires observations without a base target")
+        self._observation = observation
+        self._previous_action = None
+        self._elapsed = 0.0
+        self._success_time = 0.0
+        self._done = False
+        return self.encode(observation), {
+            "profile_fingerprint": self.profile.fingerprint,
+            "hard_case": getattr(case, "name", ""),
+        }
 
     def encode(self, observation: WbcObservation) -> np.ndarray:
         return self.layout.encode(observation, normalize=self.normalize_observations)

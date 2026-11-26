@@ -67,6 +67,19 @@ seed. It is a ceiling, not a policy result. Stretch's 0.84 held-out number is
   The composed model's zero arm posture self-collides with the wrist; the
   ready-pose reset and 300/30 torque gains are required at 20 Hz.
 
+## Hard cases
+
+`wbc_hard_cases.py` exports recorded arm postures from the manipulation failure
+sink into DAgger cases: the actor starts at the posture it actually reached when
+the attempt failed, and the teacher is asked to reach the recorded target
+posture. `--hard-cases` and `--hard-case-probability` inject them into arm and
+combined subtasks; base-only subtasks are excluded. The first export is
+`configs/eval/wbc_pandaomron_hard_cases.json` (six Panda sink/cabinet records).
+
+These are free-space arm postures, not contact/carry geometry. Shelf-entry and
+carry failures still need a dedicated carry subtask or an obstacle-conditioned
+backend before they are fully represented.
+
 ## Next experiments
 
 1. Finish the Sourccey/RB-Y1 full-suite fine-tune from the arm specialists;
