@@ -115,7 +115,9 @@ def hard_cases_from_failure_records(
         waypoints = attempt.get("planned_waypoints") or []
         if not record_joints or not trace or not waypoints:
             continue
-        initial = trace[0].get("qpos") if isinstance(trace[0], dict) else None
+        initial = attempt.get("initial_q")
+        if not initial and isinstance(trace[0], dict):
+            initial = trace[0].get("qpos")
         target = waypoints[-1]
         if not isinstance(initial, list) or not isinstance(target, list):
             continue
