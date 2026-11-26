@@ -184,7 +184,11 @@ def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
         xyt,
         planar_joint_names=tuple(planar) if planar and len(planar) == 3 else None,
         freejoint_name=getattr(profile, "base_freejoint_name", None),
-        base_body_name=getattr(spec, "base_link_name", None),
+        base_body_name=(
+            getattr(spec, "base_link_name", None)
+            if getattr(executor, "_scene_model_loaded", False)
+            else None
+        ),
     )
     # Seed arm near home so ranking matches post-approach posture.
     home = getattr(profile, "home_cmd", None)

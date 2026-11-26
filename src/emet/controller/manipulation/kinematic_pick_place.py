@@ -1066,10 +1066,12 @@ class KinematicPickPlaceExecutor:
                 clear.extend(evidence)
         poses = [pose for index, pose in enumerate(poses) if clear is None or clear[index]]
 
+        merged_base = spec.base_link_name if getattr(self, "_scene_model_loaded", False) else None
+
         def set_base(model, data, pose):
             return write_offline_mjcf_base_xyt(model, data, pose,
                 planar_joint_names=self._planar_joint_names(), freejoint_name=self.profile.base_freejoint_name,
-                base_body_name=spec.base_link_name)
+                base_body_name=merged_base)
 
         contacts = (self.ee_body, *self.profile.gripper_contact_bodies())
         snapshot_root = os.environ.get("EMET_PLACEMENT_DIAGNOSTICS_DIR")
@@ -1082,7 +1084,7 @@ class KinematicPickPlaceExecutor:
                 contact_bodies=contacts, rrt_max_iter=self.rrt_max_iter,
                 base_writer={"planar_joint_names": self._planar_joint_names(),
                              "freejoint_name": self.profile.base_freejoint_name,
-                             "base_body_name": spec.base_link_name})
+                             "base_body_name": merged_base})
             logger.info(f"Placement snapshot: {snapshot}")
         def _search(mode: str):
             search = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,
