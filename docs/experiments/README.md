@@ -11,8 +11,10 @@ until #267 adds more failure data.
 
 **RoboCasa WBC adapter (2026-11-26):** [PandaOmron reach smoke in PickPlaceCounterToCabinet](wbc_robocasa_20261126.md)
 writes contract torques/velocities directly into the RoboCasa sim; an 8 cm
-target tracks to 1.3 cm / 0.029 rad in the kitchen scene. Task targets, base
-motion, and the merged-scene adapters for Stretch/Sourccey/RB-Y1 remain open.
+target tracks to 1.3 cm / 0.029 rad, and a 20-episode reach sweep is 20/20
+(mean 1.13 cm, p95 1.67 cm). A privileged joint/Cartesian teacher and loaded
+data export are in place. Task targets, base motion, and the merged-scene
+adapters for Stretch/Sourccey/RB-Y1 remain open.
 
 **Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)
 records a simulator-only Mars result: 0.973 aggregate held-out success over

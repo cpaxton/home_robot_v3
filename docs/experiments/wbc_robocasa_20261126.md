@@ -24,12 +24,51 @@ wraps a Robosuite/RoboCasa env:
 - Holds the torso at 0.2 m with a PD/bias servo; the arm-only policy's torso
   channel is not a reliable height servo in the kitchen.
 - The default target is a free-space offset from the current end effector. A
-  skill/TAMP layer can call `set_ee_target(world_or_local_pose)` for real task
-  targets.
+  skill/TAMP layer can call `set_ee_target(world_pose)` for real task targets.
 
 The fail-closed `make_robocasa_backend("pandaomron")` hook is intentionally
 unchanged: the adapter requires an env and a task target provider, which the
 generic factory cannot construct by itself.
+
+## Privileged teacher
+
+`RoboCasaPandaBackend.teacher_action()` is the privileged labeler:
+
+- **Joint mode.** Samples a target joint posture within `target_range` of the
+  ready pose, computes its EE pose by forward kinematics, and applies joint PD
+  with the profile kp/kd gains plus gravity bias. The teacher tracks a sampled
+  target to **0.48 cm / 0.0115 rad** in the kitchen scene.
+- **Cartesian fallback.** For an EE target supplied with `set_ee_target()`, it
+  applies a Cartesian PD wrench through a finite-difference EE Jacobian. This is
+  the path for object/receptacle targets, where a joint-space target is not
+  known a priori.
+- The teacher also holds the torso at 0.2 m with the same PD/bias servo the
+  backend applies. Teacher actions are never part of the actor observation or
+  exported checkpoint.
+
+## Reach sweep and loaded data
+
+```bash
+uv run python scripts/sweep_wbc_robocasa_panda.py \
+  --checkpoint /tmp/opencode/wbc_panda_mixed_heldout/best.pt \
+  --episodes 20 --target-range 0.15 --backoff 0.45 \
+  --layout 1 --style 1 --save-data \
+  --output /tmp/opencode/wbc_robocasa_sweep_policy
+```
+
+- 20/20 contract successes on sampled joint targets (±0.15 rad) in the loaded
+  `PickPlaceCounterToCabinet` scene.
+- Position error: mean **1.13 cm**, p95 **1.67 cm**, max below the 2 cm
+  tolerance; orientation error stays well inside 0.05 rad.
+- The earlier 1.31 cm smoke is therefore typical, not a marginal one-off.
+- `loaded_data.npz` stores actor-visited observations and teacher labels
+  (`observations`, `teacher_actions`, episode/step IDs) for BC/DAgger
+  fine-tuning; `sweep.json` stores per-episode metrics and targets.
+
+The sweep covers the policy's trained joint-target distribution. Object and
+cabinet targets are farther and use the Cartesian teacher; those need a
+separate target sweep and, if the tail crosses 2 cm, a DAgger fine-tune from
+`loaded_data.npz`.
 
 ## Smoke result
 
@@ -62,7 +101,10 @@ scene contact/placement and the approximate torso hold.
 ## Next
 
 1. Add a task-target bridge from the benchmark/TAMP skill layer into
-   `set_ee_target` (object grasp, lift, place).
-2. Wire base goals so the WBC can approach the counter instead of using a fixed
+   `set_ee_target` (object grasp, lift, place), then sweep those Cartesian
+   targets with the Cartesian teacher.
+2. Run a small RoboCasa DAgger/fine-tune from `loaded_data.npz` if the
+   task-target tail crosses the 2 cm tolerance.
+3. Wire base goals so the WBC can approach the counter instead of using a fixed
    backoff.
-3. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.
+4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.

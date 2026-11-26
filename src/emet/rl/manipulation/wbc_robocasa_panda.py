@@ -23,10 +23,14 @@ from scipy.spatial.transform import Rotation
 
 from emet.controller.manipulation.torque_adapter import ServoCommand, TorqueAdapter
 from emet.controller.manipulation.wbc_contract import (
+    ArmAction,
     ArmObservation,
+    GripperCommand,
     GripperObservation,
     JointGroupObservation,
+    WbcAction,
     WbcObservation,
+    normalized_action_vector,
 )
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
 from emet.rl.manipulation.wbc_pandaomron import _READY_Q, _READY_TORSO
@@ -75,6 +79,8 @@ class RoboCasaPandaBackend:
         control_dt: float = 0.05,
         target_offset: tuple[float, float, float] = (0.04, 0.04, 0.06),
         base_backoff: float = 0.25,
+        target_mode: str = "offset",
+        target_range: float = 0.15,
     ) -> None:
         self.env = env
         self.profile = profile or pandaomron_sim_profile()
@@ -85,8 +91,14 @@ class RoboCasaPandaBackend:
         self.control_dt = float(control_dt)
         self.target_offset = tuple(float(v) for v in target_offset)
         self.base_backoff = float(base_backoff)
+        self.target_mode = str(target_mode)
+        self.target_range = float(target_range)
+        if self.target_mode not in {"offset", "joint"}:
+            raise ValueError("target_mode must be 'offset' or 'joint'")
         if self.base_backoff < 0:
             raise ValueError("base_backoff must be nonnegative")
+        if self.target_range <= 0:
+            raise ValueError("target_range must be positive")
         self.rng = np.random.default_rng(seed)
         self.model = None
         self.data = None
@@ -101,6 +113,14 @@ class RoboCasaPandaBackend:
         self._elapsed = 0.0
         self._origin_xy = np.zeros(2)
         self._origin_yaw = 0.0
+        arm_joints = self.profile.joint_group("panda_arm").joints
+        self._arm_joints = arm_joints
+        self._kp = np.asarray([float(joint.kp_eff or 0.0) for joint in arm_joints])
+        self._kd = np.asarray([float(joint.kd_eff or 0.0) for joint in arm_joints])
+        self._torque_limits = np.asarray([float(joint.torque_limit) for joint in arm_joints])
+        self._arm_low = np.asarray([joint.position_limit[0] for joint in arm_joints])
+        self._arm_high = np.asarray([joint.position_limit[1] for joint in arm_joints])
+        self._target_q: np.ndarray | None = None
 
     def _initialize_sim(self) -> None:
         self.model = self.env.sim.model
@@ -130,10 +150,19 @@ class RoboCasaPandaBackend:
         self._torque_acts["joint_torso_height"] = self._torso_act
 
     def set_ee_target(self, pose: tuple[float, ...] | None) -> None:
-        """Set a world-frame target (7 values) or restore the reset offset."""
+        """Set a world-frame target (7 values) or restore the reset offset.
+
+        The actor observation stores targets in the reset-anchored robot frame;
+        a task/skill layer naturally supplies world poses, so convert here.
+        """
         if pose is not None and len(pose) != 7:
             raise ValueError("EE target must be a 7-value position/quaternion pose")
-        self._target_ee_override = None if pose is None else tuple(float(v) for v in pose)
+        if pose is not None and self.model is None:
+            raise ValueError("set_ee_target requires an initialized reset")
+        self._target_ee_override = None if pose is None else self._local_pose(tuple(float(v) for v in pose))
+        self._target_q = None
+        if pose is not None:
+            self._target_ee = self._target_ee_override
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> WbcObservation:
         del options
@@ -169,7 +198,11 @@ class RoboCasaPandaBackend:
         ee = self._local_pose(_pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body]))
         if self._target_ee_override is not None:
             self._target_ee = self._target_ee_override
+            self._target_q = None
+        elif self.target_mode == "joint":
+            self._target_q, self._target_ee = self._sample_joint_target()
         else:
+            self._target_q = None
             offset = np.asarray(self.target_offset, dtype=np.float64)
             self._target_ee = tuple(float(v) for v in np.r_[np.asarray(ee[:3]) + offset, ee[3:]])
         return self._observation()
@@ -249,6 +282,94 @@ class RoboCasaPandaBackend:
         )
         orientation = rotation * Rotation.from_quat(pose[3:])
         return tuple(float(value) for value in np.r_[position, orientation.as_quat()])
+
+    def _world_pose(self, local: tuple[float, ...]) -> tuple[np.ndarray, Rotation]:
+        rotation = Rotation.from_euler("z", self._origin_yaw)
+        position = rotation.apply(np.asarray(local[:3], dtype=np.float64)) + np.array(
+            [self._origin_xy[0], self._origin_xy[1], 0.0]
+        )
+        return position, rotation * Rotation.from_quat(local[3:])
+
+    def _sample_joint_target(self) -> tuple[np.ndarray, tuple[float, ...]]:
+        q0 = self.data.qpos[self._arm_q].copy()
+        q = np.clip(
+            q0 + self.rng.uniform(-self.target_range, self.target_range, len(q0)),
+            self._arm_low,
+            self._arm_high,
+        )
+        self.data.qpos[self._arm_q] = q
+        self.env.sim.forward()
+        target = self._local_pose(_pose7(self.data.xpos[self._ee_body], self.data.xmat[self._ee_body]))
+        self.data.qpos[self._arm_q] = q0
+        self.env.sim.forward()
+        return q.copy(), target
+
+    def _numerical_jacobian(self, q: np.ndarray) -> np.ndarray:
+        """6x7 world-frame EE Jacobian by finite differences."""
+        eps = 1e-3
+        position = self.data.xpos[self._ee_body].copy()
+        rotation = Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3))
+        jacobian = np.zeros((6, len(q)), dtype=np.float64)
+        for index in range(len(q)):
+            perturbed = q.copy()
+            perturbed[index] = float(np.clip(perturbed[index] + eps, self._arm_low[index], self._arm_high[index]))
+            if perturbed[index] == q[index]:
+                continue
+            self.data.qpos[self._arm_q] = perturbed
+            self.env.sim.forward()
+            next_position = self.data.xpos[self._ee_body]
+            next_rotation = Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3))
+            jacobian[:3, index] = (next_position - position) / eps
+            jacobian[3:, index] = (next_rotation * rotation.inv()).as_rotvec() / eps
+        self.data.qpos[self._arm_q] = q
+        self.env.sim.forward()
+        return jacobian
+
+    def _cartesian_torque(self, q: np.ndarray, qd: np.ndarray, bias: np.ndarray) -> np.ndarray:
+        target_position, target_rotation = self._world_pose(self._target_ee)  # type: ignore[arg-type]
+        position = self.data.xpos[self._ee_body].copy()
+        rotation = Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3))
+        position_error = target_position - position
+        orientation_error = (target_rotation * rotation.inv()).as_rotvec()
+        jacobian = self._numerical_jacobian(q)
+        linear_velocity = jacobian[:3] @ qd
+        angular_velocity = jacobian[3:] @ qd
+        wrench = np.r_[
+            500.0 * position_error - 50.0 * linear_velocity,
+            200.0 * orientation_error - 20.0 * angular_velocity,
+        ]
+        return jacobian.T @ wrench + bias
+
+    def teacher_action(self) -> np.ndarray:
+        """Privileged joint-PD (or Cartesian) teacher for RoboCasa data generation."""
+        if self.data is None:
+            raise RuntimeError("reset required before teacher_action")
+        q = np.asarray(self.data.qpos[self._arm_q], dtype=np.float64)
+        qd = np.asarray(self.data.qvel[self._arm_v], dtype=np.float64)
+        bias = np.asarray(self.data.qfrc_bias[self._arm_v], dtype=np.float64)
+        if self._target_q is not None:
+            torque = self._kp * (self._target_q - q) - self._kd * qd + bias
+        elif self._target_ee is not None:
+            torque = self._cartesian_torque(q, qd, bias)
+        else:
+            torque = -self._kd * qd + bias
+        torque = np.clip(torque, -self._torque_limits, self._torque_limits)
+        torso = float(self.data.qpos[self._torso_q])
+        torso_qd = float(self.data.qvel[self._torso_v])
+        torso_bias = float(self.data.qfrc_bias[self._torso_v])
+        torso_torque = float(np.clip(1000.0 * (_READY_TORSO - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0))
+        action = WbcAction(
+            base_velocity=(0.0, 0.0, 0.0),
+            torso_torques=(torso_torque,),
+            arms=(
+                ArmAction(
+                    name="right",
+                    joint_torques=tuple(float(v) for v in torque),
+                    gripper=GripperCommand(values=(0.04, -0.04)),
+                ),
+            ),
+        )
+        return normalized_action_vector(action, self.profile).astype(np.float32)
 
     def _base_pose(self) -> tuple[float, float, float]:
         world = self._world_base_pose()

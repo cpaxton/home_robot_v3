@@ -36,6 +36,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--horizon", type=float, default=5.0)
     parser.add_argument("--offset", type=float, nargs=3, default=(0.0, 0.0, 0.08))
     parser.add_argument("--backoff", type=float, default=0.45)
+    parser.add_argument("--teacher", action="store_true", help="use the privileged teacher instead of a checkpoint")
+    parser.add_argument("--target-mode", choices=("offset", "joint"), default="offset")
+    parser.add_argument("--target-range", type=float, default=0.15)
     args = parser.parse_args(argv)
 
     import robocasa  # noqa: F401
@@ -54,11 +57,20 @@ def main(argv: list[str] | None = None) -> int:
         use_camera_obs=False,
         control_freq=20,
     )
-    backend = RoboCasaPandaBackend(env, target_offset=tuple(args.offset), base_backoff=args.backoff)
+    backend = RoboCasaPandaBackend(
+        env,
+        target_offset=tuple(args.offset),
+        base_backoff=args.backoff,
+        target_mode=args.target_mode,
+        target_range=args.target_range,
+    )
     wbc = WbcGymEnv(backend, horizon_s=args.horizon, control_dt=0.05, hold_base=True)
-    trainer, _ = WbcPPO.load(args.checkpoint, pandaomron_sim_profile())
-    policy = trainer.policy
-    device = trainer.device
+    policy = None
+    device = None
+    if not args.teacher:
+        trainer, _ = WbcPPO.load(args.checkpoint, pandaomron_sim_profile())
+        policy = trainer.policy
+        device = trainer.device
     observation, _ = wbc.reset(seed=0)
     print(
         f"base={backend._base_pose()} torso={backend.data.qpos[backend._torso_q]:.3f} "
@@ -75,14 +87,17 @@ def main(argv: list[str] | None = None) -> int:
     info: dict = {}
     try:
         for step in range(int(round(args.horizon / 0.05))):
-            with torch.no_grad():
-                action = (
-                    policy.deterministic_action(
-                        torch.as_tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
-                    )[0]
-                    .cpu()
-                    .numpy()
-                )
+            if args.teacher:
+                action = backend.teacher_action()
+            else:
+                with torch.no_grad():
+                    action = (
+                        policy.deterministic_action(
+                            torch.as_tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+                        )[0]
+                        .cpu()
+                        .numpy()
+                    )
             observation, _, terminated, truncated, info = wbc.step(action)
             success |= bool(info.get("success", False))
             if step % 10 == 0:
