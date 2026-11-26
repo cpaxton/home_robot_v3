@@ -1,4 +1,6 @@
-# Whole-body RL control: multi-arm torque contract
+# Whole-body RL control
+
+How-to guide: [docs/wbc.md](../wbc.md) (training, failure-data/scene ingestion, RoboCasa teacher/sweep, gates).: multi-arm torque contract
 
 Status: **schema v2 + adapter-matched trainer implemented; no hardware policy
 promoted.** This document is the design authority for the contract in

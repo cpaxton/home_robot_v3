@@ -164,6 +164,15 @@ class RoboCasaPandaBackend:
         if pose is not None:
             self._target_ee = self._target_ee_override
 
+    def set_local_ee_target(self, pose: tuple[float, ...] | None) -> None:
+        """Set an end-effector target in the reset-anchored robot frame."""
+        if pose is not None and len(pose) != 7:
+            raise ValueError("EE target must be a 7-value position/quaternion pose")
+        self._target_ee_override = None if pose is None else tuple(float(v) for v in pose)
+        self._target_q = None
+        if pose is not None:
+            self._target_ee = self._target_ee_override
+
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> WbcObservation:
         del options
         if seed is not None:

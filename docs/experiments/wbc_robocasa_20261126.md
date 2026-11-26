@@ -65,10 +65,18 @@ uv run python scripts/sweep_wbc_robocasa_panda.py \
   (`observations`, `teacher_actions`, episode/step IDs) for BC/DAgger
   fine-tuning; `sweep.json` stores per-episode metrics and targets.
 
-The sweep covers the policy's trained joint-target distribution. Object and
-cabinet targets are farther and use the Cartesian teacher; those need a
-separate target sweep and, if the tail crosses 2 cm, a DAgger fine-tune from
-`loaded_data.npz`.
+A second loaded sweep samples **Cartesian EE offsets** (±5 cm in x/y, 0–8 cm
+up) with the same scene and policy:
+
+- 20/20 contract successes.
+- Position error mean **0.87 cm**, p95 **1.54 cm**, max below 2 cm.
+- Data: `/tmp/opencode/wbc_robocasa_sweep_cartesian/loaded_data.npz`.
+
+Both the joint-target and Cartesian-offset distributions stay inside the 2 cm
+tolerance, so no DAgger fine-tune is required for this reach envelope. Farther
+object/cabinet targets, grasp/lift/place sequences, and obstacle/contact cases
+still need a task-target sweep and, if their tail crosses 2 cm, a DAgger
+fine-tune from `loaded_data.npz`.
 
 ## Smoke result
 

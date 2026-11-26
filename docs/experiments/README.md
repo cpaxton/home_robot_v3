@@ -1,5 +1,8 @@
 # Paper experiments — master index
 
+**WBC how-to:** [Whole-body control guide](../wbc.md) — contract, teacher/BC/DAgger, failure-data + scene ingestion, RoboCasa teacher/sweep, and promotion gates.
+
+
 **Multi-robot WBC backend matrix (2026-11-26):** [MuJoCo plants and trained policies for Mars/Stretch/Sourccey/RB-Y1/PandaOmron](wbc_multirobot_20261125.md)
 records the direct-MuJoCo backend and the trained policy gates: 50
 episodes/subtask, three seeds, means Mars 0.955, Stretch 0.951, Sourccey
@@ -11,9 +14,10 @@ until #267 adds more failure data.
 
 **RoboCasa WBC adapter (2026-11-26):** [PandaOmron reach smoke in PickPlaceCounterToCabinet](wbc_robocasa_20261126.md)
 writes contract torques/velocities directly into the RoboCasa sim; an 8 cm
-target tracks to 1.3 cm / 0.029 rad, and a 20-episode reach sweep is 20/20
-(mean 1.13 cm, p95 1.67 cm). A privileged joint/Cartesian teacher and loaded
-data export are in place. Task targets, base motion, and the merged-scene
+target tracks to 1.3 cm / 0.029 rad; 20-episode joint and Cartesian reach
+sweeps are both 20/20 (joint mean 1.13 cm/p95 1.67 cm; Cartesian mean 0.87
+cm/p95 1.54 cm). A privileged joint/Cartesian teacher and loaded data export
+are in place. Task targets, base motion, and the merged-scene
 adapters for Stretch/Sourccey/RB-Y1 remain open.
 
 **Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)
