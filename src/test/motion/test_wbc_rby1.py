@@ -182,6 +182,7 @@ def test_rby1_single_arm_goal_disables_the_other_arm():
         observation = backend.reset(seed=0)
         assert observation.arm("left").ee_target is not None
         assert observation.arm("right").ee_target is None
+        assert observation.arm("right").target_mask == (False, False)
         assert backend._target_q["right"] == pytest.approx(backend._start_q["right"])
     finally:
         backend.close()

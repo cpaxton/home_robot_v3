@@ -236,13 +236,13 @@ class SourcceyWbcBackend:
         self.data.qpos[self._base_q] = 0.0
 
         lift_lo, lift_hi = self._limits["lift"]
-        # Keep the lift off both mechanical stops so the plant's gravity
-        # feedforward (see ``_position_ctrl``) has headroom in either direction.
-        self.data.qpos[self._joint_q["lift"]] = self.rng.uniform(lift_lo + 0.02, lift_hi - 0.02)
+        # The scene is collision-free at the raised home posture; resetting
+        # there keeps the arm task learnable instead of sampling extreme poses.
+        self.data.qpos[self._joint_q["lift"]] = float(np.clip(lift_hi - 0.05, lift_lo + 0.02, lift_hi - 0.02))
         for arm_spec in self.profile.arms:
             for joint in self.profile.joint_group(arm_spec.joint_group).joints:
                 lo, hi = self._limits[joint.name]
-                self.data.qpos[self._joint_q[joint.name]] = self.rng.uniform(lo, hi)
+                self.data.qpos[self._joint_q[joint.name]] = float(np.clip(self.rng.uniform(-0.05, 0.05), lo, hi))
         for arm_spec in self.profile.arms:
             for name, value in zip(
                 self._gripper_joint_names[arm_spec.name], self._gripper_open[arm_spec.name], strict=True

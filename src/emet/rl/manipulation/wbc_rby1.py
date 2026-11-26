@@ -421,7 +421,10 @@ class Rby1WbcBackend:
         for group in self.model_groups():
             for joint in group.joints:
                 low, high = self._joint_limits[joint.name]
-                self.data.qpos[self._joint_q[joint.name]] = self.rng.uniform(low, high)
+                # The packaged home posture is collision-free. Reset near it
+                # instead of sampling the full joint range: a 12-DOF arm at a
+                # random extreme is a far harder imitation target.
+                self.data.qpos[self._joint_q[joint.name]] = float(np.clip(self.rng.uniform(-0.05, 0.05), low, high))
         for name, value in self._gripper_open.items():
             for joint_name, joint_value in zip(self._gripper_names[name], value, strict=True):
                 self.data.qpos[self._gripper_q[joint_name]] = joint_value

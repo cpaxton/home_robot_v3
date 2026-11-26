@@ -1288,8 +1288,12 @@ position-servo actuator adapter.
 - [x] PandaOmron direct-MuJoCo plant composed from Robosuite Omron + Panda assets; arm/base teacher 1.0, combined 0.9.
 - [x] Stretch teacher: raised collision-free ready pose, collision-filtered targets, chassis-riding combined goal, and a 5 s/7 s reach window; teacher 1.0, Stretch DAgger 0.90 in-suite / 0.84 held-out over 50 episodes per subtask.
 - [x] PandaOmron arm teacher: collision-free ready pose and 300/30 torque gains removed the 20 Hz limit cycle; arm/base 1.0, combined 0.9.
-- [x] Single-arm subtask suite for Sourccey/RB-Y1 (`arm_left`/`arm_right`/`combined_left`/`combined_right`); Sourccey specialists 0.90 right / 0.70 left in-suite.
-- [ ] Sourccey/RB-Y1 full-suite policy: multi-task fine-tune pending; promote only after held-out per-subtask gates pass. Dual-arm simultaneous reaches remain out of the default suite.
+- [x] PandaOmron policy: DAgger best in-suite 1.00; 0.927 held-out over 50 episodes/subtask (arm 1.0, base 1.0, combined 0.78). Artifact: `/tmp/opencode/wbc_pandaomron_full/`.
+- [x] Single-arm subtask suite for Sourccey/RB-Y1 (`arm_left`/`arm_right`/`combined_left`/`combined_right`).
+- [x] Home-posture resets for Sourccey/RB-Y1 removed the full-range joint distribution that made BC unlearnable.
+- [x] RB-Y1 full-suite policy: 0.996 held-out over 50 episodes/subtask (combined_right 0.98, everything else 1.0). Artifact: `/tmp/opencode/wbc_rby1_multi/`.
+- [ ] Sourccey held-out gate and combined_left improvement; full-suite DAgger is at 0.86 in-suite. Artifact: `/tmp/opencode/wbc_sourccey_ready/`.
+- [ ] Stretch combined improvement: 0.62 held-out; arm 0.90, base 1.0.
 - [ ] RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint contract; hooks fail closed until registered.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.
