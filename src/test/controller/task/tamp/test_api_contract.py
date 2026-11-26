@@ -759,3 +759,54 @@ def test_teleport_collision_surfaces_refusal_through_plan_and_data():
     assert "cabinet_y" not in json.dumps(data)
 
 
+
+
+def test_privileged_teacher_resolves_the_goal_cabinet_nearest_the_start_counter():
+    from emet.controller.task.tamp.agent_bridge import AgentTaskRef, privileged_task_from_semantic
+
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 1.0]},
+        "obj_2": {"cat": "mug", "pos": [2.0, 0.0, 1.0]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 1.0]},
+        "cab_a": {"cat": "cabinet", "pos": [0.0, 3.0, 1.0]},
+        "cab_b": {"cat": "cabinet", "pos": [2.0, 3.0, 1.0]},
+    }
+    ref = AgentTaskRef(
+        ref="query",
+        object_query="mug",
+        receptacle_query="cab",
+        start_receptacle="counter",
+        semantic_only=True,
+    )
+    resolved = privileged_task_from_semantic(ref, placements)
+    assert resolved is not None
+    assert resolved.object_body == "obj_main"
+    assert resolved.receptacle_body == "cab_a"
+    assert resolved.privileged is True
+
+
+def test_semantic_access_query_matches_one_fixture_without_exposing_a_body():
+    from emet.simulation.articulation import articulation_access_for_query
+
+    session = {
+        "capabilities": {"sim_articulation_state": True, "sim_set_joint_qpos": True},
+        "is_simulation": True,
+        "sim_articulations": [
+            {"bodies": ["sink_main"], "supported": True, "state": "open", "joint_positions": {}},
+        ],
+    }
+    access = articulation_access_for_query(session, "sink")
+    assert access["state"] == "open"
+    assert access["required_action"] is None
+    assert access["available_actions"] == ["open", "closed"]
+
+    ambiguous = dict(session)
+    ambiguous["sim_articulations"] = [
+        {"bodies": ["cab_main"], "supported": True, "state": "open"},
+        {"bodies": ["cab_2"], "supported": True, "state": "closed"},
+    ]
+    assert articulation_access_for_query(ambiguous, "cab") == {
+        "state": "unknown",
+        "required_action": None,
+        "available_actions": [],
+    }

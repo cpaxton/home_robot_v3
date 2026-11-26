@@ -420,6 +420,14 @@ def model_generation_wizard(
             "pos": object_placements[obj_name][0],
             "quat": object_placements[obj_name][1],
         }
+    # Semantic task metadata, not a GT body key. The task's target object
+    # category is needed to resolve PickPlace<Object>To<Receptacle> without
+    # reading ``obj_main`` or any other placement body.
+    target_cfg = next((cfg for cfg in env.object_cfgs if cfg.get("name") == "obj"), None)
+    if target_cfg is not None:
+        target_category = str((target_cfg.get("info") or {}).get("cat") or "").strip()
+        if target_category:
+            object_placements_info["_emet_object_category"] = target_category
 
     if use_strip_placeholder_robot:
         xml, remove_robot_attrib = custom_cleanups(xml)

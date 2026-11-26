@@ -468,3 +468,17 @@ def test_export_initial_voxel_map_never_raises():
     out = export_initial_voxel_map(Boom())
     assert out["kind"] == "voxel_map_2d_unavailable"
     assert out["obstacles"] == []
+
+
+def test_scenario_uses_pre_motion_initial_q_when_present():
+    from emet.controller.manipulation.failure_record import scenario_from_attempt
+
+    attempt = {
+        "target_xyz": [0.0, 0.0, 0.9],
+        "initial_q": [0.5, 0.4],
+        "trace": [{"qpos": [0.1, 0.2]}],
+        "joint_names": ["joint1", "joint2"],
+        "failure_mode": "tracking_failed",
+    }
+    rec = scenario_from_attempt(attempt, context={"object_query": "mug"})
+    assert rec.robot_state["q"] == [0.5, 0.4]
