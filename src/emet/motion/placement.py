@@ -58,6 +58,58 @@ def placement_base_candidates(center_xy, *, current_xyt, radii=(.55, .75, .95), 
     return [current.copy(), *sorted(candidates, key=lambda p: float(np.linalg.norm(p[:2] - current[:2])))]
 
 
+def base_candidates_from_approach_hint(
+    hint_xyt,
+    center_xy,
+    bounds,
+    *,
+    lateral_offsets=(-0.15, 0.0, 0.15),
+):
+    """Base poses on the receptacle face facing the task's known approach side.
+
+    RoboCasa exposes ``init_robot_base_pos`` as ``spawn_hint_xyt``. The hint is
+    often diagonally offset from the receptacle, so choose the AABB face the
+    hint is outside of and nearest to, then place the base on that face's
+    centerline at the hint's depth. This keeps a cabinet approach on its open
+    side instead of a collision-free but sealed back side.
+    """
+    hint = np.asarray(hint_xyt, dtype=float).reshape(-1)
+    center = np.asarray(center_xy, dtype=float).reshape(-1)
+    box = np.asarray(bounds, dtype=float)
+    if (
+        hint.size < 2
+        or center.size != 2
+        or box.shape != (2, 3)
+        or not np.isfinite(hint[:2]).all()
+        or not np.isfinite(center).all()
+        or not np.isfinite(box).all()
+        or not np.all(box[1] > box[0])
+    ):
+        return []
+    lo, hi = box[:, :2]
+    outside = []
+    if hint[0] < lo[0]:
+        outside.append((float(lo[0] - hint[0]), 0, float(hint[0])))
+    if hint[0] > hi[0]:
+        outside.append((float(hint[0] - hi[0]), 0, float(hint[0])))
+    if hint[1] < lo[1]:
+        outside.append((float(lo[1] - hint[1]), 1, float(hint[1])))
+    if hint[1] > hi[1]:
+        outside.append((float(hint[1] - hi[1]), 1, float(hint[1])))
+    if not outside:
+        return []
+    _, axis, depth = min(outside, key=lambda item: item[0])
+    lateral = np.array([1.0, 0.0]) if axis == 1 else np.array([0.0, 1.0])
+    base = center.copy()
+    base[axis] = depth
+    poses = []
+    for offset in lateral_offsets:
+        xy = base + float(offset) * lateral
+        yaw = float(np.arctan2(center[1] - xy[1], center[0] - xy[0]))
+        poses.append(np.array([xy[0], xy[1], yaw], dtype=float))
+    return poses
+
+
 def validated_dense_path(model, data, joint_names, path, collision, *, joint_step=.025):
     """Check all endpoints and interpolated edges, returning the samples to execute."""
     if not np.isfinite(joint_step) or joint_step <= 0:
@@ -87,6 +139,7 @@ def plan_placement_paths(
     set_base: Callable, contact_bodies=(), max_solutions=3, ik_attempts=3,
     max_candidates=64, max_ik_calls=96, max_ik_calls_per_base=12, rrt_max_iter=400, preplace_height_m=.12, margin_m=.005,
     endpoint_validator: Callable | None = None, seed=0, coupled_groups=(),
+    preplace_mode: str = "top", horizontal_preplace_m: float = 0.35,
 ) -> PlacementSearchResult:
     """Search base endpoints, support points, IK seeds and RRT paths before execution.
 
@@ -106,6 +159,10 @@ def plan_placement_paths(
         raise ValueError("Placement RRT currently requires independently controlled joints")
     if not np.isfinite(preplace_height_m) or preplace_height_m <= 0:
         raise ValueError("Positive finite preplace height required")
+    if preplace_mode not in {"top", "horizontal"}:
+        raise ValueError(f"unknown preplace mode: {preplace_mode!r}")
+    if not np.isfinite(horizontal_preplace_m) or horizontal_preplace_m <= 0:
+        raise ValueError("Positive finite horizontal preplace distance required")
     centers = [np.asarray(p, dtype=float) for p in object_centers]
     all_poses = [np.asarray(p, dtype=float) for p in base_candidates]
     poses = all_poses[:max_candidates]
@@ -173,7 +230,15 @@ def plan_placement_paths(
             if base_ik_calls >= max_ik_calls_per_base:
                 break
             place = center - center_offset
-            targets = (place + np.array([0., 0., preplace_height_m]), place)
+            if preplace_mode == "horizontal":
+                outward = np.asarray(pose[:2], dtype=float) - place[:2]
+                norm = float(np.linalg.norm(outward))
+                preplace = place.copy()
+                if norm > 1e-9:
+                    preplace[:2] += outward / norm * float(horizontal_preplace_m)
+                targets = (preplace, place)
+            else:
+                targets = (place + np.array([0., 0., preplace_height_m]), place)
             for attempt in range(ik_attempts):
                 if base_ik_calls >= max_ik_calls_per_base:
                     break

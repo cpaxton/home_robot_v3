@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from emet.motion.placement import (
+    base_candidates_from_approach_hint,
     placement_base_candidates,
     plan_placement_paths,
     validated_dense_path,
@@ -358,3 +359,33 @@ def test_snapshot_never_drops_unknown_space_predicate(rig, tmp_path):
         base_writer={"freejoint_name": "base_pose"})
     with pytest.raises(ValueError, match="Unsupported"):
         replay_snapshot(path)
+
+
+def test_approach_hint_puts_the_cabinet_base_on_the_open_side():
+    poses = base_candidates_from_approach_hint(
+        [0.59684214, -0.83209373, 1.57079633],
+        [2.25, -0.19],
+        [[1.75, -0.37, 1.39], [2.75, 0.0, 2.31]],
+    )
+    # Hint is outside the front (-y) face and much farther from the left face;
+    # the middle candidate is centered on the cabinet at the hint's depth.
+    assert np.allclose(poses[1], [2.25, -0.83209373, np.pi / 2])
+    assert all(pose[1] < -0.37 for pose in poses)
+    assert abs(poses[1][2] - np.pi / 2) < 1e-6
+
+
+def test_approach_hint_uses_a_side_face_when_that_is_nearest():
+    poses = base_candidates_from_approach_hint(
+        [0.8, -0.19, 0.0],
+        [2.25, -0.19],
+        [[1.75, -0.37, 1.39], [2.75, 0.0, 2.31]],
+    )
+    assert np.allclose(poses[1], [0.8, -0.19, 0.0])
+
+
+def test_approach_hint_inside_the_receptacle_is_ignored():
+    assert base_candidates_from_approach_hint(
+        [2.25, -0.19, 0.0],
+        [2.25, -0.19],
+        [[1.75, -0.37, 1.39], [2.75, 0.0, 2.31]],
+    ) == []
