@@ -11,10 +11,10 @@ result.
 | Robot | Profile | Direct MuJoCo backend | Teacher | DAgger status |
 |---|---|---|---|---|
 | Innate Mars | `mars_sim_profile()` | `MuJoCoWbcBackend` | 1.00 | 0.973 held-out |
-| Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | 1.00 | 0.84 held-out |
-| Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 1.00 | full-suite BC 0.86; DAgger 0.86 in-suite; held-out pending |
+| Stretch 3 | `stretch_sim_profile()` | `StretchWbcBackend` | 0.97 | 0.953 held-out |
+| Sourccey | `sourccey_sim_profile()` | `SourcceyWbcBackend` | 1.00 | 0.952 held-out |
 | RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 1.00 | 0.996 held-out |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 0.927 held-out |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 1.000 held-out (promoted iteration 2) |
 
 Teacher success is a ceiling, not a policy result. Held-out numbers use 50
 episodes per subtask on a fresh evaluation seed (30000).
@@ -22,13 +22,15 @@ episodes per subtask on a fresh evaluation seed (30000).
 | Robot | Arm subtask(s) | Base | Combined | Aggregate |
 |---|---|---|---|---|
 | Innate Mars | arm 1.00 | 1.00 | 0.92 | **0.973** |
-| Stretch 3 | arm 0.90 | 1.00 | 0.62 | **0.84** |
-| PandaOmron | right 1.00 | 1.00 | 0.78 | **0.927** |
+| Stretch 3 | arm 0.94 | 1.00 | 0.92 | **0.953** |
+| PandaOmron | right 1.00 | 1.00 | 1.00 | **1.000** |
 | RB-Y1 | left 1.00, right 1.00 | 1.00 | left 1.00, right 0.98 | **0.996** |
-| Sourccey | left 1.00, right 1.00 (BC) | 1.00 (BC) | left 0.70, right 1.00 (BC) | held-out pending |
+| Sourccey | left 1.00, right 1.00 | 1.00 | left 0.86, right 0.90 | **0.952** |
 
-The Sourccey row is the current full-suite BC/DAgger checkpoint, not a fresh
-held-out gate yet.
+The PandaOmron `best.pt` from the aggregate-only selection gate is 0.927
+because the warm-start checkpoint tied the later iterations at 1.00 in-suite.
+Iteration 2 is the promoted artifact (1.000 held-out); the loop now prefers the
+later checkpoint on a tie.
 
 ## What landed
 
@@ -58,8 +60,11 @@ held-out gate yet.
   variants (`arm_left`, `arm_right`, `combined_left`, `combined_right`, `base`)
   because a simultaneous 10–12-DOF reach is a much harder imitation target.
   BC defaults to 200 epochs; the first multi-arm runs used 30 and were
-  undertrained. `--init` warm-starts from a profile-checked checkpoint and
-  `--max-bc-samples` bounds the replay buffer.
+  undertrained. `--init` warm-starts from a profile-checked checkpoint,
+  `--max-bc-samples` bounds the replay buffer, and `--selection balanced`
+  ranks checkpoints by aggregate plus the weakest subtask. Combined tasks get
+  60% of the collection budget for Stretch/PandaOmron and 60% for the two
+  Sourccey/RB-Y1 combined variants; later checkpoints win ties.
 
 ## What fixed the plateau
 
@@ -77,22 +82,24 @@ curriculum choices were compounding:
    effective action dimension. The default suite now trains one active arm at a
    time; the inactive arm is held and publishes an empty target mask.
 
-The combined subtasks remain the hardest because the actor must react to the
-reach goal after the base stage.
+The combined subtasks were the weakest gate before the curriculum change; the
+combined-heavy collection budget and the longer Stretch/Panda window closed
+most of the gap.
 
 ## Observed limitations
 
 - **Stretch:** the position servos are underdamped and slow; the arm and
-  combined subtasks need a 5 s / 7 s window. The combined policy is the weakest
-  part (0.62 held-out) because the base stage consumes most of the episode.
-- **Sourccey:** full-suite BC reaches 0.86 with combined_right 1.0 and
-  combined_left 0.7. A fresh held-out gate is still running; combined_left is
-  the likely weak spot.
+  combined subtasks need a 5 s / 8 s window. The promoted policy reaches 0.94
+  arm, 1.00 base, 0.92 combined; the remaining gap is arm settling, not the
+  combined task.
+- **Sourccey:** the promoted policy reaches 0.952 held-out (arms 1.00, base
+  1.00, combined_left 0.86, combined_right 0.90). The checkpoint spread is
+  wide on combined tasks, so the held-out gate remains the promotion criterion.
 - **RB-Y1:** the packaged wheels are visual-only; the backend adds wheel
   collision proxies and a steer/wheel swerve mapping. The direct plant is a
   training proxy, not RoboCasa benchmark parity.
-- **PandaOmron:** the direct plant now has a trained policy (0.927 held-out),
-  but no RoboCasa adapter. RoboCasa's benchmark composite controller is
+- **PandaOmron:** the promoted iteration reaches 1.000 held-out on this suite,
+  but there is no RoboCasa adapter. RoboCasa's benchmark composite controller is
   OSC/JOINT_POSITION; the adapter must map explicitly. The composed model's
   zero arm posture self-collides with the wrist; the ready-pose reset and
   300/30 torque gains are required at 20 Hz.
@@ -112,23 +119,24 @@ backend before they are fully represented.
 
 ## Next experiments
 
-1. Finish the Sourccey held-out gate; if combined_left stays low, train a
-   combined-left specialist or fine-tune with a higher combined weight.
-2. Improve Stretch combined with a longer window or a two-stage curriculum;
-   it is the weakest promoted policy.
-3. RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint
+1. RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint
    contract.
+2. Hard-case/failure-posture DAgger: the coverage split and Panda sink
+   postures are wired; train and gate the promoted Panda policy against them.
+3. Broader held-out distributions (seeds, base goals, target ranges) and
+   contact/carry subtasks, which these free-space gates do not cover.
 4. Consider a single embodiment-conditioned policy once per-robot policies are
    stable; the current artifacts are one policy per robot.
 
 Artifacts:
 
 - Mars: `logs/eval/wbc_dagger_features_20261125/`.
-- Stretch: `/tmp/opencode/wbc_stretch_full/` (`best.pt`, `heldout_50.json`).
-- Sourccey: `/tmp/opencode/wbc_sourccey_ready/` (full suite; fresh run),
-  `/tmp/opencode/wbc_sourccey_arm_left/`, `/tmp/opencode/wbc_sourccey_arm_right/`
-  (specialists, superseded).
+- Stretch: `/tmp/opencode/wbc_stretch_combined/` (`best.pt`, iteration 2,
+  0.953 held-out).
+- Sourccey: `/tmp/opencode/wbc_sourccey_combined/` (`best.pt`, iteration 4,
+  0.952 held-out); earlier specialists are superseded.
 - RB-Y1: `/tmp/opencode/wbc_rby1_multi/` (`best.pt`, `heldout_50.json`).
-- PandaOmron: `/tmp/opencode/wbc_pandaomron_full/` (`best.pt`, `heldout_50.json`).
+- PandaOmron: `/tmp/opencode/wbc_pandaomron_combined/` (`policy_iter2.pt`,
+  1.000 held-out; `best.pt` is the 0.927 warm start).
 - The earlier dual-arm plateau runs remain under `/tmp/opencode/wbc_sourccey_full/`
   and `/tmp/opencode/wbc_rby1_full/`; they are superseded.

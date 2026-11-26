@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -76,17 +77,24 @@ def default_subtasks(robot: str = "innate_mars") -> tuple[WbcSubtask, ...]:
     """
     if robot in {"sourccey", "rby1"}:
         return (
-            WbcSubtask("arm_left", True, False, True, 0.15, 3.0, "forward", 0.2, ("left",)),
-            WbcSubtask("arm_right", True, False, True, 0.15, 3.0, "forward", 0.2, ("right",)),
-            WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.2),
-            WbcSubtask("combined_left", True, True, False, 0.15, 5.0, "forward", 0.2, ("left",)),
-            WbcSubtask("combined_right", True, True, False, 0.15, 5.0, "forward", 0.2, ("right",)),
+            WbcSubtask("arm_left", True, False, True, 0.15, 3.0, "forward", 0.15, ("left",)),
+            WbcSubtask("arm_right", True, False, True, 0.15, 3.0, "forward", 0.15, ("right",)),
+            WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.1),
+            WbcSubtask("combined_left", True, True, False, 0.15, 5.0, "forward", 0.3, ("left",)),
+            WbcSubtask("combined_right", True, True, False, 0.15, 5.0, "forward", 0.3, ("right",)),
         )
-    long_reach = robot in {"stretch", "pandaomron"}
+    if robot == "innate_mars":
+        return (
+            WbcSubtask("arm", True, False, True, 0.15, 3.0, "forward", 0.4),
+            WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.2),
+            WbcSubtask("combined", True, True, False, 0.15, 5.0, "forward", 0.4),
+        )
+    # Stretch and PandaOmron: the combined task is the weak gate, so give it
+    # most of the collection budget while retaining arm/base rehearsal.
     return (
-        WbcSubtask("arm", True, False, True, 0.15, 5.0 if long_reach else 3.0, "forward", 0.4),
-        WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.2),
-        WbcSubtask("combined", True, True, False, 0.15, 7.0 if long_reach else 5.0, "forward", 0.4),
+        WbcSubtask("arm", True, False, True, 0.15, 5.0, "forward", 0.25),
+        WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.15),
+        WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.6),
     )
 
 
@@ -178,10 +186,13 @@ class WbcTaskSuiteEnv(gym.Env):
         if use_hard_case and self.hard_cases and self.np_random.random() < self.hard_case_probability:
             task = next(task for task in self.subtasks if task.name == name)
             active_arms = set(task.active_arms or ())
-            candidates = [] if not task.arm_goal else [
-                case for case in self.hard_cases
-                if not active_arms or str(getattr(case, "arm", "")) in active_arms
-            ]
+            candidates = (
+                []
+                if not task.arm_goal
+                else [
+                    case for case in self.hard_cases if not active_arms or str(getattr(case, "arm", "")) in active_arms
+                ]
+            )
             if candidates:
                 case = candidates[int(self.np_random.integers(len(candidates)))]
                 loaded = self.envs[name].load_hard_case(case)
@@ -314,6 +325,19 @@ def evaluate_suite(
     return results
 
 
+def _selection_score(evaluation: dict[str, Any], mode: str) -> float:
+    """Rank checkpoints by aggregate or by a balance-aware score."""
+    aggregate = float(evaluation["aggregate"]["success_rate"])
+    if mode == "aggregate":
+        return aggregate
+    if mode == "balanced":
+        tasks = [float(value["success_rate"]) for key, value in evaluation.items() if key != "aggregate"]
+        if not tasks:
+            raise ValueError("balanced selection requires per-task evaluation results")
+        return aggregate + 0.25 * min(tasks)
+    raise ValueError(f"unknown checkpoint selection mode: {mode!r}")
+
+
 def dagger_train(
     *,
     output: str | Path,
@@ -329,6 +353,7 @@ def dagger_train(
     hidden: int = 128,
     eval_episodes: int = 10,
     max_bc_samples: int = 20000,
+    selection: str = "aggregate",
     seed: int = 0,
     device: str = "cpu",
     noise_std: float = 0.05,
@@ -342,6 +367,8 @@ def dagger_train(
         raise ValueError("max_bc_samples must be positive")
     if subtasks is None:
         subtasks = default_subtasks(robot)
+    if selection not in {"aggregate", "balanced"}:
+        raise ValueError(f"unknown checkpoint selection mode: {selection!r}")
     output = Path(output).expanduser()
     output.mkdir(parents=True, exist_ok=True)
     env = WbcTaskSuiteEnv(
@@ -366,17 +393,17 @@ def dagger_train(
         policy = trainer.policy
         config = trainer.config
     metrics_path = output / "dagger_metrics.jsonl"
-    best_success = -1.0
+    best_score = -1.0
     best_path = output / "best.pt"
     history: list[dict[str, Any]] = []
 
     if init is not None:
         initial = evaluate_suite(env, policy, episodes_per_task=eval_episodes, seed=seed + 10_000)
         history.append({"stage": "init_eval", **initial})
-        best_success = initial["aggregate"]["success_rate"]
+        best_score = _selection_score(initial, selection)
         trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "init", "evaluation": initial})
         print(
-            f"DAgger init_eval aggregate={best_success:.2f}",
+            f"DAgger init_eval aggregate={initial['aggregate']['success_rate']:.2f} score={best_score:.2f}",
             flush=True,
         )
 
@@ -410,8 +437,8 @@ def dagger_train(
         f"DAgger teacher_bc loss={bc['bc_loss']:.5f} aggregate={evaluation['aggregate']['success_rate']:.2f}",
         flush=True,
     )
-    if evaluation["aggregate"]["success_rate"] > best_success:
-        best_success = evaluation["aggregate"]["success_rate"]
+    if _selection_score(evaluation, selection) >= best_score:
+        best_score = _selection_score(evaluation, selection)
         trainer.save(best_path, env.envs[env.names[0]], metadata={"stage": "teacher_bc", "evaluation": evaluation})
 
     for iteration in range(1, iterations + 1):
@@ -451,8 +478,9 @@ def dagger_train(
             f"aggregate={evaluation['aggregate']['success_rate']:.2f} counts={counts}",
             flush=True,
         )
-        if evaluation["aggregate"]["success_rate"] > best_success:
-            best_success = evaluation["aggregate"]["success_rate"]
+        score = _selection_score(evaluation, selection)
+        if score >= best_score:
+            best_score = score
             trainer.save(best_path, env.envs[env.names[0]], metadata=record)
 
     final = history[-1]
@@ -476,6 +504,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hidden", type=int, default=128)
     parser.add_argument("--eval-episodes", type=int, default=10)
     parser.add_argument("--max-bc-samples", type=int, default=20000)
+    parser.add_argument(
+        "--selection",
+        choices=("aggregate", "balanced"),
+        default="aggregate",
+        help="checkpoint ranking: aggregate success or aggregate + 0.25 * weakest subtask",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--noise-std", type=float, default=0.05)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
@@ -513,6 +547,7 @@ def main(argv: list[str] | None = None) -> int:
         hidden=args.hidden,
         eval_episodes=args.eval_episodes,
         max_bc_samples=args.max_bc_samples,
+        selection=args.selection,
         seed=args.seed,
         device=device,
         noise_std=args.noise_std,

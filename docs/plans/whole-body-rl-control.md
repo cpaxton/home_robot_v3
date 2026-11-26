@@ -214,15 +214,14 @@ silently training against the wrong controller.
 
 | Robot | Sim profile | Direct MuJoCo | RoboCasa hook |
 |---|---|---|---|
-| Innate Mars | `mars_sim_profile()` | trained DAgger result | not a RoboCasa target |
-| Stretch 3 | `stretch_sim_profile()` | teacher 1.0; DAgger 0.84 held-out | `Stretch` |
-| Sourccey | `sourccey_sim_profile()` | single-arm suite teacher 1.0; DAgger rerunning | `Sourccey` |
-| RB-Y1 | `rby1_sim_profile()` | single-arm suite teacher 1.0; DAgger rerunning | Galaxea R1 proxy path |
-| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; teacher 0.93 (arm/base 1.0, combined 0.9) | `PandaOmron` hook |
+| Innate Mars | `mars_sim_profile()` | trained DAgger 0.973 held-out | not a RoboCasa target |
+| Stretch 3 | `stretch_sim_profile()` | trained DAgger 0.953 held-out | `Stretch` |
+| Sourccey | `sourccey_sim_profile()` | trained DAgger 0.952 held-out | `Sourccey` |
+| RB-Y1 | `rby1_sim_profile()` | trained DAgger 0.996 held-out | Galaxea R1 proxy path |
+| PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda plant; trained DAgger 1.000 held-out | `PandaOmron` hook |
 
-Direct-MuJoCo smoke status is a teacher-only check (one episode per subtask),
-not a trained policy result. Mars and Stretch have trained DAgger policies;
-neither is a RoboCasa benchmark result.
+Held-out numbers are 50 episodes per subtask on a fresh seed. All are direct
+MuJoCo results; none is a RoboCasa benchmark result.
 Backend/teacher/DAgger details:
 [wbc_multirobot_20261125.md](../experiments/wbc_multirobot_20261125.md).
 
@@ -232,10 +231,10 @@ assets into a direct MJCF: the Panda arm and torso are torque motors, so it uses
 `TorqueAdapter`; the base is velocity-controlled and the gripper is positional.
 The plant resets to Robosuite's collision-free Panda initial posture; the
 composed model's zero pose folds the wrist into link 5. Stable 20 Hz tracking
-uses identified 300/30 gains for the arm. The teacher passes arm and base at
-1.0 and combined at 0.9. Its RoboCasa composite controller is
+uses identified 300/30 gains for the arm. The teacher and promoted DAgger policy
+both clear the direct-MuJoCo suite. Its RoboCasa composite controller is
 OSC/JOINT_POSITION, not the torque contract, so the benchmark adapter must map
-explicitly. The hook exists; it is not yet a trained PandaOmron policy.
+explicitly. The hook exists; it is not yet a RoboCasa adapter.
 
 | Robot | Base | Torso | Arms | Grippers | Action dim |
 |---|---|---|---:|---:|---:|
@@ -418,7 +417,7 @@ actor-visited-state loop that plain BC needs:
 - robots with two arms default to `arm_left` / `arm_right` / `base` /
   `combined_left` / `combined_right`: reaching with both arms at once is a much
   harder imitation target than either arm alone;
-- Stretch uses a 5 s arm and 7 s combined window because its underdamped
+- Stretch uses a 5 s arm and 8 s combined window because its underdamped
   position-servo wrists need longer to settle;
 - initial teacher rollouts and BC warm start (200 epochs by default; the first
   multi-arm runs were undertrained at 30);
