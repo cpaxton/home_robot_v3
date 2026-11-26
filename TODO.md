@@ -1294,7 +1294,8 @@ position-servo actuator adapter.
 - [x] RB-Y1 full-suite policy: 0.996 held-out over 50 episodes/subtask (combined_right 0.98, everything else 1.0). Artifact: `/tmp/opencode/wbc_rby1_multi/`.
 - [x] Sourccey full-suite policy: 0.952 held-out over 50 episodes/subtask (arms/base 1.0, combined_left 0.86, combined_right 0.90). Artifact: `/tmp/opencode/wbc_sourccey_combined/`.
 - [x] Hard-case/failure-posture DAgger gate: clean policy 4/5 train / 0/1 held-out; mixed robust policy 5/5 train / 1/1 held-out (failure-019) with clean mean 0.991. Artifact: `/tmp/opencode/wbc_panda_mixed_heldout/`. Keep both checkpoints; the robust one trades ~0.005 clean aggregate for hard-posture generalization.
-- [ ] RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint contract; hooks fail closed until registered.
+- [x] PandaOmron RoboCasa reach adapter: native `PickPlaceCounterToCabinet` smoke tracks an 8 cm target to 1.3 cm / 0.029 rad after a 0.45 m chassis backoff. Not task success; see `docs/experiments/wbc_robocasa_20261126.md`.
+- [ ] RoboCasa task-target bridge (object/receptacle/grasp targets and base goals) and merged-scene adapters for Stretch/Sourccey/RB-Y1; the generic hook stays fail-closed until a task adapter registers.
 - [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
   - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.
 - [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
