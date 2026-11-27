@@ -1,5 +1,34 @@
 # Paper experiments — master index
 
+**WBC how-to:** [Whole-body control guide](../wbc.md) — contract, teacher/BC/DAgger, failure-data + scene ingestion, RoboCasa teacher/sweep, and promotion gates.
+
+
+**Multi-robot WBC backend matrix (2026-11-26):** [MuJoCo plants and trained policies for Mars/Stretch/Sourccey/RB-Y1/PandaOmron](wbc_multirobot_20261125.md)
+records the direct-MuJoCo backend and the trained policy gates: 50
+episodes/subtask, three seeds, means Mars 0.955, Stretch 0.951, Sourccey
+0.960, RB-Y1 1.000, PandaOmron 0.942 clean / 0.978 robust. The Sourccey/RB-Y1
+0.33 plateau was full-range resets, 30 BC epochs, and simultaneous dual-arm
+targets, not the adapter. Strict coverage gates now pass for all four
+non-Panda robots (measured collisions, settled tracking); the robust Panda
+checkpoint passes its separate gate, while the clean checkpoint does not. The
+hard-posture export exposed stale successful-grasp records; only one genuine
+reach failure remains, so that family is planned until #267 adds more failure
+data.
+
+**RoboCasa WBC adapter (2026-11-26):** [PandaOmron reach smoke in PickPlaceCounterToCabinet](wbc_robocasa_20261126.md)
+writes contract torques/velocities directly into the RoboCasa sim; an 8 cm
+target tracks to 1.3 cm / 0.029 rad; 20-episode joint and Cartesian reach
+sweeps are both 20/20 (joint mean 1.13 cm/p95 1.67 cm; Cartesian mean 0.87
+cm/p95 1.54 cm). A privileged joint/Cartesian teacher and loaded data export
+are in place. Task targets, base motion, and the merged-scene
+adapters for Stretch/Sourccey/RB-Y1 remain open.
+
+**Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)
+records a simulator-only Mars result: 0.973 aggregate held-out success over
+50 episodes per subtask (arm 1.0, base 1.0, combined 0.92) against a 0.98
+privileged-teacher ceiling. Derived base/EE error features and actor-visited
+DAgger labels were the key changes. No hardware policy is promoted.
+
 **PR #247 review (2026-11-17):** [Main reconciliation and source-bound verification](pr247_review_20261117.md)
 records conflict resolutions, review fixes, 1,776 passing tests with one optional
 Habitat skip, a separate passing configuration probe and the 73-page paper build.

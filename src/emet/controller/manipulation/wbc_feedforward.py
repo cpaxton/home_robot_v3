@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
@@ -139,6 +139,16 @@ class FeedforwardModel:
         return {name: float(value) * float(stiffness[name]) for name, value in bias.items() if name in stiffness}
 
 
+def single_calibration(model: FeedforwardModel) -> FeedforwardCalibration:
+    """Return the only calibration, refusing posture tables the caller cannot select."""
+    if len(model.calibrations) != 1:
+        raise ValueError(
+            "feedforward model must contain exactly one calibration; "
+            "multi-posture tables need nearest-posture selection"
+        )
+    return model.calibrations[0]
+
+
 def _cluster_attempts(
     selected: list[ManipulationAttempt],
     *,
@@ -197,9 +207,7 @@ def fit_feedforward(
     ``max_abs_bias``. This fails closed instead of baking one outlier into
     every command.
     """
-    selected = select_attempts(
-        attempts, robot_id=embodiment or "", exclude_feedforward=exclude_feedforward
-    )
+    selected = select_attempts(attempts, robot_id=embodiment or "", exclude_feedforward=exclude_feedforward)
     # An attempt with an extreme per-joint offset is a contaminated run (e.g. an
     # overcorrecting controller), not a posture to learn from.
     clean: list[ManipulationAttempt] = []
@@ -241,9 +249,7 @@ def fit_feedforward(
             fitted[name] = median
             reference[name] = float(np.median(np.asarray(targets.get(name) or [0.0], dtype=np.float64)))
         if fitted:
-            calibrations.append(
-                FeedforwardCalibration(reference_q=reference, joint_bias=fitted, samples=len(cluster))
-            )
+            calibrations.append(FeedforwardCalibration(reference_q=reference, joint_bias=fitted, samples=len(cluster)))
     if not calibrations:
         raise ValueError(
             "no posture had enough valid tracking attempts "

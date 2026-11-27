@@ -376,6 +376,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 
 | Doc | When to use |
 |-----|-------------|
+| [wbc.md](docs/wbc.md) | **Whole-body control** — contract, training/DAgger, failure data + scene ingestion, RoboCasa teacher/sweep, gates |
 | [simulation.md](docs/simulation.md) | MuJoCo / Robocasa overview |
 | [simulation_modules.md](docs/simulation_modules.md) | Module map under `src/emet/simulation/` |
 | [molmospaces.md](docs/molmospaces.md) | iTHOR merge + `emet serve molmospaces` |

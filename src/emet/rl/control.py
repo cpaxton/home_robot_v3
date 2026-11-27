@@ -129,8 +129,7 @@ class MarsControl:
         self.environment_geoms = [
             i
             for i in range(model.ngeom)
-            if model.geom_bodyid[i] not in robot_bodies
-            and (model.geom_contype[i] or model.geom_conaffinity[i])
+            if model.geom_bodyid[i] not in robot_bodies and (model.geom_contype[i] or model.geom_conaffinity[i])
         ]
         excludes = {int(s) for s in model.exclude_signature}
         self.pairs = []
@@ -240,17 +239,23 @@ class MarsControl:
             if not base_locked:
                 d.qpos[self.base_q] += dq[:3]
                 cursor = 3
-            d.qpos[self.arm_q] = np.clip(
-                d.qpos[self.arm_q] + dq[cursor:], self.limits[:, 0], self.limits[:, 1]
-            )
+            d.qpos[self.arm_q] = np.clip(d.qpos[self.arm_q] + dq[cursor:], self.limits[:, 0], self.limits[:, 1])
         mujoco.mj_forward(self.model, d)
         position_error = float(np.linalg.norm(target_position - d.xpos[self.ee_body]))
         current_rotation = d.xmat[self.ee_body].reshape(3, 3)
         angle_error = float(np.arccos(np.clip((np.trace(target_rotation.T @ current_rotation) - 1) / 2, -1, 1)))
         if position_error > 0.015 or angle_error > 0.12:
             raise ValueError("end-effector pose is not reachable under the base-motion constraint")
-        resolved_base = np.array([*d.xpos[self.base_body, :2], np.arctan2(d.xmat[self.base_body, 3], d.xmat[self.base_body, 0])])
+        resolved_base = np.array(
+            [*d.xpos[self.base_body, :2], np.arctan2(d.xmat[self.base_body, 3], d.xmat[self.base_body, 0])]
+        )
         return resolved_base, d.qpos[self.arm_q].copy()
+
+    def clear_obstruction(self):
+        """Clear the residual-action stall latch for callers that own targets directly."""
+        self.obstruction[:] = False
+        self._blocked_time[:] = 0.0
+        self._blocked_direction[:] = 0.0
 
     def stop(self):
         self.last_action[:] = 0
@@ -267,10 +272,12 @@ class MarsControl:
         action[2:] *= self.goal.mask[1:]
         # Rate-limit velocity setpoints to avoid discontinuous base commands.
         scales = np.array([self.profile.max_v, self.profile.max_w])
-        acceleration = np.array([
-            self.profile.max_linear_acceleration,
-            self.profile.max_angular_acceleration,
-        ])
+        acceleration = np.array(
+            [
+                self.profile.max_linear_acceleration,
+                self.profile.max_angular_acceleration,
+            ]
+        )
         previous_velocity = self.last_action[:2] * scales
         desired_velocity = action[:2] * scales
         limited_velocity = previous_velocity + np.clip(
@@ -370,11 +377,7 @@ class MarsControl:
                 0.0,
             )
             overlaps = world_extent[a] + world_extent[b] - np.abs(delta)
-            distance = (
-                float(np.linalg.norm(gaps))
-                if np.any(gaps > 0)
-                else -float(np.min(overlaps))
-            )
+            distance = float(np.linalg.norm(gaps)) if np.any(gaps > 0) else -float(np.min(overlaps))
             # Local obstacle input describes the scene. Fixed self-clearances and
             # the supporting floor would otherwise hide every nearby obstacle.
             # They remain part of collision detection above.
@@ -462,10 +465,13 @@ class MarsControl:
         small = (
             metrics["xy_error"] <= p.xy_tolerance
             and metrics["yaw_error"] <= p.yaw_tolerance
-            and (not self.goal.mask[1:].any() or (
-                metrics["ee_position_error"] <= p.ee_position_tolerance
-                and metrics["ee_orientation_error"] <= p.ee_orientation_tolerance
-            ))
+            and (
+                not self.goal.mask[1:].any()
+                or (
+                    metrics["ee_position_error"] <= p.ee_position_tolerance
+                    and metrics["ee_orientation_error"] <= p.ee_orientation_tolerance
+                )
+            )
             and np.max(np.abs(self.data.qvel[self.arm_v])) < 0.08
             and np.linalg.norm(self.base_velocity()[:2]) < 0.03
             and abs(self.base_velocity()[2]) < 0.08

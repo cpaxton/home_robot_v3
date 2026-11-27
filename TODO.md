@@ -74,7 +74,9 @@ tracking fix, the failure-data training pipeline, and the open/close skill.
       correlation in each record, (b) object/receptacle categories + grasp target in
       the context, (c) a loader/validation script, and (d) wiring into the in-flight
       RL-WBC training data path. Do not treat the sink as done until the training side
-      consumes it.
+      consumes it. Status: `failure_dataset.py` + `wbc_calibration.py` cover the
+      loader/feedforward fit, and `wbc_training --feedforward` consumes it; episode/job
+      correlation and object/receptacle categories remain.
 - [x] Torso settle: re-command the final IK posture for a bounded settle before the
       measured EE check (`_plan_and_execute_ee`). The recorded failure was PD lag, not
       a joint limit: Galaxea `torso_joint1` range is −1.13..1.83 rad, so the planned
@@ -1269,14 +1271,39 @@ arbitrary arm DOF; the policy action is per-arm joint torque with a separate
 position-servo actuator adapter.
 
 - [x] Multi-arm schema, vector layout, per-arm reward, example Mars/Sourccey/RB-Y1/Stretch profiles.
+- [x] Training-ready contract: profile serialization/fingerprint, base/torso targets and reward, normalized action space, occupancy metadata, geodesic orientation tolerance.
 - [x] Position-servo adapter with torque/current/lead clipping and fail-closed actuator fields.
 - [x] Case-library fingerprint includes embodiment/schema; generator emits multi-arm scenarios.
 - [x] External innate-os MuJoCo smoke: adapter vs direct torque, clipping, gravity, contact telemetry. See [innate-sim-validation.md](docs/plans/innate-sim-validation.md).
 - [x] Action-boundary `clamp_action` for base velocity, joint torque, and gripper limits; per-joint `control_mode`; current-limit fail-closed.
 - [x] Innate OS prototype: typed `ArmCommand`/`ArmState`, high-rate state, capability manifest, robot-side adapter, sim effort/contact parity. Fork `cpaxton/innate-os` branch `feat/torque-wbc-interface`; fork PR [cpaxton/innate-os#1](https://github.com/cpaxton/innate-os/pull/1); not hardware-tested. See [innate-os-wbc-interface.md](docs/plans/innate-os-wbc-interface.md).
-- [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits).
-- [ ] Wire the adapter into the robot-side WBC transport and a MuJoCo servo model.
-- [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline.
+- [x] True-torque adapter and bounded example gripper command channels.
+- [x] Contract-native Gym env, adapter-matched Mars MuJoCo backend, PPO trainer, profile-fingerprinted checkpoint, CUDA selection, resumable optimizer/metrics state, optional privileged-teacher BC warm start, BC-checkpoint eval, and BC-KL anchoring during PPO.
+- [x] Failure-record feedforward fit + bench-identification profile patch loader.
+- [x] DAgger subtask suite (arm/base/combined), actor-visited privileged labels, per-task evaluation, and best-checkpoint selection.
+- [ ] Bench-identify the Mars elbow (`kp_eff`, gravity, friction, current/torque, thermal limits). The tooling is in place; the hardware sweep remains.
+- [ ] Wire the adapter into the robot-side WBC transport.
+- [x] Sim-matched profiles for Mars, Stretch, Sourccey, RB-Y1 (Galaxea R1 proxy), and PandaOmron, with registry/MJCF validation.
+- [x] Direct-MuJoCo WBC plant adapters for Stretch/Sourccey/RB-Y1; Stretch/Sourccey/RB-Y1 backend sim tests pass.
+- [x] PandaOmron direct-MuJoCo plant composed from Robosuite Omron + Panda assets; arm/base teacher 1.0, combined 0.9.
+- [x] Stretch teacher/policy: raised collision-free ready pose, collision-filtered targets, chassis-riding combined goal, and a 5 s/8 s reach window; teacher 0.97, DAgger 0.953 held-out over 50 episodes/subtask (arm 0.94, base 1.0, combined 0.92). Artifact: `/tmp/opencode/wbc_stretch_combined/`.
+- [x] PandaOmron arm teacher: collision-free ready pose and 300/30 torque gains removed the 20 Hz limit cycle; arm/base 1.0, combined 0.9.
+- [x] PandaOmron policy: promoted iteration 2 reaches 1.000 held-out over 50 episodes/subtask; the aggregate-selection `best.pt` is the 0.927 warm start. Artifact: `/tmp/opencode/wbc_pandaomron_combined/policy_iter2.pt`.
+- [x] Single-arm subtask suite for Sourccey/RB-Y1 (`arm_left`/`arm_right`/`combined_left`/`combined_right`).
+- [x] Home-posture resets for Sourccey/RB-Y1 removed the full-range joint distribution that made BC unlearnable.
+- [x] RB-Y1 full-suite policy: 0.996 held-out over 50 episodes/subtask (combined_right 0.98, everything else 1.0). Artifact: `/tmp/opencode/wbc_rby1_multi/`.
+- [x] Sourccey full-suite policy: 0.952 held-out over 50 episodes/subtask (arms/base 1.0, combined_left 0.86, combined_right 0.90). Artifact: `/tmp/opencode/wbc_sourccey_combined/`.
+- [ ] Hard-case/failure-posture DAgger gate: the 2026-11-25 sink has one genuine `reached=False` failure (019); records 014–018 are stale successful-grasp attempts from place failures. Train split is empty, 019 is evaluation-only, and the earlier 5/5/1/1 claim is retracted. Regenerate after #267; keep the exporter's `reached=False` and train-split checks.
+- [x] PandaOmron RoboCasa reach adapter: native `PickPlaceCounterToCabinet` smoke tracks an 8 cm target to 1.3 cm / 0.029 rad after a 0.45 m chassis backoff. Not task success; see `docs/experiments/wbc_robocasa_20261126.md`.
+- [x] RoboCasa privileged teacher (joint PD + Cartesian fallback) and a loaded 20-episode reach sweep: 20/20, position mean 1.13 cm, p95 1.67 cm; loaded observations/teacher labels at `/tmp/opencode/wbc_robocasa_sweep_policy/loaded_data.npz`.
+- [x] RoboCasa Cartesian-offset reach sweep: 20/20, mean 0.87 cm, p95 1.54 cm; loaded data at `/tmp/opencode/wbc_robocasa_sweep_cartesian/`.
+- [x] Measured collision provenance for Stretch/Sourccey/RB-Y1/RoboCasa; coverage rows require `collision_measured=True` and missing metrics fail closed.
+- [x] Settled tracking window (last 10 steps) with final/max reporting; checkpoint task contracts and explicit legacy stamping; RoboCasa base/EE frames share the reset-anchored yaw.
+- [x] Register the native PandaOmron RoboCasa adapter and resolve profile EE/gripper aliases in both Panda plants.
+- [ ] RoboCasa object/cabinet task-target sweep and a DAgger fine-tune from the loaded data only if the task-target tail crosses 2 cm.
+- [ ] RoboCasa task-target bridge (object/receptacle/grasp targets and base goals) and merged-scene adapters for Stretch/Sourccey/RB-Y1; the generic hook stays fail-closed until a task adapter registers.
+- [ ] Train/evaluate the first torque actor on one-arm free-space and contact cases; keep the velocity tracker as the baseline. The smoke trainer runs, but no policy is promoted.
+  - 2026-11-25: full-subtask DAgger (arm/base/combined) with derived base/EE error features reached 0.973 aggregate on 50 fresh episodes per task (arm 1.0, base 1.0, combined 0.92); teacher ceiling 0.98. Plain BC was ~0.45 and DAgger without derived features plateaued near 0.88. Artifacts: `logs/eval/wbc_dagger_features_20261125/`. Policy is simulator-only; broader goals/contact/hardware remain.
 - [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
 
 ## TAMP agent execution follow-up (2026-09-29)

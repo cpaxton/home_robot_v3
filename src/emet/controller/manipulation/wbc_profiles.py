@@ -20,7 +20,11 @@ The examples cover the four current families:
 
 from __future__ import annotations
 
+import json
 import math
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
 
 from emet.controller.manipulation.wbc_contract import (
     ArmSpec,
@@ -133,6 +137,421 @@ def example_mars_profile() -> EmbodimentProfile:
     )
 
 
+def mars_sim_profile() -> EmbodimentProfile:
+    """Mars profile matched to the retained MuJoCo position actuators.
+
+    This is a simulator profile, not a hardware identification. The example
+    profile intentionally keeps placeholder actuator fields; training against
+    MuJoCo must use the plant's actual ``kp``/``kv``/effort limits or the
+    torque-to-position-lead mapping is wrong by more than an order of magnitude.
+    """
+    from emet.rl.manipulation.profiles import PROFILES
+    from emet.rl.profile import MARS
+
+    base = example_mars_profile()
+    groups = []
+    for group in base.joint_groups:
+        joints = tuple(
+            replace(
+                joint,
+                kp_eff=MARS.arm_kp,
+                kd_eff=MARS.arm_kv,
+                torque_limit=MARS.arm_effort_limit,
+                velocity_limit=MARS.max_joint_speed,
+                max_lead=MARS.max_target_lead,
+            )
+            for joint in group.joints
+        )
+        groups.append(replace(group, joints=joints))
+    metadata = dict(base.metadata)
+    metadata.update(
+        {
+            "limits_source": "mujoco_position_servo",
+            "actuator_model": "retained_mujoco_kp80_kv4_effort2",
+        }
+    )
+    # World-frame EE goals let the sampled base goal actually assist reach.
+    grip_open = PROFILES["innate_mars"].gripper_open
+    arms = tuple(
+        replace(
+            arm,
+            target_frame="world",
+            gripper=(
+                arm.gripper if arm.gripper is None else replace(arm.gripper, command_limits=((-grip_open, grip_open),))
+            ),
+        )
+        for arm in base.arms
+    )
+    return replace(
+        base,
+        base=replace(base.base, velocity_limits=(MARS.max_v, MARS.max_w)),
+        joint_groups=tuple(groups),
+        arms=arms,
+        metadata=tuple(metadata.items()),
+    )
+
+
+def stretch_sim_profile() -> EmbodimentProfile:
+    """Stretch 3 profile matched to the retained MuJoCo position/tendon actuators.
+
+    The contract uses the controller's five motion axes (``lift``, virtual
+    telescope ``arm``, and three wrist joints) plus the gripper. The virtual
+    ``arm`` position is the sum of the four telescope joints in the backend.
+    """
+    joints = (
+        JointSpec(
+            "lift",
+            (0.0, 1.1),
+            0.1,
+            70.0,
+            kind="prismatic",
+            kp_eff=400.0,
+            kd_eff=100.0,
+            max_lead=0.01,
+        ),
+        JointSpec(
+            "arm",
+            (0.0, 0.52),
+            0.1,
+            56.0,
+            kind="prismatic",
+            kp_eff=150.0,
+            kd_eff=10.0,
+            max_lead=0.01,
+        ),
+        JointSpec("wrist_yaw", (-1.39, 4.42), 0.6, 20.0, kp_eff=20.0, kd_eff=0.0, max_lead=0.05),
+        JointSpec("wrist_pitch", (-1.57, 0.56), 0.6, 50.0, kp_eff=50.0, kd_eff=0.0, max_lead=0.05),
+        JointSpec("wrist_roll", (-3.14, 3.14), 0.6, 20.0, kp_eff=20.0, kd_eff=0.0, max_lead=0.05),
+    )
+    arm = JointGroupSpec(name="stretch_arm", role="arm", joints=joints)
+    return EmbodimentProfile(
+        name="stretch_sim",
+        base=BaseSpec(name="base", kind="planar", velocity_limits=(0.12, 0.5)),
+        joint_groups=(arm,),
+        arms=(
+            ArmSpec(
+                name="primary",
+                joint_group="stretch_arm",
+                ee_link="link_grasp_center",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="primary_gripper",
+                    joint_names=("joint_gripper_slide",),
+                    command_limits=((-0.02, 0.04),),
+                ),
+            ),
+        ),
+        metadata=(("limits_source", "mujoco_servo"), ("robot", "stretch")),
+    )
+
+
+def sourccey_sim_profile() -> EmbodimentProfile:
+    """Sourccey Mk.V profile matched to the packaged MuJoCo MJCF."""
+    lift = JointGroupSpec(
+        name="lift",
+        role="torso",
+        joints=(
+            JointSpec(
+                "lift",
+                (-0.315, -0.0142),
+                0.1,
+                3000.0,
+                kind="prismatic",
+                kp_eff=30000.0,
+                kd_eff=3000.0,
+                max_lead=0.005,
+            ),
+        ),
+    )
+
+    limits = {
+        "left": (
+            (-1.570796, 1.570796),
+            (-2.094395, 2.094395),
+            (-1.570796, 1.570796),
+            (-1.570796, 1.570796),
+            (-3.141593, 3.141593),
+        ),
+        "right": (
+            (-1.570796, 1.570796),
+            (-2.094395, 1.919862),
+            (-1.570796, 1.570796),
+            (-1.570796, 1.570796),
+            (-3.141593, 3.141593),
+        ),
+    }
+    suffixes = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
+
+    def arm(side: str) -> JointGroupSpec:
+        return JointGroupSpec(
+            name=f"{side}_arm",
+            role="arm",
+            joints=tuple(
+                JointSpec(
+                    f"{side}_{suffix}",
+                    limits[side][index],
+                    1.0,
+                    100.0,
+                    kp_eff=500.0,
+                    kd_eff=35.0,
+                    max_lead=0.05,
+                )
+                for index, suffix in enumerate(suffixes)
+            ),
+        )
+
+    return EmbodimentProfile(
+        name="sourccey_sim",
+        base=BaseSpec(name="base", kind="planar", velocity_limits=(0.3, 0.8)),
+        joint_groups=(lift, arm("left"), arm("right")),
+        arms=(
+            ArmSpec(
+                name="left",
+                joint_group="left_arm",
+                ee_link="Gripper_Base_v1_1",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="left_gripper",
+                    joint_names=("left_gripper",),
+                    command_limits=((-0.087266, 1.047198),),
+                ),
+            ),
+            ArmSpec(
+                name="right",
+                joint_group="right_arm",
+                ee_link="Gripper_Base_v1_2",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("right_gripper",),
+                    command_limits=((-0.087266, 1.047198),),
+                ),
+            ),
+        ),
+        torso_group="lift",
+        metadata=(("limits_source", "mujoco_servo"), ("robot", "sourccey")),
+    )
+
+
+def rby1_sim_profile() -> EmbodimentProfile:
+    """RB-Y1 / Galaxea R1 proxy profile matched to the packaged MJCF.
+
+    The base is holonomic in the contract. The direct-MuJoCo plant must map
+    ``(vx, vy, yaw_rate)`` through the three steer/wheel modules; the RoboCasa
+    adapter must use the same profile and base command semantics.
+    """
+    torso = JointGroupSpec(
+        name="torso",
+        role="torso",
+        joints=(
+            JointSpec("torso_joint1", (-1.1345, 1.8326), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+            JointSpec("torso_joint2", (-2.7925, 2.5307), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+            JointSpec("torso_joint3", (-1.8326, 1.5708), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+            JointSpec("torso_joint4", (-3.0543, 3.0543), 1.0, 100.0, kp_eff=150.0, kd_eff=50.0, max_lead=0.05),
+        ),
+    )
+    arm_limits = (
+        (-2.8798, 2.8798),
+        (0.0, 3.2289),
+        (-3.3161, 0.0),
+        (-2.8798, 2.8798),
+        (-1.6581, 1.6581),
+        (-2.8798, 2.8798),
+    )
+    arm_torque = (40.0, 40.0, 40.0, 7.0, 7.0, 7.0)
+    arm_kp = (100.0, 100.0, 100.0, 40.0, 40.0, 40.0)
+    arm_kd = (30.0, 30.0, 30.0, 10.0, 10.0, 10.0)
+
+    def arm(side: str) -> JointGroupSpec:
+        return JointGroupSpec(
+            name=f"{side}_arm",
+            role="arm",
+            joints=tuple(
+                JointSpec(
+                    f"{side}_arm_joint{index + 1}",
+                    arm_limits[index],
+                    1.0,
+                    arm_torque[index],
+                    kp_eff=arm_kp[index],
+                    kd_eff=arm_kd[index],
+                    max_lead=0.05,
+                )
+                for index in range(6)
+            ),
+        )
+
+    return EmbodimentProfile(
+        name="rby1_sim",
+        base=BaseSpec(name="base", kind="holonomic", velocity_limits=(0.4, 0.4, 0.8)),
+        joint_groups=(torso, arm("left"), arm("right")),
+        arms=(
+            ArmSpec(
+                name="left",
+                joint_group="left_arm",
+                ee_link="left_arm_link6",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="left_gripper",
+                    joint_names=("left_gripper_finger_joint1", "left_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
+                ),
+            ),
+            ArmSpec(
+                name="right",
+                joint_group="right_arm",
+                ee_link="right_arm_link6",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("right_gripper_finger_joint1", "right_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
+                ),
+            ),
+        ),
+        torso_group="torso",
+        metadata=(("limits_source", "mujoco_servo"), ("robot", "rby1"), ("sim_model", "galaxea_r1_proxy")),
+    )
+
+
+# PandaOmron profiles use simulation-neutral canonical names so the same
+# checkpoint can drive direct MuJoCo and RoboCasa. Adapters resolve those names
+# against their model with these aliases instead of silently bypassing the
+# profile.
+PANDAOMRON_EE_LINK_ALIASES: dict[str, tuple[str, ...]] = {
+    "right_hand": ("robot0_right_hand", "gripper0_right_eef"),
+}
+PANDAOMRON_GRIPPER_JOINT_ALIASES: dict[str, tuple[str, ...]] = {
+    "panda_finger_joint1": ("gripper0_finger_joint1", "gripper0_right_finger_joint1"),
+    "panda_finger_joint2": ("gripper0_finger_joint2", "gripper0_right_finger_joint2"),
+}
+
+
+def _model_has_body(model: Any, name: str) -> bool:
+    try:
+        model.body(name)
+    except (KeyError, ValueError):
+        return False
+    return True
+
+
+def _model_has_joint(model: Any, name: str) -> bool:
+    try:
+        model.joint(name)
+    except (KeyError, ValueError):
+        return False
+    return True
+
+
+def resolve_body_name(model: Any, name: str, aliases: dict[str, tuple[str, ...]] | None = None) -> str:
+    """Resolve a canonical profile body name against a concrete model."""
+    if _model_has_body(model, name):
+        return name
+    for alias in (aliases or {}).get(name, ()):
+        if _model_has_body(model, alias):
+            return alias
+    raise ValueError(f"model has no body for profile name {name!r} or its aliases")
+
+
+def resolve_joint_names(
+    model: Any, names: tuple[str, ...], aliases: dict[str, tuple[str, ...]] | None = None
+) -> tuple[str, ...]:
+    """Resolve canonical profile joint names against a concrete model."""
+    resolved: list[str] = []
+    lookup = aliases or {}
+    for name in names:
+        if _model_has_joint(model, name):
+            resolved.append(name)
+            continue
+        match = next((alias for alias in lookup.get(name, ()) if _model_has_joint(model, alias)), None)
+        if match is None:
+            raise ValueError(f"model has no joint for profile name {name!r} or its aliases")
+        resolved.append(match)
+    return tuple(resolved)
+
+
+def pandaomron_sim_profile() -> EmbodimentProfile:
+    """PandaOmron / Omron LD-60 profile used by RoboCasa.
+
+    RoboCasa composes the Omron holonomic base, a 1-DOF torso height, one
+    7-DOF Panda arm, and a two-finger gripper. Joint names are canonical here;
+    adapters resolve ``right_hand`` and ``panda_finger_joint*`` through
+    :data:`PANDAOMRON_EE_LINK_ALIASES` and
+    :data:`PANDAOMRON_GRIPPER_JOINT_ALIASES` instead of hardcoding a divergent
+    schema.
+    """
+    torso = JointGroupSpec(
+        name="torso",
+        role="torso",
+        joints=(
+            JointSpec(
+                "joint_torso_height",
+                (0.0, 0.34),
+                0.2,
+                2000.0,
+                kind="prismatic",
+                control_mode="torque",
+                kp_eff=1000.0,
+                kd_eff=200.0,
+                max_lead=0.02,
+            ),
+        ),
+    )
+    panda_limits = (
+        (-2.8973, 2.8973),
+        (-1.7628, 1.7628),
+        (-2.8973, 2.8973),
+        (-3.0718, -0.0698),
+        (-2.8973, 2.8973),
+        (-0.0175, 3.7525),
+        (-2.8973, 2.8973),
+    )
+    panda_torque = (80.0, 80.0, 80.0, 80.0, 12.0, 12.0, 12.0)
+    # The contract teacher runs at 20 Hz. The datasheet-scale 1000/200 gains
+    # limit-cycle at that rate; these identified gains track the same targets
+    # without saturating the small wrist motors.
+    arm = JointGroupSpec(
+        name="panda_arm",
+        role="arm",
+        joints=tuple(
+            JointSpec(
+                f"joint{index + 1}",
+                panda_limits[index],
+                2.0,
+                panda_torque[index],
+                control_mode="torque",
+                kp_eff=300.0,
+                kd_eff=30.0,
+                max_lead=0.05,
+            )
+            for index in range(7)
+        ),
+    )
+    return EmbodimentProfile(
+        name="pandaomron_sim",
+        base=BaseSpec(name="base", kind="holonomic", velocity_limits=(0.5, 0.5, 1.0)),
+        joint_groups=(torso, arm),
+        arms=(
+            ArmSpec(
+                name="right",
+                joint_group="panda_arm",
+                ee_link="right_hand",
+                target_frame="world",
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("panda_finger_joint1", "panda_finger_joint2"),
+                    command_limits=((0.0, 0.04), (-0.04, 0.0)),
+                ),
+            ),
+        ),
+        torso_group="torso",
+        metadata=(
+            ("limits_source", "robocasa_robot"),
+            ("robot", "pandaomron"),
+            ("sim_model", "omron_ld60_panda"),
+        ),
+    )
+
+
 def example_sourccey_profile() -> EmbodimentProfile:
     """Sourccey: planar base, lift torso, two 5-DOF arms, two grippers."""
     lift = JointGroupSpec(
@@ -177,13 +596,21 @@ def example_sourccey_profile() -> EmbodimentProfile:
                 name="left",
                 joint_group="left_arm",
                 ee_link="left_Gripper-Finger",
-                gripper=GripperSpec(name="left_gripper", joint_names=("left_gripper",)),
+                gripper=GripperSpec(
+                    name="left_gripper",
+                    joint_names=("left_gripper",),
+                    command_limits=((0.0, 1.0),),
+                ),
             ),
             ArmSpec(
                 name="right",
                 joint_group="right_arm",
                 ee_link="right_Gripper-Finger",
-                gripper=GripperSpec(name="right_gripper", joint_names=("right_gripper",)),
+                gripper=GripperSpec(
+                    name="right_gripper",
+                    joint_names=("right_gripper",),
+                    command_limits=((0.0, 1.0),),
+                ),
             ),
         ),
         torso_group="lift",
@@ -238,6 +665,7 @@ def example_rby1_profile() -> EmbodimentProfile:
                 gripper=GripperSpec(
                     name="left_gripper",
                     joint_names=("left_gripper_finger_joint1", "left_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
                 ),
             ),
             ArmSpec(
@@ -247,6 +675,7 @@ def example_rby1_profile() -> EmbodimentProfile:
                 gripper=GripperSpec(
                     name="right_gripper",
                     joint_names=("right_gripper_finger_joint1", "right_gripper_finger_joint2"),
+                    command_limits=((0.0, 0.05), (0.0, 0.05)),
                 ),
             ),
         ),
@@ -342,16 +771,127 @@ def example_stretch_profile() -> EmbodimentProfile:
                 name="primary",
                 joint_group="stretch_arm",
                 ee_link="link_grasp_center",
-                gripper=GripperSpec(name="primary_gripper", joint_names=("joint_gripper_slide",)),
+                gripper=GripperSpec(
+                    name="primary_gripper",
+                    joint_names=("joint_gripper_slide",),
+                    command_limits=((-0.020, 0.040),),
+                ),
             ),
         ),
         metadata=(("limits_source", _EXAMPLE), ("robot", "stretch")),
     )
 
 
+_ACTUATOR_FIELDS = frozenset(
+    {
+        "position_limit",
+        "velocity_limit",
+        "torque_limit",
+        "kind",
+        "control_mode",
+        "kp_eff",
+        "kd_eff",
+        "torque_constant",
+        "gear_ratio",
+        "current_limit",
+        "max_lead",
+    }
+)
+
+
+def apply_actuator_identification(
+    profile: EmbodimentProfile,
+    identification: dict[str, Any],
+) -> EmbodimentProfile:
+    """Return a profile with bench-identified per-joint actuator fields applied.
+
+    Identification JSON shape::
+
+        {"embodiment": "example_innate_mars",
+         "source": "bench-2026-12-01",
+         "joints": {"joint3": {"kp_eff": 12.3, "max_lead": 0.02}}}
+
+    Only joint-model fields are accepted. The function fails closed on unknown
+    joints/fields or a mismatched embodiment so a bench file cannot silently
+    alter an unrelated robot.
+    """
+    if not isinstance(identification, dict):
+        raise ValueError("actuator identification must be an object")
+    embodiment = identification.get("embodiment")
+    if embodiment is not None and str(embodiment) != profile.name:
+        raise ValueError(f"actuator identification embodiment {embodiment!r} != profile {profile.name!r}")
+    joints = identification.get("joints")
+    if not isinstance(joints, dict) or not joints:
+        raise ValueError("actuator identification must contain a non-empty joints object")
+    unknown = set(joints) - set(profile.controlled_joint_names)
+    if unknown:
+        raise ValueError(f"actuator identification references unknown joints: {sorted(unknown)}")
+
+    groups = []
+    for group in profile.joint_groups:
+        updated = []
+        for joint in group.joints:
+            raw = joints.get(joint.name)
+            if raw is None:
+                updated.append(joint)
+                continue
+            if not isinstance(raw, dict):
+                raise ValueError(f"actuator identification for {joint.name} must be an object")
+            extra = set(raw) - _ACTUATOR_FIELDS
+            if extra:
+                raise ValueError(f"unknown actuator fields for {joint.name}: {sorted(extra)}")
+            updated.append(replace(joint, **raw))
+        groups.append(replace(group, joints=tuple(updated)))
+
+    metadata = dict(profile.metadata)
+    source = identification.get("source")
+    if source:
+        metadata["actuator_identification"] = str(source)
+    return replace(profile, joint_groups=tuple(groups), metadata=tuple(metadata.items()))
+
+
+def load_actuator_identification(path: str | Path, profile: EmbodimentProfile) -> EmbodimentProfile:
+    """Load a JSON identification file and apply it to *profile*."""
+    data = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+    return apply_actuator_identification(profile, data)
+
+
+_SIM_PROFILE_FACTORIES = {
+    "innate_mars": mars_sim_profile,
+    "mars": mars_sim_profile,
+    "stretch": stretch_sim_profile,
+    "sourccey": sourccey_sim_profile,
+    "rby1": rby1_sim_profile,
+    "rb_y1": rby1_sim_profile,
+    "pandaomron": pandaomron_sim_profile,
+    "panda_omron": pandaomron_sim_profile,
+}
+
+
+def sim_profile(robot: str) -> EmbodimentProfile:
+    """Return the sim-matched profile for a supported robot key."""
+    key = robot.lower().replace("-", "_")
+    try:
+        return _SIM_PROFILE_FACTORIES[key]()
+    except KeyError as exc:
+        raise KeyError(f"no WBC sim profile for robot {robot!r}") from exc
+
+
 __all__ = [
+    "PANDAOMRON_EE_LINK_ALIASES",
+    "PANDAOMRON_GRIPPER_JOINT_ALIASES",
+    "apply_actuator_identification",
     "example_mars_profile",
     "example_rby1_profile",
     "example_sourccey_profile",
     "example_stretch_profile",
+    "load_actuator_identification",
+    "mars_sim_profile",
+    "pandaomron_sim_profile",
+    "rby1_sim_profile",
+    "resolve_body_name",
+    "resolve_joint_names",
+    "sim_profile",
+    "sourccey_sim_profile",
+    "stretch_sim_profile",
 ]

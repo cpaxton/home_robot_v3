@@ -6,6 +6,11 @@
 
 from __future__ import annotations
 
+import json
+import math
+from dataclasses import replace
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -14,6 +19,8 @@ from emet.controller.manipulation.data_generators import synthetic_obstacle_targ
 from emet.controller.manipulation.wbc_contract import (
     ArmAction,
     ArmObservation,
+    BaseSpec,
+    ContactObservation,
     GripperCommand,
     GripperObservation,
     JointGroupObservation,
@@ -22,18 +29,33 @@ from emet.controller.manipulation.wbc_contract import (
     ReachSpec,
     WbcAction,
     WbcObservation,
+    action_bounds,
+    action_from_normalized_vector,
     action_from_vector,
     action_vector,
+    active_action_mask,
+    normalized_action_vector,
     reach_reward,
 )
 from emet.controller.manipulation.wbc_profiles import (
+    apply_actuator_identification,
     example_mars_profile,
     example_rby1_profile,
     example_sourccey_profile,
+    example_stretch_profile,
+    load_actuator_identification,
+    mars_sim_profile,
+    pandaomron_sim_profile,
+    rby1_sim_profile,
+    sim_profile,
+    sourccey_sim_profile,
+    stretch_sim_profile,
 )
+from emet.controller.manipulation.wbc_robots import get_wbc_robot, wbc_profile_for
+from emet.rl.manipulation.wbc_backends import make_wbc_backend
 
 
-def _observation(profile, *, targets=None, ee_poses=None, failure_mode=""):
+def _observation(profile, *, targets=None, ee_poses=None, failure_mode="", base_target=None, torso_target=None):
     targets = targets or {}
     ee_poses = ee_poses or {}
     arms = []
@@ -61,6 +83,7 @@ def _observation(profile, *, targets=None, ee_poses=None, failure_mode=""):
             name=profile.torso.name,
             position=(0.0,) * len(profile.torso.joints),
             velocity=(0.0,) * len(profile.torso.joints),
+            target=() if torso_target is None else tuple(torso_target),
         )
     return WbcObservation(
         base_pose=(0.0, 0.0, 0.0),
@@ -69,6 +92,7 @@ def _observation(profile, *, targets=None, ee_poses=None, failure_mode=""):
         occupancy=np.zeros((8, 8, 8), dtype=np.uint8),
         torso=torso,
         failure_mode=failure_mode,
+        base_target=base_target,
     )
 
 
@@ -113,6 +137,276 @@ def test_single_arm_observation_and_action_round_trip():
     restored_action.validate(profile)
     assert restored_action.arm("primary").joint_torques == action.arm("primary").joint_torques
     assert restored_action.arm("primary").gripper == action.arm("primary").gripper
+
+
+def test_contact_observation_round_trip_and_validation():
+    profile = example_mars_profile()
+    observation = _observation(profile)
+    arm = replace(
+        observation.arms[0],
+        contact=ContactObservation(
+            in_contact=True,
+            wrench=(1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+            source="ft_sensor",
+        ),
+    )
+    observed = replace(observation, arms=(arm,))
+    observed.validate(profile)
+    restored = WbcObservation.from_dict(observed.to_dict())
+    assert restored.arm("primary").contact == arm.contact
+
+    with pytest.raises(ValueError, match="wrench"):
+        ContactObservation(in_contact=True, wrench=(0.0,) * 5)
+    with pytest.raises(ValueError, match="source"):
+        ContactObservation(in_contact=False, source="")
+
+
+def test_example_profiles_have_bounded_action_channels():
+    for profile in (
+        example_mars_profile(),
+        example_sourccey_profile(),
+        example_rby1_profile(),
+        example_stretch_profile(),
+        mars_sim_profile(),
+        stretch_sim_profile(),
+        sourccey_sim_profile(),
+        rby1_sim_profile(),
+        pandaomron_sim_profile(),
+    ):
+        lower, upper = action_bounds(profile)
+        assert np.isfinite(lower).all()
+        assert np.isfinite(upper).all()
+        assert np.all(lower < upper)
+
+
+def test_profile_serialization_round_trip_and_fingerprint():
+    profiles = (
+        example_mars_profile(),
+        example_sourccey_profile(),
+        example_rby1_profile(),
+        example_stretch_profile(),
+    )
+    fingerprints = set()
+    for profile in profiles:
+        restored = profile.__class__.from_dict(profile.to_dict())
+        assert restored == profile
+        assert restored.fingerprint == profile.fingerprint
+        fingerprints.add(profile.fingerprint)
+    assert len(fingerprints) == len(profiles)
+
+    profile = example_rby1_profile()
+    changed_base = replace(profile.base, velocity_limits=(0.6, 0.6, 1.2))
+    changed = replace(profile, base=changed_base)
+    assert changed.fingerprint != profile.fingerprint
+
+
+def test_mars_sim_profile_matches_retained_mujoco_actuator():
+    from emet.rl.profile import MARS
+
+    profile = mars_sim_profile()
+    assert profile.meta("actuator_model") == "retained_mujoco_kp80_kv4_effort2"
+    assert profile.arms[0].target_frame == "world"
+    assert profile.arms[0].gripper.command_limits == ((-0.3491, 0.3491),)
+    assert profile.base.velocity_limits == (MARS.max_v, MARS.max_w)
+    for joint in profile.joint_group("primary_arm").joints:
+        assert joint.kp_eff == MARS.arm_kp
+        assert joint.kd_eff == MARS.arm_kv
+        assert joint.torque_limit == MARS.arm_effort_limit
+        assert joint.velocity_limit == MARS.max_joint_speed
+        assert joint.max_lead == MARS.max_target_lead
+    assert profile.fingerprint != example_mars_profile().fingerprint
+
+
+def test_sim_profiles_match_packaged_robot_models():
+    import mujoco
+
+    from emet.rl.manipulation.profiles import PROFILES
+    from emet.rl.model import build_model
+
+    repo = Path(__file__).resolve().parents[3]
+    sourccey = mujoco.MjModel.from_xml_path(str(repo / "src/emet/assets/robot/sourccey/sourccey.xml"))
+    rby1 = mujoco.MjModel.from_xml_path(str(repo / "src/emet/assets/robot/galaxea_r1/galaxea_r1.xml"))
+    sourccey_joints = {sourccey.joint(i).name for i in range(sourccey.njnt)}
+    rby1_joints = {rby1.joint(i).name for i in range(rby1.njnt)}
+    mars_joints = {build_model("procedural").joint(i).name for i in range(build_model("procedural").njnt)}
+
+    for robot, profile, model_joints in (
+        ("innate_mars", mars_sim_profile(), mars_joints),
+        ("sourccey", sourccey_sim_profile(), sourccey_joints),
+        ("rby1", rby1_sim_profile(), rby1_joints),
+    ):
+        assert sim_profile(robot).name == profile.name
+        for group in profile.joint_groups:
+            for joint in group.joints:
+                assert joint.name in model_joints, (robot, joint.name)
+        for arm in profile.arms:
+            assert arm.gripper is not None
+            for name in arm.gripper.joint_names:
+                assert name in model_joints, (robot, name)
+
+    stretch = stretch_sim_profile()
+    assert tuple(joint.name for group in stretch.joint_groups for joint in group.joints) == (
+        "lift",
+        "arm",
+        "wrist_yaw",
+        "wrist_pitch",
+        "wrist_roll",
+    )
+    assert set(PROFILES["stretch"].actuators) == {"lift", "arm", "wrist_yaw", "wrist_pitch", "wrist_roll"}
+    assert stretch.action_dim == 8
+    assert sourccey_sim_profile().action_dim == 15
+    assert rby1_sim_profile().action_dim == 23
+    assert rby1_sim_profile().base.kind == "holonomic"
+
+
+def test_robot_registry_and_pandaomron_hook():
+    assert sim_profile("pandaomron").name == "pandaomron_sim"
+    panda = pandaomron_sim_profile()
+    assert panda.base.kind == "holonomic"
+    assert panda.action_dim == 3 + 1 + 7 + 2
+    assert panda.arms[0].ee_link == "right_hand"
+    assert panda.arms[0].gripper.joint_names == ("panda_finger_joint1", "panda_finger_joint2")
+
+    mars = get_wbc_robot("mars")
+    assert mars.name == "innate_mars"
+    assert mars.direct_mujoco is True
+    assert wbc_profile_for("mars").name == "example_innate_mars"
+    assert get_wbc_robot("rb-y1").name == "rby1"
+    assert get_wbc_robot("panda_omron").robocasa_robot == "PandaOmron"
+    with pytest.raises(KeyError, match="unknown WBC robot"):
+        get_wbc_robot("not_a_robot")
+
+
+def test_backend_factory_routes_mujoco_and_robocasa():
+    backend = make_wbc_backend("mars", sim="mujoco", seed=0)
+    assert backend.profile.meta("robot") == "innate_mars"
+    backend.close()
+    panda = make_wbc_backend("pandaomron", sim="mujoco", seed=0)
+    assert panda.profile.meta("robot") == "pandaomron"
+    panda.close()
+    with pytest.raises(NotImplementedError, match="not registered"):
+        make_wbc_backend("rby1", sim="robocasa")
+    with pytest.raises(ValueError, match="unknown WBC simulator"):
+        make_wbc_backend("mars", sim="gazebo")
+
+
+def test_robocasa_hooks_fail_closed_then_register():
+    from emet.rl.manipulation.wbc_robocasa import (
+        make_robocasa_backend,
+        register_robocasa_backend,
+        robocasa_hook,
+    )
+
+    hook = robocasa_hook("panda_omron")
+    assert hook.robocasa_robot == "PandaOmron"
+    assert hook.available is True
+    assert hook.factory is not None
+    with pytest.raises(NotImplementedError, match="not registered"):
+        make_robocasa_backend("rby1")
+
+    register_robocasa_backend("pandaomron", lambda **kwargs: ("adapter", kwargs))
+    assert robocasa_hook("pandaomron").available is True
+    assert make_robocasa_backend("pandaomron", seed=3) == ("adapter", {"seed": 3})
+
+
+def test_actuator_identification_patch_is_validated_and_loaded(tmp_path):
+    profile = example_mars_profile()
+    identification = {
+        "embodiment": profile.name,
+        "source": "bench-test",
+        "joints": {"joint3": {"kp_eff": 12.3, "max_lead": 0.02}},
+    }
+    updated = apply_actuator_identification(profile, identification)
+    assert updated.joint_group("primary_arm").joints[2].kp_eff == 12.3
+    assert updated.joint_group("primary_arm").joints[2].max_lead == 0.02
+    assert updated.fingerprint != profile.fingerprint
+    assert updated.meta("actuator_identification") == "bench-test"
+
+    path = tmp_path / "actuator.json"
+    path.write_text(json.dumps(identification), encoding="utf-8")
+    assert load_actuator_identification(path, profile) == updated
+
+    with pytest.raises(ValueError, match="unknown joints"):
+        apply_actuator_identification(profile, {"joints": {"not_a_joint": {"kp_eff": 1.0}}})
+    with pytest.raises(ValueError, match="unknown actuator fields"):
+        apply_actuator_identification(profile, {"joints": {"joint1": {"friction": 1.0}}})
+    with pytest.raises(ValueError, match="embodiment"):
+        apply_actuator_identification(profile, {"embodiment": "other", "joints": {"joint1": {"kp_eff": 1.0}}})
+
+
+def test_observation_round_trip_preserves_whole_body_targets_and_voxel_metadata():
+    profile = example_sourccey_profile()
+    target = (0.1, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    obs = _observation(
+        profile,
+        targets={"left": target},
+        base_target=(0.8, -0.2, 0.4),
+        torso_target=(0.12,),
+    )
+    obs = replace(obs, occupancy_origin=(-0.6, -0.6, 0.0), occupancy_resolution=0.05)
+    obs.validate(profile)
+
+    restored = WbcObservation.from_dict(obs.to_dict())
+    restored.validate(profile)
+    assert restored.base_target == obs.base_target
+    assert restored.base_target_mask == obs.base_target_mask
+    assert restored.torso.target == (0.12,)
+    assert restored.torso.effective_target_mask == (True,)
+    assert restored.occupancy_origin == obs.occupancy_origin
+    assert restored.occupancy_resolution == obs.occupancy_resolution
+
+
+def test_observation_rejects_partial_occupancy_metadata():
+    profile = example_mars_profile()
+    obs = _observation(profile)
+    with pytest.raises(ValueError, match="supplied together"):
+        replace(obs, occupancy_origin=(0.0, 0.0, 0.0))
+    with pytest.raises(ValueError, match="occupancy_resolution"):
+        replace(obs, occupancy_origin=(0.0, 0.0, 0.0), occupancy_resolution=0.0)
+
+
+def test_fixed_base_cannot_accept_a_base_target():
+    profile = replace(
+        example_mars_profile(),
+        base=BaseSpec(name="base", kind="fixed", velocity_limits=()),
+    )
+    obs = replace(_observation(profile), base_target=(0.0, 0.0, 0.0))
+    with pytest.raises(ValueError, match="fixed base"):
+        obs.validate(profile)
+
+
+def test_head_group_is_required_and_observed_only():
+    base_profile = example_mars_profile()
+    head = JointGroupSpec(
+        name="head",
+        role="head",
+        joints=(JointSpec("head_pan", (-1.0, 1.0), 1.0, 1.0),),
+    )
+    profile = replace(
+        base_profile,
+        joint_groups=base_profile.joint_groups + (head,),
+        head_group="head",
+    )
+    obs = _observation(profile)
+    with pytest.raises(ValueError, match="missing head"):
+        obs.validate(profile)
+
+    with_head = replace(
+        obs,
+        head=JointGroupObservation(name="head", position=(0.0,), velocity=(0.0,)),
+    )
+    with_head.validate(profile)
+    with_target = replace(
+        with_head,
+        head=JointGroupObservation(
+            name="head",
+            position=(0.0,),
+            velocity=(0.0,),
+            target=(0.2,),
+        ),
+    )
+    with pytest.raises(ValueError, match="observed-only"):
+        with_target.validate(profile)
 
 
 def test_v1_payload_is_rejected_instead_of_silently_reinterpreted():
@@ -274,6 +568,95 @@ def test_reach_reward_ignores_inactive_arm_target():
     assert "arm.right.pos_err" not in components
 
 
+def test_reach_reward_supports_base_only_goal():
+    profile = example_mars_profile()
+    action = _action(profile)
+    at_goal = _observation(profile, base_target=(0.0, 0.0, 0.0))
+    _, components = reach_reward(action, at_goal, profile=profile)
+    assert components["success"] == 1.0
+    assert components["base_xy_err"] == pytest.approx(0.0)
+    assert components["base_heading_err"] == pytest.approx(0.0)
+
+    off_goal = replace(at_goal, base_target=(0.2, 0.0, 0.3))
+    _, components = reach_reward(action, off_goal, profile=profile)
+    assert components["success"] == 0.0
+    assert components["base_xy_err"] == pytest.approx(0.2)
+    assert components["base_heading_err"] == pytest.approx(0.3)
+
+
+def test_reach_reward_supports_torso_only_goal():
+    profile = example_sourccey_profile()
+    action = _action(profile)
+    at_goal = _observation(profile, torso_target=(0.0,))
+    r, components = reach_reward(action, at_goal, profile=profile)
+    assert components["success"] == 1.0
+    assert components["torso_err"] == pytest.approx(0.0)
+    assert r > 0
+
+    off_goal = _observation(profile, torso_target=(0.15,))
+    _, components = reach_reward(action, off_goal, profile=profile)
+    assert components["torso_err"] == pytest.approx(0.15)
+    assert components["success"] == 0.0
+
+
+def test_reach_reward_orientation_tolerance_is_radians():
+    profile = example_mars_profile()
+    target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    quarter_turn = (0.0, 0.0, 0.5, math.sqrt(0.5), 0.0, 0.0, math.sqrt(0.5))
+    obs = _observation(profile, targets={"primary": target}, ee_poses={"primary": quarter_turn})
+    _, components = reach_reward(_action(profile), obs, profile=profile)
+    assert components["quat_err"] == pytest.approx(math.pi / 2.0)
+    assert components["success"] == 0.0  # 90 deg exceeds the default 0.05 rad tolerance
+
+
+def test_normalized_action_vector_round_trips_bounded_channels():
+    profile = example_mars_profile()
+    action = WbcAction(
+        base_velocity=(0.2, -0.5),
+        arms=(
+            ArmAction(
+                name="primary",
+                joint_torques=(0.3, -0.2, 0.1, 0.0, -0.1),
+                gripper=GripperCommand(values=(0.2,)),
+            ),
+        ),
+    )
+    lower, upper = action_bounds(profile)
+    assert lower.shape == upper.shape == (profile.action_dim,)
+
+    normalized = normalized_action_vector(action, profile)
+    assert np.all(normalized >= -1.0)
+    assert np.all(normalized <= 1.0)
+    restored = action_from_normalized_vector(normalized, profile)
+    assert np.allclose(action_vector(restored, profile), action_vector(action, profile))
+
+
+def test_active_action_mask_follows_base_torso_and_arm_targets():
+    profile = example_rby1_profile()
+    target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
+    obs = _observation(
+        profile,
+        targets={"left": target},
+        base_target=(0.5, 0.0, 0.0),
+        torso_target=(0.0,) * 4,
+    )
+    mask = active_action_mask(obs, profile)
+    assert mask.shape == (profile.action_dim,)
+    # base + torso + left arm/gripper are active; right arm/gripper are not.
+    expected = [True] * 3 + [True] * 4 + [True] * 6 + [True] * 2 + [False] * 6 + [False] * 2
+    assert mask.tolist() == expected
+
+    # An arm-only goal leaves base and torso available for whole-body reach.
+    arm_only = _observation(profile, targets={"left": target})
+    arm_mask = active_action_mask(arm_only, profile)
+    assert arm_mask[:7].all()
+    assert arm_mask[7:15].all()
+    assert not arm_mask[15:].any()
+
+    no_targets = _observation(profile)
+    assert not active_action_mask(no_targets, profile).any()
+
+
 def test_reach_reward_normalizes_by_joint_torque_limits():
     profile = example_mars_profile()
     target = (0.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0)
@@ -312,6 +695,19 @@ def test_case_library_fingerprint_includes_embodiment():
     first.meta["embodiment"] = "alpha"
     second = _record()
     second.meta["embodiment"] = "beta"
+    lib = CaseLibrary()
+    assert lib.add(first) is True
+    assert lib.add(second) is True
+    assert len(lib) == 2
+
+
+def test_case_library_fingerprint_includes_embodiment_profile_revision():
+    first = _record()
+    first.meta["embodiment"] = "alpha"
+    first.meta["embodiment_fingerprint"] = "profile-v1"
+    second = _record()
+    second.meta["embodiment"] = "alpha"
+    second.meta["embodiment_fingerprint"] = "profile-v2"
     lib = CaseLibrary()
     assert lib.add(first) is True
     assert lib.add(second) is True
@@ -395,6 +791,48 @@ def test_synthetic_generator_multi_arm_profile():
     assert rec.meta["embodiment"] == profile.name
 
 
+def test_synthetic_generator_rejects_targets_without_a_profile():
+    with pytest.raises(ValueError, match="require a profile"):
+        synthetic_obstacle_target(
+            np.random.default_rng(14),
+            profile=None,
+            target_base=(0.1, 0.0, 0.0),
+        )
+    with pytest.raises(ValueError, match="require a profile"):
+        synthetic_obstacle_target(
+            np.random.default_rng(15),
+            profile=None,
+            target_torso=(0.1,),
+        )
+
+
+def test_synthetic_generator_adds_base_and_torso_targets():
+    profile = example_sourccey_profile()
+    rec = synthetic_obstacle_target(
+        np.random.default_rng(12),
+        grid_shape=(8, 8, 8),
+        profile=profile,
+        target_base=(0.7, -0.3, 0.25),
+        target_torso=(0.1,),
+    )
+    assert rec.goal["base_target"] == [0.7, -0.3, 0.25]
+    assert rec.goal["torso_target"] == [0.1]
+    assert rec.meta["embodiment_fingerprint"] == profile.fingerprint
+
+    with pytest.raises(ValueError, match="target_torso"):
+        synthetic_obstacle_target(
+            np.random.default_rng(13),
+            profile=profile,
+            target_torso=(0.5,),
+        )
+
+    with pytest.raises(ValueError, match="require a profile"):
+        synthetic_obstacle_target(
+            np.random.default_rng(14),
+            target_base=(0.7, -0.3, 0.25),
+        )
+
+
 def test_scenario_from_attempt_and_record_scenario(tmp_path, monkeypatch):
     from emet.controller.manipulation.failure_record import record_scenario, scenario_from_attempt
 
@@ -404,9 +842,7 @@ def test_scenario_from_attempt_and_record_scenario(tmp_path, monkeypatch):
         "joint_names": ["torso_joint1", "arm_joint1"],
         "trace": [{"qpos": [0.1, 0.2], "ee_xyz": [0.0, 0.0, 0.5]}],
     }
-    rec = scenario_from_attempt(
-        attempt, context={"object_query": "mug", "receptacle_query": "cab"}
-    )
+    rec = scenario_from_attempt(attempt, context={"object_query": "mug", "receptacle_query": "cab"})
     assert rec.goal["object"] == "mug"
     assert rec.goal["receptacle"] == "cab"
     assert rec.meta["privileged"] is False

@@ -9,8 +9,8 @@ actuator property, not a policy property:
 
 - **position-servo adapter** (default, Mars-class hardware): convert torque to a
   bounded position-target offset and, when available, a motor current limit.
-- **true torque** (future): a different adapter can publish torque/current
-  directly without changing the policy contract.
+- **torque adapter**: publish torque/current directly for hardware that
+  declares true torque control, without changing the policy contract.
 
 The position-servo mapping is intentionally simple and fails closed: it
 requires an identified effective stiffness and maximum lead for every joint.
@@ -63,8 +63,116 @@ Feedforward = Mapping[str, float] | Callable[[WbcObservation], Mapping[str, floa
 class ActuatorAdapter(Protocol):
     """Common interface for position-servo, current, or torque adapters."""
 
+    profile: EmbodimentProfile
+
     def command(self, action: WbcAction, observation: WbcObservation) -> ServoCommand:
         """Map one policy action to a robot-facing command."""
+
+
+class TorqueAdapter:
+    """Direct torque adapter for hardware that realizes joint torque natively.
+
+    The policy contract is unchanged. This adapter only accepts joints whose
+    ``control_mode`` is ``torque``; a position-servo or current-position joint
+    must use :class:`PositionServoAdapter` instead. Gravity/friction terms are
+    optional identified feedforwards and are added before the torque limit.
+    """
+
+    def __init__(
+        self,
+        profile: EmbodimentProfile,
+        *,
+        gravity_torques: Feedforward | None = None,
+        friction_torques: Feedforward | None = None,
+    ) -> None:
+        self.profile = profile
+        self._gravity = gravity_torques
+        self._friction = friction_torques
+        known = set(profile.controlled_joint_names)
+        for source in (gravity_torques, friction_torques):
+            if isinstance(source, Mapping):
+                extra = set(source) - known
+                if extra:
+                    raise ValueError(f"feedforward torques reference unknown joints: {sorted(extra)}")
+        for group in profile.joint_groups:
+            for joint in group.joints:
+                if joint.control_mode != "torque":
+                    raise ValueError(f"{joint.name} does not declare true torque control; use PositionServoAdapter")
+                if joint.current_limit is not None and (joint.torque_constant is None or joint.torque_constant <= 0):
+                    raise ValueError(
+                        f"{joint.name} declares current_limit but no positive torque_constant; "
+                        "the current limit cannot be enforced"
+                    )
+
+    def command(self, action: WbcAction, observation: WbcObservation) -> ServoCommand:
+        action.validate(self.profile)
+        observation.validate(self.profile)
+        clipped_action = clamp_action(action, self.profile)
+        clipped = clipped_action != action
+        action = clipped_action
+        gravity = self._resolve(self._gravity, observation, "gravity_torques")
+        friction = self._resolve(self._friction, observation, "friction_torques")
+        currents: dict[str, float] = {}
+        torques: dict[str, float] = {}
+        if self.profile.torso is not None:
+            torso_obs = observation.torso
+            if torso_obs is None:
+                raise ValueError("observation is missing the torso group required by the profile")
+            for joint, tau in zip(self.profile.torso.joints, action.torso_torques, strict=True):
+                self._joint(joint, tau, gravity, friction, currents, torques)
+        for arm_spec in self.profile.arms:
+            group = self.profile.joint_group(arm_spec.joint_group)
+            arm_action = action.arm(arm_spec.name)
+            for joint, tau in zip(group.joints, arm_action.joint_torques, strict=True):
+                self._joint(joint, tau, gravity, friction, currents, torques)
+
+        grippers: dict[str, GripperCommand] = {}
+        for arm_spec in self.profile.arms:
+            command = action.arm(arm_spec.name).gripper
+            if command is not None:
+                grippers[arm_spec.name] = command
+        return ServoCommand(
+            base_velocity=action.base_velocity,
+            joint_positions={},
+            current_limits=currents,
+            commanded_torques=torques,
+            grippers=grippers,
+            clipped=clipped,
+        )
+
+    def _resolve(
+        self,
+        source: Feedforward | None,
+        observation: WbcObservation,
+        label: str,
+    ) -> Mapping[str, float]:
+        if source is None:
+            return {}
+        resolved = source(observation) if callable(source) else source
+        if not isinstance(resolved, Mapping):
+            raise ValueError(f"{label} must return a mapping of joint name to torque")
+        extra = set(resolved) - set(self.profile.controlled_joint_names)
+        if extra:
+            raise ValueError(f"{label} references unknown joints: {sorted(extra)}")
+        return resolved
+
+    def _joint(
+        self,
+        joint: JointSpec,
+        tau: float,
+        gravity: Mapping[str, float],
+        friction: Mapping[str, float],
+        currents: dict[str, float],
+        torques: dict[str, float],
+    ) -> None:
+        total = float(tau) + float(gravity.get(joint.name, 0.0)) + float(friction.get(joint.name, 0.0))
+        total = float(np.clip(total, -joint.torque_limit, joint.torque_limit))
+        current_limit = joint.current_limit
+        if current_limit is not None and joint.torque_constant is not None:
+            torque_at_current_limit = current_limit * joint.torque_constant * joint.gear_ratio
+            total = float(np.clip(total, -torque_at_current_limit, torque_at_current_limit))
+            currents[joint.name] = float(min(abs(total) / (joint.torque_constant * joint.gear_ratio), current_limit))
+        torques[joint.name] = total
 
 
 class PositionServoAdapter:
@@ -219,4 +327,4 @@ class PositionServoAdapter:
             currents[joint.name] = float(min(current, current_limit))
 
 
-__all__ = ["ActuatorAdapter", "PositionServoAdapter", "ServoCommand"]
+__all__ = ["ActuatorAdapter", "PositionServoAdapter", "ServoCommand", "TorqueAdapter"]

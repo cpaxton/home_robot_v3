@@ -1,0 +1,143 @@
+{
+  "cases": [
+    {
+      "contact": "optional",
+      "family": "free_space_reach",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 8.0,
+        "max_tracking_error_m": 0.03,
+        "min_success": 0.9
+      },
+      "id": "pandaomron.free_space.arm",
+      "notes": "held-out seeds; no hard-case injection",
+      "occupancy": "none",
+      "robot": "pandaomron",
+      "source": "wbc_dagger default arm subtask",
+      "split": "test",
+      "status": "active"
+    },
+    {
+      "contact": "optional",
+      "family": "base_arm",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 8.0,
+        "max_tracking_error_m": 0.04,
+        "min_success": 0.85
+      },
+      "id": "pandaomron.free_space.base",
+      "notes": "base-only tracking",
+      "occupancy": "none",
+      "robot": "pandaomron",
+      "source": "wbc_dagger default base subtask",
+      "split": "test",
+      "status": "active"
+    },
+    {
+      "contact": "optional",
+      "family": "base_arm",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 8.0,
+        "max_tracking_error_m": 0.04,
+        "min_success": 0.85
+      },
+      "id": "pandaomron.free_space.combined",
+      "notes": "base + arm target",
+      "occupancy": "none",
+      "robot": "pandaomron",
+      "source": "wbc_dagger default combined subtask",
+      "split": "test",
+      "status": "active"
+    },
+    {
+      "contact": "required",
+      "family": "hard_posture",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 8.0,
+        "max_tracking_error_m": 0.05,
+        "min_success": 0.8
+      },
+      "id": "pandaomron.hard_posture.019",
+      "notes": "only genuine reached=False tracking failure in the current sink; hard_posture stays planned until a valid train/test split is regenerated; no hard-case promotion yet",
+      "occupancy": "none",
+      "robot": "pandaomron",
+      "source": "wbc_pandaomron_hard_cases_test.json#failure-019",
+      "split": "test",
+      "status": "planned"
+    },
+    {
+      "contact": "optional",
+      "family": "shelf_entry",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 12.0,
+        "max_tracking_error_m": 0.05,
+        "min_success": 0.75
+      },
+      "id": "pandaomron.shelf_entry.cabinet",
+      "notes": "open cabinet shelf; obstacle-aware reach/insert",
+      "occupancy": "required",
+      "robot": "pandaomron",
+      "source": "RoboCasa PickPlaceCounterToCabinet; occupancy case generator pending",
+      "split": "test",
+      "status": "planned"
+    },
+    {
+      "contact": "required",
+      "family": "carry_payload",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 12.0,
+        "max_tracking_error_m": 0.05,
+        "min_success": 0.75
+      },
+      "id": "pandaomron.carry_payload.sink",
+      "notes": "held pear; carry posture and base/arm coordination",
+      "occupancy": "required",
+      "robot": "pandaomron",
+      "source": "RoboCasa PickPlaceCounterToSink carry; payload case generator pending",
+      "split": "test",
+      "status": "planned"
+    },
+    {
+      "contact": "required",
+      "family": "contact_recovery",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 12.0,
+        "max_tracking_error_m": 0.06,
+        "min_success": 0.7
+      },
+      "id": "pandaomron.contact_recovery.sink_attach",
+      "notes": "contact-rich recovery; teacher privileged contacts",
+      "occupancy": "optional",
+      "robot": "pandaomron",
+      "source": "sink attach-verification failure; contact case generator pending",
+      "split": "test",
+      "status": "planned"
+    },
+    {
+      "contact": "required",
+      "family": "articulation",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 15.0,
+        "max_tracking_error_m": 0.06,
+        "min_success": 0.7
+      },
+      "id": "pandaomron.articulation.door",
+      "notes": "open/close a door; not in the first controller gate",
+      "occupancy": "required",
+      "robot": "pandaomron",
+      "source": "RoboCasa cabinet door; articulation adapter pending",
+      "split": "test",
+      "status": "planned"
+    }
+  ],
+  "profile": "pandaomron_sim",
+  "robot": "pandaomron",
+  "schema_version": 1
+}
