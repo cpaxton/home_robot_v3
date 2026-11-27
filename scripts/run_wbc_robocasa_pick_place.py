@@ -126,6 +126,13 @@ def _choose_grasp_z(
         max_width = max(max_width, width)
         probe += 0.005
     min_width = max(0.015, 0.5 * max_width)
+    # Tall, narrow objects: cap the grasp 5 cm below the top. This keeps the
+    # gripper palm clear of the object while reducing the pendulum arm.
+    if (high - low) > 1.2 * max_width and max_width <= opening_m - margin_m:
+        capped = high - 0.05
+        if capped >= low + 0.02:
+            center_xy = 0.5 * (points[:, :2].min(axis=0) + points[:, :2].max(axis=0))
+            return capped, center_xy, max_width, []
     candidate_top = high - 0.015
     candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
     center_z = 0.5 * (low + high)
