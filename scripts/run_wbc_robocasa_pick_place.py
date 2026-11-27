@@ -250,6 +250,11 @@ def _run_base_ramp(
     base_hold = None
     if hold_T is not None:
         base_hold = np.linalg.inv(_body_T(env, "mobilebase0_base")) @ hold_T
+    # The kinematic ramp owns the base pose; suppress the teacher's base
+    # velocity command so the base actuators do not fight it and shake the
+    # carried object.
+    saved_base_target = backend._target_base
+    backend._target_base = None
     for index in range(1, steps + 1):
         # Smoothstep: zero velocity at both ends so the free object is not
         # stepped relative to the pads at the start of the base motion.
@@ -270,6 +275,7 @@ def _run_base_ramp(
         if terminated or truncated:
             break
     backend.apply_base_qpos(target_q)
+    backend._target_base = saved_base_target
     if base_hold is not None:
         backend.set_ee_target(_pose_from_T(_body_T(env, "mobilebase0_base") @ base_hold))
     print(
