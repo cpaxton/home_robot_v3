@@ -24,7 +24,7 @@ There are two layers:
    tracks the targets it is given.
 
 The actor observation is sensor-only: base pose/twist, joint encoders, EE pose,
-EE target, gripper state, measured contact (layout v3), and derived target
+EE target, gripper state/target, measured contact (layout v4), and derived target
 errors. A privileged teacher may use simulator targets and phase state during
 training, but **teacher targets never enter the exported actor or checkpoint**.
 
@@ -86,7 +86,7 @@ uv run python -m emet.rl.manipulation.wbc_coverage \
 
 A checkpoint must load with the exact profile fingerprint. Layout-v2
 checkpoints are migrated to v3 automatically: old observation columns are
-remapped, new contact inputs are zeroed, and the normalized gripper-force
+remapped, new contact and gripper-target inputs are zeroed, and the normalized gripper-force
 columns are rescaled. New DAgger checkpoints also store the task contract
 (subtask goals, target range, base-goal probability, hold-base, control period,
 success hold, collision threshold). `eval_wbc_policy.py` and

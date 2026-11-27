@@ -64,8 +64,8 @@ Artifacts and the per-task breakdown are in
 JSON) and the strict re-gate under `logs/eval/wbc_multirobot_20261126/strict/`.
 The clean Panda row was re-gated from the shipped checkpoint: the old 0.996
 row was not reproducible (the checkpoint gives 0.947/0.973/0.907 at the three
-seeds). All rows are current layout-v3 evaluations with v2 checkpoints
-migrated (zero contact inputs, gripper-force columns rescaled); the strict
+seeds). All rows load through the layout-v4 path with v2/v3 checkpoints migrated
+(zero contact/gripper-target inputs, v2 gripper-force columns rescaled); the strict
 re-gate also records measured collisions and settled tracking error. See the
 narrative [training report](wbc_training_report_20261126.md).
 
@@ -178,7 +178,7 @@ a hard-case-trained policy.
    policy is not yet trained on task-like target poses.
 2. **Failure-data closure and contact-aware retrain.** Add episode/seed/scene
    correlation, collect new genuine `reached=False` failures, export a real
-   hard-posture split, and retrain layout v3 with measured contact channels.
+   hard-posture split, and retrain layout v4 with measured contact channels.
 3. **Contact/carry/shelf coverage.** Add occupancy and payload cases; do not
    claim these from the current migrated v2 checkpoints.
 4. **Merged-scene adapters** for Stretch/Sourccey/RB-Y1 after the PandaOmron

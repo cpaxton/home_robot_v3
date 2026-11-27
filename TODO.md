@@ -1293,7 +1293,7 @@ position-servo actuator adapter.
 - [x] Home-posture resets for Sourccey/RB-Y1 removed the full-range joint distribution that made BC unlearnable.
 - [x] RB-Y1 full-suite policy: 1.000 held-out over 150 episodes/subtask (measured collisions and settled tracking). Artifact: `logs/eval/wbc_multirobot_20261126/strict/rby1/`.
 - [x] Sourccey full-suite policy: 0.960 held-out over 150 episodes/subtask (arms/base 1.0, combined_left 0.86–0.88, combined_right 0.90–0.96). Artifact: `logs/eval/wbc_multirobot_20261126/strict/sourccey/`.
-- [ ] Hard-case/failure-posture DAgger gate: #267 is merged, but the current sink still has only one genuine `reached=False` failure (019); records 014–018 are stale successful-grasp attempts from place failures. Train split is empty, 019 is evaluation-only, and the earlier 5/5/1/1 claim is retracted. Generate new genuine failures from post-#267 benchmark/TAMP runs, export train/test, then retrain layout v3.
+- [ ] Hard-case/failure-posture DAgger gate: #267 is merged, but the current sink still has only one genuine `reached=False` failure (019); records 014–018 are stale successful-grasp attempts from place failures. Train split is empty, 019 is evaluation-only, and the earlier 5/5/1/1 claim is retracted. Generate new genuine failures from post-#267 benchmark/TAMP runs, export train/test, then retrain layout v4.
 - [x] PandaOmron RoboCasa reach adapter: native `PickPlaceCounterToCabinet` smoke tracks an 8 cm target to 1.3 cm / 0.029 rad after a 0.45 m chassis backoff. Not task success; see `docs/experiments/wbc_robocasa_20261126.md`.
 - [x] RoboCasa privileged teacher (joint PD + Cartesian fallback) and a loaded 20-episode reach sweep: 20/20, position mean 1.13 cm, p95 1.67 cm; loaded observations/teacher labels at `/tmp/opencode/wbc_robocasa_sweep_policy/loaded_data.npz`.
 - [x] RoboCasa Cartesian-offset reach sweep: 20/20, mean 0.87 cm, p95 1.54 cm; loaded data at `/tmp/opencode/wbc_robocasa_sweep_cartesian/`.
@@ -1304,7 +1304,7 @@ position-servo actuator adapter.
 - [ ] Task-target completion: collision-aware base/cabinet place planning, grasp retention, and a contact-aware layout retrain before calling this a task-success gate. Two-round task DAgger (3,323 aggregated samples) remained 0/3; teacher-only BC and DAgger on the free-space actor are both negative.
 - [ ] RoboCasa task-target bridge (object/receptacle/grasp targets and base goals) and merged-scene adapters for Stretch/Sourccey/RB-Y1; the generic hook stays fail-closed until a task adapter registers.
 - [x] Train and strictly gate free-space torque actors for Mars, Stretch, Sourccey, RB-Y1, and PandaOmron. All promoted policies pass the multirobot/Panda coverage gates; measured collisions and settled tracking are required. The clean Panda checkpoint is not promoted (combined base/arm 0.827 < 0.85).
-- [ ] Contact-aware layout-v3 retrain: the promoted checkpoints are v2 policies migrated with zeroed contact inputs. Train with measured wrist wrench/finger force before claiming contact/carry/shelf capability.
+- [ ] Contact-aware layout-v4 retrain: the promoted checkpoints are v2/v3 policies migrated with zeroed contact and gripper-target inputs. Train with measured wrist wrench/finger force and commanded gripper targets before claiming contact/carry/shelf capability.
 - [ ] Decide gripper force vs position and RB-Y1 torso/base actuator modes.
 
 ## TAMP agent execution follow-up (2026-09-29)

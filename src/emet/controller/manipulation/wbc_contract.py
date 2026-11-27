@@ -560,11 +560,17 @@ class JointGroupObservation:
 
 @dataclass(frozen=True)
 class GripperObservation:
-    """Measured gripper state. ``force`` is optional and may be a proxy."""
+    """Measured gripper state and commanded target.
+
+    ``target`` is the command/setpoint in the same units as ``position``. It is
+    agent-issued context (open/close/hold), not a measured object state; the
+    layout normalizes it with the gripper command limits.
+    """
 
     position: tuple[float, ...]
     velocity: tuple[float, ...] = ()
     force: tuple[float, ...] = ()
+    target: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.position:
@@ -573,7 +579,9 @@ class GripperObservation:
             raise ValueError("gripper position/velocity length mismatch")
         if self.force and len(self.force) != len(self.position):
             raise ValueError("gripper position/force length mismatch")
-        if not all(math.isfinite(float(v)) for v in (*self.position, *self.velocity, *self.force)):
+        if self.target and len(self.target) != len(self.position):
+            raise ValueError("gripper position/target length mismatch")
+        if not all(math.isfinite(float(v)) for v in (*self.position, *self.velocity, *self.force, *self.target)):
             raise ValueError("gripper observation contains a non-finite value")
 
 
@@ -786,6 +794,7 @@ class WbcObservation:
                         "position": list(a.gripper.position),
                         "velocity": list(a.gripper.velocity),
                         "force": list(a.gripper.force),
+                        "target": list(a.gripper.target),
                     },
                     "contact": None
                     if a.contact is None
@@ -840,6 +849,7 @@ class WbcObservation:
                     position=tuple(float(x) for x in a["gripper"]["position"]),
                     velocity=tuple(float(x) for x in a["gripper"].get("velocity", ())),
                     force=tuple(float(x) for x in a["gripper"].get("force", ())),
+                    target=tuple(float(x) for x in a["gripper"].get("target", ())),
                 ),
                 contact=None
                 if a.get("contact") is None

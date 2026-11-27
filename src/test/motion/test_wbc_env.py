@@ -180,7 +180,7 @@ def test_layout_encodes_measured_contact_and_gripper_force():
     arm = replace(
         observation.arms[0],
         contact=contact,
-        gripper=GripperObservation(position=(0.0,), velocity=(0.0,), force=(10.0,)),
+        gripper=GripperObservation(position=(0.0,), velocity=(0.0,), force=(10.0,), target=(0.5,)),
     )
     with_contact = replace(observation, arms=(arm,))
     vector = encode_observation(with_contact, profile, layout=layout)
@@ -191,11 +191,15 @@ def test_layout_encodes_measured_contact_and_gripper_force():
         (0.2, -0.4, 0.6, 0.1, 0.2, 0.3),
     )
     assert vector[layout.slices["arm.primary.gripper_force"]][0] == pytest.approx(0.5)
+    assert vector[layout.slices["arm.primary.has_gripper_target"]][0] == 1.0
+    assert vector[layout.slices["arm.primary.gripper_target"]][0] == pytest.approx(0.5)
 
     missing = encode_observation(observation, profile, layout=layout)
     assert missing[layout.slices["arm.primary.has_contact_state"]][0] == 0.0
     assert missing[layout.slices["arm.primary.contact_flag"]][0] == 0.0
     assert np.all(missing[layout.slices["arm.primary.contact_wrench"]] == 0.0)
+    assert missing[layout.slices["arm.primary.has_gripper_target"]][0] == 0.0
+    assert np.all(missing[layout.slices["arm.primary.gripper_target"]] == 0.0)
 
 
 def test_layout_includes_occupancy_when_requested():
@@ -393,7 +397,7 @@ def test_ppo_updates_and_checkpoint_round_trip(tmp_path):
 
 def test_load_migrates_v2_observation_layout(tmp_path):
     profile = sourccey_sim_profile()
-    old_layout = wbc_observation_layout(profile, include_contact=False)
+    old_layout = wbc_observation_layout(profile, layout_version=2)
     new_layout = wbc_observation_layout(profile)
     assert old_layout.size < new_layout.size
     policy = WbcActorCritic(old_layout.size, profile.action_dim, hidden=8)
@@ -432,6 +436,47 @@ def test_load_migrates_v2_observation_layout(tmp_path):
     assert torch.allclose(weight[0, new_layout.slices["arm.right.gripper_force"]], torch.tensor([20.0]))
     assert torch.count_nonzero(weight[0, new_layout.slices["arm.right.has_contact_state"]]) == 0
     assert torch.count_nonzero(weight[0, new_layout.slices["arm.left.joint_position"]]) == 0
+
+
+def test_load_migrates_v3_observation_layout(tmp_path):
+    profile = sourccey_sim_profile()
+    old_layout = wbc_observation_layout(profile, layout_version=3)
+    new_layout = wbc_observation_layout(profile)
+    assert old_layout.size < new_layout.size
+    policy = WbcActorCritic(old_layout.size, profile.action_dim, hidden=8)
+    with torch.no_grad():
+        policy.actor[0].weight.zero_()
+        policy.critic[0].weight.zero_()
+        policy.actor[0].weight[0, old_layout.slices["arm.right.joint_position"]] = 1.0
+        policy.actor[0].weight[0, old_layout.slices["arm.right.gripper_force"]] = 1.0
+    payload = {
+        "format": WbcPPO.format,
+        "schema_version": SCHEMA_VERSION,
+        "observation_layout_version": 3,
+        "profile": profile.to_dict(),
+        "profile_fingerprint": profile.fingerprint,
+        "observation_size": old_layout.size,
+        "action_size": profile.action_dim,
+        "config": asdict(WbcPPOConfig(hidden=8)),
+        "steps_trained": 0,
+        "updates": 0,
+        "metadata": {"test": True},
+        "state_dict": {key: value.detach().cpu() for key, value in policy.state_dict().items()},
+        "optimizer_state": None,
+        "reference_actor_state": None,
+        "reference_log_std": None,
+    }
+    path = tmp_path / "v3_policy.pt"
+    torch.save(payload, path)
+    loaded, metadata = WbcPPO.load(path, profile)
+    assert loaded.policy.observation_size == new_layout.size
+    assert metadata["observation_layout_migrated_from"] == 3
+    weight = loaded.policy.actor[0].weight
+    assert torch.allclose(weight[0, new_layout.slices["arm.right.joint_position"]], torch.ones(5))
+    # v3 gripper force was already normalized; migration must not rescale it.
+    assert torch.allclose(weight[0, new_layout.slices["arm.right.gripper_force"]], torch.ones(5))
+    assert torch.count_nonzero(weight[0, new_layout.slices["arm.right.gripper_target"]]) == 0
+    assert torch.count_nonzero(weight[0, new_layout.slices["arm.right.has_gripper_target"]]) == 0
 
 
 def test_ppo_odd_total_steps_are_consumed():

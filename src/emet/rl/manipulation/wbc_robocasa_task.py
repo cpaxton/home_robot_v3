@@ -353,11 +353,25 @@ class RoboCasaPandaTask:
     def _intent(self) -> str:
         return _PHASE_INTENT.get(self.curr_phase, self.curr_phase)
 
-    def _step_action(self, observation: np.ndarray | None, gripper: np.ndarray) -> TaskStep:
+    def _step_action(
+        self,
+        observation: np.ndarray | None,
+        gripper: np.ndarray,
+    ) -> tuple[TaskStep, bool, np.ndarray]:
+        """Step once, returning the label and next observation aligned to obs_t.
+
+        ``teacher_action`` is the privileged action for the observation passed
+        in (before the simulator step), not for the resulting state. The gripper
+        channels are overwritten with the phase command so the actor learns the
+        commanded open/close/hold intent alongside the measured finger force.
+        """
+        teacher_action = np.asarray(self.backend.teacher_action(), dtype=np.float64).copy()
+        teacher_action[-2:] = gripper
         if self.teacher_mode:
-            action = np.asarray(self.backend.teacher_action(), dtype=np.float64)
+            action = teacher_action.copy()
         else:
             assert self.policy is not None
+            assert observation is not None
             import torch
 
             with torch.no_grad():
@@ -367,8 +381,7 @@ class RoboCasaPandaTask:
                     .numpy()
                     .astype(np.float64)
                 )
-        action[-2:] = gripper
-        teacher_action = np.asarray(self.backend.teacher_action(), dtype=np.float64)
+            action[-2:] = gripper
         contract_action = action_from_normalized_vector(action, self.profile)
         command = self.backend.preferred_adapter.command(contract_action, self.backend._observation())
         next_observation, terminated, info = self.backend.step(command, self.control_dt)
@@ -385,11 +398,9 @@ class RoboCasaPandaTask:
                     * Rotation.from_quat(np.asarray(target[3:], dtype=np.float64)).inv()
                 ).magnitude()
             )
-        # Keep the actor observation in teacher rollouts too so successful
-        # demonstrations can be exported for BC/DAgger.
-        observation = self.layout.encode(next_observation)
+        encoded_next = self.layout.encode(next_observation)
         contact = terms.contact
-        gripper = terms.gripper
+        gripper_observation = terms.gripper
         grasped = self._grasped() if self.curr_phase in {"close", "lift", "preplace", "place", "release"} else False
         slip_m, slip_rad = self._slip_metrics()
         step = TaskStep(
@@ -400,7 +411,7 @@ class RoboCasaPandaTask:
             pos_err=pos_err,
             quat_err=quat_err,
             collision=bool(info.get("collision", False)),
-            finger_force=() if gripper is None else tuple(float(v) for v in gripper.force),
+            finger_force=() if gripper_observation is None else tuple(float(v) for v in gripper_observation.force),
             wrench=() if contact is None else tuple(float(v) for v in contact.wrench),
             contact_flag=False if contact is None else bool(contact.in_contact),
             grasped=grasped,
@@ -408,24 +419,22 @@ class RoboCasaPandaTask:
             slip_rad=slip_rad,
             intent=self._intent(),
         )
-        return step, bool(terminated)
+        return step, bool(terminated), encoded_next
 
     def _close_until_force(self, q: np.ndarray, pose: tuple[float, ...]) -> list[TaskStep]:
         self._set_phase("close", q, pose)
         steps: list[TaskStep] = []
-        observation = self.layout.encode(self.backend._observation()) if not self.teacher_mode else None
+        observation = self.layout.encode(self.backend._observation())
         for _ in range(40):
-            step, terminated = self._step_action(observation, _GRIPPER_CLOSE)
+            step, terminated, observation = self._step_action(observation, _GRIPPER_CLOSE)
             steps.append(step)
-            observation = step.observation
             if step.collision or terminated:
                 break
             force_ok = bool(step.finger_force) and min(step.finger_force) >= self.force_threshold_n
             if force_ok:
                 for _ in range(4):
-                    step, terminated = self._step_action(observation, _GRIPPER_CLOSE)
+                    step, terminated, observation = self._step_action(observation, _GRIPPER_CLOSE)
                     steps.append(step)
-                    observation = step.observation
                     if step.collision or terminated:
                         break
                 break
@@ -442,19 +451,17 @@ class RoboCasaPandaTask:
     ) -> list[TaskStep]:
         self._set_phase(phase, q, pose, joint=joint)
         steps: list[TaskStep] = []
-        observation = self.layout.encode(self.backend._observation()) if not self.teacher_mode else None
+        observation = self.layout.encode(self.backend._observation())
         for _ in range(self.max_move_steps):
-            step, terminated = self._step_action(observation, gripper)
+            step, terminated, observation = self._step_action(observation, gripper)
             steps.append(step)
-            observation = step.observation
             if step.collision or terminated:
                 break
             if np.isfinite(step.pos_err) and step.pos_err <= self.position_tolerance_m:
                 # Hold briefly so the target is actually settled.
                 for _ in range(4):
-                    step, terminated = self._step_action(observation, gripper)
+                    step, terminated, observation = self._step_action(observation, gripper)
                     steps.append(step)
-                    observation = step.observation
                     if step.collision or terminated:
                         break
                 break

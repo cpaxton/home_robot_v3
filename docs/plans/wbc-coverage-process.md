@@ -137,7 +137,7 @@ real wrist sensor reports; the policy learns the load. The separate
 `contact_flag` and per-finger forces come from solved contacts, so contact
 presence does not depend on a gravity model.
 
-Layout fields (appended per arm, layout version 3):
+Layout fields (appended per arm, layout version 4):
 
 ```text
 arm.<name>.has_contact_state   1
@@ -341,12 +341,12 @@ lowered to make a checkpoint pass.
 - The earlier hard-case fine-tune (teacher 1.00, BC 0.97, DAgger
   1.00/0.97/0.93/1.00 in-suite) used those five invalid postures. It is not
   promotion evidence and must be rerun after a valid train/test split is
-  regenerated on the layout-v3 contact observation.
+  regenerated on the layout-v4 contact/gripper-target observation.
 - Measured contact state is implemented for PandaOmron and the other direct
   plants: wrist F/T wrench where available, per-finger normal loads, contact
   flag, and self/external collision separation. Observation layout version is
   3; the promoted checkpoints are still v2 policies migrated with zeroed
-  contact inputs. A layout-v3 contact-aware retrain is required.
+  contact inputs. A layout-v4 contact-aware retrain is required.
 - Occupancy contract/layout exists; no provider or CNN encoder yet.
 - Shelf/carry/contact families are registered as planned; their gate requires
   `contact_state_rate == 1.0` once activated.
@@ -357,7 +357,7 @@ lowered to make a checkpoint pass.
    pre-grasp/grasp/lift/place targets, base/gripper commands, and task-success
    measurement. This is the first task-level gate.
 2. **Generate genuine hard-posture data:** collect post-#267 `reached=False`
-   failures, export train/test, retrain layout v3 with contact inputs, and
+   failures, export train/test, retrain layout v4 with contact inputs, and
    activate the `hard_posture` gate.
 3. Occupancy case provider + 3D CNN actor; no-map ablation.
 4. Shelf-entry and carry cases generated from RoboCasa placements (teacher

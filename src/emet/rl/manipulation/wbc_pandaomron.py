@@ -466,6 +466,7 @@ class PandaOmronWbcBackend:
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
                 force=contact.finger_force,
+                target=tuple(float(v) for v in self._grip_command),
             ),
             contact=contact.contact,
         )

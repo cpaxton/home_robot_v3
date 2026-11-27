@@ -99,5 +99,17 @@ def test_build_task_poses_from_a_robocasa_scene():
             assert np.all(q <= backend._arm_high + 1e-9)
         assert poses.grasp_pose[2] > poses.object_pose[2]
         assert poses.lift_pose[2] > poses.grasp_pose[2]
+
+        # DAgger labels must be aligned to the observation that produced the
+        # action, not to the post-step state.
+        task._set_phase("pregrasp", poses.pregrasp_q, poses.pregrasp_pose)
+        observation = task.layout.encode(task.backend._observation())
+        expected_teacher = np.asarray(task.backend.teacher_action(), dtype=np.float64)
+        expected_teacher[-2:] = _GRIPPER_OPEN
+        step, _terminated, next_observation = task._step_action(observation, _GRIPPER_OPEN)
+        assert step.observation is observation
+        assert np.array_equal(next_observation, task.layout.encode(task.backend._observation()))
+        assert np.allclose(step.teacher_action, expected_teacher)
+        assert tuple(step.action[-2:]) == tuple(_GRIPPER_OPEN)
     finally:
         env.close()

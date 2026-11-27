@@ -20,7 +20,8 @@ RB-Y1, and PandaOmron:
 - **Sensor-only actor.** The privileged teacher may use simulator targets and
   phase state, but the exported actor and checkpoint receive only contract
   observations: base pose/twist, joint encoders, EE pose, EE target, gripper
-  state, measured contact (layout v3), and derived target errors.
+  state/target, measured contact, and derived target errors. Layout v4 adds the commanded
+gripper target to the v3 contact channels.
 - **MuJoCo first.** Every robot is trained and gated against its own direct
   plant. RoboCasa/Robosuite comes second, behind the same `WbcBackend` contract.
 - **A benchmark path.** The long-term target is to run these policies as the
@@ -38,7 +39,7 @@ The contract is `EmbodimentProfile` + `WbcObservation` + `WbcAction`
 joint order, torque limits, and identified servo gains. The observation layout
 is versioned; v3 added measured contact channels (presence, flag, EE-frame
 wrench). A v2 checkpoint is migrated on load by remapping the first-layer
-observation columns and zeroing the new contact inputs.
+observation columns and zeroing the newly added contact/gripper-target inputs.
 
 Training has three stages:
 
@@ -86,7 +87,7 @@ with the exact profile fingerprint and (after migration) the observation layout.
 ## 4. Results
 
 Held-out clean suite: 50 episodes per subtask, three fresh seeds. All rows are
-from the strict re-gate: v2 checkpoints are migrated to layout v3 (zero contact
+from the strict re-gate: v2/v3 checkpoints are migrated to layout v4 (zero contact
 inputs, gripper-force columns rescaled), collisions are measured, and tracking
 is the settled-window mean. The previously reported Panda clean 0.996 row was
 not reproducible from the shipped checkpoint; it re-gates to **0.942**.
@@ -176,7 +177,8 @@ needs:
   direct Mars and Panda plants already had measured contact paths.
 - **Checkpoint compatibility.** Layout v3 added contact channels. `WbcPPO.load`
   migrates v2 checkpoints by remapping the first-layer observation columns and
-  zeroing the new contact inputs; migrated checkpoints are marked in metadata.
+  zeroing the newly added contact/gripper-target inputs; migrated checkpoints are
+  marked in metadata.
 - **Seeding and aliases.** `dagger_train` seeds before constructing the actor;
   `default_subtasks` canonicalizes `mars`, `rb_y1`, `panda_omron`, etc.
 - **Resume and CLI checks.** Periodic checkpoints carry the task contract and a
@@ -228,7 +230,7 @@ Training commands and per-robot hyperparameters are recorded in
    skill/TAMP layer emits EE targets and gripper commands for grasp, lift, and
    place phases. PandaOmron is the native path; Stretch/Sourccey/RB-Y1 need the
    merged-scene adapter.
-2. **Contact and carry.** The layout-v3 contact channels are measured plant
+2. **Contact and carry.** The layout-v4 contact/gripper-target channels are measured plant
    state; shelf entry and payload carry still need occupancy and contact-rich
    training cases.
 3. **Family gates.** Promote a policy only when free-space, base+arm,

@@ -177,6 +177,8 @@ class RoboCasaPandaBackend:
             ee_body=_EE_BODY,
             finger_bodies=("gripper0_right_leftfinger", "gripper0_right_rightfinger"),
             support_bodies=("mobilebase0_fixed_support", "mobilebase0_support"),
+            force_sensor="gripper0_right_force_ee",
+            torque_sensor="gripper0_right_torque_ee",
         )
         self.collision_measured = True
 
@@ -438,6 +440,7 @@ class RoboCasaPandaBackend:
             position=(float(self.data.qpos[self._torso_q]),),
             velocity=(float(self.data.qvel[self._torso_v]),),
             torque=(float(self.data.qfrc_actuator[self._torso_v]),),
+            target=(float(self._torso_target),),
         )
         arm = ArmObservation(
             name="right",
@@ -451,6 +454,7 @@ class RoboCasaPandaBackend:
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
                 force=contact.finger_force,
+                target=tuple(float(v) for v in self._grip_command),
             ),
             contact=contact.contact,
         )
