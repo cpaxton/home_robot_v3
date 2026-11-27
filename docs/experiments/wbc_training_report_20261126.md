@@ -178,7 +178,15 @@ RoboCasa task sweep with the wide contact checkpoint: **0/3**. The canned food
 reached the retreat phase with 0.78 m displacement, but did not satisfy the
 final placement/retreat checks; mango and dish brush were `grasp_failed`. This is
 better than the free-space policy's no-transport 0/3, but it is still not task
-success and is not a benchmark claim. A fresh
+success and is not a benchmark claim.
+
+**Full carry from wide (5-episode screen):** init **0.60**, teacher BC **0.40**,
+DAgger iter1 **1.00**, iter2 **0.40**. The iter1 checkpoint is
+`/tmp/opencode/wbc_contact_carry_full_from_wide/policy_iter1.pt`: 5/5 success,
+**2.84 cm** mean tracking, **7.08 cm** settled max, 0 collisions. This is the
+first full-carry (±0.35 rad, 0.1–1.2 kg, base+arm) pass on the screen. The
+settled max is above the 5 cm gate, so the 10-episode joint-torque ablation and
+RoboCasa task sweep are in flight before any promotion. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
