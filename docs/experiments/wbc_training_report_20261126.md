@@ -172,7 +172,13 @@ checkpoint is promoted.
 The next run is a mixed suite (`arm`, `base`, `combined`, `carry_wide`) trained
 from the wide checkpoint, to keep the free-space/base skills and reduce
 collisions instead of overfitting a carry-only task. A full-carry ramp from the
-wide checkpoint and a RoboCasa task sweep are also in flight. A fresh
+wide checkpoint is also in flight.
+
+RoboCasa task sweep with the wide contact checkpoint: **0/3**. The canned food
+reached the retreat phase with 0.78 m displacement, but did not satisfy the
+final placement/retreat checks; mango and dish brush were `grasp_failed`. This is
+better than the free-space policy's no-transport 0/3, but it is still not task
+success and is not a benchmark claim. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
