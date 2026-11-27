@@ -78,7 +78,134 @@ object/cabinet targets, grasp/lift/place sequences, and obstacle/contact cases
 still need a task-target sweep and, if their tail crosses 2 cm, a DAgger
 fine-tune from `loaded_data.npz`.
 
+## Task-target bridge (development)
+
+[`wbc_robocasa_task.py`](../../src/emet/rl/manipulation/wbc_robocasa_task.py)
+derives task poses from the loaded scene:
+
+- object pose from `obj_main` and its bounding-box long axis;
+- a top-down grasp orientation with the finger-closing axis across the short
+  side;
+- pregrasp, grasp, lift, place, and retreat joint targets from damped
+  least-squares position IK on the composed Panda arm;
+- the lowest open cabinet shelf as the place target.
+
+[`scripts/sweep_wbc_robocasa_tasks.py`](../../scripts/sweep_wbc_robocasa_tasks.py)
+runs the full phase sequence with the teacher or a policy, records per-phase
+tracking, object displacement, collisions, and the env's own
+`_check_success()`, and exports policy observations plus teacher labels.
+
+```bash
+uv run python scripts/sweep_wbc_robocasa_tasks.py \
+  --teacher --episodes 3 --layout 1 --style 1 --backoff 0.0 \
+  --output /tmp/opencode/wbc_task_sweep_teacher
+uv run python scripts/sweep_wbc_robocasa_tasks.py \
+  --checkpoint logs/eval/wbc_multirobot_20261126/strict/pandaomron_robust/best.pt \
+  --episodes 3 --layout 1 --style 1 --backoff 0.0 --save-data \
+  --output /tmp/opencode/wbc_task_sweep_policy
+```
+
+Development result (10 teacher seeds, one scene):
+
+- **4/10 task success** (mango, canned food, condiment bottle, lemon wedge).
+- The previous "5 closed cabinets" were mostly open: the two-door fixtures had
+  one door at 73–90% while `Fixture.is_open` requires every door ≥90%. The
+  bridge now treats a cabinet as usable when any door is ≥70%, and records
+  `door_states`. This recovered one success (lemon wedge) and two attempts.
+- Failures: 4 `grasp_failed` (dish brush, bell pepper, baguette,
+  oil/vinegar bottle) and 2 `slip` (reamer, pizza cutter).
+- The 3-seed detail below shows where tracking breaks; the full 10-seed run
+  also contains the four successes.
+- Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, centered grasp **0.6 cm**,
+  lift **8.7–10.2 cm**, preplace **12–19 cm**, place **3.4–11.6 cm**, release
+  **1.7–2.6 cm**; task success **0/3**. Object displacement was 5.3 and 16.2 cm.
+- Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, grasp **15–20 cm**,
+  centered grasp **4–7 cm**, lift **29–98 cm**, place **79–117 cm**; task
+  success **0/3**.
+- The 10-episode teacher sweep moved the object 0–65 cm and placed four
+  objects successfully. The latest force-bearing policy-mode
+  loaded data has 510 actor-visited observations and teacher labels
+  (`/tmp/opencode/wbc_task_sweep_policy_force/loaded_task_data.npz`); the task
+  export also includes measured finger forces, wrist wrenches, contact flags,
+  teacher grasp state, relative slip, and a phase-derived `intents` label
+  (`reach`, `close`, `lift`, `transport`, `place`, `release`, `retreat`). The
+  intent is teacher-side context; the actor observation layout is unchanged and
+  is not yet intent-conditioned. An earlier 728-sample set preceded measured
+  contact.
+- Per-episode diagnostics now separate the failure modes. In the 3-episode
+  detailed run, the dish brush was grasped at close but lost during lift; the
+  canned food was grasped and lifted ~12 cm but was not inside the cabinet at
+  release. `object_inside_cabinet` and `gripper_far` are recorded independently.
+- A 728-sample BC fine-tune (loss 0.017) was tried; the subsequent 3-episode
+  policy task sweep was still **0/3** and tracked worse after pregrasp. The
+  free-space actor is not a task policy yet; do not promote the fine-tune.
+- A second BC run used only the **four successful teacher episodes** (1,354
+  samples, all intents/phases, val MSE 0.039). It was also **0/3** and tracked
+  much worse: grasp-center errors reached **0.9–1.4 m** on mango and canned
+  food. Teacher-only BC is not the missing piece; the policy needs DAgger from
+  its own visited states and contact/intent conditioning, and the teacher still
+  fails 6/10 rollouts. Do not promote this checkpoint.
+- **Task DAgger (negative):** two rounds of 5 policy episodes, anchored with the
+  1,354 successful teacher samples and trained from the robust checkpoint.
+  Round 0 aggregated 2,237 samples (9 episodes), BC loss 0.321, eval **0/3**.
+  Round 1 aggregated 3,323 samples (14 episodes), BC loss 0.351, eval **0/3**.
+  Grasp/center tracking stayed at 5–28 cm and no policy episode grasped the
+  object. The data is useful (3,323 policy-visited states with teacher labels,
+  forces, contact, and intents), but the free-space actor still cannot use
+  contact and the off-policy teacher labels are large. Do not promote either
+  DAgger checkpoint. The next gate is a contact-aware layout retrain or a
+  higher-success teacher, not more DAgger on this actor.
+- The teacher now closes until measured finger force (8 N threshold) or a
+  grasp check, and records slip/terminal conditions. This is the start of
+  force-conditioned labelling; the actor still has zeroed contact inputs in
+  the promoted checkpoints.
+
+**Interpretation:** pose extraction, IK target generation, pregrasp tracking,
+finger centering, force-aware closure, and four full counter-to-cabinet
+transfers work. The remaining failures are long/thin or wide objects the
+parallel jaw cannot hold, slip during transport, and collision-aware approach.
+This is a task-target scaffold with a 40% teacher success on one scene, not a
+benchmark result.
+
+**Generic grasp experiment (negative):** we tested collision-geom grasp
+candidates (top-down over each object part, multiple yaw, bottom/center/rim
+heights, front-side grasps, 6-DOF IK, and closed-loop visual servoing). The
+candidate selector found solid patches on the brush and avoided the bbox gap,
+but the arm could not track several side/lower targets without pushing the
+object, and the fallback chain regressed the simpler bbox path (0/3 in the
+three-seed check). It is not merged.
+
+A smaller retry was also tested: if the primary bbox close fails, retry once on
+the nearest solid collision patch (brush head, oil-bottle cap). The arm still
+stopped 1–3 cm above short patches at the counter, and the brush retry pushed
+the object to the side; the three-seed check stayed 2/3 with no new success. It
+is not merged either. The next grasp gate is a collision-aware approach and a
+retained-grasp check, not more candidate scoring.
+
+**Open/close prototype:** a closed left cabinet door was opened by a
+closed-gripper push servo that follows the handle arc about the true hinge.
+Joint PD held the height and reached **58% open** before the fixed base ran out
+of reach. A prototype base shift toward the moving handle reached **66%**, but
+the base still needs a proper follow controller to finish the 90% gate.
+Reproduce with:
+
+```bash
+uv run python scripts/probe_wbc_robocasa_fixture.py \
+  --output /tmp/opencode/wbc_fixture_probe
+# prototype base shift:
+uv run python scripts/probe_wbc_robocasa_fixture.py --follow-base \
+  --iterations 60 --output /tmp/opencode/wbc_fixture_probe_follow
+```
+
+This is a prototype, not a learned open/close skill, and it is not used by the
+task sweep. The task bridge still uses the scene's door state and does not claim
+fixture manipulation.
+
+The 4/10 teacher artifact is
+`/tmp/opencode/wbc_task_teacher10_door/task_sweep.json`.
+
 ## Smoke result
+
 
 ```bash
 uv run python scripts/smoke_wbc_robocasa_panda.py \
@@ -108,13 +235,11 @@ scene contact/placement and the approximate torso hold.
 
 ## Next
 
-> **Follow-up (2026-11-27):** Items 1 and 3 below are now implemented and verified in [`robocasa_pandaomron_pick_place_20261127.md`](robocasa_pandaomron_pick_place_20261127.md) (`11 / 11` dynamic-base privileged teacher `env._check_success()` across `PickPlaceCounterToSink` and `PickPlaceCounterToCabinet`, plus `--save-rollout` export for task-posture DAgger).
+The later [dynamic-base qualification](robocasa_pandaomron_pick_place_20261127.md)
+recorded 11/11 privileged teacher successes across sink and cabinet tasks. The
+fixed-base bridge above supports task-target sweeps and DAgger collection. Its
+earlier policy checkpoints remain unpromoted.
 
-1. Add a task-target bridge from the benchmark/TAMP skill layer into
-   `set_ee_target` (object grasp, lift, place), then sweep those Cartesian
-   targets with the Cartesian teacher.
-2. Run a small RoboCasa DAgger/fine-tune from `loaded_data.npz` if the
-   task-target tail crosses the 2 cm tolerance.
-3. Wire base goals so the WBC can approach the counter instead of using a fixed
-   backoff.
-4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.
+1. Evaluate task-posture training with aligned observation and teacher-action pairs.
+2. Improve the fixed-base grasp and retention path for the objects that failed its sweep.
+3. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.

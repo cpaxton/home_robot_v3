@@ -371,9 +371,31 @@ plants resolve them through explicit alias maps and verify the result.
 - **Teacher:** joint-space PD for sampled postures; Cartesian PD through a
   finite-difference EE Jacobian for task targets. Privileged only.
 - **Reach results:** 8 cm smoke = 1.31 cm / 0.029 rad; 20-episode joint-target
-  sweep = 20/20, mean 1.13 cm, p95 1.67 cm, max 1.70 cm.
-- **Not task success:** object/receptacle targets, grasp/lift/place sequences,
-  base goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
+  sweep = 20/20, mean 1.13 cm, p95 1.67 cm, max 1.70 cm; Cartesian-offset
+  sweep = 20/20, mean 0.87 cm, p95 1.54 cm.
+- **Task-target bridge:** `wbc_robocasa_task.py` derives object/cabinet poses and
+  pregrasp/grasp/lift/place/retreat targets via IK; `sweep_wbc_robocasa_tasks.py`
+  runs the sequence with teacher or policy and records task success. A 10-episode
+  teacher sweep is **4/10** (mango, canned food, condiment bottle, lemon wedge).
+  The earlier "closed cabinets" were two-door fixtures with one door already
+  73–90% open; the bridge now accepts any door ≥70% and records `door_states`.
+  Pregrasp and centered grasp track; the teacher closes until measured finger
+  force and records slip/terminal state plus phase-derived intent labels.
+  Failures are 4 grasp failures and 2 slips. The free-space policy still gives 0/3; a 728-sample BC fine-tune also
+  gave 0/3 and worse post-pregrasp tracking. This is a 40% teacher result on
+  one scene, not a benchmark result.
+- **Not task success:** object/cabinet place planning, grasp retention, base
+  goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
+
+Use the CLI to run either RoboCasa experiment from Emet. Both routes use
+privileged task targets. The fixed-base sweep exports pre-step observations
+with their same-step expert labels. Regenerate earlier task-bridge archives
+before using them for BC or DAgger.
+
+```bash
+MUJOCO_GL=egl uv run emet wbc-robocasa pick-place --teacher --obj-groups can --json-out /tmp/panda-sink.json
+MUJOCO_GL=egl uv run emet wbc-robocasa sweep --teacher --episodes 1 --save-data --output /tmp/panda-cabinet-sweep
+```
 
 ## 7. Troubleshooting
 
@@ -395,12 +417,12 @@ plants resolve them through explicit alias maps and verify the result.
 
 ## 8. Plan
 
-1. Run the Cartesian object/cabinet-target sweep (nearby offsets already pass
-   20/20 at p95 1.54 cm; object/cabinet targets and obstacles are farther).
-2. If its tail crosses the 2 cm tolerance, fine-tune from `loaded_data.npz` with
-   the privileged teacher and re-run both the sweep and the direct held-out
-   gate.
-3. Wire the task-target bridge: object grasp, lift, place, and base goals.
+1. Fix the task-target bridge's collision-aware base/cabinet approach and
+   place path; the current teacher loses the place target (31–34 cm).
+2. Fine-tune from the 510-sample force-bearing task data and re-run the task
+   sweep; the free-space policy degrades after pregrasp (15–20 cm at grasp).
+3. Improve grasp retention; the teacher reaches the object but does not
+   consistently lift it.
 4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1
    RoboCasa scenes.
 5. Add genuine hard-posture data after #267; train and gate the family.

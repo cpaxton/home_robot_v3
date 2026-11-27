@@ -103,12 +103,7 @@ def test_reanchor_origin_preserves_world_ee_target():
 
 
 def test_topdown_grasp_planner_slices_8_vertex_box_and_aligns_eef_x_to_narrow_axis():
-    import sys
-    from pathlib import Path
-
-    scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
-    sys.path.insert(0, str(scripts_dir))
-    from run_wbc_robocasa_pick_place import _BOX_CORNERS, _BOX_EDGE_INDICES, _plan_topdown_grasp
+    from emet.app.wbc_robocasa_pick_place import _BOX_CORNERS, _BOX_EDGE_INDICES, _plan_topdown_grasp
 
     # 8-vertex bar of soap (10 cm x 5 cm x 3.2 cm) rotated 37 deg on a z=0.92 m counter;
     # zero vertices exist between z=0.920 and z=0.952, so edge-plane slicing is required.

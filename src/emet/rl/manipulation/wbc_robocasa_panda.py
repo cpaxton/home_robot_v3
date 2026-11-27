@@ -39,7 +39,7 @@ from emet.controller.manipulation.wbc_profiles import (
     resolve_body_name,
     resolve_joint_names,
 )
-from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
+from emet.rl.manipulation.wbc_contact import ContactReading, MuJoCoContactSensor
 from emet.rl.manipulation.wbc_pandaomron import _READY_Q, _READY_TORSO
 
 _ARM_JOINTS = tuple(f"robot0_joint{i}" for i in range(1, 8))
@@ -88,6 +88,7 @@ class RoboCasaPandaBackend:
         base_backoff: float = 0.25,
         target_mode: str = "offset",
         target_range: float = 0.15,
+        observe_contact: bool = False,
     ) -> None:
         self.env = env
         self.profile = profile or pandaomron_sim_profile()
@@ -100,6 +101,7 @@ class RoboCasaPandaBackend:
         self.base_backoff = float(base_backoff)
         self.target_mode = str(target_mode)
         self.target_range = float(target_range)
+        self.observe_contact = observe_contact
         if self.target_mode not in {"offset", "joint"}:
             raise ValueError("target_mode must be 'offset' or 'joint'")
         if self.base_backoff < 0:
@@ -549,7 +551,7 @@ class RoboCasaPandaBackend:
         contact = self._contact_sensor.read(self.data)
         self._elapsed += self.control_dt
         return (
-            self._observation(),
+            self._observation(contact=contact),
             invalid,
             {
                 "contact_force": contact.collision_force,
@@ -791,7 +793,11 @@ class RoboCasaPandaBackend:
         v_world = qvel[0] * slide_0 + qvel[1] * slide_1 + qvel[2] * np.array([-lever[1], lever[0]], dtype=np.float64)
         return (float(np.dot(v_world, forward_axis)), float(np.dot(v_world, left_axis)), float(qvel[2]))
 
-    def _observation(self) -> WbcObservation:
+    def _observation(self, *, contact: ContactReading | None = None) -> WbcObservation:
+        if self.observe_contact and contact is None:
+            contact = self._contact_sensor.read(self.data)
+        if not self.observe_contact:
+            contact = None
         torso = JointGroupObservation(
             name="torso",
             position=(float(self.data.qpos[self._torso_q]),),
@@ -809,7 +815,9 @@ class RoboCasaPandaBackend:
             gripper=GripperObservation(
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
+                force=() if contact is None else contact.finger_force,
             ),
+            contact=None if contact is None else contact.contact,
         )
         base_twist = self._joint_vel_to_body_twist()
         return WbcObservation(

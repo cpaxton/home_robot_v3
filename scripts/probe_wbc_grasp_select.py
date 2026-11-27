@@ -14,14 +14,11 @@ gate, and measures object rise during a slow lift.
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run_wbc_robocasa_pick_place import (  # noqa: E402
+from emet.app.wbc_robocasa_pick_place import (
     _body_geometry,
     _body_T,
     _plan_topdown_grasp,
@@ -29,11 +26,11 @@ from run_wbc_robocasa_pick_place import (  # noqa: E402
     _pose_from_T,
 )
 
-from emet.controller.manipulation.torque_adapter import TorqueAdapter  # noqa: E402
-from emet.controller.manipulation.wbc_contract import action_from_normalized_vector  # noqa: E402
-from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile  # noqa: E402
-from emet.controller.task.tamp.grasp_frames import top_down_grasp_T  # noqa: E402
-from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend  # noqa: E402
+from emet.controller.manipulation.torque_adapter import TorqueAdapter
+from emet.controller.manipulation.wbc_contract import action_from_normalized_vector
+from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
+from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 
 HAND_BODY = "robot0_right_hand"
 
