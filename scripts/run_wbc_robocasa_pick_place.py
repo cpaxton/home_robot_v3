@@ -129,6 +129,11 @@ def _choose_grasp_z(
     candidate_top = high - 0.015
     candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
     center_z = 0.5 * (low + high)
+    # Tall, narrow objects (cans, bottles) are most stable grasped at the
+    # center. Sparse side meshes make the local cross-section unreliable.
+    if (high - low) > 1.2 * max_width and max_width <= opening_m - margin_m:
+        center_xy = 0.5 * (points[:, :2].min(axis=0) + points[:, :2].max(axis=0))
+        return center_z, center_xy, max_width, []
     table: list[tuple[float, float]] = []
     valid: list[tuple[float, np.ndarray, float]] = []
     best: tuple[float, np.ndarray, float] | None = None
@@ -387,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lift-height", type=float, default=0.03, help="verification lift height")
     parser.add_argument("--min-lift-m", type=float, default=0.01, help="object rise required to accept the grasp")
     parser.add_argument("--transport-height", type=float, default=0.18, help="carry height above the grasp")
+    parser.add_argument("--carry-speed", type=float, default=0.04, help="bounded lift speed for the carry raise")
     parser.add_argument("--transport-steps", type=int, default=60, help="kinematic base ramp steps for transport")
     parser.add_argument("--place-height", type=float, default=0.15, help="EEF height above the receptacle base")
     parser.add_argument("--lift-speed", type=float, default=0.02, help="Cartesian lift speed in m/s")
@@ -592,19 +598,29 @@ def main(argv: list[str] | None = None) -> int:
             print("GRASP FAILED: object was not retained through the lift", flush=True)
             return 1
 
-        # Raise the carried object to the transport height before moving the base.
+        # Raise the carried object to the transport height with a bounded speed.
+        carry_steps = max(1, int(round(args.transport_height / args.carry_speed / wbc.control_dt)))
+        for index in range(1, carry_steps + 1):
+            position = grasp_pos + np.array(
+                [0.0, 0.0, args.transport_height * (index / carry_steps)]
+            )
+            backend.set_ee_target(_pose(position, grasp_quat))
+            _, _, terminated, truncated, _ = wbc.step(action())
+            if terminated or truncated:
+                break
+        carried, _ = _body_pose(env, args.object_body)
+        carry_left, carry_right = backend.finger_target_forces(resolved_object)
+        print(
+            f"lift_to_transport: steps={carry_steps} object={np.round(carried, 3).tolist()} "
+            f"left_N={carry_left:.2f} right_N={carry_right:.2f}",
+            flush=True,
+        )
+        if carry_left < args.grasp_force_n or carry_right < args.grasp_force_n:
+            print("GRASP FAILED: object was not retained while raising to transport", flush=True)
+            return 1
+        lift = grasp_pos + np.array([0.0, 0.0, args.transport_height])
         T_hand_transport = T_hand_grasp.copy()
         T_hand_transport[2, 3] += args.transport_height
-        backend.set_ee_target(_pose_from_T(T_hand_transport))
-        _run_until(
-            wbc,
-            backend,
-            action_source=action,
-            target_tolerance_m=args.tolerance,
-            timeout_s=6.0,
-            label="lift_to_transport",
-        )
-        lift = T_hand_transport[:3, 3].copy()
 
         # Move the base to the receptacle while holding the arm target.
         place_base = base_target_for(receptacle_pos[:2])
