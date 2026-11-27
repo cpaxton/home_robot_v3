@@ -46,6 +46,13 @@ def _body_pose(env: Any, body: str) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
+def _fixture_pos(env: Any, attr: str) -> np.ndarray | None:
+    fixture = getattr(env, attr, None)
+    if fixture is None or not hasattr(fixture, "pos"):
+        return None
+    return np.asarray(fixture.pos, dtype=np.float64).reshape(3)
+
+
 def _pose(position: np.ndarray, quat: np.ndarray) -> tuple[float, ...]:
     return tuple(float(v) for v in np.r_[position, quat])
 
@@ -67,12 +74,18 @@ def _run_base(
     while steps < limit:
         wbc.step(action_source())
         base = np.asarray(backend._base_pose(), dtype=np.float64)
-        error = float(np.linalg.norm(base[:2] - target[:2])) + abs(float(np.arctan2(np.sin(base[2] - target[2]), np.cos(base[2] - target[2]))))
+        xy_error = float(np.linalg.norm(base[:2] - target[:2]))
+        yaw_error = abs(float(np.arctan2(np.sin(base[2] - target[2]), np.cos(base[2] - target[2]))))
+        error = max(xy_error, 0.25 * yaw_error)
         good = good + 1 if error <= tolerance_m else 0
         steps += 1
         if good >= settle_steps:
             break
-    print(f"{label}: steps={steps} base_error={error:.4f} base={np.round(backend._base_pose(), 3).tolist()}", flush=True)
+    print(
+        f"{label}: steps={steps} xy_error={xy_error:.4f} yaw_error={yaw_error:.4f} "
+        f"base={np.round(backend._base_pose(), 3).tolist()}",
+        flush=True,
+    )
 
 
 def _run_until(
@@ -178,19 +191,26 @@ def main(argv: list[str] | None = None) -> int:
         observation, _ = wbc.reset(seed=0)
         object_pos, _ = _body_pose(env, args.object_body)
         receptacle_pos, _ = _body_pose(env, args.receptacle_body)
+        fixture_pos = _fixture_pos(env, "sink")
+        if fixture_pos is not None:
+            receptacle_pos = fixture_pos
         current_pose = backend._observation().arms[0].ee_pose
         _, current_rot = backend._world_pose(current_pose)
         tool_quat = current_rot.as_quat()
 
+        from emet.controller.task.tamp.task_search import approach_pose_for_object_xy
+
         base_world = backend._world_base_pose()
-        direction = np.asarray(base_world[:2]) - object_pos[:2]
-        norm = float(np.linalg.norm(direction))
-        if norm < 1e-6:
-            direction = np.array([1.0, 0.0])
-            norm = 1.0
-        base_target_xy = object_pos[:2] + direction / norm * args.base_standoff
-        yaw = float(np.arctan2(object_pos[1] - base_target_xy[1], object_pos[0] - base_target_xy[0]))
-        backend.set_world_base_target((float(base_target_xy[0]), float(base_target_xy[1]), yaw))
+        base_target = approach_pose_for_object_xy(
+            object_pos[:2], standoff=args.base_standoff, mode="front", arm="right"
+        )
+        backend.set_world_base_target(tuple(float(v) for v in base_target))
+        print(
+            f"object={args.object_body} pos={np.round(object_pos, 3).tolist()} "
+            f"receptacle={args.receptacle_body} pos={np.round(receptacle_pos, 3).tolist()} "
+            f"base_world={np.round(base_world, 3).tolist()} base_target={np.round(base_target, 3).tolist()}",
+            flush=True,
+        )
         backend.set_ee_target(_pose(np.asarray(current_pose[:3]) + np.array([0.0, 0.0, 0.0]), tool_quat))
         _run_base(wbc, backend, action_source=action, timeout_s=10.0, label="base_approach")
 
@@ -207,14 +227,10 @@ def main(argv: list[str] | None = None) -> int:
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="lift")
 
         # Move the base to the receptacle while holding the arm target.
-        direction = np.asarray(base_world[:2]) - receptacle_pos[:2]
-        norm = float(np.linalg.norm(direction))
-        if norm < 1e-6:
-            direction = np.array([1.0, 0.0])
-            norm = 1.0
-        place_base_xy = receptacle_pos[:2] + direction / norm * args.base_standoff
-        place_yaw = float(np.arctan2(receptacle_pos[1] - place_base_xy[1], receptacle_pos[0] - place_base_xy[0]))
-        backend.set_world_base_target((float(place_base_xy[0]), float(place_base_xy[1]), place_yaw))
+        place_base = approach_pose_for_object_xy(
+            receptacle_pos[:2], standoff=args.base_standoff, mode="front", arm="right"
+        )
+        backend.set_world_base_target(tuple(float(v) for v in place_base))
         backend.set_ee_target(_pose(lift, tool_quat))
         _run_base(wbc, backend, action_source=action, timeout_s=12.0, label="transport")
 
