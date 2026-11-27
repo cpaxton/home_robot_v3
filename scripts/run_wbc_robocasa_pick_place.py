@@ -129,11 +129,6 @@ def _choose_grasp_z(
     candidate_top = high - 0.015
     candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
     center_z = 0.5 * (low + high)
-    # Tall, narrow objects (cans, bottles) are most stable grasped at the
-    # center. Sparse side meshes make the local cross-section unreliable.
-    if (high - low) > 1.2 * max_width and max_width <= opening_m - margin_m:
-        center_xy = 0.5 * (points[:, :2].min(axis=0) + points[:, :2].max(axis=0))
-        return center_z, center_xy, max_width, []
     table: list[tuple[float, float]] = []
     valid: list[tuple[float, np.ndarray, float]] = []
     best: tuple[float, np.ndarray, float] | None = None
