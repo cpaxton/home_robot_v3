@@ -554,16 +554,32 @@ def main(argv: list[str] | None = None) -> int:
         _run_base(
             wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
         )
+        carried, _ = _body_pose(env, args.object_body)
+        carried_left, carried_right = backend.finger_target_forces(resolved_object)
+        print(
+            f"transport_check: object={np.round(carried, 3).tolist()} "
+            f"left_N={carried_left:.2f} right_N={carried_right:.2f}",
+            flush=True,
+        )
 
-        T_eef_place = T_eef_grasp.copy()
-        T_eef_place[:3, 3] = receptacle_pos + np.array([0.0, 0.0, args.place_height])
+        place_base = backend._world_base_pose()
+        place_base_yaw = float(
+            np.arctan2(receptacle_pos[1] - place_base[1], receptacle_pos[0] - place_base[0])
+        )
+        place_yaw = place_base_yaw + np.pi / 2.0
+        T_eef_place = top_down_grasp_T(
+            np.array([receptacle_pos[0], receptacle_pos[1], receptacle_pos[2] + args.place_height]),
+            z_offset_m=0.0,
+        )
+        T_eef_place[:3, :3] = Rotation.from_euler("z", place_yaw).as_matrix() @ T_eef_place[:3, :3]
         T_hand_place = T_eef_place @ eef_in_hand
         place = T_hand_place[:3, 3].copy()
-        backend.set_ee_target(_pose(place, grasp_quat))
+        place_quat = Rotation.from_matrix(T_hand_place[:3, :3]).as_quat()
+        backend.set_ee_target(_pose(place, place_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="place")
         backend.set_gripper(True)
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.05, timeout_s=2.0, label="release")
-        backend.set_ee_target(_pose(place + np.array([0.0, 0.0, 0.10]), grasp_quat))
+        backend.set_ee_target(_pose(place + np.array([0.0, 0.0, 0.10]), place_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.05, timeout_s=4.0, label="retreat")
 
         final_pos, _ = _body_pose(env, args.object_body)
