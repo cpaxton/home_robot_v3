@@ -12,6 +12,7 @@ import pytest
 from emet.rl.manipulation.wbc_robocasa_task import (
     _GRIPPER_CLOSE,
     _GRIPPER_OPEN,
+    _PHASE_INTENT,
     RoboCasaPandaTask,
 )
 
@@ -45,6 +46,13 @@ def test_cabinet_accessible_rejects_barely_open_doors():
     task.env = object()
     task.cabinet_fixture = lambda: _Fixture()
     assert not task.cabinet_accessible()
+
+
+def test_phase_intent_labels_cover_task_phases():
+    task = object.__new__(RoboCasaPandaTask)
+    for phase, intent in _PHASE_INTENT.items():
+        task.curr_phase = phase
+        assert task._intent() == intent
 
 
 def test_gripper_commands_close_both_mirrored_fingers():
