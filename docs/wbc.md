@@ -375,11 +375,12 @@ plants resolve them through explicit alias maps and verify the result.
 - **Task-target bridge:** `wbc_robocasa_task.py` derives object/cabinet poses and
   pregrasp/grasp/lift/place/retreat targets via IK; `sweep_wbc_robocasa_tasks.py`
   runs the sequence with teacher or policy and records task success. A 10-episode
-  teacher sweep is **0/10** (5 closed cabinets skipped); pregrasp and centered
-  grasp track, but one object was lost during lift and another was lifted ~12 cm
-  but not placed inside the cabinet. The free-space policy degrades after
-  pregrasp; a 728-sample BC fine-tune still gave 0/3 task success and worse
-  post-pregrasp tracking. This is a scaffold, not task success.
+  teacher sweep is **1/10** (condiment bottle; 5 closed cabinets skipped).
+  Pregrasp and centered grasp track; the teacher closes until measured finger
+  force and records slip/terminal state. Failures are 2 grasp failures, 1
+  retreat, and 1 slip. The free-space policy still gives 0/3; a 728-sample BC
+  fine-tune also gave 0/3 and worse post-pregrasp tracking. This is a first
+  task success, not a benchmark result.
 - **Not task success:** object/cabinet place planning, grasp retention, base
   goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
 
@@ -405,8 +406,8 @@ plants resolve them through explicit alias maps and verify the result.
 
 1. Fix the task-target bridge's collision-aware base/cabinet approach and
    place path; the current teacher loses the place target (31–34 cm).
-2. Fine-tune from the 728-sample loaded task data and re-run the task sweep;
-   the free-space policy degrades after pregrasp (15–20 cm at grasp).
+2. Fine-tune from the 510-sample force-bearing task data and re-run the task
+   sweep; the free-space policy degrades after pregrasp (15–20 cm at grasp).
 3. Improve grasp retention; the teacher reaches the object but does not
    consistently lift it.
 4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1

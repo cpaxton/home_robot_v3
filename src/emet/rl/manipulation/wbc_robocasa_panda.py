@@ -295,7 +295,7 @@ class RoboCasaPandaBackend:
         contact = self._contact_sensor.read(self.data)
         self._elapsed += self.control_dt
         return (
-            self._observation(),
+            self._observation(contact=contact),
             invalid,
             {
                 "contact_force": contact.collision_force,
@@ -430,7 +430,9 @@ class RoboCasaPandaBackend:
         )
         return (float(position[0]), float(position[1]), float(_wrap(world[2] - self._origin_yaw)))
 
-    def _observation(self) -> WbcObservation:
+    def _observation(self, *, contact=None) -> WbcObservation:
+        if contact is None:
+            contact = self._contact_sensor.read(self.data)
         torso = JointGroupObservation(
             name="torso",
             position=(float(self.data.qpos[self._torso_q]),),
@@ -448,7 +450,9 @@ class RoboCasaPandaBackend:
             gripper=GripperObservation(
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
+                force=contact.finger_force,
             ),
+            contact=contact.contact,
         )
         # The Omron planar slide joints are already expressed in the chassis
         # frame, matching the direct plant's base twist.

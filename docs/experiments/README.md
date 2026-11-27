@@ -19,11 +19,12 @@ data.
 writes contract torques/velocities directly into the RoboCasa sim; an 8 cm
 target tracks to 1.3 cm / 0.029 rad; 20-episode joint and Cartesian reach
 sweeps are both 20/20 (joint mean 1.13 cm/p95 1.67 cm; Cartesian mean 0.87
-cm/p95 1.54 cm). A privileged joint/Cartesian teacher and loaded data export
+cm/p95 1.54 cm). A privileged joint/Cartesian teacher and force-bearing loaded data export
 are in place. A task-target bridge now derives object/cabinet/grasp poses,
 solves pregrasp/grasp/lift/place/retreat targets, and runs teacher/policy task
-sweeps; it is **0/10 teacher task success** so far (5 closed cabinets skipped) because
-grasp retention and collision-aware cabinet placement are not reliable. Base motion and the
+sweeps; it is **1/10 teacher task success** so far (condiment bottle; 5 closed cabinets
+skipped). Force-aware closure and slip/terminal labels are in place; generic
+grasp retention and open/close remain open. Base motion and the
 merged-scene adapters for Stretch/Sourccey/RB-Y1 remain open.
 
 **Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)

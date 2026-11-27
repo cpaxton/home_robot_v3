@@ -107,18 +107,22 @@ uv run python scripts/sweep_wbc_robocasa_tasks.py \
 
 Development result (10 teacher seeds, one scene):
 
-- **0/10 task success**; 5/10 seeds had a closed cabinet and were skipped.
-- The 3 open-cabinet seeds below show where tracking breaks.
+- **1/10 task success** (condiment bottle); 5/10 seeds had a closed cabinet and were skipped.
+- Failures: 5 closed cabinets, 2 `grasp_failed`, 1 `retreat`, 1 `slip`.
+- The 3-seed detail below shows where tracking breaks; the full 10-seed run also contains the one success.
 - Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, centered grasp **0.6 cm**,
   lift **8.7–10.2 cm**, preplace **12–19 cm**, place **3.4–11.6 cm**, release
   **1.7–2.6 cm**; task success **0/3**. Object displacement was 5.3 and 16.2 cm.
 - Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, grasp **15–20 cm**,
   centered grasp **4–7 cm**, lift **29–98 cm**, place **79–117 cm**; task
   success **0/3**.
-- The 10-episode teacher sweep moved the object 0–28 cm but never placed it in
-  the cabinet. The latest policy-mode loaded data has 728 actor-visited
-  observations and teacher labels
-  (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
+- The 10-episode teacher sweep moved the object 0–28 cm and placed one
+  condiment bottle successfully. The latest force-bearing policy-mode
+  loaded data has 510 actor-visited observations and teacher labels
+  (`/tmp/opencode/wbc_task_sweep_policy_force/loaded_task_data.npz`); the task
+  export also includes measured finger forces, wrist wrenches, contact flags,
+  teacher grasp state, and relative slip. An earlier 728-sample set preceded
+  measured contact.
 - Per-episode diagnostics now separate the failure modes. In the 3-episode
   detailed run, the dish brush was grasped at close but lost during lift; the
   canned food was grasped and lifted ~12 cm but was not inside the cabinet at
@@ -126,13 +130,18 @@ Development result (10 teacher seeds, one scene):
 - A 728-sample BC fine-tune (loss 0.017) was tried; the subsequent 3-episode
   policy task sweep was still **0/3** and tracked worse after pregrasp. The
   free-space actor is not a task policy yet; do not promote the fine-tune.
+- The teacher now closes until measured finger force (8 N threshold) or a
+  grasp check, and records slip/terminal conditions. This is the start of
+  force-conditioned labelling; the actor still has zeroed contact inputs in
+  the promoted checkpoints.
 
 **Interpretation:** pose extraction, IK target generation, pregrasp tracking,
-and finger centering work. The teacher can now reach the place/release area,
-but grasp retention is not reliable and the free-space policy degrades as soon
-as the object-approach/grasp phase begins. This is a task-target scaffold, not
-task success; the next gate is grasp retention plus collision-aware
-base/cabinet planning, followed by DAgger from the loaded task data.
+finger centering, force-aware closure, and one full counter-to-cabinet transfer
+work. The remaining failures are closed fixtures, long/thin objects the current
+parallel-jaw candidate cannot hold, slip during transport, and retreat distance.
+This is a task-target scaffold with a first success, not a benchmark result; the
+next gate is generic grasp-candidate selection plus open/close and contact-aware
+training.
 
 ## Smoke result
 

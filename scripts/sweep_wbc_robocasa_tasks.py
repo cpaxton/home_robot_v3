@@ -86,6 +86,12 @@ def main(argv: list[str] | None = None) -> int:
     observations: list[np.ndarray] = []
     teacher_actions: list[np.ndarray] = []
     phases: list[str] = []
+    finger_forces: list[np.ndarray] = []
+    wrenches: list[np.ndarray] = []
+    contact_flags: list[bool] = []
+    teacher_grasped: list[bool] = []
+    teacher_slip_m: list[float] = []
+    teacher_slip_rad: list[float] = []
     episode_ids: list[int] = []
     episodes: list[dict] = []
     successes = 0
@@ -107,6 +113,9 @@ def main(argv: list[str] | None = None) -> int:
                 "gripper_far": result.gripper_far,
                 "grasped_after_close": result.grasped_after_close,
                 "grasped_after_lift": result.grasped_after_lift,
+                "terminal_condition": result.terminal_condition,
+                "max_slip_m": result.max_slip_m,
+                "max_slip_rad": result.max_slip_rad,
                 "cabinet": result.poses.cabinet_name,
                 "cabinet_open": result.poses.cabinet_open,
                 "final_ee": list(result.final_ee_pose[:3]),
@@ -122,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
                     observations.append(np.asarray(step.observation, dtype=np.float32))
                     teacher_actions.append(np.asarray(step.teacher_action, dtype=np.float32))
                     phases.append(step.phase)
+                    finger_forces.append(np.asarray(step.finger_force, dtype=np.float32))
+                    wrenches.append(np.asarray(step.wrench, dtype=np.float32))
+                    contact_flags.append(bool(step.contact_flag))
+                    teacher_grasped.append(bool(step.grasped))
+                    teacher_slip_m.append(float(step.slip_m))
+                    teacher_slip_rad.append(float(step.slip_rad))
                     episode_ids.append(episode)
             print(
                 f"episode={episode} success={result.success} phase={result.failure_phase or 'ok'} "
@@ -155,6 +170,12 @@ def main(argv: list[str] | None = None) -> int:
             observations=np.asarray(observations, dtype=np.float32),
             teacher_actions=np.asarray(teacher_actions, dtype=np.float32),
             phases=np.asarray(phases),
+            finger_forces=np.asarray(finger_forces, dtype=np.float32),
+            wrenches=np.asarray(wrenches, dtype=np.float32),
+            contact_flags=np.asarray(contact_flags, dtype=bool),
+            teacher_grasped=np.asarray(teacher_grasped, dtype=bool),
+            teacher_slip_m=np.asarray(teacher_slip_m, dtype=np.float32),
+            teacher_slip_rad=np.asarray(teacher_slip_rad, dtype=np.float32),
             episode_ids=np.asarray(episode_ids, dtype=np.int32),
         )
         (args.output / "loaded_task_data_meta.json").write_text(
@@ -170,6 +191,9 @@ def main(argv: list[str] | None = None) -> int:
                         "base_backoff": args.backoff,
                     },
                     "phases": sorted(set(phases)),
+                    "finger_force_shape": list(np.asarray(finger_forces).shape),
+                    "wrench_shape": list(np.asarray(wrenches).shape),
+                    "contact_flag_rate": float(np.mean(contact_flags)) if contact_flags else 0.0,
                 },
                 indent=2,
                 sort_keys=True,

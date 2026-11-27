@@ -67,6 +67,12 @@ class TaskStep:
     pos_err: float
     quat_err: float
     collision: bool
+    finger_force: tuple[float, ...] = ()
+    wrench: tuple[float, ...] = ()
+    contact_flag: bool = False
+    grasped: bool = False
+    slip_m: float = 0.0
+    slip_rad: float = 0.0
 
 
 @dataclass
@@ -81,6 +87,9 @@ class TaskResult:
     gripper_far: bool
     grasped_after_close: bool
     grasped_after_lift: bool
+    terminal_condition: str
+    max_slip_m: float
+    max_slip_rad: float
     final_object_pose: tuple[float, ...]
     final_ee_pose: tuple[float, ...]
 
@@ -117,6 +126,13 @@ class RoboCasaPandaTask:
         self.curr_phase = ""
         self.teacher_mode = True
         self.policy = None
+        self.force_threshold_n = 8.0
+        self.slip_threshold_m = 0.02
+        self.slip_threshold_rad = 0.20
+        self._grasp_reference: tuple[np.ndarray, Rotation] | None = None
+        self._max_slip_m = 0.0
+        self._max_slip_rad = 0.0
+        self._slip_detected = False
 
     # ------------------------------------------------------------------
     # Scene geometry
@@ -243,7 +259,7 @@ class RoboCasaPandaTask:
         preplace_position = place_position + np.asarray((0.0, -0.22, 0.05))
         preplace_q = self._solve_position(preplace_position, q0)
         place_q = self._solve_position(place_position, preplace_q)
-        retreat_q = self._solve_position(place_position + np.asarray((0.0, -0.18, 0.10)), place_q)
+        retreat_q = self._solve_position(place_position + np.asarray((0.0, -0.35, 0.15)), place_q)
 
         poses = TaskPoses(
             object_pose=obj_pose,
@@ -282,10 +298,11 @@ class RoboCasaPandaTask:
         self.curr_phase = phase
         self.backend._target_q = None
         self.backend.set_ee_target(pose)
-        if self.teacher_mode and joint:
-            # Use joint PD for targets that sit near the arm's Cartesian limits.
+        if self.teacher_mode:
+            # The teacher uses the IK solution directly; the Cartesian fallback
+            # cannot reliably cross the counter edge at these task targets.
             self.backend._target_q = np.asarray(q, dtype=np.float64).copy()
-        elif not self.teacher_mode:
+        else:
             # Keep a privileged joint target only as the DAgger label source.
             self.backend._target_q = np.asarray(q, dtype=np.float64).copy()
 
@@ -332,6 +349,10 @@ class RoboCasaPandaTask:
                 ).magnitude()
             )
         observation = self.layout.encode(next_observation) if not self.teacher_mode else None
+        contact = terms.contact
+        gripper = terms.gripper
+        grasped = self._grasped() if self.curr_phase in {"close", "lift", "preplace", "place", "release"} else False
+        slip_m, slip_rad = self._slip_metrics()
         step = TaskStep(
             phase=self.curr_phase,
             observation=observation,
@@ -340,8 +361,35 @@ class RoboCasaPandaTask:
             pos_err=pos_err,
             quat_err=quat_err,
             collision=bool(info.get("collision", False)),
+            finger_force=() if gripper is None else tuple(float(v) for v in gripper.force),
+            wrench=() if contact is None else tuple(float(v) for v in contact.wrench),
+            contact_flag=False if contact is None else bool(contact.in_contact),
+            grasped=grasped,
+            slip_m=slip_m,
+            slip_rad=slip_rad,
         )
         return step, bool(terminated)
+
+    def _close_until_force(self, q: np.ndarray, pose: tuple[float, ...]) -> list[TaskStep]:
+        self._set_phase("close", q, pose)
+        steps: list[TaskStep] = []
+        observation = self.layout.encode(self.backend._observation()) if not self.teacher_mode else None
+        for _ in range(40):
+            step, terminated = self._step_action(observation, _GRIPPER_CLOSE)
+            steps.append(step)
+            observation = step.observation
+            if step.collision or terminated:
+                break
+            force_ok = bool(step.finger_force) and min(step.finger_force) >= self.force_threshold_n
+            if force_ok:
+                for _ in range(4):
+                    step, terminated = self._step_action(observation, _GRIPPER_CLOSE)
+                    steps.append(step)
+                    observation = step.observation
+                    if step.collision or terminated:
+                        break
+                break
+        return steps
 
     def _move(
         self,
@@ -371,6 +419,35 @@ class RoboCasaPandaTask:
                         break
                 break
         return steps
+
+    def _object_relative_pose(self) -> tuple[np.ndarray, Rotation]:
+        data = self.backend.data
+        ee = np.asarray(data.xpos[self.backend._ee_body], dtype=np.float64)
+        ee_rotation = Rotation.from_matrix(np.asarray(data.xmat[self.backend._ee_body], dtype=np.float64).reshape(3, 3))
+        object_position = np.asarray(data.xpos[self.env.obj_body_id["obj"]], dtype=np.float64)
+        object_rotation = Rotation.from_matrix(
+            np.asarray(data.xmat[self.env.obj_body_id["obj"]], dtype=np.float64).reshape(3, 3)
+        )
+        return ee_rotation.inv().apply(object_position - ee), ee_rotation.inv() * object_rotation
+
+    def _set_grasp_reference(self) -> None:
+        self._grasp_reference = self._object_relative_pose()
+        self._max_slip_m = 0.0
+        self._max_slip_rad = 0.0
+        self._slip_detected = False
+
+    def _slip_metrics(self) -> tuple[float, float]:
+        if self._grasp_reference is None:
+            return 0.0, 0.0
+        position, rotation = self._object_relative_pose()
+        reference_position, reference_rotation = self._grasp_reference
+        slip_m = float(np.linalg.norm(position - reference_position))
+        slip_rad = float((rotation * reference_rotation.inv()).magnitude())
+        self._max_slip_m = max(self._max_slip_m, slip_m)
+        self._max_slip_rad = max(self._max_slip_rad, slip_rad)
+        if slip_m > self.slip_threshold_m or slip_rad > self.slip_threshold_rad:
+            self._slip_detected = True
+        return slip_m, slip_rad
 
     def _grasped(self) -> bool:
         try:
@@ -406,6 +483,9 @@ class RoboCasaPandaTask:
                 gripper_far=False,
                 grasped_after_close=False,
                 grasped_after_lift=False,
+                terminal_condition="cabinet_closed",
+                max_slip_m=0.0,
+                max_slip_rad=0.0,
                 final_object_pose=poses.object_pose,
                 final_ee_pose=poses.pregrasp_pose,
             )
@@ -423,18 +503,26 @@ class RoboCasaPandaTask:
                 self.backend.data.qpos[self.backend._arm_q],
             )
             steps += self._move("grasp_center", center_q, center_pose, _GRIPPER_OPEN)
-        # Close in place.
-        steps += self._move("close", poses.grasp_q, poses.grasp_pose, _GRIPPER_CLOSE)
+        # Close until the measured finger force or grasp check says contact.
+        steps += self._close_until_force(poses.grasp_q, poses.grasp_pose)
         grasped_after_close = self._grasped()
+        self._set_grasp_reference()
         max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
-        steps += self._move("lift", poses.lift_q, poses.lift_pose, _GRIPPER_CLOSE)
-        grasped_after_lift = self._grasped()
-        max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
-        steps += self._move("preplace", poses.preplace_q, poses.preplace_pose, _GRIPPER_CLOSE, joint=True)
-        max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
-        steps += self._move("place", poses.place_q, poses.place_pose, _GRIPPER_CLOSE, joint=True)
-        steps += self._move("release", poses.place_q, poses.place_pose, _GRIPPER_OPEN, joint=True)
-        steps += self._move("retreat", poses.retreat_q, poses.retreat_pose, _GRIPPER_OPEN, joint=True)
+        terminal_condition = "" if grasped_after_close else "grasp_failed"
+        if grasped_after_close:
+            steps += self._move("lift", poses.lift_q, poses.lift_pose, _GRIPPER_CLOSE)
+            grasped_after_lift = self._grasped()
+            max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
+            if not grasped_after_lift:
+                terminal_condition = "slip"
+            else:
+                steps += self._move("preplace", poses.preplace_q, poses.preplace_pose, _GRIPPER_CLOSE, joint=True)
+                max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
+                steps += self._move("place", poses.place_q, poses.place_pose, _GRIPPER_CLOSE, joint=True)
+                steps += self._move("release", poses.place_q, poses.place_pose, _GRIPPER_OPEN, joint=True)
+                steps += self._move("retreat", poses.retreat_q, poses.retreat_pose, _GRIPPER_OPEN, joint=True)
+        else:
+            terminal_condition = "grasp_failed"
 
         final_object = self.object_pose()
         displacement = float(np.linalg.norm(np.asarray(final_object[:3]) - np.asarray(poses.object_pose[:3])))
@@ -442,12 +530,14 @@ class RoboCasaPandaTask:
         inside, far = self._task_parts()
         failure_phase = ""
         if not success:
-            bad = [
-                step.phase
-                for step in steps
-                if step.collision or (np.isfinite(step.pos_err) and step.pos_err > self.position_tolerance_m)
-            ]
-            failure_phase = bad[-1] if bad else "task_failed"
+            failure_phase = terminal_condition or "task_failed"
+            if not terminal_condition:
+                bad = [
+                    step.phase
+                    for step in steps
+                    if step.collision or (np.isfinite(step.pos_err) and step.pos_err > self.position_tolerance_m)
+                ]
+                failure_phase = bad[-1] if bad else "task_failed"
         return TaskResult(
             success=success,
             failure_phase=failure_phase,
@@ -459,6 +549,9 @@ class RoboCasaPandaTask:
             gripper_far=far,
             grasped_after_close=grasped_after_close,
             grasped_after_lift=grasped_after_lift,
+            terminal_condition=terminal_condition,
+            max_slip_m=float(self._max_slip_m),
+            max_slip_rad=float(self._max_slip_rad),
             final_object_pose=final_object,
             final_ee_pose=self._forward_pose(np.asarray(self.backend.data.qpos[self.backend._arm_q])),
         )
