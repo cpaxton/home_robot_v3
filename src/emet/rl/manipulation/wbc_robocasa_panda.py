@@ -215,10 +215,30 @@ class RoboCasaPandaBackend:
         self._force_gripper = bool(force)
 
     def teleport_base_target(self) -> bool:
-        """Privileged teacher convenience: snap the planar base to its target."""
+        """Privileged teacher convenience: snap the planar base to its target.
+
+        The RoboCasa merged scene can carry a non-zero world offset; solve the
+        planar joints through FK instead of writing the reset-frame XYT into qpos.
+        """
         if self._target_base is None or self.data is None:
             return False
-        self.data.qpos[self._base_q] = np.asarray(self._target_base, dtype=np.float64)
+        from emet.simulation.spawn_planar import write_planar_base_xyt
+
+        rotation = Rotation.from_euler("z", self._origin_yaw)
+        world_xy = rotation.apply(
+            np.r_[np.asarray(self._target_base[:2], dtype=np.float64), 0.0]
+        )[:2] + self._origin_xy
+        world_yaw = _wrap(float(self._target_base[2]) + self._origin_yaw)
+        if not write_planar_base_xyt(
+            self.model,
+            self.data,
+            joint_names=_BASE_JOINTS,
+            world_x=float(world_xy[0]),
+            world_y=float(world_xy[1]),
+            world_yaw=world_yaw,
+            base_body_name=_BASE_BODY,
+        ):
+            return False
         self.data.qvel[self._base_v] = 0.0
         self.env.sim.forward()
         self._base_command[:] = 0.0
