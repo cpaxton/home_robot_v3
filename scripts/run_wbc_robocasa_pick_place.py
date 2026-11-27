@@ -234,6 +234,7 @@ def _run_base_ramp(
     steps: int,
     label: str,
     hold_T: np.ndarray | None = None,
+    object_body: str | None = None,
 ) -> bool:
     """Smooth kinematic base move while holding a pose in the base frame.
 
@@ -255,6 +256,15 @@ def _run_base_ramp(
         if base_hold is not None:
             backend.set_ee_target(_pose_from_T(_body_T(env, "mobilebase0_base") @ base_hold))
         _, _, terminated, truncated, _ = wbc.step(action_source())
+        if object_body is not None and index % 10 == 0:
+            carried = _body_pose(env, object_body)[0]
+            left, right = backend.finger_target_forces(_resolve_body(env, object_body))
+            print(
+                f"{label}: step={index} object={np.round(carried, 3).tolist()} "
+                f"left_N={left:.2f} right_N={right:.2f} "
+                f"grip_q={np.round(backend.data.qpos[backend._grip_q], 4).tolist()}",
+                flush=True,
+            )
         if terminated or truncated:
             break
     backend.apply_base_qpos(target_q)
@@ -609,6 +619,7 @@ def main(argv: list[str] | None = None) -> int:
                 steps=args.transport_steps,
                 label="transport",
                 hold_T=T_hand_transport,
+                object_body=args.object_body,
             )
         else:
             _run_base(
