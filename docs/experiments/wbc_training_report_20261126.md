@@ -125,7 +125,16 @@ PPO fine-tune result: 8,192 steps raised carry success from **0.20 to 0.30**
 (3/10), but mean tracking moved from **0.196 to 0.344 m** and the settled max
 reached **1.20 m**. The reward is still optimizing a mix of position, action,
 and base terms rather than the carry success gate. Do not promote this
-checkpoint; the easy-carry curriculum run is the next attempt.
+checkpoint.
+
+**Easy-carry curriculum (first contact-aware pass):** `carry_easy` (0.4–0.6 kg,
+held base, ±0.10 rad, torso 0.24–0.26 m) reaches **1.00** after teacher BC and
+remains **1.00** through two DAgger iterations on 5 eval episodes. Mean tracking
+is **1.05 cm**, settled max **3.5 cm**, and BC loss is 0.616 → 0.0016 through
+DAgger. This is the first contact/payload policy to pass a carry task, but it is
+the narrow curriculum stage, not the full `carry` gate. The checkpoint is
+`/tmp/opencode/wbc_contact_carry_easy/best.pt`; a full-carry ramp initialized
+from it and a joint-torque-masked ablation are in flight.
 
 ## 3. Robot matrix
 
