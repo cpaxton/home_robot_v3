@@ -133,8 +133,11 @@ remains **1.00** through two DAgger iterations on 5 eval episodes. Mean tracking
 is **1.05 cm**, settled max **3.5 cm**, and BC loss is 0.616 → 0.0016 through
 DAgger. This is the first contact/payload policy to pass a carry task, but it is
 the narrow curriculum stage, not the full `carry` gate. The checkpoint is
-`/tmp/opencode/wbc_contact_carry_easy/best.pt`; a full-carry ramp initialized
-from it and a joint-torque-masked ablation are in flight.
+`/tmp/opencode/wbc_contact_carry_easy/best.pt`. A 10-episode ablation still
+passes **1.00/1.00** when wrist wrench, finger force, and joint torque are
+masked, but tracking worsens from **1.26 to 1.73 cm**. The narrow payload range
+is learnable by averaging; the full `carry` task remains the contact test. A
+full-carry ramp initialized from the easy checkpoint is in flight.
 
 ## 3. Robot matrix
 
