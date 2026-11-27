@@ -131,11 +131,12 @@ def main(argv: list[str] | None = None) -> int:
         control_freq=20,
     )
     backend = RoboCasaPandaBackend(env, base_backoff=0.45, target_mode="offset")
+    horizon_s = max(120.0, args.steps * 0.05)
     wbc = WbcGymEnv(
         backend,
-        horizon_s=max(120.0, args.steps * 0.05),
+        horizon_s=horizon_s,
         control_dt=0.05,
-        success_hold_s=1e9,
+        success_hold_s=horizon_s,
         collision_force_n=1e9,
         hold_base=False,
     )
