@@ -214,6 +214,19 @@ class RoboCasaPandaBackend:
         self._grip_command = self._gripper_target.copy()
         self._force_gripper = bool(force)
 
+    def set_gripper_target(self, values: tuple[float, float]) -> None:
+        """Hold a measured finger opening after contact.
+
+        A fully closed target keeps squeezing and can eject a free object during
+        transport; this holds the contact opening (plus a small squeeze offset).
+        """
+        target = np.asarray(values, dtype=np.float64)
+        if target.shape != (2,) or not np.isfinite(target).all():
+            raise ValueError("gripper target must contain two finite values")
+        self._gripper_target = target
+        self._grip_command = target.copy()
+        self._force_gripper = True
+
     def solve_base_target_qpos(self) -> np.ndarray | None:
         """Solve the planar qpos that realizes the current base target."""
         if self._target_base is None or self.data is None:

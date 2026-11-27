@@ -405,6 +405,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--grasp-tilt-deg", type=float, default=30.0, help="tilt from vertical for tall-object grasps")
     parser.add_argument("--descent-steps", type=int, default=60, help="steps for the final grasp descent")
     parser.add_argument("--grasp-force-n", type=float, default=1.0, help="per-finger force required to accept the grasp")
+    parser.add_argument("--grip-hold-squeeze", type=float, default=0.0005, help="inward offset for the contact hold")
     parser.add_argument("--bilateral-hold-s", type=float, default=0.9, help="bilateral contact hold before lifting")
     parser.add_argument("--lift-height", type=float, default=0.03, help="verification lift height")
     parser.add_argument("--min-lift-m", type=float, default=0.01, help="object rise required to accept the grasp")
@@ -624,6 +625,10 @@ def main(argv: list[str] | None = None) -> int:
         if not accepted:
             print("GRASP FAILED: no bilateral finger contact on the target", flush=True)
             return 1
+        measured = np.asarray(backend.data.qpos[backend._grip_q], dtype=np.float64).copy()
+        hold = measured + np.array([-args.grip_hold_squeeze, args.grip_hold_squeeze])
+        backend.set_gripper_target((float(hold[0]), float(hold[1])))
+        print(f"grip_hold: measured={np.round(measured, 4).tolist()} target={np.round(hold, 4).tolist()}", flush=True)
 
         lift_start, _ = _body_pose(env, args.object_body)
         lift_steps = 30
