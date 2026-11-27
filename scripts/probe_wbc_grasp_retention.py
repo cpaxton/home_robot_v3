@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--style", type=int, default=1)
     parser.add_argument("--object-body", default="obj_main")
     parser.add_argument("--receptacle-body", default="sink_main")
-    parser.add_argument("--base-standoff", type=float, default=0.55)
+    parser.add_argument("--base-standoffs", default="0.55,0.70,0.85")
     parser.add_argument("--lift-m", type=float, default=0.03)
     args = parser.parse_args(argv)
 
@@ -91,20 +91,79 @@ def main(argv: list[str] | None = None) -> int:
     adapter = TorqueAdapter(pandaomron_sim_profile())
     backend.reset(seed=0)
     object_pos = _body_pos(env, args.object_body)
-    base_world = backend._world_base_pose()
-    direction = np.asarray(base_world[:2]) - object_pos[:2]
-    direction /= max(float(np.linalg.norm(direction)), 1e-9)
-    target_xy = object_pos[:2] + direction * args.base_standoff
-    backend.set_world_base_target((float(target_xy[0]), float(target_xy[1]), float(np.arctan2(object_pos[1] - target_xy[1], object_pos[0] - target_xy[0]))))
-    if not backend.teleport_base_target():
-        raise RuntimeError("could not teleport base to the probe stance")
-    state_qpos = backend.data.qpos.copy()
-    state_qvel = backend.data.qvel.copy()
     current_pose = backend._observation().arms[0].ee_pose
     _, current_rot = backend._world_pose(current_pose)
     ready_quat = current_rot.as_quat()
     topdown_quat = Rotation.from_matrix(top_down_grasp_T(object_pos)[:3, :3]).as_quat()
 
+    print(f"object={args.object_body} start={np.round(object_pos, 3).tolist()}")
+    results = []
+    for standoff in (float(value) for value in args.base_standoffs.split(",") if value.strip()):
+        base_world = backend._world_base_pose()
+        direction = np.asarray(base_world[:2]) - object_pos[:2]
+        direction /= max(float(np.linalg.norm(direction)), 1e-9)
+        target_xy = object_pos[:2] + direction * standoff
+        backend.set_world_base_target(
+            (
+                float(target_xy[0]),
+                float(target_xy[1]),
+                float(np.arctan2(object_pos[1] - target_xy[1], object_pos[0] - target_xy[0])),
+            )
+        )
+        if not backend.teleport_base_target():
+            print(f"base standoff={standoff:.2f}: teleport failed", flush=True)
+            continue
+        state_qpos = backend.data.qpos.copy()
+        state_qvel = backend.data.qvel.copy()
+        for orientation, quat in (("ready", ready_quat), ("topdown", topdown_quat)):
+            for z_offset in (0.04, 0.02, 0.0, -0.02):
+                backend.data.qpos[:] = state_qpos
+                backend.data.qvel[:] = state_qvel
+                env.sim.forward()
+                backend.set_gripper(True)
+                start = _body_pos(env, args.object_body)
+                pregrasp = start + np.array([0.0, 0.0, 0.12 + z_offset])
+                grasp = start + np.array([0.0, 0.0, z_offset])
+                backend.set_ee_target(_pose(pregrasp, quat))
+                _step(backend, adapter, 40)
+                backend.set_ee_target(_pose(grasp, quat))
+                _step(backend, adapter, 30)
+                backend.set_gripper(False)
+                _step(backend, adapter, 10)
+                breakdown = backend.contact_breakdown(args.object_body)
+                contacts = _finger_target_contacts(backend, args.object_body)
+                target_error, _ = _target_error(backend)
+                finger_q = np.asarray(backend.data.qpos[backend._grip_q], dtype=np.float64).copy()
+                before_lift = _body_pos(env, args.object_body)
+                backend.set_ee_target(_pose(grasp + np.array([0.0, 0.0, args.lift_m]), quat))
+                _step(backend, adapter, 20)
+                after_lift = _body_pos(env, args.object_body)
+                rise = float(after_lift[2] - before_lift[2])
+                row = {
+                    "base_standoff": standoff,
+                    "orientation": orientation,
+                    "z_offset": z_offset,
+                    "finger_target_N": float(breakdown["finger_target_N"]),
+                    "finger_environment_N": float(breakdown["finger_environment_N"]),
+                    "object_rise_m": rise,
+                    "finger_q": finger_q.tolist(),
+                    "target_error_m": target_error,
+                    "contact_z": [float(point[2]) for point in contacts],
+                    "retained": bool(breakdown["finger_target_N"] > 1.0 and rise > 0.01),
+                }
+                results.append(row)
+                print(
+                    f"base={standoff:.2f} {orientation:7s} z={z_offset:+.2f} "
+                    f"target_N={row['finger_target_N']:7.2f} env_N={row['finger_environment_N']:7.2f} "
+                    f"rise={rise:+.4f} err={target_error:.4f} "
+                    f"contact_z={np.round(row['contact_z'], 3).tolist() if row['contact_z'] else []} "
+                    f"object_z={start[2]:.3f} retained={row['retained']}",
+                    flush=True,
+                )
+    retained = [row for row in results if row["retained"]]
+    print("BEST", retained[0] if retained else None)
+    backend.close()
+    return 0 if retained else 1
     print(f"object={args.object_body} start={np.round(object_pos, 3).tolist()} base={np.round(backend._base_pose(), 3).tolist()}")
     results = []
     for orientation, quat in (("ready", ready_quat), ("topdown", topdown_quat)):
