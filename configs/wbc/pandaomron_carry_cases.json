@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "contact": "required",
+      "family": "carry_payload",
+      "gate": {
+        "max_collision_rate": 0.0,
+        "max_duration_s": 8.0,
+        "max_tracking_error_m": 0.05,
+        "min_success": 0.75
+      },
+      "id": "pandaomron.carry_payload.direct",
+      "notes": "direct-plant payload carry; 0.1-1.2 kg, base+arm, +/-0.35 rad; contact-aware layout v4 checkpoint",
+      "occupancy": "none",
+      "robot": "pandaomron",
+      "source": "wbc_dagger contact curriculum carry",
+      "split": "test",
+      "status": "active"
+    }
+  ],
+  "profile": "pandaomron_sim",
+  "robot": "pandaomron",
+  "schema_version": 1
+}
