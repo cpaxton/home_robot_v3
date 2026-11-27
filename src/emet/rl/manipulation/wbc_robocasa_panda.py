@@ -377,6 +377,40 @@ class RoboCasaPandaBackend:
             },
         )
 
+    def contact_breakdown(self, target_body: str) -> dict[str, float]:
+        """Privileged diagnostic: split finger load by target vs environment.
+
+        Never call this from the actor path; the target body is GT metadata.
+        """
+        from emet.rl.contact import solved_contact_force
+
+        target = int(self.model.body(target_body).id)
+        finger_bodies = set().union(*self._contact_sensor.finger_bodies_set)
+        out = {
+            "finger_target_N": 0.0,
+            "finger_environment_N": 0.0,
+            "robot_environment_N": 0.0,
+            "other_N": 0.0,
+        }
+        for index in range(int(self.data.ncon)):
+            contact = self.data.contact[index]
+            first = int(self.model.geom_bodyid[contact.geom1])
+            second = int(self.model.geom_bodyid[contact.geom2])
+            normal, _ = solved_contact_force(self.model, self.data, index)
+            first_finger = first in finger_bodies
+            second_finger = second in finger_bodies
+            if first_finger or second_finger:
+                other = second if first_finger else first
+                if other == target:
+                    out["finger_target_N"] += normal
+                elif other not in self._contact_sensor.robot_bodies:
+                    out["finger_environment_N"] += normal
+            elif first in self._contact_sensor.robot_bodies or second in self._contact_sensor.robot_bodies:
+                out["robot_environment_N"] += normal
+            else:
+                out["other_N"] += normal
+        return out
+
     def close(self) -> None:
         self.env.close()
 

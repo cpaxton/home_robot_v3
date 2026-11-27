@@ -348,10 +348,12 @@ def main(argv: list[str] | None = None) -> int:
         backend.set_gripper(False)
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.04, timeout_s=2.0, label="close")
         reading = backend._contact_sensor.read(backend.data)
+        resolved_object = _resolve_body(env, args.object_body)
         print(
             f"close state: fingers={np.round(backend.data.qpos[backend._grip_q], 4).tolist()} "
             f"finger_force={np.round(reading.finger_force, 3).tolist()} "
-            f"hand_force={reading.hand_force:.3f} in_contact={reading.contact.in_contact}",
+            f"hand_force={reading.hand_force:.3f} in_contact={reading.contact.in_contact} "
+            f"breakdown={ {k: round(v, 3) for k, v in backend.contact_breakdown(resolved_object).items()} }",
             flush=True,
         )
         _run_lift(
