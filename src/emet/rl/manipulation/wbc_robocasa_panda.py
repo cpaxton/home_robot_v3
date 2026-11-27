@@ -214,6 +214,16 @@ class RoboCasaPandaBackend:
         self._grip_command = self._gripper_target.copy()
         self._force_gripper = bool(force)
 
+    def teleport_base_target(self) -> bool:
+        """Privileged teacher convenience: snap the planar base to its target."""
+        if self._target_base is None or self.data is None:
+            return False
+        self.data.qpos[self._base_q] = np.asarray(self._target_base, dtype=np.float64)
+        self.data.qvel[self._base_v] = 0.0
+        self.env.sim.forward()
+        self._base_command[:] = 0.0
+        return True
+
     def set_local_ee_target(self, pose: tuple[float, ...] | None) -> None:
         """Set an end-effector target in the reset-anchored robot frame."""
         if pose is not None and len(pose) != 7:

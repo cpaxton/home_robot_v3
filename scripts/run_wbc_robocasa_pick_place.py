@@ -66,7 +66,15 @@ def _run_base(
     label: str,
     tolerance_m: float = 0.05,
     settle_steps: int = 3,
+    teleport: bool = False,
 ) -> None:
+    if teleport and backend.teleport_base_target():
+        print(
+            f"{label}: teleported base={np.round(backend._base_pose(), 3).tolist()} "
+            f"target={np.round(backend._target_base, 3).tolist()}",
+            flush=True,
+        )
+        return
     steps = 0
     good = 0
     limit = int(round(timeout_s / wbc.control_dt))
@@ -133,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--receptacle-body", default="sink_main")
     parser.add_argument("--base-standoff", type=float, default=0.55)
     parser.add_argument("--teacher", action="store_true", help="use the privileged teacher; no checkpoint")
+    parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -220,7 +229,9 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         backend.set_ee_target(_pose(np.asarray(current_pose[:3]) + np.array([0.0, 0.0, 0.0]), tool_quat))
-        _run_base(wbc, backend, action_source=action, timeout_s=10.0, label="base_approach")
+        _run_base(
+            wbc, backend, action_source=action, timeout_s=10.0, label="base_approach", teleport=args.teleport_base
+        )
 
         pregrasp = object_pos + np.array([0.0, 0.0, 0.12])
         grasp = object_pos + np.array([0.0, 0.0, 0.02])
@@ -238,7 +249,9 @@ def main(argv: list[str] | None = None) -> int:
         place_base = base_target_for(receptacle_pos[:2])
         backend.set_world_base_target(tuple(float(v) for v in place_base))
         backend.set_ee_target(_pose(lift, tool_quat))
-        _run_base(wbc, backend, action_source=action, timeout_s=12.0, label="transport")
+        _run_base(
+            wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
+        )
 
         place = receptacle_pos + np.array([0.0, 0.0, 0.12])
         backend.set_ee_target(_pose(place, tool_quat))
