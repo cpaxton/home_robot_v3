@@ -1,9 +1,10 @@
 # WBC coverage process: cases, gates, and voxel observations
 
-Status: process + registry scaffold. The free-space PandaOmron teacher and
-DAgger baseline are running; shelf/carry/occupancy cases are the next stages.
-This document is the authority for what "good enough" means and where a case
-enters training.
+Status: active. Free-space reach and base/arm gates pass for Mars, Stretch,
+Sourccey, RB-Y1, and the robust PandaOmron checkpoint. The next capability
+gap is task targets/grasping, then contact-aware training and
+shelf/carry/occupancy cases. This document is the authority for what "good
+enough" means and where a case enters training.
 
 ## Goal
 
@@ -327,8 +328,11 @@ lowered to make a checkpoint pass.
 
 ## Current state (2026-11-26)
 
-- PandaOmron teacher: 1.00 in-suite; DAgger baseline reached 1.00 at iteration
-  5 (10 evaluation episodes). Not a held-out promotion.
+- Strict 150-episode re-gate: Mars 0.955, Stretch 0.951, Sourccey 0.960,
+  RB-Y1 1.000, PandaOmron robust 0.978, PandaOmron clean 0.942. The clean Panda
+  checkpoint fails the combined base/arm gate (0.827 < 0.85) and is not
+  promoted. Collisions are measured; Stretch has one real self-collision in
+  150 combined episodes.
 - Only `failure-019` is a genuine pre-motion tracking failure (`reached=False`)
   in the current sink. The other five records were place failures carrying a
   successful grasp as `last_attempt` (`reached=True`); the exporter now rejects
@@ -338,20 +342,25 @@ lowered to make a checkpoint pass.
   1.00/0.97/0.93/1.00 in-suite) used those five invalid postures. It is not
   promotion evidence and must be rerun after a valid train/test split is
   regenerated on the layout-v3 contact observation.
-- Measured contact state is implemented for PandaOmron: wrist F/T wrench,
-  per-finger normal loads, contact flag, and self/external contact separation.
-  Observation layout version is 3; older checkpoints must be retrained.
+- Measured contact state is implemented for PandaOmron and the other direct
+  plants: wrist F/T wrench where available, per-finger normal loads, contact
+  flag, and self/external collision separation. Observation layout version is
+  3; the promoted checkpoints are still v2 policies migrated with zeroed
+  contact inputs. A layout-v3 contact-aware retrain is required.
 - Occupancy contract/layout exists; no provider or CNN encoder yet.
 - Shelf/carry/contact families are registered as planned; their gate requires
   `contact_state_rate == 1.0` once activated.
 
 ## Next milestones
 
-1. Regenerate a valid hard-posture train/test split from `reached=False`
-   tracking failures on the current sink; keep `hard_posture` planned until
-   both splits have real records.
-2. Occupancy case provider + 3D CNN actor; no-map ablation.
-3. Shelf-entry and carry cases generated from RoboCasa placements (teacher
+1. **PandaOmron RoboCasa task-target bridge:** object/receptacle/grasp poses,
+   pre-grasp/grasp/lift/place targets, base/gripper commands, and task-success
+   measurement. This is the first task-level gate.
+2. **Generate genuine hard-posture data:** collect post-#267 `reached=False`
+   failures, export train/test, retrain layout v3 with contact inputs, and
+   activate the `hard_posture` gate.
+3. Occupancy case provider + 3D CNN actor; no-map ablation.
+4. Shelf-entry and carry cases generated from RoboCasa placements (teacher
    privileged; actor map-only).
-4. RoboCasa voxel provider and adapter; run the family gate.
-5. Whole-task TAMP+WBC gate; promote the first checkpoint.
+5. RoboCasa voxel provider and merged-scene adapters; run the family gate.
+6. Whole-task TAMP+WBC gate; promote the first checkpoint.

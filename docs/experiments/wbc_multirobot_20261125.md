@@ -20,25 +20,24 @@ result.
 | RB-Y1 | `rby1_sim_profile()` | `Rby1WbcBackend` | 1.00 | 1.000 held-out (v3) |
 | PandaOmron | `pandaomron_sim_profile()` | composed Omron+Panda torque plant | 1.00 | 0.942 clean (v2, re-gated) / 0.978 robust (v3) |
 
-Teacher success is a ceiling, not a policy result. Held-out numbers use 50
-episodes per subtask on a fresh evaluation seed (30000).
+Teacher success is a ceiling, not a policy result. Held-out numbers are the
+strict 150-episode re-gate (50 episodes per subtask on seeds 30000/40000/50000),
+with measured collisions and settled tracking.
 
 | Robot | Arm subtask(s) | Base | Combined | Aggregate |
 |---|---|---|---|---|
 | Innate Mars | arm 1.00 | 1.00 | 0.92 | **0.973** |
 | Stretch 3 | arm 0.94 | 1.00 | 0.92 | **0.951** |
-| PandaOmron (clean) | right 1.00 | 1.00 | 1.00 | **1.000** (v2) |
+| PandaOmron (clean) | right 1.00 | 1.00 | 0.84–0.92 | **0.942** (re-gated) |
 | PandaOmron (robust) | right 1.00 | 1.00 | 0.94–1.00 | **0.978** (v3) |
 | RB-Y1 | left 1.00, right 1.00 | 1.00 | left 1.00, right 1.00 | **1.000** |
-| Sourccey | left 1.00, right 1.00 | 1.00 | left 0.86, right 0.90 | **0.952** |
+| Sourccey | left 1.00, right 1.00 | 1.00 | left 0.86–0.88, right 0.90–0.96 | **0.960** |
 
-The PandaOmron `best.pt` from the aggregate-only selection gate is 0.927
-because the warm-start checkpoint tied the later iterations at 1.00 in-suite.
-Iteration 2 is the clean promoted artifact (1.000 held-out); the separately
-promoted robust checkpoint is the mixed hard/clean run. The loop now prefers the
-later checkpoint on a tie.
+The clean Panda checkpoint re-gates to 0.942 and fails the strict combined
+base/arm gate (0.827 < 0.85); it is not promoted. The robust checkpoint is the
+promoted policy at 0.978.
 
-Multi-seed gate (50 episodes per subtask; aggregate success):
+Multi-seed gate (50 episodes per subtask, 150 per robot; aggregate success):
 
 | Robot | seed 30000 | seed 40000 | seed 50000 | Mean |
 |---|---|---|---|---|
@@ -137,20 +136,20 @@ most of the gap.
 ## Observed limitations
 
 - **Stretch:** the position servos are underdamped and slow; the arm and
-  combined subtasks need a 5 s / 8 s window. The promoted policy reaches 0.94
-  arm, 1.00 base, 0.92 combined; the remaining gap is arm settling, not the
-  combined task.
-- **Sourccey:** the promoted policy reaches 0.952 held-out (arms 1.00, base
-  1.00, combined_left 0.86, combined_right 0.90). The checkpoint spread is
-  wide on combined tasks, so the held-out gate remains the promotion criterion.
+  combined subtasks need a 5 s / 8 s window. The promoted policy reaches 0.927
+  arm and 0.927 combined. One real gripper/arm self-collision occurs in 150
+  combined episodes (6.85 N); the combined gate allows 1/150.
+- **Sourccey:** the promoted policy reaches 0.960 held-out (arms 1.00, base
+  1.00, combined_left 0.86–0.88, combined_right 0.90–0.96). The checkpoint
+  spread remains widest on combined_left.
 - **RB-Y1:** the packaged wheels are visual-only; the backend adds wheel
   collision proxies and a steer/wheel swerve mapping. The direct plant is a
   training proxy, not RoboCasa benchmark parity.
-- **PandaOmron:** the promoted iteration reaches 1.000 held-out on this suite,
-  but there is no RoboCasa adapter. RoboCasa's benchmark composite controller is
-  OSC/JOINT_POSITION; the adapter must map explicitly. The composed model's
-  zero arm posture self-collides with the wrist; the ready-pose reset and
-  300/30 torque gains are required at 20 Hz.
+- **PandaOmron:** the robust checkpoint reaches 0.978; the clean checkpoint is
+  0.942 and fails the combined base/arm gate. The native RoboCasa reach adapter
+  now exists, but it is not task success. The composed model's zero arm posture
+  self-collides with the wrist; the ready-pose reset and 300/30 torque gains are
+  required at 20 Hz.
 
 ## Hard-case data correction (PandaOmron)
 
@@ -161,11 +160,11 @@ entries, not failure postures. Only record 019 is a genuine reach failure
 (`reached=False`, `tracking_failed`, `error_m=0.42`).
 
 The exporter now requires an explicit `reached=False` and canonicalizes robot
-aliases (`panda_omron`, `rb_y1`, `mars`). The regenerated train split is empty;
-the one genuine case is evaluation-only (`split='test'`), and the
-`hard_posture` family is marked planned until #267 supplies genuine reach
-failures. `dagger_train --hard-cases` rejects non-train files and empty train
-files.
+aliases (`panda_omron`, `rb_y1`, `mars`). The train split is empty and the one
+genuine case is evaluation-only (`split='test'`). #267 is merged and future
+records carry `attempt.op`, but a new genuine failure population is still
+required; `hard_posture` stays planned until then. `dagger_train --hard-cases`
+rejects non-train files and empty train files.
 
 The earlier “5/5 train, 1/1 test” hard-case claim is retracted. The mixed
 checkpoint's clean-suite result is reported separately; it is not evidence for
@@ -173,26 +172,25 @@ a hard-case-trained policy.
 
 ## Next experiments
 
-1. RoboCasa adapters for RB-Y1 and PandaOmron using the same profile/checkpoint
-   contract.
-2. Broader held-out distributions (seeds, base goals, target ranges) and
-   contact/carry subtasks, which these free-space gates do not cover. The
-   hard-posture family now passes its held-out test; shelf entry, payload
-   carry, and contact recovery still need occupancy/contact observations.
-3. Consider a single embodiment-conditioned policy once per-robot policies are
-   stable; the current artifacts are one policy per robot.
+1. **PandaOmron RoboCasa task-target bridge.** Extract object/receptacle/grasp
+   poses, emit pre-grasp/grasp/lift/place EE targets plus base/gripper commands,
+   and measure task success. The native reach adapter and teacher are ready; the
+   policy is not yet trained on task-like target poses.
+2. **Failure-data closure and contact-aware retrain.** Add episode/seed/scene
+   correlation, collect new genuine `reached=False` failures, export a real
+   hard-posture split, and retrain layout v3 with measured contact channels.
+3. **Contact/carry/shelf coverage.** Add occupancy and payload cases; do not
+   claim these from the current migrated v2 checkpoints.
+4. **Merged-scene adapters** for Stretch/Sourccey/RB-Y1 after the PandaOmron
+   task bridge.
+5. Consider a single embodiment-conditioned policy once per-robot policies are
+   stable.
 
 Artifacts:
 
-- Mars: `logs/eval/wbc_dagger_features_20261125/`.
-- Stretch: `/tmp/opencode/wbc_stretch_combined/` (`best.pt`, iteration 2,
-  0.953 held-out).
-- Sourccey: `/tmp/opencode/wbc_sourccey_combined/` (`best.pt`, iteration 4,
-  0.952 held-out); earlier specialists are superseded.
-- RB-Y1: `/tmp/opencode/wbc_rby1_multi/` (`best.pt`, `heldout_50.json`).
-- PandaOmron clean: `/tmp/opencode/wbc_pandaomron_combined/policy_iter2.pt`
-  (1.000 clean held-out).
-- PandaOmron robust: `/tmp/opencode/wbc_panda_mixed_heldout/best.pt` (0.991
-  clean mean, 5/5 hard-train, 1/1 held-out hard test).
+- Strict re-gate: `logs/eval/wbc_multirobot_20261126/strict/` (checkpoints,
+  per-seed held-out JSON, manifests, coverage reports).
+- Mars train: `logs/eval/wbc_dagger_features_20261125/`.
+- PandaOmron robust train: `/tmp/opencode/wbc_panda_mixed_heldout/`.
 - The earlier dual-arm plateau runs remain under `/tmp/opencode/wbc_sourccey_full/`
   and `/tmp/opencode/wbc_rby1_full/`; they are superseded.

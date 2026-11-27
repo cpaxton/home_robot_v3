@@ -370,9 +370,16 @@ plants resolve them through explicit alias maps and verify the result.
 - **Teacher:** joint-space PD for sampled postures; Cartesian PD through a
   finite-difference EE Jacobian for task targets. Privileged only.
 - **Reach results:** 8 cm smoke = 1.31 cm / 0.029 rad; 20-episode joint-target
-  sweep = 20/20, mean 1.13 cm, p95 1.67 cm, max 1.70 cm.
-- **Not task success:** object/receptacle targets, grasp/lift/place sequences,
-  base goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
+  sweep = 20/20, mean 1.13 cm, p95 1.67 cm, max 1.70 cm; Cartesian-offset
+  sweep = 20/20, mean 0.87 cm, p95 1.54 cm.
+- **Task-target bridge:** `wbc_robocasa_task.py` derives object/cabinet poses and
+  pregrasp/grasp/lift/place/retreat targets via IK; `sweep_wbc_robocasa_tasks.py`
+  runs the sequence with teacher or policy and records task success. A 3-episode
+  development sweep is **0/3**: pregrasp tracks, but the teacher loses the
+  place target without collision-aware cabinet planning, and the free-space
+  policy degrades after pregrasp. This is a scaffold, not task success.
+- **Not task success:** object/cabinet place planning, grasp retention, base
+  goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
 
 ## 7. Troubleshooting
 
@@ -394,12 +401,12 @@ plants resolve them through explicit alias maps and verify the result.
 
 ## 8. Plan
 
-1. Run the Cartesian object/cabinet-target sweep (nearby offsets already pass
-   20/20 at p95 1.54 cm; object/cabinet targets and obstacles are farther).
-2. If its tail crosses the 2 cm tolerance, fine-tune from `loaded_data.npz` with
-   the privileged teacher and re-run both the sweep and the direct held-out
-   gate.
-3. Wire the task-target bridge: object grasp, lift, place, and base goals.
+1. Fix the task-target bridge's collision-aware base/cabinet approach and
+   place path; the current teacher loses the place target (31–34 cm).
+2. Fine-tune from the 464-sample loaded task data and re-run the task sweep;
+   the free-space policy degrades after pregrasp (15–20 cm at grasp).
+3. Improve grasp retention; the teacher reaches the object but does not
+   consistently lift it.
 4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1
    RoboCasa scenes.
 5. Add genuine hard-posture data after #267; train and gate the family.

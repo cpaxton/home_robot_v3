@@ -78,7 +78,52 @@ object/cabinet targets, grasp/lift/place sequences, and obstacle/contact cases
 still need a task-target sweep and, if their tail crosses 2 cm, a DAgger
 fine-tune from `loaded_data.npz`.
 
+## Task-target bridge (development)
+
+[`wbc_robocasa_task.py`](../../src/emet/rl/manipulation/wbc_robocasa_task.py)
+derives task poses from the loaded scene:
+
+- object pose from `obj_main` and its bounding-box long axis;
+- a top-down grasp orientation with the finger-closing axis across the short
+  side;
+- pregrasp, grasp, lift, place, and retreat joint targets from damped
+  least-squares position IK on the composed Panda arm;
+- the lowest open cabinet shelf as the place target.
+
+[`scripts/sweep_wbc_robocasa_tasks.py`](../../scripts/sweep_wbc_robocasa_tasks.py)
+runs the full phase sequence with the teacher or a policy, records per-phase
+tracking, object displacement, collisions, and the env's own
+`_check_success()`, and exports policy observations plus teacher labels.
+
+```bash
+uv run python scripts/sweep_wbc_robocasa_tasks.py \
+  --teacher --episodes 3 --layout 1 --style 1 --backoff 0.0 \
+  --output /tmp/opencode/wbc_task_sweep_teacher
+uv run python scripts/sweep_wbc_robocasa_tasks.py \
+  --checkpoint logs/eval/wbc_multirobot_20261126/strict/pandaomron_robust/best.pt \
+  --episodes 3 --layout 1 --style 1 --backoff 0.0 --save-data \
+  --output /tmp/opencode/wbc_task_sweep_policy
+```
+
+Development result (3 seeds, one scene):
+
+- 1/3 seeds had a closed cabinet and were skipped.
+- Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, lift **9.7–11.2 cm**,
+  place **31–34 cm**; task success **0/3**. Object displacement was 0–11 cm.
+- Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, then degraded to
+  **15–20 cm** at grasp and worse at lift/place; task success **0/3**.
+- The loaded task data has 464 actor-visited observations and teacher labels
+  (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
+
+**Interpretation:** pose extraction, IK target generation, and pregrasp
+tracking work. The teacher loses the place target without collision-aware
+base/cabinet planning, and the free-space policy is not trained on the object
+approach/grasp distribution. This is a task-target scaffold, not task success;
+the next gate is collision-aware base/place planning plus DAgger from the
+loaded task data.
+
 ## Smoke result
+
 
 ```bash
 uv run python scripts/smoke_wbc_robocasa_panda.py \
@@ -108,11 +153,10 @@ scene contact/placement and the approximate torso hold.
 
 ## Next
 
-1. Add a task-target bridge from the benchmark/TAMP skill layer into
-   `set_ee_target` (object grasp, lift, place), then sweep those Cartesian
-   targets with the Cartesian teacher.
-2. Run a small RoboCasa DAgger/fine-tune from `loaded_data.npz` if the
-   task-target tail crosses the 2 cm tolerance.
-3. Wire base goals so the WBC can approach the counter instead of using a fixed
-   backoff.
+1. Add collision-aware base/cabinet planning and a place approach that does not
+   require the arm to reach through the cabinet front.
+2. Run a small RoboCasa task DAgger/fine-tune from the loaded task data; the
+   free-space policy currently fails after pregrasp.
+3. Improve grasp retention: the teacher reaches the object but the object is
+   not consistently lifted, so the task bridge is not yet a task-success gate.
 4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.
