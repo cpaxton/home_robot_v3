@@ -233,8 +233,11 @@ def _plan_topdown_grasp(
             continue
         min_w_at_z = float("inf")
         for yaw in candidate_yaws:
-            close_axis = np.array([np.sin(yaw), -np.cos(yaw)], dtype=np.float64)
-            ortho_axis = np.array([np.cos(yaw), np.sin(yaw)], dtype=np.float64)
+            # In Robosuite's PandaGripper, finger separation in gripper0_right_eef
+            # is along EEF X (col 0 = [cos(yaw), sin(yaw)]), while EEF Y (col 1 =
+            # [sin(yaw), -cos(yaw)]) is perpendicular to the fingers.
+            close_axis = np.array([np.cos(yaw), np.sin(yaw)], dtype=np.float64)
+            ortho_axis = np.array([np.sin(yaw), -np.cos(yaw)], dtype=np.float64)
             p_close = pts_2d @ close_axis
             p_ortho = pts_2d @ ortho_axis
             w_close = float(p_close.max() - p_close.min())
@@ -666,15 +669,15 @@ def main(argv: list[str] | None = None) -> int:
         under_cabinet = "cab" in args.receptacle_body
         side = args.grasp_mode == "side"
         if side or under_cabinet:
-            tilt = float(np.deg2rad(args.grasp_tilt_deg if side else 22.0))
+            tilt = float(np.deg2rad(args.grasp_tilt_deg if side else 18.0))
             forward_vec = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
             lateral_vec = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
             down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
             approach = np.sin(tilt) * forward_vec + np.cos(tilt) * down
             approach /= max(float(np.linalg.norm(approach)), 1e-9)
-            x_axis = np.cross(lateral_vec, approach)
+            y_axis = np.cross(approach, lateral_vec)
             T_eef_grasp = np.eye(4, dtype=np.float64)
-            T_eef_grasp[:3, :3] = np.column_stack([x_axis, lateral_vec, approach])
+            T_eef_grasp[:3, :3] = np.column_stack([lateral_vec, y_axis, approach])
             T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z])
         else:
             T_eef_grasp = top_down_grasp_T(
@@ -911,16 +914,16 @@ def main(argv: list[str] | None = None) -> int:
         T_eef_now = _body_T(env, "gripper0_right_eef")
         T_hand_now = _body_T(env, "robot0_right_hand")
         if front_out is not None:
-            # Front-open cabinet: pitch forearm forward 60 deg so hand/forearm enter
-            # horizontally through the open cabinet door rather than through the roof.
+            # Front-open cabinet: pitch forearm forward 55 deg with EEF X (col 0)
+            # horizontal lateral so hand/forearm enter through the open door.
             into_cab = np.array([-front_out[0], -front_out[1], 0.0], dtype=np.float64)
             lat_cab = np.array([-into_cab[1], into_cab[0], 0.0], dtype=np.float64)
-            cab_tilt = float(np.deg2rad(60.0))
+            cab_tilt = float(np.deg2rad(55.0))
             cab_approach = np.sin(cab_tilt) * into_cab + np.cos(cab_tilt) * np.array([0.0, 0.0, -1.0])
             cab_approach /= max(float(np.linalg.norm(cab_approach)), 1e-9)
-            cab_x = np.cross(lat_cab, cab_approach)
+            cab_y = np.cross(cab_approach, lat_cab)
             T_eef_preplace = np.eye(4, dtype=np.float64)
-            T_eef_preplace[:3, :3] = np.column_stack([cab_x, lat_cab, cab_approach])
+            T_eef_preplace[:3, :3] = np.column_stack([lat_cab, cab_y, cab_approach])
             T_eef_preplace[:3, 3] = preplace_eef_xyz
         else:
             eef_x_horiz = np.array([T_eef_now[0, 0], T_eef_now[1, 0]], dtype=np.float64)

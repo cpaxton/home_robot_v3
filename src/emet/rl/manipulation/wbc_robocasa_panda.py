@@ -252,7 +252,11 @@ class RoboCasaPandaBackend:
         try:
             seed_q = self._target_q if self._target_q is not None else q_saved
             best_q, p_err, r_err = _run_from(seed_q, iterations)
-            if p_err > 0.012 or r_err > 0.12:
+            if p_err > 0.008 or r_err > 0.08:
+                cont_q, cont_p, cont_r = _run_from(q_saved, 45)
+                if cont_p + 0.1 * cont_r < p_err + 0.1 * r_err:
+                    best_q, p_err, r_err = cont_q, cont_p, cont_r
+            if p_err > 0.015 or r_err > 0.15:
                 alt_q, alt_p, alt_r = _run_from(_READY_Q, 45)
                 if alt_p + 0.1 * alt_r < p_err + 0.1 * r_err:
                     best_q, p_err, r_err = alt_q, alt_p, alt_r
@@ -494,8 +498,11 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
+        torso_err = self._target_torso - torso
+        torso_fric = float(self.model.dof_frictionloss[self._torso_v])
+        torso_ff = torso_fric * float(np.tanh(torso_err / 0.005)) if abs(torso_err) > 2e-3 else 0.0
         torso_torque = float(
-            np.clip(1000.0 * (self._target_torso - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+            np.clip(2000.0 * torso_err - 300.0 * torso_qd + torso_bias + torso_ff, -2000.0, 2000.0)
         )
         self.data.ctrl[self._torso_act] = torso_torque
         base = np.asarray(command.base_velocity, dtype=np.float64).reshape(-1)
@@ -710,8 +717,11 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
+        torso_err = self._target_torso - torso
+        torso_fric = float(self.model.dof_frictionloss[self._torso_v])
+        torso_ff = torso_fric * float(np.tanh(torso_err / 0.005)) if abs(torso_err) > 2e-3 else 0.0
         torso_torque = float(
-            np.clip(1000.0 * (self._target_torso - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+            np.clip(2000.0 * torso_err - 300.0 * torso_qd + torso_bias + torso_ff, -2000.0, 2000.0)
         )
         base_velocity = (0.0, 0.0, 0.0)
         if self._target_base is not None:
