@@ -223,13 +223,17 @@ combined **0.80** (2.04 cm, 0 collisions), carry_wide **0.60** (5.26 cm,
 settled max 31 cm, 0 collisions). Combined is one episode short of 0.85 and
 carry_wide is below 0.75, so no promotion.
 
-**Focused combined + carry_wide pass (5-episode screen):** three DAgger
+**Focused combined + carry_wide (5-episode screen, not a gate):** three DAgger
 iterations from the mixed checkpoint reach **0.90 aggregate, zero collisions**.
 Combined is **1.00** (1.94 cm mean, 3.48 cm settled max) and carry_wide is
-**0.80** (2.34 cm mean, 4.39 cm settled max). Both clear their gates on the
-screen. Candidate: `/tmp/opencode/wbc_contact_combined_carry/policy_iter3.pt`.
-A 10-episode evaluation is in flight; promotion requires that and the 3-seed
-gate.
+**0.80** (2.34 cm mean, 4.39 cm settled max).
+
+**10-episode evaluation of the same checkpoint:** **0.55 aggregate**, combined
+**0.50**, carry_wide **0.60**. The 5-episode screen was optimistic again; this
+checkpoint is not promotable. The recurring pattern is that short screens clear
+the gates while 10-episode evaluations do not, so 10+ episodes and the 3-seed
+gate are the minimum for future claims. Candidate:
+`/tmp/opencode/wbc_contact_combined_carry/policy_iter3.pt`; no promotion.
 
 ## 3. Robot matrix
 
