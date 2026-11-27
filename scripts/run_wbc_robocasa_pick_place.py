@@ -391,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         "--grasp-mode",
         choices=("auto", "topdown", "side"),
         default="auto",
-        help="top-down grasp or horizontal side grasp for tall objects",
+        help="top-down grasp or tilted top-down grasp for tall objects",
     )
     parser.add_argument(
         "--grasp-height-mode",
@@ -402,6 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gripper-opening", type=float, default=0.063, help="usable finger opening in meters")
     parser.add_argument("--grasp-margin", type=float, default=0.0, help="clearance to reserve inside the opening")
     parser.add_argument("--pregrasp-height", type=float, default=0.12, help="wrist standoff above the grasp")
+    parser.add_argument("--grasp-tilt-deg", type=float, default=30.0, help="tilt from vertical for tall-object grasps")
     parser.add_argument("--descent-steps", type=int, default=60, help="steps for the final grasp descent")
     parser.add_argument("--grasp-force-n", type=float, default=1.0, help="per-finger force required to accept the grasp")
     parser.add_argument("--bilateral-hold-s", type=float, default=0.9, help="bilateral contact hold before lifting")
@@ -541,11 +542,15 @@ def main(argv: list[str] | None = None) -> int:
         if side:
             grasp_xy = 0.5 * (object_low[:2] + object_high[:2])
             grasp_z = float(0.5 * (object_low[2] + object_high[2]))
-            approach = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
-            up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-            lateral = np.cross(approach, up)
+            tilt = float(np.deg2rad(args.grasp_tilt_deg))
+            forward = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
+            lateral = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
+            down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+            approach = np.sin(tilt) * forward + np.cos(tilt) * down
+            approach /= max(float(np.linalg.norm(approach)), 1e-9)
+            x_axis = np.cross(lateral, approach)
             T_eef_grasp = np.eye(4, dtype=np.float64)
-            T_eef_grasp[:3, :3] = np.column_stack([up, lateral, approach])
+            T_eef_grasp[:3, :3] = np.column_stack([x_axis, lateral, approach])
             T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z])
             grasp_yaw = base_yaw
         else:
