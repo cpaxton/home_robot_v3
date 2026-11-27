@@ -375,12 +375,14 @@ plants resolve them through explicit alias maps and verify the result.
 - **Task-target bridge:** `wbc_robocasa_task.py` derives object/cabinet poses and
   pregrasp/grasp/lift/place/retreat targets via IK; `sweep_wbc_robocasa_tasks.py`
   runs the sequence with teacher or policy and records task success. A 10-episode
-  teacher sweep is **1/10** (condiment bottle; 5 closed cabinets skipped).
+  teacher sweep is **4/10** (mango, canned food, condiment bottle, lemon wedge).
+  The earlier "closed cabinets" were two-door fixtures with one door already
+  73–90% open; the bridge now accepts any door ≥70% and records `door_states`.
   Pregrasp and centered grasp track; the teacher closes until measured finger
-  force and records slip/terminal state. Failures are 2 grasp failures, 1
-  retreat, and 1 slip. The free-space policy still gives 0/3; a 728-sample BC
-  fine-tune also gave 0/3 and worse post-pregrasp tracking. This is a first
-  task success, not a benchmark result.
+  force and records slip/terminal state. Failures are 4 grasp failures and 2
+  slips. The free-space policy still gives 0/3; a 728-sample BC fine-tune also
+  gave 0/3 and worse post-pregrasp tracking. This is a 40% teacher result on
+  one scene, not a benchmark result.
 - **Not task success:** object/cabinet place planning, grasp retention, base
   goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
 

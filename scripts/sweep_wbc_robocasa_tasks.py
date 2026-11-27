@@ -118,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
                 "max_slip_rad": result.max_slip_rad,
                 "cabinet": result.poses.cabinet_name,
                 "cabinet_open": result.poses.cabinet_open,
+                "door_states": list(result.poses.door_states),
                 "final_ee": list(result.final_ee_pose[:3]),
                 "steps": len(result.steps),
                 "collisions": sum(int(step.collision) for step in result.steps),

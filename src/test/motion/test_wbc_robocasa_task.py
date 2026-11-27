@@ -9,7 +9,42 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from emet.rl.manipulation.wbc_robocasa_task import _GRIPPER_CLOSE, _GRIPPER_OPEN
+from emet.rl.manipulation.wbc_robocasa_task import (
+    _GRIPPER_CLOSE,
+    _GRIPPER_OPEN,
+    RoboCasaPandaTask,
+)
+
+
+def test_cabinet_accessible_accepts_one_open_door():
+    class _Fixture:
+        name = "cab"
+        door_joint_names = ("left", "right")
+
+        def get_joint_state(self, env, names):
+            del env, names
+            return {"left": 0.90, "right": 0.73}
+
+    task = object.__new__(RoboCasaPandaTask)
+    task.env = object()
+    task.cabinet_fixture = lambda: _Fixture()
+    assert task.door_states() == (0.90, 0.73)
+    assert task.cabinet_accessible()
+
+
+def test_cabinet_accessible_rejects_barely_open_doors():
+    class _Fixture:
+        name = "cab"
+        door_joint_names = ("left", "right")
+
+        def get_joint_state(self, env, names):
+            del env, names
+            return {"left": 0.55, "right": 0.40}
+
+    task = object.__new__(RoboCasaPandaTask)
+    task.env = object()
+    task.cabinet_fixture = lambda: _Fixture()
+    assert not task.cabinet_accessible()
 
 
 def test_gripper_commands_close_both_mirrored_fingers():

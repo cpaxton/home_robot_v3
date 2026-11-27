@@ -22,9 +22,13 @@ sweeps are both 20/20 (joint mean 1.13 cm/p95 1.67 cm; Cartesian mean 0.87
 cm/p95 1.54 cm). A privileged joint/Cartesian teacher and force-bearing loaded data export
 are in place. A task-target bridge now derives object/cabinet/grasp poses,
 solves pregrasp/grasp/lift/place/retreat targets, and runs teacher/policy task
-sweeps; it is **1/10 teacher task success** so far (condiment bottle; 5 closed cabinets
-skipped). Force-aware closure and slip/terminal labels are in place; generic
-grasp retention and open/close remain open. Base motion and the
+sweeps; it is **4/10 teacher task success** so far (mango, canned food,
+condiment bottle, lemon wedge). The earlier "closed cabinets" were mostly open;
+the bridge now accepts any door ≥70% and records door states. Force-aware
+closure and slip/terminal labels are in place. A generic grasp-candidate and
+visual-servo experiment regressed the simpler bbox path and is not merged; a
+push-open prototype reached 58% on a deliberately closed door but needs base
+following. Generic grasp retention, full open/close, base motion, and the
 merged-scene adapters for Stretch/Sourccey/RB-Y1 remain open.
 
 **Whole-body DAgger on Mars (2026-11-25):** [Contract-native arm/base/combined DAgger](wbc_dagger_20261125.md)

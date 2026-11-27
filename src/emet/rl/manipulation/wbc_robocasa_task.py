@@ -44,6 +44,7 @@ class TaskPoses:
     object_category: str
     cabinet_name: str
     cabinet_open: bool
+    door_states: tuple[float, ...]
     pregrasp_pose: tuple[float, ...]
     grasp_pose: tuple[float, ...]
     lift_pose: tuple[float, ...]
@@ -153,11 +154,30 @@ class RoboCasaPandaTask:
     def cabinet_fixture(self) -> Any:
         return self.env.fixture_refs["cab"][0]
 
-    def cabinet_open(self) -> bool:
+    def door_states(self) -> tuple[float, ...]:
+        """Normalized door openness in [0, 1], one value per door joint."""
+        fixture = self.cabinet_fixture()
+        names = tuple(getattr(fixture, "door_joint_names", ()) or ())
+        if not names:
+            return ()
         try:
-            return bool(self.cabinet_fixture().is_open(self.env))
+            states = fixture.get_joint_state(self.env, names)
         except Exception:
-            return False
+            return ()
+        return tuple(float(states.get(name, 0.0)) for name in names)
+
+    def cabinet_accessible(self) -> bool:
+        """Whether the target shelf is reachable through an open door.
+
+        RoboCasa's ``Fixture.is_open`` requires *every* door to be at least 90%
+        open. Two-door cabinets in these scenes often leave the non-target door
+        at 70-80%, which is still wide enough to pass an object through the
+        target side. Treat the cabinet as usable when any door is open enough.
+        """
+        states = self.door_states()
+        if not states:
+            return True
+        return max(states) >= 0.70
 
     def cabinet_place_position(self) -> np.ndarray:
         """Center of the lowest cabinet shelf, in world coordinates."""
@@ -265,7 +285,8 @@ class RoboCasaPandaTask:
             object_pose=obj_pose,
             object_category=str(self.env.object_cfgs[0].get("info", {}).get("cat") or "object"),
             cabinet_name=str(self.cabinet_fixture().name),
-            cabinet_open=self.cabinet_open(),
+            cabinet_open=self.cabinet_accessible(),
+            door_states=self.door_states(),
             pregrasp_pose=self._forward_pose(pregrasp_q),
             grasp_pose=self._forward_pose(grasp_q),
             lift_pose=self._forward_pose(lift_q),
@@ -504,7 +525,12 @@ class RoboCasaPandaTask:
             )
             steps += self._move("grasp_center", center_q, center_pose, _GRIPPER_OPEN)
         # Close until the measured finger force or grasp check says contact.
-        steps += self._close_until_force(poses.grasp_q, poses.grasp_pose)
+        # Close at the settled, centered pose. Re-commanding the original grasp
+        # target would pull the fingers back off the object whenever the grasp
+        # phase did not fully track.
+        close_q = np.asarray(self.backend.data.qpos[self.backend._arm_q], dtype=np.float64).copy()
+        close_pose = self._forward_pose(close_q)
+        steps += self._close_until_force(close_q, close_pose)
         grasped_after_close = self._grasped()
         self._set_grasp_reference()
         max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)

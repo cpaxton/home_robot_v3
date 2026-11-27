@@ -107,17 +107,23 @@ uv run python scripts/sweep_wbc_robocasa_tasks.py \
 
 Development result (10 teacher seeds, one scene):
 
-- **1/10 task success** (condiment bottle); 5/10 seeds had a closed cabinet and were skipped.
-- Failures: 5 closed cabinets, 2 `grasp_failed`, 1 `retreat`, 1 `slip`.
-- The 3-seed detail below shows where tracking breaks; the full 10-seed run also contains the one success.
+- **4/10 task success** (mango, canned food, condiment bottle, lemon wedge).
+- The previous "5 closed cabinets" were mostly open: the two-door fixtures had
+  one door at 73–90% while `Fixture.is_open` requires every door ≥90%. The
+  bridge now treats a cabinet as usable when any door is ≥70%, and records
+  `door_states`. This recovered one success (lemon wedge) and two attempts.
+- Failures: 4 `grasp_failed` (dish brush, bell pepper, baguette,
+  oil/vinegar bottle) and 2 `slip` (reamer, pizza cutter).
+- The 3-seed detail below shows where tracking breaks; the full 10-seed run
+  also contains the four successes.
 - Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, centered grasp **0.6 cm**,
   lift **8.7–10.2 cm**, preplace **12–19 cm**, place **3.4–11.6 cm**, release
   **1.7–2.6 cm**; task success **0/3**. Object displacement was 5.3 and 16.2 cm.
 - Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, grasp **15–20 cm**,
   centered grasp **4–7 cm**, lift **29–98 cm**, place **79–117 cm**; task
   success **0/3**.
-- The 10-episode teacher sweep moved the object 0–28 cm and placed one
-  condiment bottle successfully. The latest force-bearing policy-mode
+- The 10-episode teacher sweep moved the object 0–65 cm and placed four
+  objects successfully. The latest force-bearing policy-mode
   loaded data has 510 actor-visited observations and teacher labels
   (`/tmp/opencode/wbc_task_sweep_policy_force/loaded_task_data.npz`); the task
   export also includes measured finger forces, wrist wrenches, contact flags,
@@ -136,12 +142,38 @@ Development result (10 teacher seeds, one scene):
   the promoted checkpoints.
 
 **Interpretation:** pose extraction, IK target generation, pregrasp tracking,
-finger centering, force-aware closure, and one full counter-to-cabinet transfer
-work. The remaining failures are closed fixtures, long/thin objects the current
-parallel-jaw candidate cannot hold, slip during transport, and retreat distance.
-This is a task-target scaffold with a first success, not a benchmark result; the
-next gate is generic grasp-candidate selection plus open/close and contact-aware
-training.
+finger centering, force-aware closure, and four full counter-to-cabinet
+transfers work. The remaining failures are long/thin or wide objects the
+parallel jaw cannot hold, slip during transport, and collision-aware approach.
+This is a task-target scaffold with a 40% teacher success on one scene, not a
+benchmark result.
+
+**Generic grasp experiment (negative):** we tested collision-geom grasp
+candidates (top-down over each object part, multiple yaw, bottom/center/rim
+heights, front-side grasps, 6-DOF IK, and closed-loop visual servoing). The
+candidate selector found solid patches on the brush and avoided the bbox gap,
+but the arm could not track several side/lower targets without pushing the
+object, and the fallback chain regressed the simpler bbox path (0/3 in the
+three-seed check). It is not merged. The next grasp gate is a collision-aware
+approach and a retained-grasp check, not more candidate scoring.
+
+**Open/close prototype:** a closed left cabinet door was opened by a
+closed-gripper push servo that follows the handle arc about the true hinge.
+Joint PD held the height and reached **58% open** before the fixed base ran out
+of reach; the arm needs to follow the door with the mobile base to finish the
+90% gate. Reproduce with:
+
+```bash
+uv run python scripts/probe_wbc_robocasa_fixture.py \
+  --output /tmp/opencode/wbc_fixture_probe
+```
+
+This is a prototype, not a learned open/close skill, and it is not used by the
+task sweep. The task bridge still uses the scene's door state and does not claim
+fixture manipulation.
+
+The 4/10 teacher artifact is
+`/tmp/opencode/wbc_task_teacher10_door/task_sweep.json`.
 
 ## Smoke result
 
