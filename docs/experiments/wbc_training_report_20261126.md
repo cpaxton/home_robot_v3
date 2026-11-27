@@ -71,6 +71,33 @@ Training has three stages:
 - **Warm starts and bounded replay.** `--init` loads a profile-checked
   checkpoint; `--max-bc-samples` caps the growing DAgger buffer.
 
+### Contact/payload curriculum (layout v4)
+
+Layout v4 adds `has_gripper_target` + `gripper_target` per gripper. This is the
+commanded open/close/hold setpoint, not a measured object state; it sits beside
+the v3 measured wrench/finger-force channels so the actor can tell a commanded
+squeeze from an accidental contact.
+
+The PandaOmron contact suite adds two subtasks to the existing arm/base/combined
+set:
+
+- `wide_arm`: ±0.55 rad arm targets with torso height sampled over 0.12–0.32 m.
+- `carry`: arm + base goals with a 0.1–1.2 kg inertial payload attached to a
+  body downstream of the wrist F/T sensor, and a closed-gripper teacher command.
+
+The payload mass and the `gripper_close` flag are teacher-side only. The actor
+sees the resulting measured wrist wrench, finger force, joint torque, and the
+commanded gripper target. A separate Stretch suite uses a 0.05–0.8 kg payload
+on the gripper slider; Stretch observes the load through joint torque/servo
+effort and finger force rather than a 6-axis wrist sensor. This is the
+two-archetype check: true-torque + F/T (PandaOmron) and position-servo +
+joint-torque/finger-force (Stretch).
+
+Pilot result: the Panda carry teacher succeeds **1/1** with a 0.8 kg payload,
+and the short BC/DAgger smoke is **0/1** (BC loss 0.63, DAgger loss 0.052,
+0.68 m tracking). A longer carry run is in flight; no contact-aware checkpoint
+is promoted yet.
+
 ## 3. Robot matrix
 
 | Robot | Plant | DoF summary | Base | Training notes |

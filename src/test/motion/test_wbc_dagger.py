@@ -176,6 +176,9 @@ def test_contact_subtasks_include_payload_and_wide_posture():
     assert tasks["carry"].payload_mass_range == (0.1, 1.2)
     assert tasks["carry"].gripper_close is True
     assert tasks["carry"].torso_range == (0.15, 0.32)
+    stretch = {task.name: task for task in contact_subtasks("stretch")}
+    assert stretch["carry"].payload_mass_range == (0.05, 0.8)
+    assert stretch["carry"].gripper_close is True
     with pytest.raises(ValueError, match="no contact curriculum"):
         contact_subtasks("innate_mars")
 

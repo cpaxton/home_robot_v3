@@ -12,7 +12,7 @@ import pytest
 from emet.controller.manipulation.torque_adapter import ServoCommand
 from emet.controller.manipulation.wbc_contract import GripperCommand
 from emet.controller.manipulation.wbc_profiles import stretch_sim_profile
-from emet.rl.manipulation.wbc_env import WbcGymEnv, wbc_observation_layout
+from emet.rl.manipulation.wbc_env import WbcGymEnv, WbcPerturbation, wbc_observation_layout
 
 
 def _backend(**kwargs):
@@ -146,3 +146,21 @@ def test_teacher_reaches_sampled_arm_target_within_60_steps():
     assert final_position < 0.1
     assert final_position < initial_position
     env.close()
+
+
+@pytest.mark.sim
+def test_stretch_payload_changes_joint_torque_and_closes_gripper():
+    baseline = _backend(seed=0, base_goal_probability=0.0)
+    baseline.reset(seed=0)
+    baseline_bias = float(np.linalg.norm(baseline.data.qfrc_bias))
+    baseline.close()
+
+    loaded = _backend(seed=0, base_goal_probability=0.0)
+    loaded.set_perturbation(WbcPerturbation(payload_mass=0.8, gripper_close=True))
+    loaded.reset(seed=0)
+    loaded_bias = float(np.linalg.norm(loaded.data.qfrc_bias))
+    assert loaded.model.body_mass[loaded._payload_body] == pytest.approx(0.8)
+    assert loaded_bias > baseline_bias
+    action = loaded.teacher_action()
+    assert action[-1] < 0.0
+    loaded.close()

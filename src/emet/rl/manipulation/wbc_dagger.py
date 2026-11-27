@@ -132,6 +132,25 @@ def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
     finger force, not through the observation.
     """
     robot = get_wbc_robot(robot).name
+    if robot == "stretch":
+        return (
+            WbcSubtask("arm", True, False, True, 0.15, 5.0, "forward", 0.15),
+            WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.05),
+            WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.2),
+            WbcSubtask("wide_arm", True, False, True, 0.55, 8.0, "forward", 0.2),
+            WbcSubtask(
+                "carry",
+                True,
+                True,
+                False,
+                0.35,
+                8.0,
+                "forward",
+                0.4,
+                payload_mass_range=(0.05, 0.8),
+                gripper_close=True,
+            ),
+        )
     if robot != "pandaomron":
         raise ValueError(f"no contact curriculum for {robot!r}")
     return (
