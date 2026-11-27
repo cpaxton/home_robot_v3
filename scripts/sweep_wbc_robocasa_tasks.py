@@ -49,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backoff", type=float, default=0.0)
     parser.add_argument("--max-move-steps", type=int, default=70)
     parser.add_argument("--teacher", action="store_true", help="run the privileged teacher instead of a policy")
-    parser.add_argument("--save-data", action="store_true", help="save policy observations and teacher labels")
+    parser.add_argument("--save-data", action="store_true", help="save actor observations and teacher labels")
+    parser.add_argument("--successes-only", action="store_true", help="save only successful episodes")
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                 "phase_metrics": _phase_metrics(result),
             }
             episodes.append(record)
-            if args.save_data and not args.teacher:
+            if args.save_data and (result.success or not args.successes_only):
                 for step in result.steps:
                     if step.observation is None or step.teacher_action is None:
                         continue
@@ -195,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
                         "base_backoff": args.backoff,
                     },
                     "phases": sorted(set(phases)),
+                    "successes_only": bool(args.successes_only),
                     "intents": sorted(set(intents)),
                     "finger_force_shape": list(np.asarray(finger_forces).shape),
                     "wrench_shape": list(np.asarray(wrenches).shape),

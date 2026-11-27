@@ -385,7 +385,9 @@ class RoboCasaPandaTask:
                     * Rotation.from_quat(np.asarray(target[3:], dtype=np.float64)).inv()
                 ).magnitude()
             )
-        observation = self.layout.encode(next_observation) if not self.teacher_mode else None
+        # Keep the actor observation in teacher rollouts too so successful
+        # demonstrations can be exported for BC/DAgger.
+        observation = self.layout.encode(next_observation)
         contact = terms.contact
         gripper = terms.gripper
         grasped = self._grasped() if self.curr_phase in {"close", "lift", "preplace", "place", "release"} else False

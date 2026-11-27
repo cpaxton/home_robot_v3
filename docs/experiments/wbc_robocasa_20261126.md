@@ -139,6 +139,12 @@ Development result (10 teacher seeds, one scene):
 - A 728-sample BC fine-tune (loss 0.017) was tried; the subsequent 3-episode
   policy task sweep was still **0/3** and tracked worse after pregrasp. The
   free-space actor is not a task policy yet; do not promote the fine-tune.
+- A second BC run used only the **four successful teacher episodes** (1,354
+  samples, all intents/phases, val MSE 0.039). It was also **0/3** and tracked
+  much worse: grasp-center errors reached **0.9–1.4 m** on mango and canned
+  food. Teacher-only BC is not the missing piece; the policy needs DAgger from
+  its own visited states and contact/intent conditioning, and the teacher still
+  fails 6/10 rollouts. Do not promote this checkpoint.
 - The teacher now closes until measured finger force (8 N threshold) or a
   grasp check, and records slip/terminal conditions. This is the start of
   force-conditioned labelling; the actor still has zeroed contact inputs in
