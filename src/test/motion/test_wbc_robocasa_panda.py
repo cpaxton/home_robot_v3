@@ -2,26 +2,57 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""RoboCasa Panda adapter frame tests (no scene construction)."""
+"""RoboCasa Panda task-target plumbing tests (no scene construction)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-pytest.importorskip("robosuite")
-
 from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 
 
-def test_base_pose_uses_the_reset_anchored_yaw():
+def _backend() -> RoboCasaPandaBackend:
     backend = object.__new__(RoboCasaPandaBackend)
     backend._origin_xy = np.array([1.0, 2.0], dtype=np.float64)
     backend._origin_yaw = np.pi / 2
-    backend._world_base_pose = lambda: (1.0, 3.0, np.pi)
+    backend._target_base = None
+    backend._teacher_phase = "arm"
+    backend._gripper_target = np.array([0.04, -0.04])
+    backend._force_gripper = False
+    return backend
 
+
+def test_base_pose_uses_the_reset_anchored_yaw():
+    backend = _backend()
+    backend._world_base_pose = lambda: (1.0, 3.0, np.pi)
     pose = backend._base_pose()
-    # World offset (0, 1) rotates to (1, 0) in the reset-anchored frame; the
-    # heading is the same -pi/2 offset as the EE local pose.
     np.testing.assert_allclose(pose[:2], [1.0, 0.0], atol=1e-9)
     assert pose[2] == pytest.approx(np.pi / 2)
+
+
+def test_world_base_target_is_converted_to_reset_frame():
+    backend = _backend()
+    backend.set_world_base_target((1.0, 4.0, np.pi))
+    assert backend._target_base is not None
+    np.testing.assert_allclose(backend._target_base[:2], [2.0, 0.0], atol=1e-9)
+    assert backend._target_base[2] == pytest.approx(np.pi / 2)
+    assert backend._teacher_phase == "base"
+
+
+def test_local_base_target_round_trips_and_clears():
+    backend = _backend()
+    backend.set_base_target((0.5, -0.2, 0.3))
+    assert backend._target_base == (0.5, -0.2, 0.3)
+    backend.set_base_target(None)
+    assert backend._target_base is None
+    assert backend._teacher_phase == "arm"
+
+
+def test_scripted_gripper_target_is_forced():
+    backend = _backend()
+    backend.set_gripper(False)
+    assert backend._force_gripper is True
+    np.testing.assert_allclose(backend._gripper_target, [0.0, 0.0])
+    backend.set_gripper(True)
+    np.testing.assert_allclose(backend._gripper_target, [0.04, -0.04])

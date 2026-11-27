@@ -117,6 +117,9 @@ class RoboCasaPandaBackend:
         self._target_base: tuple[float, float, float] | None = None
         self._base_command = np.zeros(3)
         self._grip_command = np.asarray((0.04, -0.04))
+        self._gripper_target = np.asarray((0.04, -0.04), dtype=np.float64)
+        self._force_gripper = False
+        self._teacher_phase = "arm"
         self._elapsed = 0.0
         self._origin_xy = np.zeros(2)
         self._origin_yaw = 0.0
@@ -184,6 +187,32 @@ class RoboCasaPandaBackend:
         self._target_q = None
         if pose is not None:
             self._target_ee = self._target_ee_override
+
+    def set_base_target(self, pose: tuple[float, float, float] | None, *, world: bool = False) -> None:
+        """Set a base XYT target in the reset-anchored frame (or world frame)."""
+        if pose is None:
+            self._target_base = None
+            self._teacher_phase = "arm"
+            return
+        if len(pose) != 3 or not np.isfinite(np.asarray(pose, dtype=np.float64)).all():
+            raise ValueError("base target must contain three finite values")
+        if world:
+            rotation = Rotation.from_euler("z", -self._origin_yaw)
+            local_xy = rotation.apply(
+                np.r_[np.asarray(pose[:2], dtype=np.float64) - self._origin_xy, 0.0]
+            )[:2]
+            pose = (float(local_xy[0]), float(local_xy[1]), float(_wrap(float(pose[2]) - self._origin_yaw)))
+        self._target_base = (float(pose[0]), float(pose[1]), float(pose[2]))
+        self._teacher_phase = "base"
+
+    def set_world_base_target(self, pose: tuple[float, float, float] | None) -> None:
+        self.set_base_target(pose, world=True)
+
+    def set_gripper(self, open_: bool, *, force: bool = True) -> None:
+        """Set a scripted gripper target for task execution."""
+        self._gripper_target = np.asarray((0.04, -0.04) if open_ else (0.0, 0.0), dtype=np.float64)
+        self._grip_command = self._gripper_target.copy()
+        self._force_gripper = bool(force)
 
     def set_local_ee_target(self, pose: tuple[float, ...] | None) -> None:
         """Set an end-effector target in the reset-anchored robot frame."""
@@ -264,8 +293,13 @@ class RoboCasaPandaBackend:
         self._base_command = np.clip(base, -limits, limits)
         self.data.ctrl[self._base_act] = self._base_command
         grip = command.grippers.get("right")
-        if grip is not None:
+        if self._force_gripper:
+            values = np.asarray(self._gripper_target, dtype=np.float64).reshape(-1)
+        elif grip is not None:
             values = np.asarray(grip.values, dtype=np.float64).reshape(-1)
+        else:
+            values = None
+        if values is not None:
             if values.shape != (2,) or not np.isfinite(values).all():
                 raise ValueError("Panda gripper command must contain two finite values")
             self._grip_command = values.copy()
@@ -391,14 +425,38 @@ class RoboCasaPandaBackend:
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
         torso_torque = float(np.clip(1000.0 * (_READY_TORSO - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0))
+        base_velocity = (0.0, 0.0, 0.0)
+        if self._target_base is not None:
+            base = np.asarray(self._base_pose(), dtype=np.float64)
+            target = np.asarray(self._target_base, dtype=np.float64)
+            dx, dy = target[0] - base[0], target[1] - base[1]
+            yaw = _wrap(float(target[2] - base[2]))
+            if float(np.hypot(dx, dy)) > 0.03 or abs(yaw) > 0.05:
+                self._teacher_phase = "base"
+                forward = dx * np.cos(base[2]) + dy * np.sin(base[2])
+                lateral = -dx * np.sin(base[2]) + dy * np.cos(base[2])
+                limits = np.asarray(self.profile.base.velocity_limits, dtype=np.float64)
+                base_velocity = (
+                    float(np.sign(forward) * min(limits[0], max(0.2, 2.0 * abs(forward))))
+                    if abs(forward) > 0.02
+                    else 0.0,
+                    float(np.sign(lateral) * min(limits[1], max(0.2, 2.0 * abs(lateral))))
+                    if abs(lateral) > 0.02
+                    else 0.0,
+                    float(np.sign(yaw) * min(limits[2], max(0.2, 2.0 * abs(yaw))))
+                    if abs(yaw) > 0.03
+                    else 0.0,
+                )
+            else:
+                self._teacher_phase = "arm"
         action = WbcAction(
-            base_velocity=(0.0, 0.0, 0.0),
+            base_velocity=base_velocity,
             torso_torques=(torso_torque,),
             arms=(
                 ArmAction(
                     name="right",
                     joint_torques=tuple(float(v) for v in torque),
-                    gripper=GripperCommand(values=(0.04, -0.04)),
+                    gripper=GripperCommand(values=tuple(float(v) for v in self._gripper_target)),
                 ),
             ),
         )
