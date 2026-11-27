@@ -120,6 +120,7 @@ class RoboCasaPandaBackend:
         self._base_jnt = np.zeros(3, dtype=int)
         self._base_stiction_ctrl = np.zeros(3, dtype=np.float64)
         self._teacher_base_speed_scale = 1.0
+        self._target_torso = float(_READY_TORSO)
         self._ee_in_base_T: np.ndarray | None = None
         self._grip_command = np.asarray((0.04, -0.04))
         self._gripper_target = np.asarray((0.04, -0.04), dtype=np.float64)
@@ -220,6 +221,33 @@ class RoboCasaPandaBackend:
         if not np.isfinite(value) or value <= 0.0:
             raise ValueError("base speed scale must be positive and finite")
         self._teacher_base_speed_scale = value
+
+    def set_torso_target(self, height: float) -> None:
+        """Set the torso lift target in meters within ``[0.0, 0.34]``."""
+        value = float(height)
+        if not np.isfinite(value):
+            raise ValueError("torso target must be finite")
+        self._target_torso = float(np.clip(value, 0.0, 0.34))
+
+    def reanchor_origin(self) -> None:
+        """Re-anchor the reset-local observation frame to the current base pose.
+
+        Preserves any active world-frame EE target while centering
+        ``observation.base_pose`` at ``(0, 0, 0)`` for subsequent arm phases.
+        """
+        if self.data is None:
+            return
+        ee_world: tuple[np.ndarray, Rotation] | None = None
+        if self._target_ee is not None:
+            ee_world = self._world_pose(self._target_ee)
+        world_base = self._world_base_pose()
+        self._origin_xy = np.asarray(world_base[:2], dtype=np.float64)
+        self._origin_yaw = float(world_base[2])
+        if ee_world is not None:
+            pos, rot = ee_world
+            self._target_ee = self._local_pose(_pose7(pos, rot.as_matrix()))
+            if self._target_ee_override is not None:
+                self._target_ee_override = self._target_ee
 
     def _sync_base_held_ee_target(self) -> None:
         if self._ee_in_base_T is None or self.data is None:
@@ -368,6 +396,7 @@ class RoboCasaPandaBackend:
         self._base_command[:] = 0.0
         self._ee_in_base_T = None
         self._teacher_base_speed_scale = 1.0
+        self._target_torso = float(_READY_TORSO)
         self._grip_command = np.asarray((0.04, -0.04))
         self._elapsed = 0.0
         world_base = self._world_base_pose()
@@ -403,7 +432,9 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
-        torso_torque = float(np.clip(1000.0 * (_READY_TORSO - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0))
+        torso_torque = float(
+            np.clip(1000.0 * (self._target_torso - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+        )
         self.data.ctrl[self._torso_act] = torso_torque
         base = np.asarray(command.base_velocity, dtype=np.float64).reshape(-1)
         if base.shape != (3,) or not np.isfinite(base).all():
@@ -617,7 +648,9 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
-        torso_torque = float(np.clip(1000.0 * (_READY_TORSO - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0))
+        torso_torque = float(
+            np.clip(1000.0 * (self._target_torso - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+        )
         base_velocity = (0.0, 0.0, 0.0)
         if self._target_base is not None:
             base = np.asarray(self._base_pose(), dtype=np.float64)

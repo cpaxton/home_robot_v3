@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation, Slerp
 
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
 from emet.rl.manipulation.wbc_env import WbcGymEnv
@@ -244,9 +244,9 @@ def _plan_topdown_grasp(
                 + 0.5 * float(p_close.max() + p_close.min()) * close_axis
             )
             yaw_diff = abs(float(np.arctan2(np.sin(yaw - yaw_pref), np.cos(yaw - yaw_pref))))
-            # Prefer narrower pinch width (more descent clearance), deeper grasp
-            # (closer to z_lo / CoM), and comfortable wrist angle.
-            score = w_close + 0.15 * float(eef_z - z_lo) + 0.002 * yaw_diff
+            # Prefer deepest safe height (closest to z_lo, away from sloped top
+            # caps/stems) first, then narrowest pinch width at that height.
+            score = 2.0 * float(eef_z - z_lo) + 0.25 * w_close + 0.002 * yaw_diff
             if 0.012 <= w_close <= max_ok:
                 if best_valid is None or score < best_valid[0]:
                     best_valid = (score, float(eef_z), center_xy, float(yaw), w_close)
@@ -295,13 +295,18 @@ def _receptacle_place_target(
             if "cab" in receptacle_body:
                 v_xy = v[:2]
                 front_out = -v_xy / max(float(np.linalg.norm(v_xy)), 1e-6)
-                place_xy = (p0 + 0.50 * u + 0.30 * v)[:2]
-                shelf_eef_z = floor_z + 0.03 + object_bottom_offset_m
+                place_xy = (p0 + 0.50 * u + 0.28 * v)[:2]
+                shelf_eef_z = floor_z + 0.035 + object_bottom_offset_m
                 preplace_eef = np.array(
-                    [place_xy[0] + 0.24 * front_out[0], place_xy[1] + 0.24 * front_out[1], shelf_eef_z + 0.02],
+                    [place_xy[0] + 0.26 * front_out[0], place_xy[1] + 0.26 * front_out[1], shelf_eef_z + 0.02],
                     dtype=np.float64,
                 )
                 place_eef = np.array([place_xy[0], place_xy[1], shelf_eef_z], dtype=np.float64)
+                print(
+                    f"cab_interior floor_z={floor_z:.3f} rim_z={rim_z:.3f} "
+                    f"place_xy={np.round(place_xy, 3).tolist()} front_out={np.round(front_out, 3).tolist()}",
+                    flush=True,
+                )
                 return place_xy, preplace_eef, place_eef, front_out
 
             place_xy = (p0 + 0.50 * u + 0.35 * v)[:2]
@@ -369,14 +374,25 @@ def _ramp_ee(
     start_pos: np.ndarray,
     end_pos: np.ndarray,
     quat: np.ndarray,
+    start_quat: np.ndarray | None = None,
     speed_m_s: float,
 ) -> int:
     distance = float(np.linalg.norm(end_pos - start_pos))
-    steps = max(1, int(np.ceil(distance / max(speed_m_s, 1e-3) / wbc.control_dt)))
+    ang_dist = 0.0
+    slerp = None
+    if start_quat is not None:
+        r0 = Rotation.from_quat(start_quat)
+        r1 = Rotation.from_quat(quat)
+        ang_dist = float((r1 * r0.inv()).magnitude())
+        if ang_dist > 1e-3:
+            slerp = Slerp([0.0, 1.0], Rotation.concatenate([r0, r1]))
+    duration_s = max(distance / max(speed_m_s, 1e-3), ang_dist / 0.8)
+    steps = max(1, int(np.ceil(duration_s / wbc.control_dt)))
     for index in range(1, steps + 1):
         alpha = 0.5 - 0.5 * float(np.cos(np.pi * index / steps))
         position = start_pos + (end_pos - start_pos) * alpha
-        backend.set_ee_target(_pose(position, quat))
+        q_step = slerp([alpha])[0].as_quat() if slerp is not None else quat
+        backend.set_ee_target(_pose(position, q_step))
         _, _, terminated, truncated, _ = wbc.step(action_source())
         if terminated or truncated:
             return index
@@ -588,12 +604,26 @@ def main(argv: list[str] | None = None) -> int:
             yaw = float(np.arctan2(target_xy[1] - xy[1], target_xy[0] - xy[0]))
             return np.array([xy[0], xy[1], yaw], dtype=np.float64)
 
-        # Keep the arm tucked in the base frame during unloaded base approach.
-        ready_local = backend._observation().arms[0].ee_pose
-        backend.set_local_ee_target(ready_local)
+        # Raise the arm 18 cm in the open aisle BEFORE driving to the counter so
+        # the ready-posture gripper (z_eef ~ 0.95 m) never bumps counter objects.
+        wbc.hold_base = True
+        backend.set_base_target(None)
+        ready_hand_T = _body_T(env, "robot0_right_hand")
+        high_ready_pos = ready_hand_T[:3, 3].copy() + np.array([0.0, 0.0, 0.18])
+        high_ready_quat = Rotation.from_matrix(ready_hand_T[:3, :3]).as_quat()
+        backend.set_ee_target(_pose(high_ready_pos, high_ready_quat))
+        wbc._observation = backend._observation()
+        for _ in range(25):
+            _, _, terminated, truncated, _ = wbc.step(action())
+            if terminated or truncated:
+                break
+
+        # Keep the raised arm locked in the base frame during unloaded base approach.
         backend.hold_ee_in_base_frame(True)
         base_target = base_target_for(object_pos[:2], standoff=args.base_standoff)
         backend.set_world_base_target(tuple(float(v) for v in base_target))
+        wbc.hold_base = False
+        wbc._observation = backend._observation()
         print(
             f"lang={lang!r} object={args.object_body} pos={np.round(object_pos, 3).tolist()} "
             f"base_world={np.round(base_world, 3).tolist()} base_target={np.round(base_target, 3).tolist()}",
@@ -610,6 +640,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         backend.set_base_target(None)
         backend.hold_ee_in_base_frame(False)
+        backend.reanchor_origin()
+        wbc.hold_base = True
+        wbc._observation = backend._observation()
 
         from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
 
@@ -638,11 +671,10 @@ def main(argv: list[str] | None = None) -> int:
             section_width = 0.0
             table = []
 
+        under_cabinet = "cab" in args.receptacle_body
         side = args.grasp_mode == "side"
-        if side:
-            grasp_xy = 0.5 * (object_low[:2] + object_high[:2])
-            grasp_z = float(0.5 * (object_low[2] + object_high[2]))
-            tilt = float(np.deg2rad(args.grasp_tilt_deg))
+        if side or under_cabinet:
+            tilt = float(np.deg2rad(args.grasp_tilt_deg if side else 22.0))
             forward_vec = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
             lateral_vec = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
             down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
@@ -663,10 +695,12 @@ def main(argv: list[str] | None = None) -> int:
         eef_in_hand = np.linalg.inv(T_hand_eef)
         T_hand_grasp = T_eef_grasp @ eef_in_hand
         T_hand_pregrasp = T_hand_grasp.copy()
+        effective_pregrasp_h = min(args.pregrasp_height, 0.065) if under_cabinet else args.pregrasp_height
         if side:
-            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * args.pregrasp_height
+            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * effective_pregrasp_h
         else:
-            T_hand_pregrasp[2, 3] += args.pregrasp_height
+            # Always descend straight vertically so open pads straddle without lateral sweep.
+            T_hand_pregrasp[2, 3] += effective_pregrasp_h
         grasp_pos = T_hand_grasp[:3, 3].copy()
         grasp_quat = Rotation.from_matrix(T_hand_grasp[:3, :3]).as_quat()
         pregrasp = T_hand_pregrasp[:3, 3].copy()
@@ -765,28 +799,50 @@ def main(argv: list[str] | None = None) -> int:
             print("GRASP FAILED: object was not retained through the lift", flush=True)
             return 1
 
-        # Stage 2: raise vertically clear of counter distractors, then retract toward the base.
-        high_pos = grasp_pos + np.array([0.0, 0.0, args.transport_height])
-        s1 = _ramp_ee(
-            wbc,
-            backend,
-            action_source=action,
-            start_pos=verify_pos,
-            end_pos=high_pos,
-            quat=grasp_quat,
-            speed_m_s=args.carry_speed,
-        )
+        # Stage 2: pull out from any overhead cabinet while rising to carry pose.
         forward_xy = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
-        retract_pos = high_pos - forward_xy * args.retract_m
-        s2 = _ramp_ee(
-            wbc,
-            backend,
-            action_source=action,
-            start_pos=high_pos,
-            end_pos=retract_pos,
-            quat=grasp_quat,
-            speed_m_s=args.carry_speed,
-        )
+        if under_cabinet:
+            out_pos = verify_pos - forward_xy * max(args.retract_m, 0.25)
+            s1 = _ramp_ee(
+                wbc,
+                backend,
+                action_source=action,
+                start_pos=verify_pos,
+                end_pos=out_pos,
+                quat=grasp_quat,
+                speed_m_s=args.carry_speed,
+            )
+            retract_pos = out_pos + np.array([0.0, 0.0, max(0.0, args.transport_height - args.lift_height)])
+            s2 = _ramp_ee(
+                wbc,
+                backend,
+                action_source=action,
+                start_pos=out_pos,
+                end_pos=retract_pos,
+                quat=grasp_quat,
+                speed_m_s=args.carry_speed,
+            )
+        else:
+            high_pos = grasp_pos + np.array([0.0, 0.0, args.transport_height])
+            s1 = _ramp_ee(
+                wbc,
+                backend,
+                action_source=action,
+                start_pos=verify_pos,
+                end_pos=high_pos,
+                quat=grasp_quat,
+                speed_m_s=args.carry_speed,
+            )
+            retract_pos = high_pos - forward_xy * args.retract_m
+            s2 = _ramp_ee(
+                wbc,
+                backend,
+                action_source=action,
+                start_pos=high_pos,
+                end_pos=retract_pos,
+                quat=grasp_quat,
+                speed_m_s=args.carry_speed,
+            )
         carried, _ = _body_pose(env, args.object_body)
         carry_left, carry_right = backend.finger_target_forces(resolved_object)
         print(
@@ -807,7 +863,9 @@ def main(argv: list[str] | None = None) -> int:
             place_height_m=args.place_height,
         )
         if front_out is not None:
-            standoff_xy = place_xy + front_out * args.place_standoff
+            backend.set_torso_target(0.34)
+            cab_standoff = max(args.place_standoff, 0.65)
+            standoff_xy = place_xy + front_out * cab_standoff
             place_base_yaw = float(np.arctan2(place_xy[1] - standoff_xy[1], place_xy[0] - standoff_xy[0]))
             place_base_target = np.array([standoff_xy[0], standoff_xy[1], place_base_yaw], dtype=np.float64)
         else:
@@ -816,6 +874,8 @@ def main(argv: list[str] | None = None) -> int:
         backend.hold_ee_in_base_frame(True)
         backend.set_base_speed_scale(args.transport_base_scale)
         backend.set_world_base_target(tuple(float(v) for v in place_base_target))
+        wbc.hold_base = False
+        wbc._observation = backend._observation()
         _run_base(
             wbc,
             backend,
@@ -829,6 +889,9 @@ def main(argv: list[str] | None = None) -> int:
         backend.set_base_target(None)
         backend.set_base_speed_scale(1.0)
         backend.hold_ee_in_base_frame(False)
+        backend.reanchor_origin()
+        wbc.hold_base = True
+        wbc._observation = backend._observation()
 
         carried, _ = _body_pose(env, args.object_body)
         carried_left, carried_right = backend.finger_target_forces(resolved_object)
@@ -841,18 +904,30 @@ def main(argv: list[str] | None = None) -> int:
             print("TRANSPORT FAILED: object slipped out during base transport", flush=True)
             return 1
 
-        # Stage 4: keep the current carried wrist yaw (which rotated with the base),
-        # move to preplace, then into place & release.
+        # Stage 4: move to preplace, then into place & release.
         T_eef_now = _body_T(env, "gripper0_right_eef")
         T_hand_now = _body_T(env, "robot0_right_hand")
-        eef_x_horiz = np.array([T_eef_now[0, 0], T_eef_now[1, 0]], dtype=np.float64)
-        place_yaw = (
-            float(np.arctan2(eef_x_horiz[1], eef_x_horiz[0]))
-            if float(np.linalg.norm(eef_x_horiz)) > 1e-4
-            else float(backend._world_base_pose()[2] + 0.5 * np.pi)
-        )
-        T_eef_preplace = top_down_grasp_T(preplace_eef_xyz, z_offset_m=0.0)
-        T_eef_preplace[:3, :3] = Rotation.from_euler("z", place_yaw).as_matrix() @ T_eef_preplace[:3, :3]
+        if front_out is not None:
+            # Front-open cabinet: pitch forearm forward 60 deg so hand/forearm enter
+            # horizontally through the open cabinet door rather than through the roof.
+            into_cab = np.array([-front_out[0], -front_out[1], 0.0], dtype=np.float64)
+            lat_cab = np.array([-into_cab[1], into_cab[0], 0.0], dtype=np.float64)
+            cab_tilt = float(np.deg2rad(60.0))
+            cab_approach = np.sin(cab_tilt) * into_cab + np.cos(cab_tilt) * np.array([0.0, 0.0, -1.0])
+            cab_approach /= max(float(np.linalg.norm(cab_approach)), 1e-9)
+            cab_x = np.cross(lat_cab, cab_approach)
+            T_eef_preplace = np.eye(4, dtype=np.float64)
+            T_eef_preplace[:3, :3] = np.column_stack([cab_x, lat_cab, cab_approach])
+            T_eef_preplace[:3, 3] = preplace_eef_xyz
+        else:
+            eef_x_horiz = np.array([T_eef_now[0, 0], T_eef_now[1, 0]], dtype=np.float64)
+            place_yaw = (
+                float(np.arctan2(eef_x_horiz[1], eef_x_horiz[0]))
+                if float(np.linalg.norm(eef_x_horiz)) > 1e-4
+                else float(backend._world_base_pose()[2] + 0.5 * np.pi)
+            )
+            T_eef_preplace = top_down_grasp_T(preplace_eef_xyz, z_offset_m=0.0)
+            T_eef_preplace[:3, :3] = Rotation.from_euler("z", place_yaw).as_matrix() @ T_eef_preplace[:3, :3]
         T_eef_place = T_eef_preplace.copy()
         T_eef_place[:3, 3] = place_eef_xyz
 
@@ -871,6 +946,7 @@ def main(argv: list[str] | None = None) -> int:
             start_pos=T_hand_now[:3, 3].copy(),
             end_pos=preplace_hand_pos,
             quat=place_quat,
+            start_quat=Rotation.from_matrix(T_hand_now[:3, :3]).as_quat(),
             speed_m_s=args.carry_speed,
         )
         _run_until(
