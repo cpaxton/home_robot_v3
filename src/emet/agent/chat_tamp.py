@@ -11,7 +11,6 @@ The existing TAMP APIs own plan handles, revalidation and physical execution.
 from __future__ import annotations
 
 import logging
-
 from collections.abc import Callable
 from typing import Any
 
@@ -403,6 +402,12 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
         if rid:
             try:
                 from emet.eval.scene_task_extractor import compute_reachability_priors
+                from emet.robots import get_robot_spec
+
+                spec = get_robot_spec(rid)
+                arm = str(getattr(spec, "default_arm", "left") or "left") if spec is not None else "left"
+                if spec is None or not getattr(spec, "mjcf_path", None):
+                    raise ValueError("reachability requires a standalone robot MJCF")
 
                 def _pose(body: str) -> np.ndarray:
                     info = placements.get(body)
@@ -412,7 +417,7 @@ def build_tamp_handlers(context: dict[str, Any]) -> dict[str, Callable[..., Any]
                     return np.asarray(pos, dtype=float).reshape(3) if pos is not None else np.zeros(3)
 
                 priors = compute_reachability_priors(
-                    objs, robot_id=rid, arm="left", **({"object_pose_fn": _pose} if placements else {})
+                    objs, robot_id=rid, arm=arm, **({"object_pose_fn": _pose} if placements else {})
                 )
                 reachability = {
                     "robot": rid,

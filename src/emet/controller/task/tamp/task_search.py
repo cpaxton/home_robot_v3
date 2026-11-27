@@ -184,6 +184,11 @@ def _sync_executor_base_to_xyt(executor: Any, xyt: np.ndarray) -> None:
         xyt,
         planar_joint_names=tuple(planar) if planar and len(planar) == 3 else None,
         freejoint_name=getattr(profile, "base_freejoint_name", None),
+        base_body_name=(
+            getattr(spec, "base_link_name", None)
+            if getattr(executor, "_scene_model_loaded", False)
+            else None
+        ),
     )
     # Seed arm near home so ranking matches post-approach posture.
     home = getattr(profile, "home_cmd", None)
@@ -264,6 +269,10 @@ def plan_pick_place(
             poses.extend(approach_candidates_for_object_xy(
                 obj_xy, standoff=radius, mode=mode, arm=arm, count=8))
         logger.info(f'TAMP approach search: {len(poses)} candidates over radii={radii}')
+    if not poses:
+        return TaskPlan([], object_gt_body, receptacle_gt_body,
+                        object_query=object_query, receptacle_query=receptacle_query,
+                        success=False, message='no_approach_candidates', expanded_nodes=expanded)
     clear = [True] * len(poses)
     if use_scene_query:
         try:
@@ -281,6 +290,10 @@ def plan_pick_place(
             return TaskPlan([], object_gt_body, receptacle_gt_body,
                             object_query=object_query, receptacle_query=receptacle_query,
                             success=False, message=f'approach_validation_failed:{exc}', expanded_nodes=expanded)
+    if not clear:
+        return TaskPlan([], object_gt_body, receptacle_gt_body,
+                        object_query=object_query, receptacle_query=receptacle_query,
+                        success=False, message='no_approach_candidates', expanded_nodes=expanded)
 
     scores: list[tuple[int, float, bool]] = []
     chosen: int | None = None
@@ -289,10 +302,10 @@ def plan_pick_place(
         sync = getattr(executor, '_sync_base_freejoint', None)
         if callable(sync):
             sync()  # retain measured base height while probing world XYT
-    failure_reason = "no_grasp_candidates"
+    clear_count = sum(1 for value in clear if value)
+    failure_reason = "approach_collision" if clear_count == 0 else "no_reachable_grasp"
     for candidate_index, (candidate, is_clear) in enumerate(zip(poses, clear, strict=True)):
         if not is_clear:
-            failure_reason = 'approach_collision'
             expanded.append(f'approach[{candidate_index}] collision')
             continue
         if approach_validator is not None and not approach_validator(candidate.copy()):
@@ -311,6 +324,11 @@ def plan_pick_place(
                 ik_max_iters=getattr(executor, "ik_max_iters", 150),
             )
             chosen = next((idx for idx, _err, ok in scores if ok), None)
+            logger.info(
+                f"TAMP approach[{candidate_index}] clear mode={mode} arm={arm} "
+                f"ik={[(int(idx), round(float(err), 3), bool(ok)) for idx, err, ok in scores[:4]]} "
+                f"chosen={chosen!r}"
+            )
         elif grasp_poses:
             chosen = 0
             scores = [(i, float('inf'), True) for i in range(min(len(grasp_poses), top_k_grasps))]

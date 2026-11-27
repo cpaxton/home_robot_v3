@@ -330,6 +330,12 @@ Add new cross-cutting `EMET_*` variables here or in a topic-specific doc and lin
   for Stretch head images, preserving robot self-occlusion. Default `0` retains
   the existing mapping-oriented robot-body suppression. Collision proxy groups
   remain hidden. Realistic rendering does not itself remove robot map points.
+- `EMET_SCENE_MODEL_DIR`: directory for the content-addressed RoboCasa `.mjb`
+  scene model used by client-side kinematic IK. Default
+  `~/.cache/emet/scene_models`. The server writes by model hash, so repeated
+  launches reuse one file instead of leaking an `mkstemp` file per session.
+  Remote clients must mount the same directory; otherwise the session falls
+  back to the scene XML / robot MJCF and may reject scene-provided IK.
 - `EMET_SIM_SYNCHRONIZED_RGBD`: `1` copies one scene sample under the physics
   lock, then renders the cameras from that private copy while physics continues.
   Default `0` preserves asynchronous rendering. Images retain original sampling

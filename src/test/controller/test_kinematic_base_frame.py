@@ -89,6 +89,109 @@ def test_write_offline_base_xyt_xlerobot_spec_names():
         assert abs(float(data.qpos[int(model.jnt_qposadr[jid])]) - float(val)) < 1e-9
 
 
+def test_write_offline_base_xyt_merged_base_uses_fk():
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="scene" pos="10 0 0" euler="0 0 1.0">
+              <body name="base">
+                <joint name="base_x" type="slide" axis="1 0 0"/>
+                <joint name="base_y" type="slide" axis="0 1 0"/>
+                <joint name="base_yaw" type="hinge" axis="0 0 1"/>
+                <geom name="base_geom" type="box" size="0.1 0.1 0.1"/>
+              </body>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    target = np.array([1.0, 2.0, 0.3], dtype=np.float64)
+    assert write_offline_mjcf_base_xyt(
+        model,
+        data,
+        target,
+        planar_joint_names=("base_x", "base_y", "base_yaw"),
+        base_body_name="base",
+    )
+    mujoco.mj_forward(model, data)
+    body = model.body("base").id
+    np.testing.assert_allclose(data.xpos[body][:2], target[:2], atol=1e-6)
+    yaw = np.arctan2(data.xmat[body].reshape(3, 3)[1, 0], data.xmat[body].reshape(3, 3)[0, 0])
+    assert abs(yaw - target[2]) < 1e-6
+
+
+def test_write_offline_base_xyt_planar_failure_falls_back_to_freejoint():
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import write_offline_mjcf_base_xyt
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="planar">
+              <joint name="base_x" type="slide" axis="1 0 0"/>
+              <joint name="base_y" type="slide" axis="0 1 0"/>
+              <joint name="base_yaw" type="hinge" axis="0 0 1"/>
+              <geom name="planar_geom" type="box" size="0.1 0.1 0.1"/>
+            </body>
+            <body name="free" pos="0 5 0">
+              <freejoint name="base_freejoint"/>
+              <geom name="free_geom" type="box" size="0.1 0.1 0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    target = np.array([0.4, -0.2, 0.1], dtype=np.float64)
+    # The missing base body makes write_planar_base_xyt fail; the freejoint
+    # fallback must still be attempted.
+    assert write_offline_mjcf_base_xyt(
+        model,
+        data,
+        target,
+        planar_joint_names=("base_x", "base_y", "base_yaw"),
+        freejoint_name="base_freejoint",
+        base_body_name="missing_base",
+    )
+    qadr = int(model.joint("base_freejoint").qposadr[0])
+    np.testing.assert_allclose(data.qpos[qadr : qadr + 2], target[:2], atol=1e-9)
+
+
+def test_sync_base_freejoint_standalone_uses_raw_qpos():
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+    from emet.robots.sourccey import SourcceyBackend
+
+    spec = SourcceyBackend().get_spec()
+    model = mujoco.MjModel.from_xml_path(str(spec.mjcf_path))
+    data = mujoco.MjData(model)
+
+    class _Robot:
+        _spec = spec
+        _state = {}
+
+    executor = object.__new__(KinematicPickPlaceExecutor)
+    executor.robot = _Robot()
+    executor._model = model
+    executor._data = data
+    executor._scene_model_loaded = False
+    executor.profile = type("Profile", (), {"base_freejoint_name": "base_freejoint"})()
+    executor._world_base_xyt = lambda: np.array([0.4, -0.25, 0.7])
+    executor._sync_base_freejoint()
+    for name, value in zip(spec.planar_base_joint_names, (0.4, -0.25, 0.7), strict=True):
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        assert abs(float(data.qpos[int(model.jnt_qposadr[jid])]) - value) < 1e-9
+
+
 def test_sync_executor_base_to_xyt_uses_spec_planar_names():
     import mujoco
 

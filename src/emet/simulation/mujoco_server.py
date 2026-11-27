@@ -8,9 +8,11 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import hashlib
 import os
 import random
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,36 @@ DEFAULT_SCENE_NO_ROBOT = (
 # --robot stretch, so that emet serve mujoco --robot rby1 works without pinocchio/hppfcl.
 
 
+def _write_scene_model_cache(scene_model, cache_dir: str | Path) -> Path:
+    """Write a content-addressed ``.mjb`` for client-side IK.
+
+    The temporary file lives in the cache directory, so ``os.replace`` is a
+    same-filesystem atomic rename even when ``/tmp`` is a different mount.
+    """
+    import mujoco
+
+    directory = Path(cache_dir).expanduser()
+    directory.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix="emet_scene_", suffix=".mjb", dir=directory)
+    os.close(fd)
+    try:
+        mujoco.mj_saveModel(scene_model, temporary)
+        digest = hashlib.sha256()
+        with open(temporary, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        cached = directory / f"emet_scene_{digest.hexdigest()[:20]}.mjb"
+        if cached.exists():
+            os.unlink(temporary)
+        else:
+            os.replace(temporary, cached)
+        return cached
+    except Exception:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+        raise
+
+
 def _get_stretch_server():
     """Lazy import of the Stretch MuJoCo ZMQ server (avoids loading pinocchio for non-stretch robots)."""
     from emet.simulation.mujoco_server_stretch import MujocoZmqServer
@@ -65,14 +97,19 @@ def _load_default_scene_with_robot(robot_key: str):
     # Robot MJCFs may contain a standalone preview floor. The environment owns
     # the actual floor: two coplanar planes cause z-fighting and duplicate contacts.
     robot_tree = ET.parse(robot_path)
-    preview_planes = [(world, geom) for world in robot_tree.getroot().findall("worldbody")
-                      for geom in world.findall("geom") if geom.get("type") == "plane"]
+    preview_planes = [
+        (world, geom)
+        for world in robot_tree.getroot().findall("worldbody")
+        for geom in world.findall("geom")
+        if geom.get("type") == "plane"
+    ]
     robot_preview_path = None
     if preview_planes:
         for world, geom in preview_planes:
             world.remove(geom)
-        fd_robot, robot_preview_path = tempfile.mkstemp(suffix=".xml", prefix="robot_no_preview_floor_",
-                                                       dir=str(robot_path.parent))
+        fd_robot, robot_preview_path = tempfile.mkstemp(
+            suffix=".xml", prefix="robot_no_preview_floor_", dir=str(robot_path.parent)
+        )
         os.close(fd_robot)
         robot_tree.write(robot_preview_path, encoding="unicode")
         robot_abs = robot_preview_path
@@ -321,6 +358,7 @@ def main(
 
     scene_model = None
     objects_info = None
+    scene_model_path: str | None = None
 
     from emet.utils.port_utils import get_ports
 
@@ -432,6 +470,26 @@ def main(
                 robot=robot,
                 seed=int(seed) if seed is not None else None,
             )
+            from emet.robots import get_robot_spec
+
+            robot_spec = get_robot_spec(str(robot))
+            scene_provided_robot = bool(
+                robot_spec is not None and getattr(robot_spec, "scene_provides_mjcf", False)
+            )
+            if scene_model is not None and scene_provided_robot:
+                try:
+                    # Only native scene-provided robots need this model. A
+                    # standalone robot has its own MJCF and should not pay the
+                    # serialization cost for a large kitchen scene.
+                    cache_dir = Path(
+                        os.environ.get("EMET_SCENE_MODEL_DIR", Path.home() / ".cache" / "emet" / "scene_models")
+                    ).expanduser()
+                    cached = _write_scene_model_cache(scene_model, cache_dir)
+                    scene_model_path = str(cached)
+                    logger.info(f"Saved scene model for client-side IK: {scene_model_path}")
+                except Exception as exc:
+                    logger.warning(f"Could not save scene model for client-side IK: {exc}")
+                    scene_model_path = None
         except FileNotFoundError as e:
             _complete, basic_ok, layout_ok, lw_ok, obj_ok = diagnose_robocasa_assets()
             logger.error(
@@ -659,10 +717,11 @@ def main(
                 use_remote_computer=use_remote_computer,
                 verbose=verbose,
                 scene_xml=scene_xml if use_robocasa else None,
-                scene_model=scene_model if not use_robocasa else None,
+                scene_model=scene_model,
                 environment=zmq_environment,
                 scene_source_basename=scene_source_basename,
                 objects_info=objects_info,
+                session_extra={"scene_model_path": scene_model_path} if scene_model_path else None,
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
                 scene_disk_path=spawn_scene_disk,

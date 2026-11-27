@@ -225,6 +225,90 @@ def _apply_scene_qpos0(model, scene_qpos: dict[str, np.ndarray]) -> int:
     return applied
 
 
+def _panda_omron_position_servos(xml: str) -> str:
+    """Replace Panda torque motors with position servos for kinematic TAMP.
+
+    RoboCasa's PandaOmron is torque-actuated; the emet kinematic executor sends
+    joint-position targets. Keep the mobile-base velocity actuators and gripper
+    position actuators unchanged, preserve the original actuator order, and
+    carry each motor's torque ``ctrlrange`` over as the position servo's
+    ``forcerange``. This scene is for kinematic TAMP, not dynamic RoboCasa
+    parity.
+    """
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml)
+    joint_ranges = {
+        joint.get("name"): joint.get("range")
+        for joint in root.iter("joint")
+        if joint.get("name") and joint.get("range")
+    }
+    actuator = root.find("actuator")
+    if actuator is None:
+        return xml
+
+    def position_servo(original: ET.Element, *, name: str, joint: str, ctrlrange: str) -> ET.Element:
+        attrs = {
+            "name": name,
+            "joint": joint,
+            "kp": "1000",
+            "kv": "50",
+            "ctrllimited": "true",
+            "ctrlrange": ctrlrange,
+        }
+        # A motor's ctrlrange is a torque range; preserve it as force authority.
+        # An explicit forcelimited="false" wins (the torso motor has no force cap).
+        if original.get("forcelimited") == "false":
+            attrs["forcelimited"] = "false"
+        elif original.get("forcerange") is not None:
+            attrs["forcerange"] = original.get("forcerange")
+            attrs["forcelimited"] = original.get("forcelimited") or "true"
+        elif original.tag == "motor" and original.get("ctrlrange"):
+            attrs["forcelimited"] = "true"
+            attrs["forcerange"] = original.get("ctrlrange")
+        elif original.get("forcelimited") is not None:
+            attrs["forcelimited"] = original.get("forcelimited")
+        if original.get("gear") is not None:
+            attrs["gear"] = original.get("gear")
+        return ET.Element("position", attrs)
+
+    replaced = 0
+    torso_replaced = 0
+    for index, elem in enumerate(list(actuator)):
+        name = elem.get("name") or ""
+        if name == "mobilebase0_actuator_torso_height":
+            joint = elem.get("joint") or "mobilebase0_joint_torso_height"
+            new = position_servo(
+                elem,
+                name=name,
+                joint=joint,
+                ctrlrange=joint_ranges.get(joint, "0 0.34"),
+            )
+            actuator.remove(elem)
+            actuator.insert(index, new)
+            torso_replaced += 1
+            continue
+        if not name.startswith("robot0_torq_j"):
+            continue
+        joint = elem.get("joint") or ""
+        suffix = name.removeprefix("robot0_torq_j")
+        new = position_servo(
+            elem,
+            name=f"robot0_joint{suffix}_act",
+            joint=joint,
+            ctrlrange=joint_ranges.get(joint, "-3.14 3.14"),
+        )
+        actuator.remove(elem)
+        actuator.insert(index, new)
+        replaced += 1
+    if replaced or torso_replaced:
+        click.secho(
+            f"Converted {replaced} Panda torque motors and {torso_replaced} torso motor to position servos",
+            fg="green",
+        )
+    return ET.tostring(root, encoding="unicode")
+
+
 def model_generation_wizard(
     task: str = "PickPlaceCounterToCabinet",
     layout: int = None,
@@ -371,6 +455,8 @@ def model_generation_wizard(
     else:
         xml = _cleanup_for_native_robot(xml)
         xml = ensure_mesh_inertia(xml)
+        if robot_key in ("panda_omron", "pandaomron"):
+            xml = _panda_omron_position_servos(xml)
         click.secho(f"\nKeeping robosuite robot '{rs_robot}' in scene.\n", fg="yellow")
 
     # Strip keyframes from the serialized kitchen model when we swapped in a different robot:
@@ -386,7 +472,9 @@ def model_generation_wizard(
         fg="green",
     )
 
-    if use_strip_placeholder_robot and hasattr(env, "init_robot_base_pos"):
+    if (use_strip_placeholder_robot or robot_key in ("panda_omron", "pandaomron")) and hasattr(
+        env, "init_robot_base_pos"
+    ):
         pos = np.asarray(env.init_robot_base_pos, dtype=float).reshape(-1)
         yaw = 0.0
         if hasattr(env, "init_robot_base_ori"):

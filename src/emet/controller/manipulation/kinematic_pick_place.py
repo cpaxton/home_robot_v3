@@ -89,12 +89,15 @@ def write_offline_mjcf_base_xyt(
     planar_joint_names: Sequence[str] | None = None,
     freejoint_name: str | None = None,
     z: float | None = None,
+    base_body_name: str | None = None,
 ) -> bool:
-    """Write world XYT into a standalone (unmerged) robot MJCF base.
+    """Write world XYT into a standalone or merged robot MJCF base.
 
     Prefers planar slide/hinge joints when all names resolve, otherwise a 7-DoF
-    freejoint. Values are **raw world XYT** — correct for vendored robot MJCFs, not
-    Robocasa-merged models (use :func:`emet.simulation.spawn_planar.write_planar_base_xyt`).
+    freejoint. With ``base_body_name`` the planar joints are solved through FK to
+    the requested world pose, which is required for RoboCasa-merged scenes with
+    transformed ancestors. Without it the values are written directly as raw
+    qpos, which is correct for standalone robot MJCFs.
     """
     x, y, th = float(xyt[0]), float(xyt[1]), float(xyt[2])
     names = tuple(str(n) for n in planar_joint_names) if planar_joint_names else ()
@@ -106,9 +109,29 @@ def write_offline_mjcf_base_xyt(
     if len(names) == 3:
         ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) for jn in names]
         if all(jid >= 0 for jid in ids):
-            for jid, val in zip(ids, (x, y, th), strict=True):
-                data.qpos[int(model.jnt_qposadr[jid])] = float(val)
-            return True
+            if base_body_name is None:
+                # Standalone robot MJCF: the planar joints are already in the
+                # robot's world frame, so the raw XYT is the correct qpos.
+                for jid, value in zip(ids, (x, y, th), strict=True):
+                    data.qpos[int(model.jnt_qposadr[jid])] = float(value)
+                return True
+            # Merged RoboCasa scenes place the planar base under a transformed
+            # ancestor; solve the actual joint FK to world instead of writing raw
+            # joint values (which would add the scene's 10 m merge offset).
+            from emet.simulation.spawn_planar import write_planar_base_xyt
+
+            if write_planar_base_xyt(
+                model,
+                data,
+                joint_names=(names[0], names[1], names[2]),
+                world_x=x,
+                world_y=y,
+                world_yaw=th,
+                base_body_name=base_body_name,
+            ):
+                return True
+            # Fall through to a freejoint when the planar solve fails; returning
+            # False here used to leave the base stale even for freejoint robots.
     if freejoint_name:
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(freejoint_name))
         if jid >= 0:
@@ -135,7 +158,7 @@ class KinematicPickPlaceExecutor:
         self,
         robot: Any,
         *,
-        arm: str = "left",
+        arm: str | None = None,
         profile: ArmManipProfile | None = None,
         manip_collision: str = "none",
         manip_planner: str = "rrt_connect",
@@ -149,11 +172,19 @@ class KinematicPickPlaceExecutor:
         ik_max_iters: int = 150,
         pregrasp_standoff_m: float = 0.12,
         place_xy_tol_m: float = 0.12,
-        grasp_lift_verify_tol_m: float = 0.08,
+        grasp_lift_verify_tol_m: float | None = None,
         visualizer: Any | None = None,
         placement_geometry_provider: Any | None = None,
     ) -> None:
         self.robot = robot
+        spec = getattr(robot, "_spec", None)
+        if grasp_lift_verify_tol_m is None:
+            grasp_lift_verify_tol_m = float(
+                getattr(spec, "grasp_lift_verify_tol_m", 0.08) or 0.08
+            )
+        if arm is None:
+            spec = getattr(robot, "_spec", None)
+            arm = str(getattr(spec, "default_arm", "left") or "left") if spec is not None else "left"
         self.arm = str(arm).lower()
         if profile is None:
             profile = ArmManipProfile.for_robot(robot_id_from_client(robot), arm=self.arm)
@@ -190,6 +221,7 @@ class KinematicPickPlaceExecutor:
         self.link_bodies = list(self.profile.link_bodies)
         self._model: mujoco.MjModel | None = None
         self._data: mujoco.MjData | None = None
+        self._scene_model_loaded = False
         self._collision: VoxelMapArmCollisionChecker | AabbArmCollisionChecker | PlacementCollisionChecker | None = None
         self._last_cmd_q: np.ndarray | None = None
         self.last_plan_waypoints: list[np.ndarray] = []
@@ -270,8 +302,29 @@ class KinematicPickPlaceExecutor:
             return True
         spec = getattr(self.robot, "_spec", None) or getattr(self.robot, "get_robot_spec", lambda: None)()
         mjcf = getattr(spec, "mjcf_path", None) if spec is not None else None
+        if not mjcf and spec is not None and bool(getattr(spec, "scene_provides_mjcf", False)):
+            get_session = getattr(self.robot, "get_emet_session", None)
+            session = (get_session() if callable(get_session) else None) or {}
+            scene_model_path = session.get("scene_model_path")
+            if scene_model_path and Path(str(scene_model_path)).is_file():
+                try:
+                    self._model = mujoco.MjModel.from_binary_path(str(scene_model_path))
+                    self._data = mujoco.MjData(self._model)
+                    self._scene_model_loaded = True
+                    mujoco.mj_forward(self._model, self._data)
+                    return True
+                except Exception as exc:
+                    self._model = None
+                    self._data = None
+                    self._scene_model_loaded = False
+                    logger.warning(
+                        f"KinematicPickPlace: could not load scene model {scene_model_path}: {exc}"
+                    )
         if not mjcf:
-            logger.error("KinematicPickPlace: robot spec missing mjcf_path")
+            logger.error(
+                "KinematicPickPlace: no usable scene model and no mjcf_path; "
+                "kinematic manipulation is unavailable"
+            )
             return False
         path = Path(str(mjcf))
         if not path.is_file():
@@ -279,6 +332,7 @@ class KinematicPickPlaceExecutor:
             return False
         self._model = mujoco.MjModel.from_xml_path(str(path))
         self._data = mujoco.MjData(self._model)
+        self._scene_model_loaded = False
         mujoco.mj_forward(self._model, self._data)
         if self.manip_collision == "voxel" and self.voxel_map is not None:
             self._collision = VoxelMapArmCollisionChecker.from_voxel_map(
@@ -344,14 +398,18 @@ class KinematicPickPlaceExecutor:
                 z = float(np.asarray(state["base_xyz"], dtype=np.float64).reshape(-1)[2])
             except Exception:
                 pass
-        write_offline_mjcf_base_xyt(
+        spec = getattr(self.robot, "_spec", None)
+        written = write_offline_mjcf_base_xyt(
             self._model,
             self._data,
             world,
             planar_joint_names=self._planar_joint_names(),
             freejoint_name=getattr(self.profile, "base_freejoint_name", None),
             z=z,
+            base_body_name=getattr(spec, "base_link_name", None) if getattr(self, "_scene_model_loaded", False) else None,
         )
+        if not written:
+            logger.warning("KinematicPickPlace: could not sync the measured base pose into the offline model")
 
     def _actuator_to_joint_name(self, aname: str) -> str | None:
         m = re.match(r"(left|right)_arm(\d+)$", aname)
@@ -546,22 +604,58 @@ class KinematicPickPlaceExecutor:
 
     def _hold_actuator_dict(self) -> dict[str, float]:
         names = self._actuator_names()
+        spec = getattr(self.robot, "_spec", None)
+        base = set(getattr(spec, "base_actuator_names", ()) or ())
         hold: dict[str, float] = {}
         q, _, _ = self.robot.get_joint_state(timeout=1.0)
         if q is not None and len(q) >= len(names):
-            hold = {n: float(q[i]) for i, n in enumerate(names)}
+            hold = {
+                n: (0.0 if n in base else float(q[i]))
+                for i, n in enumerate(names)
+            }
         return hold
+
+    def _actuator_for_joint(self, joint_name: str) -> str | None:
+        """Resolve the actuator that drives ``joint_name`` in the loaded model."""
+        names = self._actuator_names()
+        if joint_name in names:
+            return joint_name
+        model = self._model
+        if model is not None:
+            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, str(joint_name))
+            if jid >= 0:
+                for aid in range(model.nu):
+                    if model.actuator_trntype[aid] not in (
+                        mujoco.mjtTrn.mjTRN_JOINT,
+                        mujoco.mjtTrn.mjTRN_JOINTINPARENT,
+                    ):
+                        continue
+                    if int(model.actuator_trnid[aid, 0]) != jid:
+                        continue
+                    actuator = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aid)
+                    if actuator is not None and actuator in names:
+                        return str(actuator)
+        return None
 
     def _set_gripper(self, *, open_: bool) -> None:
         names = self._actuator_names()
         hold = self._hold_actuator_dict()
-        val = self.profile.gripper_open if open_ else self.profile.gripper_closed
-        keys = [n for n in self.profile.actuator_names if "gripper" in n.lower()]
-        if not keys:
-            keys = ["right_gripper1", "right_gripper2"] if self.arm == "right" else ["left_gripper1", "left_gripper2"]
-        for k in keys:
-            if k in names:
-                hold[k] = val
+        configuration = self.profile.gripper_open_configuration
+        if configuration:
+            # Keep open and close on the same joint->actuator path. A robot with
+            # a configured open pose but differently named close actuators used
+            # to open and never close.
+            for name, open_value in configuration:
+                actuator = self._actuator_for_joint(name)
+                if actuator is None:
+                    logger.warning(f"Gripper configuration joint {name!r} has no resolvable actuator; skipping")
+                    continue
+                hold[actuator] = float(open_value if open_ else self.profile.gripper_closed)
+        else:
+            value = self.profile.gripper_open if open_ else self.profile.gripper_closed
+            keys = [n for n in names if "gripper" in n.lower() or "finger" in n.lower() or "jaw" in n.lower()]
+            for key in keys:
+                hold[key] = value
         if hold:
             self.robot.set_actuator_positions(hold)
 
@@ -579,11 +673,12 @@ class KinematicPickPlaceExecutor:
         names = self._actuator_names()
         home_ctrl = self.profile.home_cmd
         skip_base = {"steer1", "wheel1", "steer2", "wheel2", "steer3", "wheel3"}
-        cmd = {
+        cmd = self._hold_actuator_dict()
+        cmd.update({
             n: float(home_ctrl[i])
             for i, n in enumerate(self.profile.actuator_names)
             if i < len(home_ctrl) and n in names and n not in skip_base
-        }
+        })
         if cmd:
             # Repeated holds: a single send after nav teleport often loses to contact transients.
             deadline = time.time() + max(float(settle_s), 0.5)
@@ -702,42 +797,44 @@ class KinematicPickPlaceExecutor:
             # plan did not track. The plan can be kinematically valid while the
             # loaded torso settles short; solving from the observed q finds the
             # posture that reaches the same target despite that droop.
-            from emet.motion.mujoco_arm_ik import solve_position_ik
-
             lo, hi = self._joint_position_bounds()
-            gain = 1.0
-            previous_error = measured_error if np.isfinite(measured_error) else float("inf")
-            for _ in range(6):
-                if not self._sync_qpos_from_robot():
-                    break
-                q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
-                solution = solve_position_ik(
-                    self._model,
-                    self._data,
-                    ee_body=self.ee_body,
-                    joint_names=self.joint_names,
-                    target_pos=np.asarray(target_xyz_world, dtype=np.float64),
-                    tol_m=min(0.01, self.ik_tol_m * 0.25),
-                    max_iters=self.ik_max_iters,
-                )
-                if not solution.success:
-                    break
-                q_ik = np.asarray(solution.qpos, dtype=np.float64)[qadr]
-                step = np.clip(gain * (q_ik - q_obs), -0.35, 0.35)
-                if float(np.max(np.abs(step))) < 1e-3:
-                    break
-                q_cmd = np.clip(q_obs + step, lo, hi)
-                for _ in range(8):
-                    self._stream_arm_q(q_cmd)
-                    self._sleep(0.05)
-                reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
-                if reached:
-                    break
-                # A full IK step can overshoot at the edge of reach; back off
-                # when the measured error stops improving instead of oscillating.
-                if measured_error >= previous_error * 0.98:
-                    gain = max(0.25, gain * 0.5)
-                previous_error = measured_error
+            spec = getattr(getattr(self, "robot", None), "_spec", None)
+            if bool(getattr(spec, "live_ik_correction", True)):
+                from emet.motion.mujoco_arm_ik import solve_position_ik
+
+                gain = 1.0
+                previous_error = measured_error if np.isfinite(measured_error) else float("inf")
+                for _ in range(6):
+                    if not self._sync_qpos_from_robot():
+                        break
+                    q_obs = np.asarray([float(self._data.qpos[a]) for a in qadr], dtype=np.float64)
+                    solution = solve_position_ik(
+                        self._model,
+                        self._data,
+                        ee_body=self.ee_body,
+                        joint_names=self.joint_names,
+                        target_pos=np.asarray(target_xyz_world, dtype=np.float64),
+                        tol_m=min(0.01, self.ik_tol_m * 0.25),
+                        max_iters=self.ik_max_iters,
+                    )
+                    if not solution.success:
+                        break
+                    q_ik = np.asarray(solution.qpos, dtype=np.float64)[qadr]
+                    step = np.clip(gain * (q_ik - q_obs), -0.35, 0.35)
+                    if float(np.max(np.abs(step))) < 1e-3:
+                        break
+                    q_cmd = np.clip(q_obs + step, lo, hi)
+                    for _ in range(8):
+                        self._stream_arm_q(q_cmd)
+                        self._sleep(0.05)
+                    reached, measured_error = self._wait_measured_ee(np.asarray(target_xyz_world))
+                    if reached:
+                        break
+                    # A full IK step can overshoot at the edge of reach; back off
+                    # when the measured error stops improving instead of oscillating.
+                    if measured_error >= previous_error * 0.98:
+                        gain = max(0.25, gain * 0.5)
+                    previous_error = measured_error
             if not reached:
                 # Cartesian re-solve can fail at a singular/stretched posture.
                 # Fall back to the bounded joint residual instead of giving up.
@@ -857,6 +954,53 @@ class KinematicPickPlaceExecutor:
             raise ValueError("placement_support_geometry_missing")
         return scene, payload, support_patches(patches)
 
+    def _retract_for_placement(self, distance_m: float = 0.0) -> bool:
+        """Pull the held object toward the base before placement base queries.
+
+        Placement base endpoints are checked against the robot's current posture.
+        With the arm extended at the lift target, otherwise-clear bases fail on
+        robot/payload collision. Re-solving IK to a point closer to the base is
+        measured, not a blind joint tuck.
+        """
+        from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_position_ik
+
+        if self._model is None or self._data is None:
+            return False
+        if not self._sync_qpos_from_robot():
+            return False
+        ee = np.asarray(self._data.body(self.ee_body).xpos, dtype=np.float64).copy()
+        base = self._world_base_xyt()
+        if base is None:
+            return False
+        outward = ee[:2] - np.asarray(base[:2], dtype=np.float64)
+        norm = float(np.linalg.norm(outward))
+        if norm <= float(distance_m) + 0.05:
+            return True
+        target = ee.copy()
+        target[:2] -= outward / norm * float(distance_m)
+        solution = solve_position_ik(
+            self._model,
+            self._data,
+            ee_body=self.ee_body,
+            joint_names=self.joint_names,
+            target_pos=target,
+            tol_m=min(0.015, self.ik_tol_m * 0.5),
+            max_iters=self.ik_max_iters,
+        )
+        if not solution.success:
+            return False
+        qadr = joint_qpos_addrs(self._model, self.joint_names)
+        q_cmd = np.asarray(solution.qpos, dtype=np.float64)[qadr]
+        for _ in range(10):
+            self._stream_arm_q(q_cmd)
+            self._sleep(0.05)
+        self._wait_measured_ee(target, timeout_s=4.0)
+        logger.info(
+            f"Placement pre-retract: ee={np.round(ee, 3).tolist()} "
+            f"target={np.round(target, 3).tolist()}"
+        )
+        return True
+
     def _search_placement(self, body, receptacle, *, approach_base):
         from emet.motion.placement import (
             base_candidates_from_approach_hint,
@@ -867,6 +1011,10 @@ class KinematicPickPlaceExecutor:
 
         if not self._sync_qpos_from_robot():
             raise ValueError("placement_" + (self._last_motion_failure or "missing_joint_state"))
+        spec = self.robot._spec
+        retract_m = float(getattr(spec, "placement_retract_m", 0.0) or 0.0)
+        if retract_m > 0.0:
+            self._retract_for_placement(distance_m=retract_m)
         scene, payload, support = self._placement_geometry(body, receptacle)
         rotation = self._data.body(self.ee_body).xmat.reshape(3, 3).copy()
         from emet.motion.placement_surfaces import centers_lowest_first, free_surface_centers, support_patches
@@ -918,9 +1066,12 @@ class KinematicPickPlaceExecutor:
                 clear.extend(evidence)
         poses = [pose for index, pose in enumerate(poses) if clear is None or clear[index]]
 
+        merged_base = spec.base_link_name if getattr(self, "_scene_model_loaded", False) else None
+
         def set_base(model, data, pose):
             return write_offline_mjcf_base_xyt(model, data, pose,
-                planar_joint_names=self._planar_joint_names(), freejoint_name=self.profile.base_freejoint_name)
+                planar_joint_names=self._planar_joint_names(), freejoint_name=self.profile.base_freejoint_name,
+                base_body_name=merged_base)
 
         contacts = (self.ee_body, *self.profile.gripper_contact_bodies())
         snapshot_root = os.environ.get("EMET_PLACEMENT_DIAGNOSTICS_DIR")
@@ -932,7 +1083,8 @@ class KinematicPickPlaceExecutor:
                 joint_names=self.joint_names, ee_body=self.ee_body, robot_body=spec.base_link_name,
                 contact_bodies=contacts, rrt_max_iter=self.rrt_max_iter,
                 base_writer={"planar_joint_names": self._planar_joint_names(),
-                             "freejoint_name": self.profile.base_freejoint_name})
+                             "freejoint_name": self.profile.base_freejoint_name,
+                             "base_body_name": merged_base})
             logger.info(f"Placement snapshot: {snapshot}")
         def _search(mode: str):
             search = plan_placement_paths(self._model, self._data, joint_names=self.joint_names,

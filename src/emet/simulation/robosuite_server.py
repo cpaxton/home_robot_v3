@@ -116,7 +116,8 @@ def _robot_supports_kinematic_manip(robot_name: str) -> bool:
 
         spec = get_robot_spec(key)
         if spec is not None and bool(getattr(spec, "advertise_kinematic_manip", False)):
-            ArmManipProfile.for_robot(key, arm="left")
+            arm = str(getattr(spec, "default_arm", "left") or "left")
+            ArmManipProfile.for_robot(key, arm=arm)
             ok = True
     except Exception:  # noqa: BLE001  (KeyError / spec / MJCF discovery failures)
         ok = False

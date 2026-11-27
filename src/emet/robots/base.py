@@ -76,6 +76,8 @@ class RobotSpec:
     urdf_path: str | None
     footprint: Footprint
     mjcf_path: str | None = None
+    scene_provides_mjcf: bool = False
+    """True when the robot MJCF is supplied by the live scene (e.g. native RoboCasa PandaOmron)."""
     actuator_names: list[str] = field(default_factory=list)
     control_limits: dict[str, float] = field(default_factory=dict)
     """Verified or simulator-only absolute caps, with units in the key names.
@@ -103,6 +105,22 @@ class RobotSpec:
     ``capabilities.kinematic_manip`` when an :class:`~emet.motion.arm_manip_profile.ArmManipProfile`
     also resolves. Default False so offline IK discovery (xlerobot, franka, …) does not
     switch live DynaMem/OVMM pick/place from teleport to latch."""
+    default_arm: str = "left"
+    """Arm side used when a robot exposes a single arm or the caller does not choose one."""
+    live_ik_correction: bool = True
+    """Re-solve Cartesian IK from the measured posture when open-loop tracking misses.
+
+    Disable for position-servo robots whose measured posture is already the
+    authoritative reference and where a second IK branch can oscillate.
+    """
+    grasp_lift_verify_tol_m: float = 0.08
+    """Object-center tolerance for the grasp lift check; round objects can sit off the EE TCP."""
+    placement_retract_m: float = 0.0
+    """Distance to pull the held object toward the base before placement base queries.
+
+    Opt-in: zero preserves the previous placement search for robots that do not
+    need the pre-retract. PandaOmron sets a nonzero value for its carry posture.
+    """
     tamp_approach: str = "front"
     """TAMP table standoff. ``front`` = Galaxea/rby1 (stand in +Y, yaw=−π/2 so +X faces
     the object). ``side`` = arms hang on ±X (Sourccey): left yaw=+π/2, right yaw=−π/2 so
@@ -118,6 +136,13 @@ class RobotSpec:
     """
     dynav_parameter_overrides: dict[str, Any] = field(default_factory=dict)
     """Optional ``dynav_config.yaml`` key overrides applied in ``run_dynagraph`` / ``run_dynamem`` after load."""
+    base_actuator_names: tuple[str, ...] = ()
+    """Velocity/steer actuators that must not be commanded with held joint positions.
+
+    These are zeroed in the kinematic arm hold instead of being filled from the
+    measured joint state (e.g. PandaOmron's planar mobile-base velocity actuators).
+    """
+
     planar_base_joint_names: tuple[str, str, str] | None = None
     """If set, MuJoCo nav uses three scalar joints (slide, slide, hinge yaw) as velocity targets instead
     of a ``base_link`` free joint. Slide axes live on the parent body of the first slide (e.g. ``base_root``);
