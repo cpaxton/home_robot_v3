@@ -74,6 +74,108 @@ def _fixture_pos(env: Any, attr: str) -> np.ndarray | None:
     return np.asarray(fixture.pos, dtype=np.float64).reshape(3)
 
 
+def _body_points(env: Any, body: str) -> np.ndarray:
+    """World-space vertices of the body's collidable geometry."""
+    model = env.sim.model
+    data = env.sim.data
+    body_id = int(model.body_name2id(_resolve_body(env, body)))
+    points: list[np.ndarray] = []
+    for geom in range(model.ngeom):
+        if int(model.geom_bodyid[geom]) != body_id:
+            continue
+        if int(model.geom_contype[geom]) == 0 and int(model.geom_conaffinity[geom]) == 0:
+            continue
+        if int(model.geom_type[geom]) == 7:
+            mesh = int(model.geom_dataid[geom])
+            start = int(model.mesh_vertadr[mesh])
+            count = int(model.mesh_vertnum[mesh])
+            vertices = np.asarray(model.mesh_vert[start : start + count], dtype=np.float64)
+            rotation = np.asarray(data.geom_xmat[geom], dtype=np.float64).reshape(3, 3)
+            points.append(vertices @ rotation.T + np.asarray(data.geom_xpos[geom], dtype=np.float64))
+        else:
+            center = np.asarray(data.geom_xpos[geom], dtype=np.float64)
+            radius = float(np.linalg.norm(model.geom_size[geom]))
+            points.append(np.array([center - radius, center + radius]))
+    if not points:
+        raise ValueError(f"body {body!r} has no collidable geometry")
+    return np.concatenate(points, axis=0)
+
+
+def _cross_section(points: np.ndarray, z: float, half_height: float) -> tuple[np.ndarray | None, float]:
+    slab = points[np.abs(points[:, 2] - z) <= half_height]
+    if len(slab) == 0:
+        return None, 0.0
+    low = slab[:, :2].min(axis=0)
+    high = slab[:, :2].max(axis=0)
+    return 0.5 * (low + high), float(np.max(high - low))
+
+
+def _choose_grasp_z(
+    points: np.ndarray,
+    *,
+    opening_m: float,
+    margin_m: float,
+    pad_half_height_m: float,
+) -> tuple[float, np.ndarray, float, list[tuple[float, float]]]:
+    high = float(points[:, 2].max())
+    low = float(points[:, 2].min())
+    max_width = 0.0
+    probe = low
+    while probe <= high:
+        _, width = _cross_section(points, probe, 0.005)
+        max_width = max(max_width, width)
+        probe += 0.005
+    min_width = max(0.015, 0.5 * max_width)
+    candidate_top = high - 0.015
+    candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
+    table: list[tuple[float, float]] = []
+    best: tuple[float, np.ndarray, float] | None = None
+    z = candidate_top
+    while z >= candidate_bottom - 1e-9:
+        center, width = _cross_section(points, z, pad_half_height_m)
+        table.append((z, width))
+        if center is not None and min_width <= width <= opening_m - margin_m:
+            return z, center, width, table
+        if center is not None and (
+            best is None
+            or abs(width - 0.5 * (min_width + opening_m)) < abs(best[2] - 0.5 * (min_width + opening_m))
+        ):
+            best = (z, center, width)
+        z -= 0.002
+    if best is None:
+        raise ValueError("could not find a grasp cross-section")
+    return best[0], best[1], best[2], table
+
+
+def _close_gate(
+    wbc: WbcGymEnv,
+    backend: RoboCasaPandaBackend,
+    *,
+    object_body: str,
+    action_source,
+    force_n: float,
+    hold_s: float,
+    timeout_s: float,
+) -> tuple[bool, float, float, float]:
+    stable = 0.0
+    left = right = 0.0
+    limit = int(round(timeout_s / wbc.control_dt))
+    for _ in range(limit):
+        _, _, terminated, truncated, _ = wbc.step(action_source())
+        left, right = backend.finger_target_forces(object_body)
+        if left > force_n and right > force_n:
+            stable += wbc.control_dt
+        else:
+            stable = 0.0
+        if stable >= hold_s or terminated or truncated:
+            break
+    return stable >= hold_s, left, right, stable
+
+
+def _pose_from_T(T: np.ndarray) -> tuple[float, ...]:
+    return _pose(T[:3, 3], Rotation.from_matrix(T[:3, :3]).as_quat())
+
+
 def _pose(position: np.ndarray, quat: np.ndarray) -> tuple[float, ...]:
     return tuple(float(v) for v in np.r_[position, quat])
 
@@ -211,17 +313,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
     parser.add_argument("--grasp-z-offset", type=float, default=0.02, help="wrist target offset below object center")
     parser.add_argument(
-        "--grasp-orientation",
-        choices=("ready", "topdown"),
-        default="ready",
-        help="wrist orientation for grasp/place targets",
+        "--grasp-height-mode",
+        choices=("geometry", "offset"),
+        default="geometry",
+        help="choose the grasp height from the object's collision geometry or a fixed offset",
     )
-    parser.add_argument(
-        "--grasp-frame",
-        choices=("hand", "eef"),
-        default="eef",
-        help="target the wrist body directly or offset it so the gripper EEF is at the object",
-    )
+    parser.add_argument("--gripper-opening", type=float, default=0.063, help="usable finger opening in meters")
+    parser.add_argument("--grasp-margin", type=float, default=0.0, help="clearance to reserve inside the opening")
+    parser.add_argument("--pregrasp-height", type=float, default=0.12, help="wrist standoff above the grasp")
+    parser.add_argument("--descent-steps", type=int, default=60, help="steps for the final grasp descent")
+    parser.add_argument("--grasp-force-n", type=float, default=1.0, help="per-finger force required to accept the grasp")
+    parser.add_argument("--bilateral-hold-s", type=float, default=0.9, help="bilateral contact hold before lifting")
+    parser.add_argument("--lift-height", type=float, default=0.03, help="verification lift height")
+    parser.add_argument("--min-lift-m", type=float, default=0.01, help="object rise required to accept the grasp")
+    parser.add_argument("--transport-height", type=float, default=0.18, help="carry height above the grasp")
+    parser.add_argument("--place-height", type=float, default=0.15, help="EEF height above the receptacle base")
     parser.add_argument("--lift-speed", type=float, default=0.02, help="Cartesian lift speed in m/s")
     parser.add_argument("--lift-settle", type=float, default=0.5, help="settle time after the lift ramp")
     parser.add_argument("--steps", type=int, default=1200)
@@ -293,7 +399,8 @@ def main(argv: list[str] | None = None) -> int:
         base_world = backend._world_base_pose()
 
         def base_target_for(target_xy: np.ndarray) -> np.ndarray:
-            direction = np.asarray(base_world[:2], dtype=np.float64) - target_xy
+            current_base = backend._world_base_pose()
+            direction = np.asarray(current_base[:2], dtype=np.float64) - target_xy
             norm = float(np.linalg.norm(direction))
             if norm < 1e-6:
                 direction = np.array([1.0, 0.0])
@@ -315,60 +422,126 @@ def main(argv: list[str] | None = None) -> int:
             wbc, backend, action_source=action, timeout_s=10.0, label="base_approach", teleport=args.teleport_base
         )
 
-        if args.grasp_orientation == "topdown":
-            from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+        from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
 
-            topdown = top_down_grasp_T(object_pos)
-            grasp_quat = Rotation.from_matrix(topdown[:3, :3]).as_quat()
+        grasp_object_pos, _ = _body_pose(env, args.object_body)
+        resolved_object = _resolve_body(env, args.object_body)
+        if args.grasp_height_mode == "geometry":
+            points = _body_points(env, args.object_body)
+            grasp_z, grasp_xy, section_width, table = _choose_grasp_z(
+                points,
+                opening_m=args.gripper_opening,
+                margin_m=args.grasp_margin,
+                pad_half_height_m=0.012,
+            )
         else:
-            grasp_quat = tool_quat
-        grasp_pos = object_pos + np.array([0.0, 0.0, args.grasp_z_offset])
-        eef_offset = np.zeros(3)
-        if args.grasp_frame == "eef":
-            hand_T = _body_T(env, "robot0_right_hand")
-            eef_T = _body_T(env, "gripper0_right_eef")
-            eef_in_hand = np.linalg.inv(hand_T) @ eef_T
-            eef_offset = Rotation.from_quat(grasp_quat).apply(eef_in_hand[:3, 3])
-            grasp_pos = grasp_pos - eef_offset
-        finger_axis, finger_center = _finger_axis_center(env)
-        lateral = float(np.dot(object_pos - finger_center, finger_axis))
-        grasp_pos = grasp_pos + finger_axis * lateral
+            grasp_xy = grasp_object_pos[:2]
+            grasp_z = float(grasp_object_pos[2] + args.grasp_z_offset)
+            section_width = 0.0
+            table = []
+        base_world = backend._world_base_pose()
+        base_yaw = float(
+            np.arctan2(grasp_xy[1] - base_world[1], grasp_xy[0] - base_world[0])
+        )
+        grasp_yaw = base_yaw + np.pi / 2.0
+        T_eef_grasp = top_down_grasp_T(
+            np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
+            z_offset_m=0.0,
+        )
+        T_eef_grasp[:3, :3] = Rotation.from_euler("z", grasp_yaw).as_matrix() @ T_eef_grasp[:3, :3]
+        T_hand_eef = np.linalg.inv(_body_T(env, "robot0_right_hand")) @ _body_T(env, "gripper0_right_eef")
+        eef_in_hand = np.linalg.inv(T_hand_eef)
+        T_hand_grasp = T_eef_grasp @ eef_in_hand
+        T_hand_pregrasp = T_hand_grasp.copy()
+        T_hand_pregrasp[2, 3] += args.pregrasp_height
+        grasp_pos = T_hand_grasp[:3, 3].copy()
+        grasp_quat = Rotation.from_matrix(T_hand_grasp[:3, :3]).as_quat()
+        pregrasp = T_hand_pregrasp[:3, 3].copy()
         print(
-            f"grasp_alignment lateral={lateral:.4f} axis={np.round(finger_axis, 3).tolist()} "
-            f"object={np.round(object_pos, 3).tolist()}",
+            f"grasp_plan object={np.round(grasp_object_pos, 3).tolist()} "
+            f"grasp_xy={np.round(grasp_xy, 3).tolist()} z={grasp_z:.4f} "
+            f"section_width={section_width:.4f} yaw={grasp_yaw:.3f} "
+            f"hand_grasp={np.round(grasp_pos, 3).tolist()} "
+            f"table={[(round(z, 3), round(w, 3)) for z, w in table[::5]]}",
             flush=True,
         )
-        pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
-        grasp = grasp_pos
-        lift = grasp_pos + np.array([0.0, 0.0, 0.20])
         backend.set_ee_target(_pose(pregrasp, grasp_quat))
-        _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="pregrasp")
-        backend.set_ee_target(_pose(grasp, grasp_quat))
-        _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=6.0, label="grasp")
-        backend.set_gripper(False)
-        _run_until(wbc, backend, action_source=action, target_tolerance_m=0.04, timeout_s=2.0, label="close")
-        reading = backend._contact_sensor.read(backend.data)
-        resolved_object = _resolve_body(env, args.object_body)
+        _run_until(
+            wbc,
+            backend,
+            action_source=action,
+            target_tolerance_m=args.tolerance,
+            timeout_s=8.0,
+            label="pregrasp",
+        )
+
+        pregrasp_object, _ = _body_pose(env, args.object_body)
+        for index in range(1, args.descent_steps + 1):
+            position = pregrasp + (grasp_pos - pregrasp) * (index / args.descent_steps)
+            backend.set_ee_target(_pose(position, grasp_quat))
+            _, _, terminated, truncated, _ = wbc.step(action())
+            if terminated or truncated:
+                break
+        grasp_object_pos, _ = _body_pose(env, args.object_body)
         print(
-            f"close state: fingers={np.round(backend.data.qpos[backend._grip_q], 4).tolist()} "
+            f"descent: object_moved={np.linalg.norm(grasp_object_pos - pregrasp_object):.4f} "
+            f"object={np.round(grasp_object_pos, 3).tolist()}",
+            flush=True,
+        )
+
+        backend.set_gripper(False)
+        accepted, left_force, right_force, hold = _close_gate(
+            wbc,
+            backend,
+            object_body=resolved_object,
+            action_source=action,
+            force_n=args.grasp_force_n,
+            hold_s=args.bilateral_hold_s,
+            timeout_s=2.5,
+        )
+        reading = backend._contact_sensor.read(backend.data)
+        print(
+            f"close state: accepted={accepted} fingers_q={np.round(backend.data.qpos[backend._grip_q], 4).tolist()} "
+            f"left_N={left_force:.2f} right_N={right_force:.2f} hold_s={hold:.2f} "
             f"finger_force={np.round(reading.finger_force, 3).tolist()} "
-            f"hand_force={reading.hand_force:.3f} in_contact={reading.contact.in_contact} "
             f"breakdown={ {k: round(v, 3) for k, v in backend.contact_breakdown(resolved_object).items()} }",
             flush=True,
         )
-        _run_lift(
+        if not accepted:
+            print("GRASP FAILED: no bilateral finger contact on the target", flush=True)
+            return 1
+
+        lift_start, _ = _body_pose(env, args.object_body)
+        lift_steps = 30
+        for index in range(1, lift_steps + 1):
+            position = grasp_pos + np.array([0.0, 0.0, args.lift_height * (index / lift_steps)])
+            backend.set_ee_target(_pose(position, grasp_quat))
+            _, _, terminated, truncated, _ = wbc.step(action())
+            if terminated or truncated:
+                break
+        lift_end, _ = _body_pose(env, args.object_body)
+        rise = float(lift_end[2] - lift_start[2])
+        print(
+            f"lift_check: object_rise={rise:.4f} object={np.round(lift_end, 3).tolist()}",
+            flush=True,
+        )
+        if rise < args.min_lift_m:
+            print("GRASP FAILED: object was not retained through the lift", flush=True)
+            return 1
+
+        # Raise the carried object to the transport height before moving the base.
+        T_hand_transport = T_hand_grasp.copy()
+        T_hand_transport[2, 3] += args.transport_height
+        backend.set_ee_target(_pose_from_T(T_hand_transport))
+        _run_until(
             wbc,
             backend,
-            env=env,
-            object_body=args.object_body,
             action_source=action,
-            start=grasp_pos,
-            end=lift,
-            quat=grasp_quat,
-            speed_m_s=args.lift_speed,
-            settle_s=args.lift_settle,
-            label="lift",
+            target_tolerance_m=args.tolerance,
+            timeout_s=6.0,
+            label="lift_to_transport",
         )
+        lift = T_hand_transport[:3, 3].copy()
 
         # Move the base to the receptacle while holding the arm target.
         place_base = base_target_for(receptacle_pos[:2])
@@ -378,7 +551,10 @@ def main(argv: list[str] | None = None) -> int:
             wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
         )
 
-        place = receptacle_pos + np.array([0.0, 0.0, 0.10]) - eef_offset
+        T_eef_place = T_eef_grasp.copy()
+        T_eef_place[:3, 3] = receptacle_pos + np.array([0.0, 0.0, args.place_height])
+        T_hand_place = T_eef_place @ eef_in_hand
+        place = T_hand_place[:3, 3].copy()
         backend.set_ee_target(_pose(place, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="place")
         backend.set_gripper(True)
