@@ -108,10 +108,16 @@ Contact ablation on the same 10 episodes:
 
 Masking the measured wrist wrench, contact flag, and finger force measurably
 worsens tracking, so the actor is using the load channels rather than only
-averaging the payload. It is still far below the planned carry gate (0.75); no
-contact-aware checkpoint is promoted. A PPO fine-tune of `policy_iter3` on the
-carry suite is in flight to see whether reward pressure closes the remaining
-tracking gap.
+averaging the payload. Masking joint torque as well drops success to **0/10**
+for both checkpoints and worsens tracking further (iter1 **3.4 → 9.4 cm**;
+iter3 **19.6 → 33.5 cm**). It is still far below the planned carry gate (0.75);
+no contact-aware checkpoint is promoted.
+
+To separate “hard carry” from “learn the load,” the suite now includes
+`carry_easy`: a 0.4–0.6 kg payload, held base, ±0.10 rad arm targets, and torso
+0.24–0.26 m. The next run trains `carry_easy` before widening to `carry`. A PPO
+fine-tune of `policy_iter3` on the full carry suite is also in flight; if it
+does not close the gap, the easy carry curriculum is the next step.
 
 ## 3. Robot matrix
 

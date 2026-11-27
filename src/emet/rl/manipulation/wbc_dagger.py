@@ -139,6 +139,18 @@ def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
             WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.2),
             WbcSubtask("wide_arm", True, False, True, 0.55, 8.0, "forward", 0.2),
             WbcSubtask(
+                "carry_easy",
+                True,
+                False,
+                True,
+                0.10,
+                6.0,
+                "forward",
+                0.2,
+                payload_mass_range=(0.2, 0.4),
+                gripper_close=True,
+            ),
+            WbcSubtask(
                 "carry",
                 True,
                 True,
@@ -146,7 +158,7 @@ def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
                 0.35,
                 8.0,
                 "forward",
-                0.4,
+                0.3,
                 payload_mass_range=(0.05, 0.8),
                 gripper_close=True,
             ),
@@ -156,7 +168,7 @@ def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
     return (
         WbcSubtask("arm", True, False, True, 0.15, 5.0, "forward", 0.15),
         WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.05),
-        WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.2),
+        WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.15),
         WbcSubtask(
             "wide_arm",
             True,
@@ -165,8 +177,21 @@ def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
             0.55,
             8.0,
             "forward",
-            0.2,
+            0.15,
             torso_range=(0.12, 0.32),
+        ),
+        WbcSubtask(
+            "carry_easy",
+            True,
+            False,
+            True,
+            0.10,
+            6.0,
+            "forward",
+            0.2,
+            payload_mass_range=(0.4, 0.6),
+            gripper_close=True,
+            torso_range=(0.24, 0.26),
         ),
         WbcSubtask(
             "carry",
@@ -176,7 +201,7 @@ def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
             0.35,
             8.0,
             "forward",
-            0.4,
+            0.3,
             payload_mass_range=(0.1, 1.2),
             gripper_close=True,
             torso_range=(0.15, 0.32),
@@ -308,6 +333,11 @@ class WbcTaskSuiteEnv(gym.Env):
             "collision_force_n": self.collision_force_n,
             "subtasks": [asdict(task) for task in self.subtasks],
         }
+
+    @property
+    def profile(self):
+        """Shared contract profile; all subtask environments must match it."""
+        return next(iter(self.envs.values())).profile
 
     @property
     def active(self) -> WbcGymEnv:
