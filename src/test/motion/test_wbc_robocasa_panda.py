@@ -56,3 +56,32 @@ def test_scripted_gripper_target_is_forced():
     np.testing.assert_allclose(backend._gripper_target, [0.0, 0.0])
     backend.set_gripper(True)
     np.testing.assert_allclose(backend._gripper_target, [0.04, -0.04])
+
+
+def test_body_twist_joint_velocity_round_trip_with_rotated_yaw_and_lever():
+    from pathlib import Path
+
+    import mujoco
+    import robosuite
+
+    xml_path = Path(robosuite.__file__).resolve().parent / "models/assets/bases/omron_mobile_base.xml"
+    model = mujoco.MjModel.from_xml_path(str(xml_path))
+    data = mujoco.MjData(model)
+    backend = _backend()
+    backend.model = model
+    backend.data = data
+    backend._base_jnt = np.asarray(
+        [model.joint(n).id for n in ("joint_mobile_forward", "joint_mobile_side", "joint_mobile_yaw")], dtype=int
+    )
+    backend._base_q = np.asarray([model.jnt_qposadr[j] for j in backend._base_jnt], dtype=int)
+    backend._base_v = np.asarray([model.jnt_dofadr[j] for j in backend._base_jnt], dtype=int)
+    backend._base_body = int(model.body("base").id)
+    data.qpos[backend._base_q] = [0.4, -0.3, 2.1]
+    mujoco.mj_forward(model, data)
+
+    desired = (0.18, -0.07, 0.35)
+    qdot = backend._body_twist_to_joint_vel(*desired)
+    data.qvel[backend._base_v] = qdot
+    recovered = backend._joint_vel_to_body_twist()
+    np.testing.assert_allclose(recovered, desired, atol=1e-9)
+
