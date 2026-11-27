@@ -121,6 +121,12 @@ does not close the gap, the easy carry curriculum is the next step. The PPO
 launcher is `scripts/finetune_wbc_contact_ppo.py`; the mask ablation is
 `scripts/eval_wbc_contact_ablation.py`.
 
+PPO fine-tune result: 8,192 steps raised carry success from **0.20 to 0.30**
+(3/10), but mean tracking moved from **0.196 to 0.344 m** and the settled max
+reached **1.20 m**. The reward is still optimizing a mix of position, action,
+and base terms rather than the carry success gate. Do not promote this
+checkpoint; the easy-carry curriculum run is the next attempt.
+
 ## 3. Robot matrix
 
 | Robot | Plant | DoF summary | Base | Training notes |
