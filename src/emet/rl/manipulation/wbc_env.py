@@ -93,11 +93,12 @@ class WbcPerturbation:
 
     ``payload_mass`` is attached to the backends that support an inertial
     payload body; ``gripper_close`` asks the teacher to hold the gripper closed
-    for carry. The actor never receives the mass or the privileged flag.
+    for carry. `payload_com` offsets the center of mass in the payload body frame.
+    The actor never receives the mass, offset, or privileged flag.
     """
 
     payload_mass: float = 0.0
-    payload_com: tuple[float, float, float] = (0.0, 0.0, -0.06)
+    payload_com: tuple[float, float, float] = (0.0, 0.0, 0.0)
     gripper_close: bool = False
 
     def __post_init__(self) -> None:
@@ -397,7 +398,7 @@ def encode_observation(
             if layout.layout_version >= 4:
                 put(f"{prefix}.has_gripper_target", [bool(gripper.target)])
                 target = gripper.target or (0.0,) * arm_spec.gripper.dof
-                if limits is not None and normalize:
+                if gripper.target and limits is not None and normalize:
                     target = [
                         _normalized_gripper(value, low, high) for value, (low, high) in zip(target, limits, strict=True)
                     ]

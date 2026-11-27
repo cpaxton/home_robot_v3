@@ -131,6 +131,7 @@ class RoboCasaPandaTask:
     ) -> None:
         self.env = env
         self.backend = backend
+        self.backend.observe_contact = True
         self.control_dt = float(control_dt)
         self.max_move_steps = int(max_move_steps)
         self.position_tolerance_m = float(position_tolerance_m)
@@ -355,7 +356,7 @@ class RoboCasaPandaTask:
 
     def _step_action(
         self,
-        observation: np.ndarray | None,
+        observation: np.ndarray,
         gripper: np.ndarray,
     ) -> tuple[TaskStep, bool, np.ndarray]:
         """Step once, returning the label and next observation aligned to obs_t.
@@ -376,7 +377,9 @@ class RoboCasaPandaTask:
 
             with torch.no_grad():
                 action = (
-                    self.policy.deterministic_action(torch.as_tensor(observation, dtype=torch.float32).unsqueeze(0))[0]
+                    self.policy.deterministic_action(torch.as_tensor(
+                        observation, dtype=torch.float32, device=next(self.policy.parameters()).device
+                    ).unsqueeze(0))[0]
                     .cpu()
                     .numpy()
                     .astype(np.float64)
@@ -385,7 +388,7 @@ class RoboCasaPandaTask:
         contract_action = action_from_normalized_vector(action, self.profile)
         command = self.backend.preferred_adapter.command(contract_action, self.backend._observation())
         next_observation, terminated, info = self.backend.step(command, self.control_dt)
-        terms = self.backend._observation().arms[0]
+        terms = next_observation.arms[0]
         target = terms.ee_target
         if target is None:
             pos_err = float("nan")
@@ -423,6 +426,7 @@ class RoboCasaPandaTask:
 
     def _close_until_force(self, q: np.ndarray, pose: tuple[float, ...]) -> list[TaskStep]:
         self._set_phase("close", q, pose)
+        self.backend.set_gripper(False, force=False)
         steps: list[TaskStep] = []
         observation = self.layout.encode(self.backend._observation())
         for _ in range(40):
@@ -450,6 +454,7 @@ class RoboCasaPandaTask:
         joint: bool = False,
     ) -> list[TaskStep]:
         self._set_phase(phase, q, pose, joint=joint)
+        self.backend.set_gripper(bool(gripper[0] > 0), force=False)
         steps: list[TaskStep] = []
         observation = self.layout.encode(self.backend._observation())
         for _ in range(self.max_move_steps):

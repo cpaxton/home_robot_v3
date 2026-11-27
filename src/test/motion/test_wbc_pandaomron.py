@@ -102,12 +102,17 @@ def test_pandaomron_payload_mass_changes_measured_wrench():
     baseline.close()
 
     loaded = PandaOmronWbcBackend(seed=0, base_goal_probability=0.0, torso_range=(0.20, 0.32))
-    loaded.set_perturbation(WbcPerturbation(payload_mass=1.0, gripper_close=True))
+    loaded.set_perturbation(WbcPerturbation(payload_mass=1.0, payload_com=(0.01, 0.0, 0.0), gripper_close=True))
     observation = loaded.reset(seed=0)
     loaded_wrench = abs(float(observation.arm("right").contact.wrench[2]))
     assert loaded.model.body_mass[loaded._payload_body] == pytest.approx(1.0)
+    assert loaded.model.body_ipos[loaded._payload_body] == pytest.approx((0.01, 0.0, 0.0))
     assert loaded_wrench > baseline_wrench + 2.0
     action = loaded.teacher_action()
     assert action[-2] < -0.5
     assert action[-1] > 0.5
+    loaded.set_perturbation(None)
+    loaded.reset(seed=0)
+    assert loaded.model.body_mass[loaded._payload_body] == pytest.approx(1e-9)
+    assert loaded.model.body_ipos[loaded._payload_body] == pytest.approx((0.0, 0.0, 0.0))
     loaded.close()

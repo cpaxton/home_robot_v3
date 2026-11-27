@@ -39,7 +39,7 @@ from emet.controller.manipulation.wbc_profiles import (
     resolve_body_name,
     resolve_joint_names,
 )
-from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
+from emet.rl.manipulation.wbc_contact import ContactReading, MuJoCoContactSensor
 from emet.rl.manipulation.wbc_pandaomron import _READY_Q, _READY_TORSO
 
 _ARM_JOINTS = tuple(f"robot0_joint{i}" for i in range(1, 8))
@@ -88,6 +88,7 @@ class RoboCasaPandaBackend:
         base_backoff: float = 0.25,
         target_mode: str = "offset",
         target_range: float = 0.15,
+        observe_contact: bool = False,
     ) -> None:
         self.env = env
         self.profile = profile or pandaomron_sim_profile()
@@ -100,6 +101,7 @@ class RoboCasaPandaBackend:
         self.base_backoff = float(base_backoff)
         self.target_mode = str(target_mode)
         self.target_range = float(target_range)
+        self.observe_contact = observe_contact
         if self.target_mode not in {"offset", "joint"}:
             raise ValueError("target_mode must be 'offset' or 'joint'")
         if self.base_backoff < 0:
@@ -116,7 +118,16 @@ class RoboCasaPandaBackend:
         self._target_ee_override: tuple[float, ...] | None = None
         self._target_base: tuple[float, float, float] | None = None
         self._base_command = np.zeros(3)
+        self._base_step = np.asarray((0.05, 0.05, 0.10), dtype=np.float64)
+        self._base_jnt = np.zeros(3, dtype=int)
+        self._base_stiction_ctrl = np.zeros(3, dtype=np.float64)
+        self._teacher_base_speed_scale = 1.0
+        self._target_torso = float(_READY_TORSO)
+        self._ee_in_base_T: np.ndarray | None = None
         self._grip_command = np.asarray((0.04, -0.04))
+        self._gripper_target = np.asarray((0.04, -0.04), dtype=np.float64)
+        self._force_gripper = False
+        self._teacher_phase = "arm"
         self._elapsed = 0.0
         self._origin_xy = np.zeros(2)
         self._origin_yaw = 0.0
@@ -128,16 +139,6 @@ class RoboCasaPandaBackend:
         self._arm_low = np.asarray([joint.position_limit[0] for joint in arm_joints])
         self._arm_high = np.asarray([joint.position_limit[1] for joint in arm_joints])
         self._target_q: np.ndarray | None = None
-        self._torso_target = _READY_TORSO
-
-    def set_torso_target(self, height: float) -> None:
-        """Set the privileged torso-height servo target in meters."""
-        value = float(height)
-        joint = self.profile.torso.joints[0]
-        low, high = joint.position_limit
-        if not np.isfinite(value) or not low <= value <= high:
-            raise ValueError(f"torso target {height!r} outside [{low}, {high}]")
-        self._torso_target = value
 
     def _initialize_sim(self) -> None:
         self.model = self.env.sim.model
@@ -161,9 +162,13 @@ class RoboCasaPandaBackend:
         self._torso_q = int(self.model.joint(_TORSO_JOINT).qposadr[0])
         self._torso_v = int(self.model.joint(_TORSO_JOINT).dofadr[0])
         self._torso_act = int(self.model.actuator(_TORSO_ACTUATOR).id)
+        self._base_jnt = np.asarray([self.model.joint(name).id for name in _BASE_JOINTS], dtype=int)
         self._base_q = np.asarray([self.model.joint(name).qposadr[0] for name in _BASE_JOINTS], dtype=int)
         self._base_v = np.asarray([self.model.joint(name).dofadr[0] for name in _BASE_JOINTS], dtype=int)
         self._base_act = np.asarray([self.model.actuator(name).id for name in _BASE_ACTUATORS], dtype=int)
+        kv = np.abs(np.asarray(self.model.actuator_gainprm[self._base_act, 0], dtype=np.float64))
+        friction = np.asarray(self.model.dof_frictionloss[self._base_v], dtype=np.float64)
+        self._base_stiction_ctrl = np.divide(friction, kv, out=np.zeros(3, dtype=np.float64), where=kv > 1e-6)
         self._grip_q = np.asarray([self.model.joint(name).qposadr[0] for name in _GRIPPER_JOINTS], dtype=int)
         self._grip_v = np.asarray([self.model.joint(name).dofadr[0] for name in _GRIPPER_JOINTS], dtype=int)
         self._grip_act = np.asarray([self.model.actuator(name).id for name in _GRIPPER_ACTUATORS], dtype=int)
@@ -182,26 +187,253 @@ class RoboCasaPandaBackend:
         )
         self.collision_measured = True
 
-    def set_ee_target(self, pose: tuple[float, ...] | None) -> None:
+    def set_ee_target(self, pose: tuple[float, ...] | None, *, solve_ik: bool = False) -> None:
         """Set a world-frame target (7 values) or restore the reset offset.
 
         The actor observation stores targets in the reset-anchored robot frame;
         a task/skill layer naturally supplies world poses, so convert here.
+        When ``solve_ik`` is True (teacher mode), also solve a warm-started
+        joint target so the joint-PD teacher tracks wrist rotations cleanly
+        without Jacobian-transpose local minima.
         """
         if pose is not None and len(pose) != 7:
             raise ValueError("EE target must be a 7-value position/quaternion pose")
         if pose is not None and self.model is None:
             raise ValueError("set_ee_target requires an initialized reset")
         self._target_ee_override = None if pose is None else self._local_pose(tuple(float(v) for v in pose))
+        self._ee_in_base_T = None
         self._target_q = None
         if pose is not None:
             self._target_ee = self._target_ee_override
+            if solve_ik:
+                self._target_q = self.solve_ee_ik(tuple(float(v) for v in pose))
+
+    def solve_ee_ik(
+        self,
+        world_pose: tuple[float, ...],
+        *,
+        iterations: int = 12,
+        damping: float = 1.5e-2,
+    ) -> np.ndarray | None:
+        """Warm-started damped-least-squares IK for ``robot0_right_hand``."""
+        if self.data is None or len(world_pose) != 7:
+            return None
+        target_pos = np.asarray(world_pose[:3], dtype=np.float64)
+        target_rot = Rotation.from_quat(world_pose[3:])
+        q_saved = np.asarray(self.data.qpos[self._arm_q], dtype=np.float64).copy()
+        low = self._arm_low + 0.015
+        high = self._arm_high - 0.015
+
+        def _run_from(seed_q: np.ndarray, max_iter: int) -> tuple[np.ndarray, float, float]:
+            q = np.clip(seed_q.copy(), low, high)
+            for _ in range(max_iter):
+                self.data.qpos[self._arm_q] = q
+                self.env.sim.forward()
+                pos_err = target_pos - self.data.xpos[self._ee_body]
+                rot_err = (
+                    target_rot * Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3)).inv()
+                ).as_rotvec()
+                p_norm = float(np.linalg.norm(pos_err))
+                r_norm = float(np.linalg.norm(rot_err))
+                if p_norm < 4e-4 and r_norm < 4e-3:
+                    return q, p_norm, r_norm
+                jac = self._numerical_jacobian(q)
+                jjt = jac @ jac.T + (damping**2) * np.eye(6)
+                j_pinv = jac.T @ np.linalg.solve(jjt, np.eye(6))
+                null = (np.eye(len(q)) - j_pinv @ jac) @ (0.04 * (_READY_Q - q))
+                dq = j_pinv @ np.r_[pos_err, rot_err] + null
+                q = np.clip(q + np.clip(dq, -0.20, 0.20), low, high)
+            self.data.qpos[self._arm_q] = q
+            self.env.sim.forward()
+            p_norm = float(np.linalg.norm(target_pos - self.data.xpos[self._ee_body]))
+            r_norm = float(
+                np.linalg.norm(
+                    (target_rot * Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3)).inv()).as_rotvec()
+                )
+            )
+            return q, p_norm, r_norm
+
+        try:
+            seed_q = self._target_q if self._target_q is not None else q_saved
+            best_q, p_err, r_err = _run_from(seed_q, iterations)
+            if p_err > 0.008 or r_err > 0.08:
+                cont_q, cont_p, cont_r = _run_from(q_saved, 45)
+                if cont_p + 0.1 * cont_r < p_err + 0.1 * r_err:
+                    best_q, p_err, r_err = cont_q, cont_p, cont_r
+            if p_err > 0.015 or r_err > 0.15:
+                alt_q, alt_p, alt_r = _run_from(_READY_Q, 45)
+                if alt_p + 0.1 * alt_r < p_err + 0.1 * r_err:
+                    best_q, p_err, r_err = alt_q, alt_p, alt_r
+            return best_q if (p_err <= 0.025 and r_err <= 0.25) else None
+        finally:
+            self.data.qpos[self._arm_q] = q_saved
+            self.env.sim.forward()
+
+    def hold_ee_in_base_frame(self, enabled: bool = True) -> None:
+        """Keep the active EE target fixed in the moving base frame during transport."""
+        if not enabled:
+            self._ee_in_base_T = None
+            return
+        if self._target_ee is None or self.data is None:
+            raise ValueError("hold_ee_in_base_frame requires an initialized EE target")
+        target_pos, target_rot = self._world_pose(self._target_ee)
+        ee_world = np.eye(4, dtype=np.float64)
+        ee_world[:3, :3] = target_rot.as_matrix()
+        ee_world[:3, 3] = target_pos
+        base_world = np.eye(4, dtype=np.float64)
+        base_world[:3, :3] = np.asarray(self.data.xmat[self._base_body], dtype=np.float64).reshape(3, 3)
+        base_world[:3, 3] = np.asarray(self.data.xpos[self._base_body], dtype=np.float64)
+        self._ee_in_base_T = np.linalg.inv(base_world) @ ee_world
+
+    def set_base_speed_scale(self, scale: float) -> None:
+        """Scale the teacher's planar base speed limits (e.g. gentler loaded transport)."""
+        value = float(scale)
+        if not np.isfinite(value) or value <= 0.0:
+            raise ValueError("base speed scale must be positive and finite")
+        self._teacher_base_speed_scale = value
+
+    def set_torso_target(self, height: float) -> None:
+        """Set the torso lift target in meters within ``[0.0, 0.34]``."""
+        value = float(height)
+        if not np.isfinite(value):
+            raise ValueError("torso target must be finite")
+        self._target_torso = float(np.clip(value, 0.0, 0.34))
+
+    def reanchor_origin(self) -> None:
+        """Re-anchor the reset-local observation frame to the current base pose.
+
+        Preserves any active world-frame EE target while centering
+        ``observation.base_pose`` at ``(0, 0, 0)`` for subsequent arm phases.
+        """
+        if self.data is None:
+            return
+        ee_world: tuple[np.ndarray, Rotation] | None = None
+        if self._target_ee is not None:
+            ee_world = self._world_pose(self._target_ee)
+        world_base = self._world_base_pose()
+        self._origin_xy = np.asarray(world_base[:2], dtype=np.float64)
+        self._origin_yaw = float(world_base[2])
+        if ee_world is not None:
+            pos, rot = ee_world
+            self._target_ee = self._local_pose(_pose7(pos, rot.as_matrix()))
+            if self._target_ee_override is not None:
+                self._target_ee_override = self._target_ee
+
+    def _sync_base_held_ee_target(self) -> None:
+        if self._ee_in_base_T is None or self.data is None:
+            return
+        base_world = np.eye(4, dtype=np.float64)
+        base_world[:3, :3] = np.asarray(self.data.xmat[self._base_body], dtype=np.float64).reshape(3, 3)
+        base_world[:3, 3] = np.asarray(self.data.xpos[self._base_body], dtype=np.float64)
+        ee_world = base_world @ self._ee_in_base_T
+        self._target_ee = self._local_pose(_pose7(ee_world[:3, 3], ee_world[:3, :3]))
+
+    def set_base_target(self, pose: tuple[float, float, float] | None, *, world: bool = False) -> None:
+        """Set a base XYT target in the reset-anchored frame (or world frame)."""
+        if pose is None:
+            self._target_base = None
+            self._teacher_phase = "arm"
+            return
+        if len(pose) != 3 or not np.isfinite(np.asarray(pose, dtype=np.float64)).all():
+            raise ValueError("base target must contain three finite values")
+        if world:
+            rotation = Rotation.from_euler("z", -self._origin_yaw)
+            local_xy = rotation.apply(
+                np.r_[np.asarray(pose[:2], dtype=np.float64) - self._origin_xy, 0.0]
+            )[:2]
+            pose = (float(local_xy[0]), float(local_xy[1]), float(_wrap(float(pose[2]) - self._origin_yaw)))
+        self._target_base = (float(pose[0]), float(pose[1]), float(pose[2]))
+        self._teacher_phase = "base"
+
+    def set_world_base_target(self, pose: tuple[float, float, float] | None) -> None:
+        self.set_base_target(pose, world=True)
+
+    def set_gripper(self, open_: bool, *, force: bool = True) -> None:
+        """Set a scripted gripper target for task execution."""
+        self._gripper_target = np.asarray((0.04, -0.04) if open_ else (0.0, 0.0), dtype=np.float64)
+        self._grip_command = self._gripper_target.copy()
+        self._force_gripper = bool(force)
+
+    def set_gripper_target(self, values: tuple[float, float]) -> None:
+        """Hold a measured finger opening after contact.
+
+        A fully closed target keeps squeezing and can eject a free object during
+        transport; this holds the contact opening (plus a small squeeze offset).
+        """
+        target = np.asarray(values, dtype=np.float64)
+        if target.shape != (2,) or not np.isfinite(target).all():
+            raise ValueError("gripper target must contain two finite values")
+        self._gripper_target = target
+        self._grip_command = target.copy()
+        self._force_gripper = True
+
+    def solve_base_target_qpos(self) -> np.ndarray | None:
+        """Solve the planar qpos that realizes the current base target."""
+        if self._target_base is None or self.data is None:
+            return None
+        rotation = Rotation.from_euler("z", self._origin_yaw)
+        target_xy = rotation.apply(
+            np.r_[np.asarray(self._target_base[:2], dtype=np.float64), 0.0]
+        )[:2] + self._origin_xy
+        target_yaw = _wrap(float(self._target_base[2]) + self._origin_yaw)
+
+        def pose_for(q: np.ndarray) -> tuple[np.ndarray, float]:
+            self.data.qpos[self._base_q] = q
+            self.env.sim.forward()
+            world = self._world_base_pose()
+            return np.asarray(world[:2], dtype=np.float64), float(world[2])
+
+        current_q = np.asarray(self.data.qpos[self._base_q], dtype=np.float64).copy()
+        q = current_q.copy()
+        for _ in range(12):
+            xy, yaw = pose_for(q)
+            error = np.r_[target_xy - xy, _wrap(target_yaw - yaw)]
+            if float(np.linalg.norm(error[:2])) <= 1e-4 and abs(float(error[2])) <= 1e-4:
+                break
+            jac = np.zeros((3, 3), dtype=np.float64)
+            for index in range(3):
+                probe = q.copy()
+                probe[index] += 1e-4
+                probe_xy, probe_yaw = pose_for(probe)
+                jac[:2, index] = (probe_xy - xy) / 1e-4
+                jac[2, index] = _wrap(probe_yaw - yaw) / 1e-4
+            try:
+                step = np.linalg.lstsq(jac, error, rcond=None)[0]
+            except np.linalg.LinAlgError:
+                self.data.qpos[self._base_q] = current_q
+                self.env.sim.forward()
+                return None
+            q += np.clip(step, -0.25, 0.25)
+        xy, yaw = pose_for(q)
+        solved = bool(
+            np.linalg.norm(target_xy - xy) <= 5e-3 and abs(_wrap(target_yaw - yaw)) <= 5e-3
+        )
+        self.data.qpos[self._base_q] = current_q
+        self.data.qvel[self._base_v] = 0.0
+        self.env.sim.forward()
+        return q if solved else None
+
+    def apply_base_qpos(self, q: np.ndarray) -> None:
+        """Kinematic base move used by the teacher's transport ramp."""
+        self.data.qpos[self._base_q] = q
+        self.data.qvel[self._base_v] = 0.0
+        self.env.sim.forward()
+        self._base_command[:] = 0.0
+
+    def teleport_base_target(self) -> bool:
+        """Privileged teacher convenience: snap the planar base to its target."""
+        q = self.solve_base_target_qpos()
+        if q is None:
+            return False
+        self.apply_base_qpos(q)
+        return True
 
     def set_local_ee_target(self, pose: tuple[float, ...] | None) -> None:
         """Set an end-effector target in the reset-anchored robot frame."""
         if pose is not None and len(pose) != 7:
             raise ValueError("EE target must be a 7-value position/quaternion pose")
         self._target_ee_override = None if pose is None else tuple(float(v) for v in pose)
+        self._ee_in_base_T = None
         self._target_q = None
         if pose is not None:
             self._target_ee = self._target_ee_override
@@ -232,9 +464,11 @@ class RoboCasaPandaBackend:
         self.data.qpos[self._grip_q] = (0.04, -0.04)
         self.env.sim.forward()
         self._base_command[:] = 0.0
-        self._grip_command = np.asarray((0.04, -0.04))
+        self._ee_in_base_T = None
+        self._teacher_base_speed_scale = 1.0
+        self._target_torso = float(_READY_TORSO)
+        self.set_gripper(True, force=False)
         self._elapsed = 0.0
-        self._torso_target = _READY_TORSO
         world_base = self._world_base_pose()
         self._origin_xy = np.asarray(world_base[:2], dtype=np.float64)
         self._origin_yaw = float(world_base[2])
@@ -268,19 +502,40 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
+        torso_err = self._target_torso - torso
+        torso_fric = float(self.model.dof_frictionloss[self._torso_v])
+        torso_ff = torso_fric * float(np.tanh(torso_err / 0.005)) if abs(torso_err) > 2e-3 else 0.0
         torso_torque = float(
-            np.clip(1000.0 * (self._torso_target - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+            np.clip(2000.0 * torso_err - 300.0 * torso_qd + torso_bias + torso_ff, -2000.0, 2000.0)
         )
         self.data.ctrl[self._torso_act] = torso_torque
         base = np.asarray(command.base_velocity, dtype=np.float64).reshape(-1)
         if base.shape != (3,) or not np.isfinite(base).all():
             raise ValueError("RoboCasaPandaBackend requires a finite three-axis base velocity")
         limits = np.asarray(self.profile.base.velocity_limits, dtype=np.float64)
-        self._base_command = np.clip(base, -limits, limits)
-        self.data.ctrl[self._base_act] = self._base_command
+        desired_base = np.clip(base, -limits, limits)
+        self._base_command = self._base_command + np.clip(
+            desired_base - self._base_command, -self._base_step, self._base_step
+        )
+        qdot_des = self._body_twist_to_joint_vel(
+            float(self._base_command[0]), float(self._base_command[1]), float(self._base_command[2])
+        )
+        base_ctrl = np.where(
+            np.abs(qdot_des) > 1e-3,
+            qdot_des + self._base_stiction_ctrl * np.tanh(qdot_des / 0.015),
+            0.0,
+        )
+        for actuator, value in zip(self._base_act, base_ctrl, strict=True):
+            low, high = self.model.actuator_ctrlrange[actuator]
+            self.data.ctrl[actuator] = float(np.clip(value, low, high))
         grip = command.grippers.get("right")
-        if grip is not None:
+        if self._force_gripper:
+            values = np.asarray(self._gripper_target, dtype=np.float64).reshape(-1)
+        elif grip is not None:
             values = np.asarray(grip.values, dtype=np.float64).reshape(-1)
+        else:
+            values = None
+        if values is not None:
             if values.shape != (2,) or not np.isfinite(values).all():
                 raise ValueError("Panda gripper command must contain two finite values")
             self._grip_command = values.copy()
@@ -294,6 +549,7 @@ class RoboCasaPandaBackend:
                 invalid = True
                 break
         self.env.sim.forward()
+        self._sync_base_held_ee_target()
         contact = self._contact_sensor.read(self.data)
         self._elapsed += self.control_dt
         return (
@@ -310,6 +566,65 @@ class RoboCasaPandaBackend:
                 "model_fingerprint": self.model_fingerprint,
             },
         )
+
+    def contact_breakdown(self, target_body: str) -> dict[str, float]:
+        """Privileged diagnostic: split finger load by target vs environment.
+
+        Never call this from the actor path; the target body is GT metadata.
+        """
+        from emet.rl.contact import solved_contact_force
+
+        target = int(self.model.body(target_body).id)
+        finger_bodies = set().union(*self._contact_sensor.finger_bodies_set)
+        out = {
+            "finger_target_N": 0.0,
+            "finger_environment_N": 0.0,
+            "robot_environment_N": 0.0,
+            "other_N": 0.0,
+        }
+        for index in range(int(self.data.ncon)):
+            contact = self.data.contact[index]
+            first = int(self.model.geom_bodyid[contact.geom1])
+            second = int(self.model.geom_bodyid[contact.geom2])
+            normal, _ = solved_contact_force(self.model, self.data, index)
+            first_finger = first in finger_bodies
+            second_finger = second in finger_bodies
+            if first_finger or second_finger:
+                other = second if first_finger else first
+                if other == target:
+                    out["finger_target_N"] += normal
+                elif other not in self._contact_sensor.robot_bodies:
+                    out["finger_environment_N"] += normal
+            elif first in self._contact_sensor.robot_bodies or second in self._contact_sensor.robot_bodies:
+                out["robot_environment_N"] += normal
+            else:
+                out["other_N"] += normal
+        return out
+
+    def finger_target_forces(self, target_body: str) -> tuple[float, float]:
+        """Privileged diagnostic: split target load by left/right finger.
+
+        Returns ``(left_N, right_N)``. Never call this from the actor path; the
+        target body is GT metadata.
+        """
+        from emet.rl.contact import solved_contact_force
+
+        target = int(self.model.body(target_body).id)
+        finger_sets = self._contact_sensor.finger_bodies_set
+        totals = [0.0] * len(finger_sets)
+        for index in range(int(self.data.ncon)):
+            contact = self.data.contact[index]
+            first = int(self.model.geom_bodyid[contact.geom1])
+            second = int(self.model.geom_bodyid[contact.geom2])
+            if target not in (first, second):
+                continue
+            other = first if second == target else second
+            finger = next((i for i, bodies in enumerate(finger_sets) if other in bodies), None)
+            if finger is None:
+                continue
+            normal, _ = solved_contact_force(self.model, self.data, index)
+            totals[finger] += normal
+        return float(totals[0]), float(totals[1])
 
     def close(self) -> None:
         self.env.close()
@@ -392,6 +707,7 @@ class RoboCasaPandaBackend:
         """Privileged joint-PD (or Cartesian) teacher for RoboCasa data generation."""
         if self.data is None:
             raise RuntimeError("reset required before teacher_action")
+        self._sync_base_held_ee_target()
         q = np.asarray(self.data.qpos[self._arm_q], dtype=np.float64)
         qd = np.asarray(self.data.qvel[self._arm_v], dtype=np.float64)
         bias = np.asarray(self.data.qfrc_bias[self._arm_v], dtype=np.float64)
@@ -405,17 +721,38 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
+        torso_err = self._target_torso - torso
+        torso_fric = float(self.model.dof_frictionloss[self._torso_v])
+        torso_ff = torso_fric * float(np.tanh(torso_err / 0.005)) if abs(torso_err) > 2e-3 else 0.0
         torso_torque = float(
-            np.clip(1000.0 * (self._torso_target - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+            np.clip(2000.0 * torso_err - 300.0 * torso_qd + torso_bias + torso_ff, -2000.0, 2000.0)
         )
+        base_velocity = (0.0, 0.0, 0.0)
+        if self._target_base is not None:
+            base = np.asarray(self._base_pose(), dtype=np.float64)
+            target = np.asarray(self._target_base, dtype=np.float64)
+            dx, dy = target[0] - base[0], target[1] - base[1]
+            yaw = _wrap(float(target[2] - base[2]))
+            if float(np.hypot(dx, dy)) > 0.025 or abs(yaw) > 0.04:
+                self._teacher_phase = "base"
+                forward = dx * np.cos(base[2]) + dy * np.sin(base[2])
+                lateral = -dx * np.sin(base[2]) + dy * np.cos(base[2])
+                limits = np.asarray(self.profile.base.velocity_limits, dtype=np.float64) * self._teacher_base_speed_scale
+                base_velocity = (
+                    float(np.clip(1.5 * forward, -limits[0], limits[0])) if abs(forward) > 0.01 else 0.0,
+                    float(np.clip(1.5 * lateral, -limits[1], limits[1])) if abs(lateral) > 0.01 else 0.0,
+                    float(np.clip(1.8 * yaw, -limits[2], limits[2])) if abs(yaw) > 0.015 else 0.0,
+                )
+            else:
+                self._teacher_phase = "arm"
         action = WbcAction(
-            base_velocity=(0.0, 0.0, 0.0),
+            base_velocity=base_velocity,
             torso_torques=(torso_torque,),
             arms=(
                 ArmAction(
                     name="right",
                     joint_torques=tuple(float(v) for v in torque),
-                    gripper=GripperCommand(values=(0.04, -0.04)),
+                    gripper=GripperCommand(values=tuple(float(v) for v in self._gripper_target)),
                 ),
             ),
         )
@@ -432,9 +769,37 @@ class RoboCasaPandaBackend:
         )
         return (float(position[0]), float(position[1]), float(_wrap(world[2] - self._origin_yaw)))
 
-    def _observation(self, *, contact=None) -> WbcObservation:
-        if contact is None:
+    def _body_twist_to_joint_vel(self, vx: float, vy: float, wz: float) -> np.ndarray:
+        """Map chassis-frame twist ``(vx, vy, wz)`` to Omron planar joint rates.
+
+        In ``omron_mobile_base.xml`` the two slide joints precede ``joint_mobile_yaw``
+        and ``joint_mobile_yaw`` is anchored at ``(-0.21, 0, 0)``, so the slide axes
+        do not rotate with heading and yaw rate sweeps the chassis origin.
+        """
+        rotation = np.asarray(self.data.xmat[self._base_body], dtype=np.float64).reshape(3, 3)
+        forward_axis, left_axis = rotation[:2, 0], rotation[:2, 1]
+        slide_0 = np.asarray(self.data.xaxis[self._base_jnt[0], :2], dtype=np.float64)
+        slide_1 = np.asarray(self.data.xaxis[self._base_jnt[1], :2], dtype=np.float64)
+        lever = np.asarray(self.data.xpos[self._base_body, :2] - self.data.xanchor[self._base_jnt[2], :2], dtype=np.float64)
+        v_world = vx * forward_axis + vy * left_axis
+        v_slide = v_world - wz * np.array([-lever[1], lever[0]], dtype=np.float64)
+        return np.array([float(np.dot(v_slide, slide_0)), float(np.dot(v_slide, slide_1)), float(wz)], dtype=np.float64)
+
+    def _joint_vel_to_body_twist(self) -> tuple[float, float, float]:
+        rotation = np.asarray(self.data.xmat[self._base_body], dtype=np.float64).reshape(3, 3)
+        forward_axis, left_axis = rotation[:2, 0], rotation[:2, 1]
+        slide_0 = np.asarray(self.data.xaxis[self._base_jnt[0], :2], dtype=np.float64)
+        slide_1 = np.asarray(self.data.xaxis[self._base_jnt[1], :2], dtype=np.float64)
+        lever = np.asarray(self.data.xpos[self._base_body, :2] - self.data.xanchor[self._base_jnt[2], :2], dtype=np.float64)
+        qvel = np.asarray(self.data.qvel[self._base_v], dtype=np.float64)
+        v_world = qvel[0] * slide_0 + qvel[1] * slide_1 + qvel[2] * np.array([-lever[1], lever[0]], dtype=np.float64)
+        return (float(np.dot(v_world, forward_axis)), float(np.dot(v_world, left_axis)), float(qvel[2]))
+
+    def _observation(self, *, contact: ContactReading | None = None) -> WbcObservation:
+        if self.observe_contact and contact is None:
             contact = self._contact_sensor.read(self.data)
+        if not self.observe_contact:
+            contact = None
         torso = JointGroupObservation(
             name="torso",
             position=(float(self.data.qpos[self._torso_q]),),
@@ -453,15 +818,12 @@ class RoboCasaPandaBackend:
             gripper=GripperObservation(
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
-                force=contact.finger_force,
+                force=() if contact is None else contact.finger_force,
                 target=tuple(float(v) for v in self._grip_command),
             ),
-            contact=contact.contact,
+            contact=None if contact is None else contact.contact,
         )
-        # The Omron planar slide joints are already expressed in the chassis
-        # frame, matching the direct plant's base twist.
-        qvel = self.data.qvel[self._base_v]
-        base_twist = (float(qvel[0]), float(qvel[1]), float(qvel[2]))
+        base_twist = self._joint_vel_to_body_twist()
         return WbcObservation(
             base_pose=self._base_pose(),
             base_twist=base_twist,

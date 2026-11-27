@@ -52,7 +52,7 @@ from emet.controller.manipulation.wbc_contract import (
 )
 from emet.controller.manipulation.wbc_profiles import stretch_sim_profile
 from emet.rl.manipulation.control import ManipulationControl
-from emet.rl.manipulation.models import build_manipulation_model
+from emet.rl.manipulation.models import build_manipulation_model, set_wbc_payload
 from emet.rl.manipulation.profiles import PROFILES
 from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
 from emet.rl.manipulation.wbc_env import WbcPerturbation
@@ -233,14 +233,12 @@ class StretchWbcBackend:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         mujoco.mj_resetData(self.model, self.data)
+        perturbation = self._perturbation or WbcPerturbation()
+        set_wbc_payload(self.model, self.data, self._payload_body, perturbation.payload_mass, perturbation.payload_com)
         self._set_arm_q(_READY_Q)
         self.data.qpos[self._grip_q] = self._grip_open
         mujoco.mj_forward(self.model, self.data)
         self.control.reset()
-        payload_mass = 0.0 if self._perturbation is None else float(self._perturbation.payload_mass)
-        self.model.body_mass[self._payload_body] = max(payload_mass, 1e-9)
-        payload_radius = 0.03
-        self.model.body_inertia[self._payload_body] = 0.4 * payload_mass * payload_radius**2
         self._teacher_gripper = 0.0 if self._perturbation is not None and self._perturbation.gripper_close else 0.04
 
         self._joint_command = self.control.positions().copy()

@@ -94,6 +94,11 @@ _LAZY_APP_COMMANDS: dict[str, tuple[str, str, str]] = {
         "sqa3d_group",
         "SQA3D embodied QA (ScanNet / DynaMem / Dynagraph)",
     ),
+    "wbc-robocasa": (
+        "emet.app.wbc_robocasa",
+        "wbc_robocasa_group",
+        "Run PandaOmron RoboCasa pick-place and task sweeps",
+    ),
     "ovmm": (
         "emet.app.eval_ovmm",
         "ovmm_group",

@@ -24,18 +24,11 @@ import numpy as np
 
 
 def _aggregate(paths: list[Path], output: Path) -> Path:
-    arrays: dict[str, list[np.ndarray]] = {}
-    episode_offset = 0
-    for path in paths:
-        payload = np.load(path)
-        for key in payload.files:
-            values = np.asarray(payload[key])
-            if key == "episode_ids":
-                values = values.astype(np.int64) + episode_offset
-                episode_offset = int(values.max()) + 1
-            arrays.setdefault(key, []).append(values)
+    from finetune_wbc_task_bc import load_task_data
+
+    observations, actions, episode_ids = load_task_data(paths)
     output.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(output, **{key: np.concatenate(values) for key, values in arrays.items()})
+    np.savez_compressed(output, observations=observations, teacher_actions=actions, episode_ids=episode_ids)
     return output
 
 
@@ -68,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args(argv)
 
+    if min(args.rounds, args.episodes, args.eval_episodes, args.epochs) < 1:
+        parser.error("rounds, episodes, eval episodes, and epochs must be positive")
+
     repo = Path(__file__).resolve().parents[1]
     sweep = repo / "scripts" / "sweep_wbc_robocasa_tasks.py"
     finetune = repo / "scripts" / "finetune_wbc_task_bc.py"
@@ -79,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     history: list[dict] = []
     for round_index in range(args.rounds):
         round_dir = args.output / f"round_{round_index}"
+        round_dir.mkdir(exist_ok=False)
         rollout_dir = round_dir / "rollout"
         _run(
             [
@@ -94,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.layout),
                 "--style",
                 str(args.style),
+                "--device",
+                args.device,
                 "--backoff",
                 "0.0",
                 "--max-move-steps",
@@ -149,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.layout),
                 "--style",
                 str(args.style),
+                "--device",
+                args.device,
                 "--backoff",
                 "0.0",
                 "--max-move-steps",
@@ -160,11 +161,13 @@ def main(argv: list[str] | None = None) -> int:
             env,
         )
         success_rate, eval_payload = _success(eval_dir / "task_sweep.json")
+        with np.load(aggregated) as dataset:
+            sample_count = len(dataset["observations"])
         record = {
             "round": round_index,
             "train_checkpoint": str(current),
             "policy": str(policy_path),
-            "samples": int(len(np.load(aggregated)["observations"])),
+            "samples": sample_count,
             "success_rate": success_rate,
             "failure_counts": eval_payload["failure_counts"],
             "episodes": eval_payload["episodes_detail"],
@@ -176,8 +179,6 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         current = policy_path
-        if success_rate > 0:
-            break
     return 0
 
 

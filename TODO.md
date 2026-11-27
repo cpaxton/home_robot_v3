@@ -2,7 +2,7 @@
 
 ## RoboCasa benchmark landing + regression gates (2026-11-26)
 
-Plan: [RoboCasa benchmark landing + regression gates](docs/plans/robocasa_benchmark_landing_20261126.md).
+Plan: [RoboCasa benchmark landing + regression gates](docs/plans/robocasa_benchmark_landing_20261126.md) · Next-stage no-GT & DAgger plan: [RoboCasa PandaOmron no-GT perception & task-posture DAgger](docs/plans/robocasa_no_gt_and_wbc_dagger_20261127.md).
 
 The stack is #264 (merged) → #265 (held) → #267 → #266. Landing code and claiming
 a benchmark are separate decisions: #265 may land as infrastructure only after
@@ -10,18 +10,24 @@ Tier 0/1 pass; a task pass requires the new sink/cabinet gate with measured
 success and no GT actor inputs.
 
 - [x] Land #264.
-- [ ] Land #265 after Tier 0 + Tier 1 and an explicit decision to accept the
-      Panda placement gap as a bring-up limitation.
-- [ ] Rebase/land #267, then #266. Run Tier 0 after each; Tier 1 before #266.
-- [ ] Full WBC clean suite (50×3, five robots) after #266; compare to
-      `logs/eval/wbc_multirobot_20261126/manifest.json` (aggregate -0.02, task
-      -0.05 tolerance without explanation).
+- [x] Land #265, #267, and #266 onto `main` (`cd1bfcee`).
+- [x] Full WBC clean suite replay (50×3, five robots) after #266: Mars 0.955,
+      Stretch 0.951, Sourccey 0.960, RB-Y1 1.000, Panda clean 0.942 / robust 0.978.
 - [ ] Old rby1 RoboCasa sink row via `emet jobs`; record success, release, and
       displacement. Do not substitute the Panda reach smoke for this row.
 - [x] Panda RoboCasa reach adapter + loaded joint/Cartesian sweeps (20/20,
       <=1.7 cm p95). Not task success.
-- [ ] New Panda task-target bridge, base goals, carry/contact, and merged-scene
-      adapters for Stretch/Sourccey/RB-Y1; gate sink and cabinet separately.
+- [x] Panda RoboCasa multi-step mobile pick-place harness + dynamic-base teacher
+      qualification (#273, [report](docs/experiments/robocasa_pandaomron_pick_place_20261127.md)):
+      `7/7` `PickPlaceCounterToSink` and `4/4` `PickPlaceCounterToCabinet`
+      `env._check_success()` with 100% dynamic MuJoCo base driving (no teleport,
+      no weld). Privileged teacher targets only.
+- [ ] Task-posture BC/DAgger fine-tune of `pandaomron_robust` from
+      `run_wbc_robocasa_pick_place.py --save-rollout` so the learned RL-WBC
+      actor closes the top-down pregrasp gap (`2.19 rad` OOD wrist offset).
+- [ ] Observed (no-GT) RGB-D object/receptacle target provider + strict no-GT
+      benchmark gate on sink and cabinet; merged-scene adapters for
+      Stretch/Sourccey/RB-Y1.
 - [ ] Regenerate a valid `reached=False` hard-posture train/test split;
       `hard_posture` remains `planned` until then.
 

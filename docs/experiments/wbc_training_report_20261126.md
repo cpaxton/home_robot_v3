@@ -115,10 +115,7 @@ no contact-aware checkpoint is promoted.
 
 To separate “hard carry” from “learn the load,” the suite now includes
 `carry_easy`: a 0.4–0.6 kg payload, held base, ±0.10 rad arm targets, and torso
-0.24–0.26 m. The next run trains `carry_easy` before widening to `carry`. A PPO
-fine-tune of `policy_iter3` on the full carry suite is also in flight; if it
-does not close the gap, the easy carry curriculum is the next step. The PPO
-launcher is `scripts/finetune_wbc_contact_ppo.py`; the mask ablation is
+0.24–0.26 m. The PPO launcher is `scripts/finetune_wbc_contact_ppo.py`; the mask ablation is
 `scripts/eval_wbc_contact_ablation.py`.
 
 PPO fine-tune result: 8,192 steps raised carry success from **0.20 to 0.30**
@@ -137,7 +134,10 @@ the narrow curriculum stage, not the full `carry` gate. The checkpoint is
 passes **1.00/1.00** when wrist wrench, finger force, and joint torque are
 masked, but tracking worsens from **1.26 to 1.73 cm**. The narrow payload range
 is learnable by averaging; the full `carry` task remains the contact test. A
-full-carry ramp initialized from the easy checkpoint is in flight.
+full-carry ramp initialized from the easy checkpoint is in flight. A fresh
+paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
+constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
+on `carry` (15.49 cm) with the same checkpoint.
 
 ## 3. Robot matrix
 
@@ -155,8 +155,8 @@ with the exact profile fingerprint and (after migration) the observation layout.
 ## 4. Results
 
 Held-out clean suite: 50 episodes per subtask, three fresh seeds. All rows are
-from the strict re-gate: v2/v3 checkpoints are migrated to layout v4 (zero contact
-inputs, gripper-force columns rescaled), collisions are measured, and tracking
+from the strict re-gate: v2/v3 checkpoints load into layout v4 by copying matching fields and zeroing
+new inputs. Migration resizes gripper-force weights only for v2, collisions are measured, and tracking
 is the settled-window mean. The previously reported Panda clean 0.996 row was
 not reproducible from the shipped checkpoint; it re-gates to **0.942**.
 

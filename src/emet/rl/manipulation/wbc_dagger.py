@@ -278,6 +278,11 @@ class WbcTaskSuiteEnv(gym.Env):
             raise ValueError("duplicate subtask names")
         if not 0.0 <= float(hard_case_probability) <= 1.0:
             raise ValueError("hard_case_probability must be in [0, 1]")
+        for task in subtasks:
+            if (task.payload_mass_range[1] > 0 or task.gripper_close) and robot not in {"pandaomron", "stretch"}:
+                raise ValueError(f"payload and gripper perturbations are unsupported for {robot}")
+            if task.torso_range is not None and robot != "pandaomron":
+                raise ValueError(f"torso perturbations are unsupported for {robot}")
         self.robot = robot
         self.control_dt = float(control_dt)
         self.success_hold_s = float(success_hold_s)
@@ -361,7 +366,7 @@ class WbcTaskSuiteEnv(gym.Env):
         self.active_name = name
         task = next(task for task in self.subtasks if task.name == name)
         perturbation = None
-        if task.payload_mass_range[1] > 0:
+        if task.payload_mass_range[1] > 0 or task.gripper_close:
             mass = float(self.np_random.uniform(task.payload_mass_range[0], task.payload_mass_range[1]))
             perturbation = WbcPerturbation(
                 payload_mass=mass,

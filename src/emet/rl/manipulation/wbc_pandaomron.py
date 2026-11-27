@@ -39,6 +39,7 @@ from emet.controller.manipulation.wbc_profiles import (
     resolve_body_name,
     resolve_joint_names,
 )
+from emet.rl.manipulation.models import set_wbc_payload
 from emet.rl.manipulation.wbc_contact import ContactReading, MuJoCoContactSensor
 from emet.rl.manipulation.wbc_env import WbcPerturbation
 
@@ -196,10 +197,8 @@ class PandaOmronWbcBackend:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         mujoco.mj_resetData(self.model, self.data)
-        payload_mass = 0.0 if self._perturbation is None else float(self._perturbation.payload_mass)
-        self.model.body_mass[self._payload_body] = max(payload_mass, 1e-9)
-        payload_radius = 0.03
-        self.model.body_inertia[self._payload_body] = 0.4 * payload_mass * payload_radius**2
+        perturbation = self._perturbation or WbcPerturbation()
+        set_wbc_payload(self.model, self.data, self._payload_body, perturbation.payload_mass, perturbation.payload_com)
         self._teacher_gripper = (
             (0.0, 0.0) if self._perturbation is not None and self._perturbation.gripper_close else self._grip_open
         )
