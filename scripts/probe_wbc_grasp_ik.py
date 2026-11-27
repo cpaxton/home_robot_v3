@@ -45,6 +45,12 @@ def _pose_from_T(T: np.ndarray) -> tuple[float, ...]:
     return _pose(T[:3, 3], Rotation.from_matrix(T[:3, :3]).as_quat())
 
 
+def _top_down_T(object_pos: np.ndarray, z_offset: float, yaw: float) -> np.ndarray:
+    T = top_down_grasp_T(object_pos + np.array([0.0, 0.0, z_offset]))
+    T[:3, :3] = Rotation.from_euler("z", yaw).as_matrix() @ T[:3, :3]
+    return T
+
+
 def _step(backend: RoboCasaPandaBackend, adapter: TorqueAdapter, steps: int) -> None:
     dt = backend.control_dt
     for _ in range(steps):
@@ -108,11 +114,21 @@ def _trial(
     object_body: str,
     standoff: float,
     z_offset: float,
+    yaw_offset_deg: float,
     pregrasp_m: float,
     lift_m: float,
     execute: bool,
+    reset_state: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None,
 ) -> dict[str, object]:
-    backend.reset(seed=0)
+    if reset_state is None:
+        backend.reset(seed=0)
+    else:
+        qpos, qvel, origin_xy, origin_yaw = reset_state
+        backend.data.qpos[:] = qpos
+        backend.data.qvel[:] = qvel
+        backend._origin_xy = np.asarray(origin_xy, dtype=np.float64).copy()
+        backend._origin_yaw = float(origin_yaw)
+        env.sim.forward()
     object_pos = _body_pos(env, object_body)
     base_world = backend._world_base_pose()
     direction = np.asarray(base_world[:2]) - object_pos[:2]
@@ -131,7 +147,9 @@ def _trial(
     q_initial = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
     T_hand_eef = np.linalg.inv(_body_T(env, "robot0_right_hand")) @ _body_T(env, "gripper0_right_eef")
     eef_in_hand = np.linalg.inv(T_hand_eef)
-    T_eef_des = top_down_grasp_T(object_pos + np.array([0.0, 0.0, z_offset]))
+    base_yaw = float(np.arctan2(object_pos[1] - base_world[1], object_pos[0] - base_world[0]))
+    yaw = base_yaw + float(np.deg2rad(yaw_offset_deg))
+    T_eef_des = _top_down_T(object_pos, z_offset, yaw)
     T_hand_des = T_eef_des @ eef_in_hand
     T_eef_pre = T_eef_des.copy()
     T_eef_pre[2, 3] += pregrasp_m
@@ -144,6 +162,9 @@ def _trial(
     margins = np.minimum(q_grasp - backend._arm_low, backend._arm_high - q_grasp)
     result: dict[str, object] = {
         "standoff": standoff,
+        "z_offset": z_offset,
+        "yaw_offset_deg": yaw_offset_deg,
+        "base_yaw": base_yaw,
         "base": np.round(base_world, 3).tolist(),
         "object": np.round(object_pos, 3).tolist(),
         "pregrasp_ik_err": [pre_pos_err, pre_ang_err],
@@ -198,7 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--style", type=int, default=1)
     parser.add_argument("--object-body", default="obj_main")
     parser.add_argument("--standoffs", default="0.40,0.50,0.55,0.60")
-    parser.add_argument("--z-offsets", default="0.0,0.02,0.04")
+    parser.add_argument("--z-offsets", default="0.03,0.05")
+    parser.add_argument("--yaw-offsets-deg", default="0,90,180,270")
     parser.add_argument("--pregrasp-m", type=float, default=0.12)
     parser.add_argument("--lift-m", type=float, default=0.03)
     parser.add_argument("--execute", action="store_true")
@@ -223,24 +245,33 @@ def main(argv: list[str] | None = None) -> int:
     backend = RoboCasaPandaBackend(env, base_backoff=0.45)
     adapter = TorqueAdapter(pandaomron_sim_profile())
     backend.reset(seed=0)
+    reset_state = (
+        backend.data.qpos.copy(),
+        backend.data.qvel.copy(),
+        np.asarray(backend._origin_xy, dtype=np.float64).copy(),
+        float(backend._origin_yaw),
+    )
     print(f"lang={env.get_ep_meta().get('lang')!r}", flush=True)
 
     results = []
     for standoff in (float(value) for value in args.standoffs.split(",") if value.strip()):
         for z_offset in (float(value) for value in args.z_offsets.split(",") if value.strip()):
-            result = _trial(
-                env,
-                backend,
-                adapter,
-                object_body=args.object_body,
-                standoff=standoff,
-                z_offset=z_offset,
-                pregrasp_m=args.pregrasp_m,
-                lift_m=args.lift_m,
-                execute=args.execute,
-            )
-            results.append(result)
-            print(result, flush=True)
+            for yaw_offset in (float(value) for value in args.yaw_offsets_deg.split(",") if value.strip()):
+                result = _trial(
+                    env,
+                    backend,
+                    adapter,
+                    object_body=args.object_body,
+                    standoff=standoff,
+                    z_offset=z_offset,
+                    yaw_offset_deg=yaw_offset,
+                    pregrasp_m=args.pregrasp_m,
+                    lift_m=args.lift_m,
+                    execute=args.execute,
+                    reset_state=reset_state,
+                )
+                results.append(result)
+                print(result, flush=True)
     backend.close()
     return 0
 
