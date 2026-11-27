@@ -13,6 +13,7 @@ import numpy as np
 import torch
 
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
+from emet.rl.manipulation.wbc_env import OBSERVATION_LAYOUT_VERSION
 from emet.rl.manipulation.wbc_training import WbcPPO
 
 
@@ -22,15 +23,18 @@ def load_task_data(paths: list[Path]) -> tuple[np.ndarray, np.ndarray, np.ndarra
     episodes: list[np.ndarray] = []
     episode_offset = 0
     for path in paths:
-        payload = np.load(path)
-        observations.append(np.asarray(payload["observations"], dtype=np.float32))
-        actions.append(np.asarray(payload["teacher_actions"], dtype=np.float32))
-        if "episode_ids" in payload:
-            episodes.append(np.asarray(payload["episode_ids"], dtype=np.int64) + episode_offset)
-            episode_offset = int(episodes[-1].max()) + 1
-        else:
-            episodes.append(np.zeros(len(observations[-1]), dtype=np.int64) + episode_offset)
-            episode_offset += 1
+        with np.load(path) as payload:
+            inputs = np.asarray(payload["observations"], dtype=np.float32)
+            labels = np.asarray(payload["teacher_actions"], dtype=np.float32)
+            if inputs.ndim != 2 or labels.ndim != 2 or not len(inputs) or len(inputs) != len(labels):
+                raise ValueError(f"{path} needs one teacher action per observation")
+            ids = np.asarray(payload.get("episode_ids", np.zeros(len(inputs))), dtype=np.int64)
+            if ids.shape != (len(inputs),) or np.any(ids < 0):
+                raise ValueError(f"{path} has invalid episode IDs")
+        observations.append(inputs)
+        actions.append(labels)
+        episodes.append(ids + episode_offset)
+        episode_offset = int(episodes[-1].max()) + 1
     return (
         np.concatenate(observations, axis=0),
         np.concatenate(actions, axis=0),
@@ -69,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"bc_loss={result['bc_loss']:.6f} samples={int(result['bc_samples'])}", flush=True)
 
     raw = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+    raw["observation_layout_version"] = OBSERVATION_LAYOUT_VERSION
+    raw["observation_size"] = trainer.policy.observation_size
     raw["state_dict"] = {key: value.detach().cpu() for key, value in trainer.policy.state_dict().items()}
     raw["optimizer_state"] = None
     raw["reference_actor_state"] = None
