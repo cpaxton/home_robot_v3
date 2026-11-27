@@ -108,19 +108,21 @@ uv run python scripts/sweep_wbc_robocasa_tasks.py \
 Development result (3 seeds, one scene):
 
 - 1/3 seeds had a closed cabinet and were skipped.
-- Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, lift **9.7–11.2 cm**,
-  place **31–34 cm**; task success **0/3**. Object displacement was 0–11 cm.
-- Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, then degraded to
-  **15–20 cm** at grasp and worse at lift/place; task success **0/3**.
-- The loaded task data has 464 actor-visited observations and teacher labels
-  (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
+- Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, centered grasp **0.6 cm**,
+  lift **8.7–10.2 cm**, preplace **12–19 cm**, place **3.4–11.6 cm**, release
+  **1.7–2.6 cm**; task success **0/3**. Object displacement was 5.3 and 16.2 cm.
+- Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, grasp **15–20 cm**,
+  centered grasp **4–7 cm**, lift **29–98 cm**, place **79–117 cm**; task
+  success **0/3**.
+- The latest loaded task data has 728 actor-visited observations and teacher
+  labels (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
 
-**Interpretation:** pose extraction, IK target generation, and pregrasp
-tracking work. The teacher loses the place target without collision-aware
-base/cabinet planning, and the free-space policy is not trained on the object
-approach/grasp distribution. This is a task-target scaffold, not task success;
-the next gate is collision-aware base/place planning plus DAgger from the
-loaded task data.
+**Interpretation:** pose extraction, IK target generation, pregrasp tracking,
+and finger centering work. The teacher can now reach the place/release area,
+but grasp retention is not reliable and the free-space policy degrades as soon
+as the object-approach/grasp phase begins. This is a task-target scaffold, not
+task success; the next gate is grasp retention plus collision-aware
+base/cabinet planning, followed by DAgger from the loaded task data.
 
 ## Smoke result
 

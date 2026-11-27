@@ -375,9 +375,9 @@ plants resolve them through explicit alias maps and verify the result.
 - **Task-target bridge:** `wbc_robocasa_task.py` derives object/cabinet poses and
   pregrasp/grasp/lift/place/retreat targets via IK; `sweep_wbc_robocasa_tasks.py`
   runs the sequence with teacher or policy and records task success. A 3-episode
-  development sweep is **0/3**: pregrasp tracks, but the teacher loses the
-  place target without collision-aware cabinet planning, and the free-space
-  policy degrades after pregrasp. This is a scaffold, not task success.
+  development sweep is **0/3**: pregrasp and centered grasp track, but grasp
+  retention is unreliable and the free-space policy degrades after pregrasp.
+  This is a scaffold, not task success; the latest loaded data has 728 samples.
 - **Not task success:** object/cabinet place planning, grasp retention, base
   goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
 
@@ -403,7 +403,7 @@ plants resolve them through explicit alias maps and verify the result.
 
 1. Fix the task-target bridge's collision-aware base/cabinet approach and
    place path; the current teacher loses the place target (31–34 cm).
-2. Fine-tune from the 464-sample loaded task data and re-run the task sweep;
+2. Fine-tune from the 728-sample loaded task data and re-run the task sweep;
    the free-space policy degrades after pregrasp (15–20 cm at grasp).
 3. Improve grasp retention; the teacher reaches the object but does not
    consistently lift it.

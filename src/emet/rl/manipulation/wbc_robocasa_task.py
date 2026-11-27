@@ -47,11 +47,13 @@ class TaskPoses:
     pregrasp_pose: tuple[float, ...]
     grasp_pose: tuple[float, ...]
     lift_pose: tuple[float, ...]
+    preplace_pose: tuple[float, ...]
     place_pose: tuple[float, ...]
     retreat_pose: tuple[float, ...]
     pregrasp_q: np.ndarray
     grasp_q: np.ndarray
     lift_q: np.ndarray
+    preplace_q: np.ndarray
     place_q: np.ndarray
     retreat_q: np.ndarray
 
@@ -227,7 +229,9 @@ class RoboCasaPandaTask:
         lift_q[6] = grasp_q[6]
 
         place_position = self.cabinet_place_position() + np.asarray((0.0, 0.0, 0.05))
-        place_q = self._solve_position(place_position, q0)
+        preplace_position = place_position + np.asarray((0.0, -0.22, 0.05))
+        preplace_q = self._solve_position(preplace_position, q0)
+        place_q = self._solve_position(place_position, preplace_q)
         retreat_q = self._solve_position(place_position + np.asarray((0.0, -0.18, 0.10)), place_q)
 
         poses = TaskPoses(
@@ -238,11 +242,13 @@ class RoboCasaPandaTask:
             pregrasp_pose=self._forward_pose(pregrasp_q),
             grasp_pose=self._forward_pose(grasp_q),
             lift_pose=self._forward_pose(lift_q),
+            preplace_pose=self._forward_pose(preplace_q),
             place_pose=self._forward_pose(place_q),
             retreat_pose=self._forward_pose(retreat_q),
             pregrasp_q=pregrasp_q,
             grasp_q=grasp_q,
             lift_q=lift_q,
+            preplace_q=preplace_q,
             place_q=place_q,
             retreat_q=retreat_q,
         )
@@ -271,6 +277,16 @@ class RoboCasaPandaTask:
         elif not self.teacher_mode:
             # Keep a privileged joint target only as the DAgger label source.
             self.backend._target_q = np.asarray(q, dtype=np.float64).copy()
+
+    def _centered_grasp_pose(self) -> tuple[float, ...]:
+        """Shift the grasp target to center the object between the fingers."""
+        data = self.backend.data
+        ee = np.asarray(data.xpos[self.backend._ee_body], dtype=np.float64)
+        rotation = Rotation.from_matrix(np.asarray(data.xmat[self.backend._ee_body], dtype=np.float64).reshape(3, 3))
+        object_position = np.asarray(data.xpos[self.env.obj_body_id["obj"]], dtype=np.float64)
+        local = rotation.as_matrix().T @ (object_position - ee)
+        local[2] = 0.0
+        return _pose7(ee + rotation.apply(local), rotation)
 
     def _step_action(self, observation: np.ndarray | None, gripper: np.ndarray) -> TaskStep:
         if self.teacher_mode:
@@ -362,9 +378,17 @@ class RoboCasaPandaTask:
         steps: list[TaskStep] = []
         steps += self._move("pregrasp", poses.pregrasp_q, poses.pregrasp_pose, _GRIPPER_OPEN)
         steps += self._move("grasp", poses.grasp_q, poses.grasp_pose, _GRIPPER_OPEN)
+        for _ in range(2):
+            center_pose = self._centered_grasp_pose()
+            center_q = self._solve_position(
+                np.asarray(center_pose[:3], dtype=np.float64),
+                self.backend.data.qpos[self.backend._arm_q],
+            )
+            steps += self._move("grasp_center", center_q, center_pose, _GRIPPER_OPEN)
         # Close in place.
         steps += self._move("close", poses.grasp_q, poses.grasp_pose, _GRIPPER_CLOSE)
         steps += self._move("lift", poses.lift_q, poses.lift_pose, _GRIPPER_CLOSE)
+        steps += self._move("preplace", poses.preplace_q, poses.preplace_pose, _GRIPPER_CLOSE, joint=True)
         steps += self._move("place", poses.place_q, poses.place_pose, _GRIPPER_CLOSE, joint=True)
         steps += self._move("release", poses.place_q, poses.place_pose, _GRIPPER_OPEN, joint=True)
         steps += self._move("retreat", poses.retreat_q, poses.retreat_pose, _GRIPPER_OPEN, joint=True)
