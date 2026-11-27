@@ -28,6 +28,8 @@ from emet.rl.manipulation.wbc_dagger import default_subtasks
 
 def _task_for_source(source: str, robot: str) -> str:
     text = source.lower()
+    if "carry" in text:
+        return "carry"
     known = {task.name for task in default_subtasks(robot)}
     for task in (
         "combined_left",
@@ -115,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             if hard_report is None:
                 raise ValueError(f"{case.id} requires --hard-case-report")
             rows[case.id] = hard_case_metrics(_hard_case_result(hard_report, case.source))
-        elif case.family in {"free_space_reach", "base_arm"}:
+        elif case.family in {"free_space_reach", "base_arm", "carry_payload"}:
             seed_results = policy_reports.get(case.robot) or policy_reports.get("")
             if seed_results is None:
                 raise ValueError(f"{case.id} requires --policy-report for {case.robot!r}")
