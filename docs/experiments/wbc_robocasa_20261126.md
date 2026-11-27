@@ -127,8 +127,11 @@ Development result (10 teacher seeds, one scene):
   loaded data has 510 actor-visited observations and teacher labels
   (`/tmp/opencode/wbc_task_sweep_policy_force/loaded_task_data.npz`); the task
   export also includes measured finger forces, wrist wrenches, contact flags,
-  teacher grasp state, and relative slip. An earlier 728-sample set preceded
-  measured contact.
+  teacher grasp state, relative slip, and a phase-derived `intents` label
+  (`reach`, `close`, `lift`, `transport`, `place`, `release`, `retreat`). The
+  intent is teacher-side context; the actor observation layout is unchanged and
+  is not yet intent-conditioned. An earlier 728-sample set preceded measured
+  contact.
 - Per-episode diagnostics now separate the failure modes. In the 3-episode
   detailed run, the dish brush was grasped at close but lost during lift; the
   canned food was grasped and lifted ~12 cm but was not inside the cabinet at

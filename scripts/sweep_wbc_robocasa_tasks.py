@@ -92,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     teacher_grasped: list[bool] = []
     teacher_slip_m: list[float] = []
     teacher_slip_rad: list[float] = []
+    intents: list[str] = []
     episode_ids: list[int] = []
     episodes: list[dict] = []
     successes = 0
@@ -138,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
                     teacher_grasped.append(bool(step.grasped))
                     teacher_slip_m.append(float(step.slip_m))
                     teacher_slip_rad.append(float(step.slip_rad))
+                    intents.append(step.intent)
                     episode_ids.append(episode)
             print(
                 f"episode={episode} success={result.success} phase={result.failure_phase or 'ok'} "
@@ -177,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
             teacher_grasped=np.asarray(teacher_grasped, dtype=bool),
             teacher_slip_m=np.asarray(teacher_slip_m, dtype=np.float32),
             teacher_slip_rad=np.asarray(teacher_slip_rad, dtype=np.float32),
+            intents=np.asarray(intents),
             episode_ids=np.asarray(episode_ids, dtype=np.int32),
         )
         (args.output / "loaded_task_data_meta.json").write_text(
@@ -192,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                         "base_backoff": args.backoff,
                     },
                     "phases": sorted(set(phases)),
+                    "intents": sorted(set(intents)),
                     "finger_force_shape": list(np.asarray(finger_forces).shape),
                     "wrench_shape": list(np.asarray(wrenches).shape),
                     "contact_flag_rate": float(np.mean(contact_flags)) if contact_flags else 0.0,

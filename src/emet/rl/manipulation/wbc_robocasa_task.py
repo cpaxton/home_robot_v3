@@ -35,6 +35,18 @@ from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 _GRIPPER_OPEN = np.asarray((1.0, -1.0), dtype=np.float64)
 _GRIPPER_CLOSE = np.asarray((-1.0, 1.0), dtype=np.float64)
 
+_PHASE_INTENT = {
+    "pregrasp": "reach",
+    "grasp": "reach",
+    "grasp_center": "reach",
+    "close": "close",
+    "lift": "lift",
+    "preplace": "transport",
+    "place": "place",
+    "release": "release",
+    "retreat": "retreat",
+}
+
 
 @dataclass(frozen=True)
 class TaskPoses:
@@ -74,6 +86,7 @@ class TaskStep:
     grasped: bool = False
     slip_m: float = 0.0
     slip_rad: float = 0.0
+    intent: str = ""
 
 
 @dataclass
@@ -337,6 +350,9 @@ class RoboCasaPandaTask:
         local[2] = 0.0
         return _pose7(ee + rotation.apply(local), rotation)
 
+    def _intent(self) -> str:
+        return _PHASE_INTENT.get(self.curr_phase, self.curr_phase)
+
     def _step_action(self, observation: np.ndarray | None, gripper: np.ndarray) -> TaskStep:
         if self.teacher_mode:
             action = np.asarray(self.backend.teacher_action(), dtype=np.float64)
@@ -388,6 +404,7 @@ class RoboCasaPandaTask:
             grasped=grasped,
             slip_m=slip_m,
             slip_rad=slip_rad,
+            intent=self._intent(),
         )
         return step, bool(terminated)
 

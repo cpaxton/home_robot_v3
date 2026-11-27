@@ -379,8 +379,8 @@ plants resolve them through explicit alias maps and verify the result.
   The earlier "closed cabinets" were two-door fixtures with one door already
   73–90% open; the bridge now accepts any door ≥70% and records `door_states`.
   Pregrasp and centered grasp track; the teacher closes until measured finger
-  force and records slip/terminal state. Failures are 4 grasp failures and 2
-  slips. The free-space policy still gives 0/3; a 728-sample BC fine-tune also
+  force and records slip/terminal state plus phase-derived intent labels.
+  Failures are 4 grasp failures and 2 slips. The free-space policy still gives 0/3; a 728-sample BC fine-tune also
   gave 0/3 and worse post-pregrasp tracking. This is a 40% teacher result on
   one scene, not a benchmark result.
 - **Not task success:** object/cabinet place planning, grasp retention, base
