@@ -26,10 +26,20 @@ from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 from emet.rl.manipulation.wbc_training import WbcPPO
 
 
+def _resolve_body(env: Any, requested: str) -> str:
+    names = list(env.sim.model.body_names)
+    if requested in names:
+        return requested
+    tokens = [token for token in requested.replace("_main", "").split("_") if token]
+    candidates = [name for name in names if tokens and all(token in name for token in tokens)]
+    if not candidates:
+        raise ValueError(f"body {requested!r} is not in the RoboCasa scene; known={sorted(names)[:20]}...")
+    # Prefer the shortest matching fixture body (and avoid mesh/door children).
+    return sorted(candidates, key=lambda name: (len(name), name))[0]
+
+
 def _body_pose(env: Any, body: str) -> tuple[np.ndarray, np.ndarray]:
-    model = env.sim.model
-    if body not in model.body_names:
-        raise ValueError(f"body {body!r} is not in the RoboCasa scene; known={sorted(model.body_names)[:20]}...")
+    body = _resolve_body(env, body)
     return (
         np.asarray(env.sim.data.get_body_xpos(body), dtype=np.float64).copy(),
         np.asarray(env.sim.data.get_body_xquat(body), dtype=np.float64).copy(),
