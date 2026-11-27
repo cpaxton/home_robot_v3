@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
 from emet.rl.manipulation.wbc_env import WbcGymEnv
@@ -204,9 +205,13 @@ def main(argv: list[str] | None = None) -> int:
         fixture_pos = _fixture_pos(env, "sink")
         if fixture_pos is not None:
             receptacle_pos = fixture_pos
+        from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+
         current_pose = backend._observation().arms[0].ee_pose
         _, current_rot = backend._world_pose(current_pose)
         tool_quat = current_rot.as_quat()
+        grasp_T = top_down_grasp_T(object_pos)
+        grasp_quat = Rotation.from_matrix(grasp_T[:3, :3]).as_quat()
 
         base_world = backend._world_base_pose()
 
@@ -236,29 +241,29 @@ def main(argv: list[str] | None = None) -> int:
         pregrasp = object_pos + np.array([0.0, 0.0, 0.12])
         grasp = object_pos + np.array([0.0, 0.0, 0.02])
         lift = object_pos + np.array([0.0, 0.0, 0.20])
-        backend.set_ee_target(_pose(pregrasp, tool_quat))
+        backend.set_ee_target(_pose(pregrasp, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="pregrasp")
-        backend.set_ee_target(_pose(grasp, tool_quat))
+        backend.set_ee_target(_pose(grasp, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=6.0, label="grasp")
         backend.set_gripper(False)
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.04, timeout_s=2.0, label="close")
-        backend.set_ee_target(_pose(lift, tool_quat))
+        backend.set_ee_target(_pose(lift, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="lift")
 
         # Move the base to the receptacle while holding the arm target.
         place_base = base_target_for(receptacle_pos[:2])
         backend.set_world_base_target(tuple(float(v) for v in place_base))
-        backend.set_ee_target(_pose(lift, tool_quat))
+        backend.set_ee_target(_pose(lift, grasp_quat))
         _run_base(
             wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
         )
 
         place = receptacle_pos + np.array([0.0, 0.0, 0.12])
-        backend.set_ee_target(_pose(place, tool_quat))
+        backend.set_ee_target(_pose(place, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="place")
         backend.set_gripper(True)
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.05, timeout_s=2.0, label="release")
-        backend.set_ee_target(_pose(place + np.array([0.0, 0.0, 0.10]), tool_quat))
+        backend.set_ee_target(_pose(place + np.array([0.0, 0.0, 0.10]), grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.05, timeout_s=4.0, label="retreat")
 
         final_pos, _ = _body_pose(env, args.object_body)
