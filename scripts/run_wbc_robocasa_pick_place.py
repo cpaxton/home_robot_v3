@@ -248,12 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         topdown = top_down_grasp_T(object_pos)
-        hand_T = _body_T(env, "robot0_right_hand")
-        eef_T = _body_T(env, "gripper0_right_eef")
-        eef_in_hand_rot = (np.linalg.inv(hand_T) @ eef_T)[:3, :3]
-        grasp_quat = (
-            Rotation.from_matrix(topdown[:3, :3]) * Rotation.from_matrix(eef_in_hand_rot).inv()
-        ).as_quat()
+        grasp_quat = Rotation.from_matrix(topdown[:3, :3]).as_quat()
         grasp_pos = object_pos + np.array([0.0, 0.0, args.grasp_z_offset])
         pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
         grasp = grasp_pos
@@ -264,6 +259,13 @@ def main(argv: list[str] | None = None) -> int:
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=6.0, label="grasp")
         backend.set_gripper(False)
         _run_until(wbc, backend, action_source=action, target_tolerance_m=0.04, timeout_s=2.0, label="close")
+        reading = backend._contact_sensor.read(backend.data)
+        print(
+            f"close state: fingers={np.round(backend.data.qpos[backend._grip_q], 4).tolist()} "
+            f"finger_force={np.round(reading.finger_force, 3).tolist()} "
+            f"hand_force={reading.hand_force:.3f} in_contact={reading.contact.in_contact}",
+            flush=True,
+        )
         backend.set_ee_target(_pose(lift, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="lift")
 
