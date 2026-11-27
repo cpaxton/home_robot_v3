@@ -222,6 +222,8 @@ def main(argv: list[str] | None = None) -> int:
         default="eef",
         help="target the wrist body directly or offset it so the gripper EEF is at the object",
     )
+    parser.add_argument("--lift-speed", type=float, default=0.02, help="Cartesian lift speed in m/s")
+    parser.add_argument("--lift-settle", type=float, default=0.5, help="settle time after the lift ramp")
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
