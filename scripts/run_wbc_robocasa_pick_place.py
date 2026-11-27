@@ -220,6 +220,35 @@ def _run_base(
     )
 
 
+def _run_base_ramp(
+    wbc: WbcGymEnv,
+    backend: RoboCasaPandaBackend,
+    *,
+    action_source,
+    steps: int,
+    label: str,
+) -> bool:
+    """Smooth kinematic base move while the arm holds a world-frame target."""
+    target_q = backend.solve_base_target_qpos()
+    if target_q is None:
+        print(f"{label}: base target solve failed", flush=True)
+        return False
+    start_q = np.asarray(backend.data.qpos[backend._base_q], dtype=np.float64).copy()
+    for index in range(1, steps + 1):
+        alpha = index / steps
+        backend.apply_base_qpos(start_q + (target_q - start_q) * alpha)
+        _, _, terminated, truncated, _ = wbc.step(action_source())
+        if terminated or truncated:
+            break
+    backend.apply_base_qpos(target_q)
+    print(
+        f"{label}: ramped base={np.round(backend._base_pose(), 3).tolist()} "
+        f"target={np.round(backend._target_base, 3).tolist()}",
+        flush=True,
+    )
+    return True
+
+
 def _run_until(
     wbc: WbcGymEnv,
     backend: RoboCasaPandaBackend,
@@ -329,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lift-height", type=float, default=0.03, help="verification lift height")
     parser.add_argument("--min-lift-m", type=float, default=0.01, help="object rise required to accept the grasp")
     parser.add_argument("--transport-height", type=float, default=0.18, help="carry height above the grasp")
+    parser.add_argument("--transport-steps", type=int, default=60, help="kinematic base ramp steps for transport")
     parser.add_argument("--place-height", type=float, default=0.15, help="EEF height above the receptacle base")
     parser.add_argument("--lift-speed", type=float, default=0.02, help="Cartesian lift speed in m/s")
     parser.add_argument("--lift-settle", type=float, default=0.5, help="settle time after the lift ramp")
@@ -551,9 +581,18 @@ def main(argv: list[str] | None = None) -> int:
         place_base = base_target_for(receptacle_pos[:2])
         backend.set_world_base_target(tuple(float(v) for v in place_base))
         backend.set_ee_target(_pose(lift, grasp_quat))
-        _run_base(
-            wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
-        )
+        if args.teleport_base:
+            _run_base_ramp(
+                wbc,
+                backend,
+                action_source=action,
+                steps=args.transport_steps,
+                label="transport",
+            )
+        else:
+            _run_base(
+                wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=False
+            )
         carried, _ = _body_pose(env, args.object_body)
         carried_left, carried_right = backend.finger_target_forces(resolved_object)
         print(

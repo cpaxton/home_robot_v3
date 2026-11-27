@@ -214,15 +214,10 @@ class RoboCasaPandaBackend:
         self._grip_command = self._gripper_target.copy()
         self._force_gripper = bool(force)
 
-    def teleport_base_target(self) -> bool:
-        """Privileged teacher convenience: snap the planar base to its target.
-
-        The RoboCasa model is a robosuite binding wrapper, so solve the three
-        planar qpos values numerically through the base body FK instead of
-        calling the native MuJoCo API.
-        """
+    def solve_base_target_qpos(self) -> np.ndarray | None:
+        """Solve the planar qpos that realizes the current base target."""
         if self._target_base is None or self.data is None:
-            return False
+            return None
         rotation = Rotation.from_euler("z", self._origin_yaw)
         target_xy = rotation.apply(
             np.r_[np.asarray(self._target_base[:2], dtype=np.float64), 0.0]
@@ -235,7 +230,8 @@ class RoboCasaPandaBackend:
             world = self._world_base_pose()
             return np.asarray(world[:2], dtype=np.float64), float(world[2])
 
-        q = np.asarray(self.data.qpos[self._base_q], dtype=np.float64).copy()
+        current_q = np.asarray(self.data.qpos[self._base_q], dtype=np.float64).copy()
+        q = current_q.copy()
         for _ in range(12):
             xy, yaw = pose_for(q)
             error = np.r_[target_xy - xy, _wrap(target_yaw - yaw)]
@@ -251,15 +247,33 @@ class RoboCasaPandaBackend:
             try:
                 step = np.linalg.lstsq(jac, error, rcond=None)[0]
             except np.linalg.LinAlgError:
-                pose_for(q)
-                return False
+                self.data.qpos[self._base_q] = current_q
+                self.env.sim.forward()
+                return None
             q += np.clip(step, -0.25, 0.25)
-        pose_for(q)
+        xy, yaw = pose_for(q)
+        solved = bool(
+            np.linalg.norm(target_xy - xy) <= 5e-3 and abs(_wrap(target_yaw - yaw)) <= 5e-3
+        )
+        self.data.qpos[self._base_q] = current_q
+        self.data.qvel[self._base_v] = 0.0
+        self.env.sim.forward()
+        return q if solved else None
+
+    def apply_base_qpos(self, q: np.ndarray) -> None:
+        """Kinematic base move used by the teacher's transport ramp."""
+        self.data.qpos[self._base_q] = q
         self.data.qvel[self._base_v] = 0.0
         self.env.sim.forward()
         self._base_command[:] = 0.0
-        xy, yaw = pose_for(q)
-        return bool(np.linalg.norm(target_xy - xy) <= 5e-3 and abs(_wrap(target_yaw - yaw)) <= 5e-3)
+
+    def teleport_base_target(self) -> bool:
+        """Privileged teacher convenience: snap the planar base to its target."""
+        q = self.solve_base_target_qpos()
+        if q is None:
+            return False
+        self.apply_base_qpos(q)
+        return True
 
     def set_local_ee_target(self, pose: tuple[float, ...] | None) -> None:
         """Set an end-effector target in the reset-anchored robot frame."""
