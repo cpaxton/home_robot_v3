@@ -160,12 +160,16 @@ approach and a retained-grasp check, not more candidate scoring.
 **Open/close prototype:** a closed left cabinet door was opened by a
 closed-gripper push servo that follows the handle arc about the true hinge.
 Joint PD held the height and reached **58% open** before the fixed base ran out
-of reach; the arm needs to follow the door with the mobile base to finish the
-90% gate. Reproduce with:
+of reach. A prototype base shift toward the moving handle reached **66%**, but
+the base still needs a proper follow controller to finish the 90% gate.
+Reproduce with:
 
 ```bash
 uv run python scripts/probe_wbc_robocasa_fixture.py \
   --output /tmp/opencode/wbc_fixture_probe
+# prototype base shift:
+uv run python scripts/probe_wbc_robocasa_fixture.py --follow-base \
+  --iterations 60 --output /tmp/opencode/wbc_fixture_probe_follow
 ```
 
 This is a prototype, not a learned open/close skill, and it is not used by the

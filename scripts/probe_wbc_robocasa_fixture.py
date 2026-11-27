@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=50000)
     parser.add_argument("--side", choices=("auto", "left", "right"), default="left")
     parser.add_argument("--iterations", type=int, default=40)
+    parser.add_argument("--follow-base", action="store_true", help="shift the base toward the moving handle")
     parser.add_argument("--output", type=Path, default=Path("/tmp/opencode/wbc_fixture_probe"))
     args = parser.parse_args(argv)
 
@@ -125,8 +126,18 @@ def main(argv: list[str] | None = None) -> int:
         # The left door opens with +z rotation; the right door mirrors it.
         sign = 1.0 if "left" in handle_name or len(fixture.door_joint_names) == 1 else -1.0
         history: list[dict[str, object]] = []
+        base_body = int(env.sim.model.body_name2id("mobilebase0_base"))
         for iteration in range(args.iterations):
             handle = np.asarray(env.sim.data.body_xpos[handle_body], dtype=np.float64).copy()
+            if args.follow_base:
+                base = np.asarray(env.sim.data.xpos[base_body], dtype=np.float64)
+                offset = handle[:2] - base[:2]
+                distance = float(np.linalg.norm(offset))
+                if distance > 0.45:
+                    step = min(0.02, distance - 0.45) * offset / distance
+                    env.sim.data.qpos[backend._base_q[0]] += float(step[0])
+                    env.sim.data.qpos[backend._base_q[1]] += float(step[1])
+                    env.sim.forward()
             delta = Rotation.from_euler("z", sign * np.deg2rad(4.0))
             target_handle = hinge + delta.apply(handle - hinge)
             target_pose = target_handle - 0.108 * delta.apply(approach)
