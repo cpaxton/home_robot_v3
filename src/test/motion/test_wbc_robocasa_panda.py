@@ -102,3 +102,40 @@ def test_reanchor_origin_preserves_world_ee_target():
     np.testing.assert_allclose(after_rot.as_matrix(), before_rot.as_matrix(), atol=1e-9)
 
 
+def test_topdown_grasp_planner_slices_8_vertex_box_and_aligns_eef_x_to_narrow_axis():
+    import sys
+    from pathlib import Path
+
+    scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
+    sys.path.insert(0, str(scripts_dir))
+    from run_wbc_robocasa_pick_place import _BOX_CORNERS, _BOX_EDGE_INDICES, _plan_topdown_grasp
+
+    # 8-vertex bar of soap (10 cm x 5 cm x 3.2 cm) rotated 37 deg on a z=0.92 m counter;
+    # zero vertices exist between z=0.920 and z=0.952, so edge-plane slicing is required.
+    half = np.array([0.05, 0.025, 0.016], dtype=np.float64)
+    theta = np.deg2rad(37.0)
+    rot_z = np.array(
+        [[np.cos(theta), -np.sin(theta), 0.0], [np.sin(theta), np.cos(theta), 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    center = np.array([0.70, -0.55, 0.936], dtype=np.float64)
+    corners = (_BOX_CORNERS * half) @ rot_z.T + center
+    edges = corners[_BOX_EDGE_INDICES]
+
+    grasp_z, grasp_xy, grasp_yaw, width, _ = _plan_topdown_grasp(
+        corners,
+        edges,
+        base_yaw=1.96,
+        opening_m=0.078,
+        margin_m=0.004,
+    )
+    assert 0.934 <= grasp_z <= 0.942
+    np.testing.assert_allclose(grasp_xy, center[:2], atol=2e-3)
+    assert width == pytest.approx(0.05, abs=4e-3)
+    # EEF X ([cos(yaw), sin(yaw)]) must align with the 5 cm minor axis of the rotated box.
+    eef_x = np.array([np.cos(grasp_yaw), np.sin(grasp_yaw)])
+    minor_axis = rot_z[:2, 1]
+    assert abs(float(np.dot(eef_x, minor_axis))) > 0.98
+
+
+

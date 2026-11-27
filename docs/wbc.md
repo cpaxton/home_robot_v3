@@ -9,7 +9,8 @@ This is the how-to guide. Result tables and caveats live in:
 
 - [WBC training report](experiments/wbc_training_report_20261126.md)
 - [multi-robot result matrix](experiments/wbc_multirobot_20261125.md)
-- [RoboCasa adapter](experiments/wbc_robocasa_20261126.md)
+- [RoboCasa reach adapter](experiments/wbc_robocasa_20261126.md)
+- [RoboCasa multi-step pick-place & retention](experiments/robocasa_pandaomron_pick_place_20261127.md)
 - [whole-body control plan](plans/whole-body-rl-control.md)
 
 ## 1. Mental model

@@ -17,6 +17,7 @@ alone as a no-GT benchmark result.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -217,7 +218,7 @@ def _plan_topdown_grasp(
     # around base_yaw + 90 deg covers every undirected 2D finger axis while keeping
     # wrist rotation within 90 deg of the ready posture.
     yaw_pref = base_yaw + 0.50 * np.pi
-    candidate_yaws = yaw_pref + np.linspace(-0.5 * np.pi, 0.5 * np.pi, 18, endpoint=False)
+    candidate_yaws = yaw_pref + np.linspace(-0.5 * np.pi, 0.5 * np.pi, 60, endpoint=False)
 
     table: list[tuple[float, float]] = []
     best_valid: tuple[float, float, np.ndarray, float, float] | None = None
@@ -533,6 +534,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--steps", type=int, default=2400)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument("--json-out", type=Path, default=None, help="write structured episode summary JSON")
+    parser.add_argument("--save-rollout", type=Path, default=None, help="save (observations, teacher_actions, executed_actions) .npz")
     args = parser.parse_args(argv)
 
     import robocasa  # noqa: F401
@@ -570,25 +573,57 @@ def main(argv: list[str] | None = None) -> int:
         policy = trainer.policy
         device = str(trainer.device)
 
-    def action() -> np.ndarray:
-        if args.teacher:
-            return np.asarray(backend.teacher_action(), dtype=np.float32)
-        assert policy is not None
-        import torch
+    rollout_obs: list[np.ndarray] = []
+    rollout_teacher_act: list[np.ndarray] = []
+    rollout_exec_act: list[np.ndarray] = []
 
-        with torch.no_grad():
-            return (
-                policy.deterministic_action(
-                    torch.as_tensor(wbc.encode(backend._observation()), dtype=torch.float32, device=device).unsqueeze(0)
-                )[0]
-                .cpu()
-                .numpy()
-            )
+    def action() -> np.ndarray:
+        obs_vec = wbc.encode(backend._observation())
+        teacher_vec = np.asarray(backend.teacher_action(), dtype=np.float32) if args.save_rollout is not None or args.teacher else None
+        if args.teacher:
+            assert teacher_vec is not None
+            exec_vec = teacher_vec
+        else:
+            assert policy is not None
+            import torch
+
+            with torch.no_grad():
+                exec_vec = (
+                    policy.deterministic_action(
+                        torch.as_tensor(obs_vec, dtype=torch.float32, device=device).unsqueeze(0)
+                    )[0]
+                    .cpu()
+                    .numpy()
+                    .astype(np.float32)
+                )
+        if args.save_rollout is not None and teacher_vec is not None:
+            rollout_obs.append(obs_vec.copy())
+            rollout_teacher_act.append(teacher_vec.copy())
+            rollout_exec_act.append(exec_vec.copy())
+        return exec_vec
+
+    summary: dict[str, Any] = {
+        "env_name": args.env_name,
+        "layout": args.layout,
+        "style": args.style,
+        "obj_groups": args.obj_groups,
+        "seed": args.seed,
+        "controller": "privileged_teacher" if args.teacher else "wbc_policy",
+        "checkpoint": None if args.teacher else str(args.checkpoint),
+        "target_source": "privileged_gt_metadata",
+        "teleport_base": bool(args.teleport_base),
+        "object_weld": False,
+        "task_success": False,
+        "failure_stage": "incomplete",
+    }
 
     try:
         wbc.reset(seed=args.seed)
         lang = env.get_ep_meta().get("lang", "")
         object_pos, _ = _body_pose(env, args.object_body)
+        summary["lang"] = lang
+        summary["model_fingerprint"] = backend.model_fingerprint
+        summary["object_start"] = [round(float(v), 4) for v in object_pos]
         base_world = backend._world_base_pose()
 
         # Estimate counter front normal from robot spawn -> counter object direction
@@ -786,7 +821,19 @@ def main(argv: list[str] | None = None) -> int:
             f"breakdown={ {k: round(v, 3) for k, v in backend.contact_breakdown(resolved_object).items()} }",
             flush=True,
         )
+        summary.update(
+            {
+                "grasp_xy": [round(float(v), 4) for v in grasp_xy],
+                "grasp_z": round(float(grasp_z), 4),
+                "grasp_yaw": round(float(grasp_yaw), 4),
+                "pinch_width_m": round(float(section_width), 4),
+                "close_accepted": bool(accepted),
+                "close_left_N": round(float(left_force), 3),
+                "close_right_N": round(float(right_force), 3),
+            }
+        )
         if not accepted:
+            summary["failure_stage"] = "close_gate"
             print("GRASP FAILED: no bilateral finger contact on the target", flush=True)
             return 1
         if args.grip_hold_squeeze > 0:
@@ -813,7 +860,9 @@ def main(argv: list[str] | None = None) -> int:
             f"lift_check: object_rise={rise:.4f} object={np.round(lift_end, 3).tolist()}",
             flush=True,
         )
+        summary["lift_rise_m"] = round(float(rise), 4)
         if rise < args.min_lift_m:
+            summary["failure_stage"] = "lift_check"
             print("GRASP FAILED: object was not retained through the lift", flush=True)
             return 1
 
@@ -875,6 +924,7 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         if carry_left < args.grasp_force_n or carry_right < args.grasp_force_n:
+            summary["failure_stage"] = "retract_to_transport"
             print("GRASP FAILED: object was not retained while retracting to transport", flush=True)
             return 1
 
@@ -933,7 +983,10 @@ def main(argv: list[str] | None = None) -> int:
             f"left_N={carried_left:.2f} right_N={carried_right:.2f}",
             flush=True,
         )
+        summary["post_transport_left_N"] = round(float(carried_left), 3)
+        summary["post_transport_right_N"] = round(float(carried_right), 3)
         if carried_left < 0.5 and carried_right < 0.5:
+            summary["failure_stage"] = "transport"
             print("TRANSPORT FAILED: object slipped out during base transport", flush=True)
             return 1
 
@@ -1053,6 +1106,16 @@ def main(argv: list[str] | None = None) -> int:
         task_success = bool(env._check_success()) if hasattr(env, "_check_success") else (
             displacement > 0.05 and placement_error < 0.25
         )
+        summary.update(
+            {
+                "object_final": [round(float(v), 4) for v in final_pos],
+                "place_xy": [round(float(v), 4) for v in place_xy],
+                "displacement_m": round(displacement, 4),
+                "receptacle_xy_error_m": round(placement_error, 4),
+                "task_success": bool(task_success),
+                "failure_stage": None if task_success else "place_or_retreat",
+            }
+        )
         print(
             f"object={args.object_body} start={np.round(object_pos, 3).tolist()} "
             f"final={np.round(final_pos, 3).tolist()} place_xy={np.round(place_xy, 3).tolist()} "
@@ -1062,6 +1125,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if task_success else 1
     finally:
+        if args.json_out is not None:
+            args.json_out.parent.mkdir(parents=True, exist_ok=True)
+            args.json_out.write_text(json.dumps(summary, indent=2) + "\n")
+        if args.save_rollout is not None and rollout_obs:
+            args.save_rollout.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(
+                args.save_rollout,
+                observations=np.stack(rollout_obs, axis=0),
+                teacher_actions=np.stack(rollout_teacher_act, axis=0),
+                executed_actions=np.stack(rollout_exec_act, axis=0),
+                task_success=np.asarray([bool(summary.get("task_success", False))]),
+            )
         wbc.close()
 
 
