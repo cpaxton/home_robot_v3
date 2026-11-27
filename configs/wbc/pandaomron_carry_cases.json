@@ -10,12 +10,12 @@
         "min_success": 0.75
       },
       "id": "pandaomron.carry_payload.direct",
-      "notes": "direct-plant payload carry; 0.1-1.2 kg, base+arm, +/-0.35 rad; contact-aware layout v4 checkpoint",
+      "notes": "direct-plant payload carry; 0.1-1.2 kg, base+arm, +/-0.35 rad; contact-aware layout v4 checkpoint; candidate checkpoint fails the 3-seed gate (0.80/0.70/0.50, mean 0.667), activate after a robust retrain",
       "occupancy": "none",
       "robot": "pandaomron",
       "source": "wbc_dagger contact curriculum carry",
       "split": "test",
-      "status": "active"
+      "status": "planned"
     }
   ],
   "profile": "pandaomron_sim",
