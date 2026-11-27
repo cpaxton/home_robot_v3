@@ -161,10 +161,18 @@ between medium and full. Trained from the 0.40 full-carry checkpoint, it reaches
 **0.80** after one DAgger iteration (5 episodes, **2.03 cm** mean tracking,
 **3.56 cm** settled max, 0 collisions). The second iteration also succeeds 0.80
 but its settled max is 7.14 cm, so `policy_iter1.pt` is the gate candidate. This
-is the first contact-aware policy to pass a base+arm carry task. It is still a
-curriculum stage, not the full ±0.35 rad carry; a full-carry run initialized
-from it, a 10-episode joint-torque ablation, and a RoboCasa task sweep are in
-flight. A fresh
+is the first contact-aware policy to pass a base+arm carry task on the 5-episode
+screen. The 10-episode re-evaluation is the honest gate: success stays **0.80**,
+but mean tracking is **18.2 cm**, settled max **1.04 m**, and there are **2
+collisions**. That fails the carry gate (5 cm tracking, zero collisions). The
+masked run is also 0.80 with 7.0 cm tracking and 2 collisions, so the 5-episode
+screen was optimistic and contact use does not fix the instability. No
+checkpoint is promoted.
+
+The next run is a mixed suite (`arm`, `base`, `combined`, `carry_wide`) trained
+from the wide checkpoint, to keep the free-space/base skills and reduce
+collisions instead of overfitting a carry-only task. A full-carry ramp from the
+wide checkpoint and a RoboCasa task sweep are also in flight. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
