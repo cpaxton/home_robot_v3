@@ -153,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-standoff", type=float, default=0.55)
     parser.add_argument("--teacher", action="store_true", help="use the privileged teacher; no checkpoint")
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
-    parser.add_argument("--grasp-z-offset", type=float, default=-0.03, help="wrist target offset below object center")
+    parser.add_argument("--grasp-z-offset", type=float, default=0.02, help="wrist target offset below object center")
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -248,7 +248,12 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         topdown = top_down_grasp_T(object_pos)
-        grasp_quat = Rotation.from_matrix(topdown[:3, :3]).as_quat()
+        hand_T = _body_T(env, "robot0_right_hand")
+        eef_T = _body_T(env, "gripper0_right_eef")
+        eef_in_hand_rot = (np.linalg.inv(hand_T) @ eef_T)[:3, :3]
+        grasp_quat = (
+            Rotation.from_matrix(topdown[:3, :3]) * Rotation.from_matrix(eef_in_hand_rot).inv()
+        ).as_quat()
         grasp_pos = object_pos + np.array([0.0, 0.0, args.grasp_z_offset])
         pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
         grasp = grasp_pos
