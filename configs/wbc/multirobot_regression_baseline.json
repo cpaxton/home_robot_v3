@@ -1,0 +1,194 @@
+{
+  "branch_commit": "ac3d1c81d74b50524f02d5da7e34527f28e95d01",
+  "generated": "2026-11-26",
+  "protocol": {
+    "environment": "direct MuJoCo",
+    "episodes_per_subtask": 50,
+    "not_robocasa": true,
+    "note": "Panda clean row corrected to the measured re-gate; old 0.996 was stale.",
+    "seeds": [
+      30000,
+      40000,
+      50000
+    ]
+  },
+  "robots": {
+    "mars": {
+      "checkpoint": "logs/eval/wbc_multirobot_20261126/mars/best.pt",
+      "checkpoint_note": "original Mars DAgger best (seed 30000)",
+      "checkpoint_stage": "dagger_5",
+      "metrics": {
+        "30000": {
+          "aggregate": 0.9733333333333334,
+          "tasks": {
+            "arm": 1.0,
+            "base": 1.0,
+            "combined": 0.92
+          }
+        },
+        "40000": {
+          "aggregate": 0.92,
+          "tasks": {
+            "arm": 1.0,
+            "base": 1.0,
+            "combined": 0.76
+          }
+        },
+        "50000": {
+          "aggregate": 0.9733333333333334,
+          "tasks": {
+            "arm": 1.0,
+            "base": 1.0,
+            "combined": 0.92
+          }
+        }
+      },
+      "profile": "example_innate_mars",
+      "profile_fingerprint": "ecf33352459bca7c5fd01dca615f6a3198208548e3907a67189aa71fd2d39a97"
+    },
+    "pandaomron": {
+      "checkpoint": "logs/eval/wbc_multirobot_20261126/pandaomron/best.pt",
+      "checkpoint_note": "promoted iteration 2 checkpoint (copied to best.pt)",
+      "checkpoint_stage": "dagger_2",
+      "metrics": {
+        "30000": {
+          "aggregate": 0.9466666666666667,
+          "tasks": {
+            "arm": 1.0,
+            "base": 1.0,
+            "combined": 0.84
+          }
+        },
+        "40000": {
+          "aggregate": 0.9733333333333334,
+          "tasks": {
+            "arm": 1.0,
+            "base": 1.0,
+            "combined": 0.92
+          }
+        },
+        "50000": {
+          "aggregate": 0.9066666666666666,
+          "tasks": {
+            "arm": 1.0,
+            "base": 1.0,
+            "combined": 0.72
+          }
+        }
+      },
+      "profile": "pandaomron_sim",
+      "profile_fingerprint": "618f10c8aeaadd4fb0add23e9e7fd0972136e2ae1b0b1de4584f36a7a1529ad1"
+    },
+    "rby1": {
+      "checkpoint": "logs/eval/wbc_multirobot_20261126/rby1/best.pt",
+      "checkpoint_note": "aggregate-selected best (iteration 1)",
+      "checkpoint_stage": "dagger_1",
+      "metrics": {
+        "30000": {
+          "aggregate": 0.996,
+          "tasks": {
+            "arm_left": 1.0,
+            "arm_right": 1.0,
+            "base": 1.0,
+            "combined_left": 1.0,
+            "combined_right": 0.98
+          }
+        },
+        "40000": {
+          "aggregate": 0.996,
+          "tasks": {
+            "arm_left": 1.0,
+            "arm_right": 1.0,
+            "base": 1.0,
+            "combined_left": 1.0,
+            "combined_right": 0.98
+          }
+        },
+        "50000": {
+          "aggregate": 1.0,
+          "tasks": {
+            "arm_left": 1.0,
+            "arm_right": 1.0,
+            "base": 1.0,
+            "combined_left": 1.0,
+            "combined_right": 1.0
+          }
+        }
+      },
+      "profile": "rby1_sim",
+      "profile_fingerprint": "8d50d90d8220acab0e1763945b30b8e5af547df166cf0ba496488768a3294b3e"
+    },
+    "sourccey": {
+      "checkpoint": "logs/eval/wbc_multirobot_20261126/sourccey/best.pt",
+      "checkpoint_note": "aggregate-selected best (iteration 4)",
+      "checkpoint_stage": "dagger_4",
+      "metrics": {
+        "30000": {
+          "aggregate": 0.952,
+          "tasks": {
+            "arm_left": 1.0,
+            "arm_right": 1.0,
+            "base": 1.0,
+            "combined_left": 0.86,
+            "combined_right": 0.9
+          }
+        },
+        "40000": {
+          "aggregate": 0.96,
+          "tasks": {
+            "arm_left": 1.0,
+            "arm_right": 1.0,
+            "base": 1.0,
+            "combined_left": 0.86,
+            "combined_right": 0.94
+          }
+        },
+        "50000": {
+          "aggregate": 0.968,
+          "tasks": {
+            "arm_left": 1.0,
+            "arm_right": 1.0,
+            "base": 1.0,
+            "combined_left": 0.88,
+            "combined_right": 0.96
+          }
+        }
+      },
+      "profile": "sourccey_sim",
+      "profile_fingerprint": "836dbff07a32f3f5c168abef537948bad62dc9ad13da8327459e1f027a848d13"
+    },
+    "stretch": {
+      "checkpoint": "logs/eval/wbc_multirobot_20261126/stretch/best.pt",
+      "checkpoint_note": "aggregate-selected best (iteration 2)",
+      "checkpoint_stage": "dagger_2",
+      "metrics": {
+        "30000": {
+          "aggregate": 0.9533333333333334,
+          "tasks": {
+            "arm": 0.94,
+            "base": 1.0,
+            "combined": 0.92
+          }
+        },
+        "40000": {
+          "aggregate": 0.94,
+          "tasks": {
+            "arm": 0.88,
+            "base": 1.0,
+            "combined": 0.94
+          }
+        },
+        "50000": {
+          "aggregate": 0.96,
+          "tasks": {
+            "arm": 0.96,
+            "base": 1.0,
+            "combined": 0.92
+          }
+        }
+      },
+      "profile": "stretch_sim",
+      "profile_fingerprint": "c419c9aaadc637052f26767f44599d3d144c7c7998893a98bf910ab85f525a25"
+    }
+  }
+}

@@ -7,6 +7,7 @@ cd "$ROOT"
 
 PYTHON="${PYTHON:-python3}"
 CHECKPOINTS="${CHECKPOINTS:-logs/eval/wbc_multirobot_20261126}"
+BASELINE="${BASELINE:-configs/wbc/multirobot_regression_baseline.json}"
 OUT="${OUT:-/tmp/wbc_benchmark_regression}"
 EPISODES="${EPISODES:-50}"
 SEEDS="${SEEDS:-30000,40000,50000}"
@@ -26,7 +27,7 @@ for robot in $ROBOTS; do
  done
 
 "$PYTHON" scripts/compare_wbc_benchmark.py \
-  --baseline "$CHECKPOINTS/manifest.json" \
+  --baseline "$BASELINE" \
   --results "$OUT" \
   --episodes "$EPISODES" \
   --robots "$ROBOTS" \
