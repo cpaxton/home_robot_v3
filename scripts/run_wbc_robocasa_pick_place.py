@@ -694,11 +694,16 @@ def main(argv: list[str] | None = None) -> int:
             np.arctan2(receptacle_pos[1] - place_base[1], receptacle_pos[0] - place_base[0])
         )
         place_yaw = place_base_yaw + np.pi / 2.0
-        T_eef_place = top_down_grasp_T(
-            np.array([receptacle_pos[0], receptacle_pos[1], receptacle_pos[2] + args.place_height]),
-            z_offset_m=0.0,
-        )
-        T_eef_place[:3, :3] = Rotation.from_euler("z", place_yaw).as_matrix() @ T_eef_place[:3, :3]
+        if side:
+            T_eef_place = np.eye(4, dtype=np.float64)
+            T_eef_place[:3, :3] = T_eef_grasp[:3, :3]
+            T_eef_place[:3, 3] = receptacle_pos + np.array([0.0, 0.0, args.place_height])
+        else:
+            T_eef_place = top_down_grasp_T(
+                np.array([receptacle_pos[0], receptacle_pos[1], receptacle_pos[2] + args.place_height]),
+                z_offset_m=0.0,
+            )
+            T_eef_place[:3, :3] = Rotation.from_euler("z", place_yaw).as_matrix() @ T_eef_place[:3, :3]
         T_hand_place = T_eef_place @ eef_in_hand
         place = T_hand_place[:3, 3].copy()
         place_quat = Rotation.from_matrix(T_hand_place[:3, :3]).as_quat()
