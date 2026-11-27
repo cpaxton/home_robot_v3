@@ -154,6 +154,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--teacher", action="store_true", help="use the privileged teacher; no checkpoint")
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
     parser.add_argument("--grasp-z-offset", type=float, default=0.02, help="wrist target offset below object center")
+    parser.add_argument(
+        "--grasp-orientation",
+        choices=("ready", "topdown"),
+        default="ready",
+        help="wrist orientation for grasp/place targets",
+    )
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -216,8 +222,6 @@ def main(argv: list[str] | None = None) -> int:
         fixture_pos = _fixture_pos(env, "sink")
         if fixture_pos is not None:
             receptacle_pos = fixture_pos
-        from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
-
         current_pose = backend._observation().arms[0].ee_pose
         _, current_rot = backend._world_pose(current_pose)
         tool_quat = current_rot.as_quat()
@@ -247,8 +251,13 @@ def main(argv: list[str] | None = None) -> int:
             wbc, backend, action_source=action, timeout_s=10.0, label="base_approach", teleport=args.teleport_base
         )
 
-        topdown = top_down_grasp_T(object_pos)
-        grasp_quat = Rotation.from_matrix(topdown[:3, :3]).as_quat()
+        if args.grasp_orientation == "topdown":
+            from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
+
+            topdown = top_down_grasp_T(object_pos)
+            grasp_quat = Rotation.from_matrix(topdown[:3, :3]).as_quat()
+        else:
+            grasp_quat = tool_quat
         grasp_pos = object_pos + np.array([0.0, 0.0, args.grasp_z_offset])
         pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
         grasp = grasp_pos
