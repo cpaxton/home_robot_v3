@@ -388,6 +388,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
     parser.add_argument("--grasp-z-offset", type=float, default=0.02, help="wrist target offset below object center")
     parser.add_argument(
+        "--grasp-mode",
+        choices=("auto", "topdown", "side"),
+        default="auto",
+        help="top-down grasp or horizontal side grasp for tall objects",
+    )
+    parser.add_argument(
         "--grasp-height-mode",
         choices=("geometry", "offset"),
         default="geometry",
