@@ -218,8 +218,11 @@ A longer continuation (3 iterations, 8,192 teacher steps, 4,096 DAgger steps
 per iteration) peaks at **0.83 aggregate** on iteration 2: arm 1.00, base 1.00,
 combined **0.67** (2.58 cm, 0 collisions), carry_wide **0.67** (2.11 cm, 0
 collisions). Iteration 3 is 0.75. The 10-episode evaluation of iteration 2 is
-in flight; the 3-episode screen is below both the 0.85 combined and 0.75
-carry_wide gates, so no promotion yet.
+**0.85 aggregate, zero collisions**: arm 1.00 (1.56 cm), base 1.00,
+combined **0.80** (2.04 cm, 0 collisions), carry_wide **0.60** (5.26 cm,
+settled max 31 cm, 0 collisions). Combined is one episode short of 0.85 and
+carry_wide is below 0.75, so no promotion. A focused `combined,carry_wide`
+continuation from iteration 2 is the next run.
 
 ## 3. Robot matrix
 
