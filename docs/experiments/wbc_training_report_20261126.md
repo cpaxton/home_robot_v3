@@ -140,7 +140,12 @@ Full-carry ramp from the easy checkpoint: teacher BC **0.20**, DAgger iter1
 remaining gap is closed-loop tracking, not label fit. This is better than the
 0.30 PPO result but still below 0.75. The suite now adds `carry_medium`
 (0.2–1.0 kg, held base, ±0.15 rad, torso 0.20–0.30 m) as the next curriculum
-stage; it is training from the easy checkpoint. A fresh
+stage. The easy checkpoint already evaluates **1.00** on medium, and teacher BC
+and two DAgger iterations stay **1.00** on 5 episodes (BC loss 0.00065). The
+0.2–1.0 kg load range is therefore learnable with a held base and a narrow
+target; the remaining full-carry gap is the base+arm coordination and ±0.35 rad
+targets, not the payload alone. A full-carry run initialized from the medium
+checkpoint is in flight. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
