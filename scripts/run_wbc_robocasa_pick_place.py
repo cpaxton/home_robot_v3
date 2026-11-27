@@ -251,7 +251,9 @@ def _run_base_ramp(
     if hold_T is not None:
         base_hold = np.linalg.inv(_body_T(env, "mobilebase0_base")) @ hold_T
     for index in range(1, steps + 1):
-        alpha = index / steps
+        # Smoothstep: zero velocity at both ends so the free object is not
+        # stepped relative to the pads at the start of the base motion.
+        alpha = 0.5 - 0.5 * np.cos(np.pi * index / steps)
         backend.apply_base_qpos(start_q + (target_q - start_q) * alpha)
         if base_hold is not None:
             backend.set_ee_target(_pose_from_T(_body_T(env, "mobilebase0_base") @ base_hold))
