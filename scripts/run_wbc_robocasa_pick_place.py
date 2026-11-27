@@ -153,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-standoff", type=float, default=0.55)
     parser.add_argument("--teacher", action="store_true", help="use the privileged teacher; no checkpoint")
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
+    parser.add_argument("--grasp-z-offset", type=float, default=-0.03, help="wrist target offset below object center")
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -220,19 +221,6 @@ def main(argv: list[str] | None = None) -> int:
         current_pose = backend._observation().arms[0].ee_pose
         _, current_rot = backend._world_pose(current_pose)
         tool_quat = current_rot.as_quat()
-        # The task grasp frame is expressed for the gripper EEF body; the WBC
-        # contract uses the wrist/right_hand body. Convert through their fixed
-        # reset-time relative transform.
-        hand_T = _body_T(env, "robot0_right_hand")
-        eef_T = _body_T(env, "gripper0_right_eef")
-        eef_in_hand = np.linalg.inv(hand_T) @ eef_T
-
-        def hand_for_eef(eef_target: np.ndarray) -> np.ndarray:
-            return eef_target @ np.linalg.inv(eef_in_hand)
-
-        grasp_hand = hand_for_eef(top_down_grasp_T(object_pos))
-        grasp_pos = grasp_hand[:3, 3]
-        grasp_quat = Rotation.from_matrix(grasp_hand[:3, :3]).as_quat()
 
         base_world = backend._world_base_pose()
 
@@ -259,6 +247,9 @@ def main(argv: list[str] | None = None) -> int:
             wbc, backend, action_source=action, timeout_s=10.0, label="base_approach", teleport=args.teleport_base
         )
 
+        topdown = top_down_grasp_T(object_pos)
+        grasp_quat = Rotation.from_matrix(topdown[:3, :3]).as_quat()
+        grasp_pos = object_pos + np.array([0.0, 0.0, args.grasp_z_offset])
         pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
         grasp = grasp_pos
         lift = grasp_pos + np.array([0.0, 0.0, 0.20])
@@ -279,8 +270,7 @@ def main(argv: list[str] | None = None) -> int:
             wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
         )
 
-        place_hand = hand_for_eef(top_down_grasp_T(receptacle_pos + np.array([0.0, 0.0, 0.10])))
-        place = place_hand[:3, 3]
+        place = receptacle_pos + np.array([0.0, 0.0, 0.10])
         backend.set_ee_target(_pose(place, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="place")
         backend.set_gripper(True)
