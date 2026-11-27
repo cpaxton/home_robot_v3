@@ -150,8 +150,14 @@ A 10-episode medium ablation still passes **1.00/1.00** when wrist wrench,
 finger force, and joint torque are masked; tracking is essentially unchanged
 (**1.76 vs 1.79 cm**). The easy/medium stages can be solved by averaging the
 payload, so they prove the curriculum is trainable but not that the actor needs
-contact. Full `carry` is the contact gate. A full-carry run initialized from
-the medium checkpoint is in flight. A fresh
+contact. Full `carry` is the contact gate.
+
+Full carry initialized from the medium checkpoint is **0/5** at init, after
+teacher BC, and after both DAgger iterations. The medium stage overfits to the
+held base and ±0.15 rad targets and does not retain the base+arm skill. The best
+full-carry result remains the easy-to-full ramp at **0.40**. The suite now adds
+`carry_wide` (0.2–1.0 kg, base+arm, ±0.20 rad, torso 0.18–0.30 m) as the bridge
+between medium and full; it is training from the 0.40 full-carry checkpoint. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
