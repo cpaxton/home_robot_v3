@@ -145,6 +145,16 @@ Development result (10 teacher seeds, one scene):
   food. Teacher-only BC is not the missing piece; the policy needs DAgger from
   its own visited states and contact/intent conditioning, and the teacher still
   fails 6/10 rollouts. Do not promote this checkpoint.
+- **Task DAgger (negative):** two rounds of 5 policy episodes, anchored with the
+  1,354 successful teacher samples and trained from the robust checkpoint.
+  Round 0 aggregated 2,237 samples (9 episodes), BC loss 0.321, eval **0/3**.
+  Round 1 aggregated 3,323 samples (14 episodes), BC loss 0.351, eval **0/3**.
+  Grasp/center tracking stayed at 5–28 cm and no policy episode grasped the
+  object. The data is useful (3,323 policy-visited states with teacher labels,
+  forces, contact, and intents), but the free-space actor still cannot use
+  contact and the off-policy teacher labels are large. Do not promote either
+  DAgger checkpoint. The next gate is a contact-aware layout retrain or a
+  higher-success teacher, not more DAgger on this actor.
 - The teacher now closes until measured finger force (8 N threshold) or a
   grasp check, and records slip/terminal conditions. This is the start of
   force-conditioned labelling; the actor still has zeroed contact inputs in
