@@ -213,12 +213,11 @@ def _plan_topdown_grasp(
     z_lo = min(z_max, max(z_min_counter, z_min_palm))
     z_hi = max(z_lo, z_max)
 
-    # q7 is ~0 rad at base_yaw + 135 deg and +0.786 rad at base_yaw + 90 deg;
-    # sweeping +-90 deg around base_yaw + 135 deg covers every undirected 2D
-    # finger axis while keeping |q7| <= 1.57 rad (>1.3 rad joint margin).
-    yaw_center = base_yaw + 0.75 * np.pi
+    # _READY_Q[6] = +0.785 rad corresponds to base_yaw + 90 deg; sweeping +-90 deg
+    # around base_yaw + 90 deg covers every undirected 2D finger axis while keeping
+    # wrist rotation within 90 deg of the ready posture.
     yaw_pref = base_yaw + 0.50 * np.pi
-    candidate_yaws = yaw_center + np.linspace(-0.5 * np.pi, 0.5 * np.pi, 18, endpoint=False)
+    candidate_yaws = yaw_pref + np.linspace(-0.5 * np.pi, 0.5 * np.pi, 18, endpoint=False)
 
     table: list[tuple[float, float]] = []
     best_valid: tuple[float, float, np.ndarray, float, float] | None = None
@@ -271,12 +270,12 @@ def _receptacle_place_target(
     *,
     object_bottom_offset_m: float,
     place_height_m: float,
-) -> tuple[np.ndarray, float, float]:
-    """Return ``(place_xy, preplace_eef_z, place_eef_z)`` for sink or cabinet.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
+    """Return ``(place_xy, preplace_eef_xyz, place_eef_xyz, front_out_xy)``.
 
-    Privileged teacher helper: queries RoboCasa's fixture interior sites when
-    present so the object is placed in the front-center of the basin/cavity,
-    away from back distractors and faucets.
+    Top-open receptacles (sink) enter from above; front-open receptacles
+    (cabinet) stage outside the open door along ``front_out_xy``, slide in
+    horizontally at shelf height, and retreat straight back out the door.
     """
     fixture = None
     if "sink" in receptacle_body and hasattr(env, "sink"):
@@ -291,23 +290,42 @@ def _receptacle_place_target(
             u = np.asarray(px, dtype=np.float64) - p0
             v = np.asarray(py, dtype=np.float64) - p0
             w = np.asarray(pz, dtype=np.float64) - p0
-            place_xy = (p0 + 0.50 * u + 0.35 * v)[:2]
             rim_z = float((p0 + w)[2])
             floor_z = float(p0[2])
-            if "sink" in receptacle_body:
-                place_eef_z = max(floor_z + 0.05, rim_z - 0.01) + object_bottom_offset_m
-                preplace_eef_z = rim_z + max(place_height_m, 0.14) + object_bottom_offset_m
-            else:
-                place_eef_z = floor_z + 0.04 + object_bottom_offset_m
-                preplace_eef_z = floor_z + max(place_height_m, 0.10) + object_bottom_offset_m
-            return place_xy, float(preplace_eef_z), float(place_eef_z)
+            if "cab" in receptacle_body:
+                v_xy = v[:2]
+                front_out = -v_xy / max(float(np.linalg.norm(v_xy)), 1e-6)
+                place_xy = (p0 + 0.50 * u + 0.30 * v)[:2]
+                shelf_eef_z = floor_z + 0.03 + object_bottom_offset_m
+                preplace_eef = np.array(
+                    [place_xy[0] + 0.24 * front_out[0], place_xy[1] + 0.24 * front_out[1], shelf_eef_z + 0.02],
+                    dtype=np.float64,
+                )
+                place_eef = np.array([place_xy[0], place_xy[1], shelf_eef_z], dtype=np.float64)
+                return place_xy, preplace_eef, place_eef, front_out
+
+            place_xy = (p0 + 0.50 * u + 0.35 * v)[:2]
+            place_eef_z = max(floor_z + 0.05, rim_z - 0.01) + object_bottom_offset_m
+            preplace_eef_z = rim_z + max(place_height_m, 0.14) + object_bottom_offset_m
+            return (
+                place_xy,
+                np.array([place_xy[0], place_xy[1], preplace_eef_z], dtype=np.float64),
+                np.array([place_xy[0], place_xy[1], place_eef_z], dtype=np.float64),
+                None,
+            )
 
     fallback_pos, _ = _body_pose(env, receptacle_body)
     if "sink" in receptacle_body and hasattr(env, "sink") and hasattr(env.sink, "pos"):
         fallback_pos = np.asarray(env.sink.pos, dtype=np.float64).reshape(3)
+    place_xy = fallback_pos[:2].copy()
     place_eef_z = float(fallback_pos[2] + 0.06 + object_bottom_offset_m)
     preplace_eef_z = float(fallback_pos[2] + max(place_height_m, 0.16) + object_bottom_offset_m)
-    return fallback_pos[:2].copy(), preplace_eef_z, place_eef_z
+    return (
+        place_xy,
+        np.array([place_xy[0], place_xy[1], preplace_eef_z], dtype=np.float64),
+        np.array([place_xy[0], place_xy[1], place_eef_z], dtype=np.float64),
+        None,
+    )
 
 
 def _close_gate(
@@ -667,10 +685,22 @@ def main(argv: list[str] | None = None) -> int:
             wbc,
             backend,
             action_source=action,
-            target_tolerance_m=args.tolerance,
+            target_tolerance_m=min(args.tolerance, 0.01),
             timeout_s=8.0,
             label="pregrasp",
         )
+        # Proprioceptive FK trim: remove steady-state Cartesian PD offset in XY
+        # before descending so the open pads straddle tight objects cleanly.
+        eef_actual_xy = _body_T(env, "gripper0_right_eef")[:2, 3]
+        xy_trim = np.clip(grasp_xy - eef_actual_xy, -0.025, 0.025)
+        if float(np.linalg.norm(xy_trim)) > 0.002:
+            pregrasp[:2] += xy_trim
+            grasp_pos[:2] += xy_trim
+            backend.set_ee_target(_pose(pregrasp, grasp_quat))
+            for _ in range(20):
+                _, _, terminated, truncated, _ = wbc.step(action())
+                if terminated or truncated:
+                    break
 
         pregrasp_object, _ = _body_pose(env, args.object_body)
         for index in range(1, args.descent_steps + 1):
@@ -770,13 +800,18 @@ def main(argv: list[str] | None = None) -> int:
 
         # Stage 3: dynamic physics-integrated base transport (never teleport qpos while carrying!).
         object_bottom_offset = max(0.015, float(grasp_z - object_low[2]))
-        place_xy, preplace_eef_z, place_eef_z = _receptacle_place_target(
+        place_xy, preplace_eef_xyz, place_eef_xyz, front_out = _receptacle_place_target(
             env,
             args.receptacle_body,
             object_bottom_offset_m=object_bottom_offset,
             place_height_m=args.place_height,
         )
-        place_base_target = base_target_for(place_xy, standoff=args.place_standoff)
+        if front_out is not None:
+            standoff_xy = place_xy + front_out * args.place_standoff
+            place_base_yaw = float(np.arctan2(place_xy[1] - standoff_xy[1], place_xy[0] - standoff_xy[0]))
+            place_base_target = np.array([standoff_xy[0], standoff_xy[1], place_base_yaw], dtype=np.float64)
+        else:
+            place_base_target = base_target_for(place_xy, standoff=args.place_standoff)
         backend.set_ee_target(_pose(retract_pos, grasp_quat))
         backend.hold_ee_in_base_frame(True)
         backend.set_base_speed_scale(args.transport_base_scale)
@@ -807,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         # Stage 4: keep the current carried wrist yaw (which rotated with the base),
-        # move horizontally over the receptacle at preplace height, then lower & release.
+        # move to preplace, then into place & release.
         T_eef_now = _body_T(env, "gripper0_right_eef")
         T_hand_now = _body_T(env, "robot0_right_hand")
         eef_x_horiz = np.array([T_eef_now[0, 0], T_eef_now[1, 0]], dtype=np.float64)
@@ -816,18 +851,16 @@ def main(argv: list[str] | None = None) -> int:
             if float(np.linalg.norm(eef_x_horiz)) > 1e-4
             else float(backend._world_base_pose()[2] + 0.5 * np.pi)
         )
-        T_eef_preplace = top_down_grasp_T(
-            np.array([place_xy[0], place_xy[1], preplace_eef_z], dtype=np.float64),
-            z_offset_m=0.0,
-        )
+        T_eef_preplace = top_down_grasp_T(preplace_eef_xyz, z_offset_m=0.0)
         T_eef_preplace[:3, :3] = Rotation.from_euler("z", place_yaw).as_matrix() @ T_eef_preplace[:3, :3]
         T_eef_place = T_eef_preplace.copy()
-        T_eef_place[2, 3] = place_eef_z
+        T_eef_place[:3, 3] = place_eef_xyz
 
         T_hand_preplace = T_eef_preplace @ eef_in_hand
         T_hand_place = T_eef_place @ eef_in_hand
         preplace_hand_pos = T_hand_preplace[:3, 3].copy()
-        preplace_hand_pos[2] = max(preplace_hand_pos[2], float(T_hand_now[2, 3]))
+        if front_out is None:
+            preplace_hand_pos[2] = max(preplace_hand_pos[2], float(T_hand_now[2, 3]))
         place_hand_pos = T_hand_place[:3, 3].copy()
         place_quat = Rotation.from_matrix(T_hand_place[:3, :3]).as_quat()
 
@@ -874,11 +907,16 @@ def main(argv: list[str] | None = None) -> int:
                 break
         print("release: opened gripper", flush=True)
 
-        arrived_base = backend._world_base_pose()
-        away_from_place = np.array(
-            [np.cos(arrived_base[2]), np.sin(arrived_base[2]), 0.0], dtype=np.float64
-        )
-        retreat_hand_pos = preplace_hand_pos + np.array([0.0, 0.0, 0.14]) - away_from_place * 0.22
+        if front_out is not None:
+            retreat_hand_pos = place_hand_pos + np.array(
+                [0.30 * front_out[0], 0.30 * front_out[1], 0.02], dtype=np.float64
+            )
+        else:
+            arrived_base = backend._world_base_pose()
+            away_from_place = np.array(
+                [np.cos(arrived_base[2]), np.sin(arrived_base[2]), 0.0], dtype=np.float64
+            )
+            retreat_hand_pos = preplace_hand_pos + np.array([0.0, 0.0, 0.14]) - away_from_place * 0.22
         _ramp_ee(
             wbc,
             backend,
