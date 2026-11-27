@@ -133,8 +133,14 @@ the narrow curriculum stage, not the full `carry` gate. The checkpoint is
 `/tmp/opencode/wbc_contact_carry_easy/best.pt`. A 10-episode ablation still
 passes **1.00/1.00** when wrist wrench, finger force, and joint torque are
 masked, but tracking worsens from **1.26 to 1.73 cm**. The narrow payload range
-is learnable by averaging; the full `carry` task remains the contact test. A
-full-carry ramp initialized from the easy checkpoint is in flight. A fresh
+is learnable by averaging; the full `carry` task remains the contact test.
+
+Full-carry ramp from the easy checkpoint: teacher BC **0.20**, DAgger iter1
+**0.20**, iter2 **0.40** on 5 episodes. The BC loss is already 0.005, so the
+remaining gap is closed-loop tracking, not label fit. This is better than the
+0.30 PPO result but still below 0.75. The suite now adds `carry_medium`
+(0.2–1.0 kg, held base, ±0.15 rad, torso 0.20–0.30 m) as the next curriculum
+stage; it is training from the easy checkpoint. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.

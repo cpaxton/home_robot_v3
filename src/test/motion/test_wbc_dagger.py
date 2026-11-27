@@ -171,7 +171,15 @@ def test_default_subtasks_accepts_robot_aliases():
 
 def test_contact_subtasks_include_payload_and_wide_posture():
     tasks = {task.name: task for task in contact_subtasks("pandaomron")}
-    assert set(tasks) == {"arm", "base", "combined", "wide_arm", "carry_easy", "carry"}
+    assert set(tasks) == {
+        "arm",
+        "base",
+        "combined",
+        "wide_arm",
+        "carry_easy",
+        "carry_medium",
+        "carry",
+    }
     assert tasks["wide_arm"].torso_range == (0.12, 0.32)
     assert tasks["carry"].payload_mass_range == (0.1, 1.2)
     assert tasks["carry"].gripper_close is True
@@ -179,9 +187,13 @@ def test_contact_subtasks_include_payload_and_wide_posture():
     assert tasks["carry_easy"].payload_mass_range == (0.4, 0.6)
     assert tasks["carry_easy"].hold_base is True
     assert tasks["carry_easy"].target_range == 0.10
+    assert tasks["carry_medium"].payload_mass_range == (0.2, 1.0)
+    assert tasks["carry_medium"].hold_base is True
+    assert tasks["carry_medium"].target_range == 0.15
     stretch = {task.name: task for task in contact_subtasks("stretch")}
     assert stretch["carry"].payload_mass_range == (0.05, 0.8)
     assert stretch["carry_easy"].payload_mass_range == (0.2, 0.4)
+    assert stretch["carry_medium"].payload_mass_range == (0.1, 0.6)
     assert stretch["carry"].gripper_close is True
     with pytest.raises(ValueError, match="no contact curriculum"):
         contact_subtasks("innate_mars")
