@@ -669,16 +669,21 @@ def main(argv: list[str] | None = None) -> int:
         under_cabinet = "cab" in args.receptacle_body
         side = args.grasp_mode == "side"
         if side or under_cabinet:
-            tilt = float(np.deg2rad(args.grasp_tilt_deg if side else 18.0))
+            tilt = float(np.deg2rad(args.grasp_tilt_deg if side else 55.0))
             forward_vec = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
             lateral_vec = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
             down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
             approach = np.sin(tilt) * forward_vec + np.cos(tilt) * down
             approach /= max(float(np.linalg.norm(approach)), 1e-9)
             y_axis = np.cross(approach, lateral_vec)
+            if under_cabinet:
+                grasp_xy = 0.5 * (object_low[:2] + object_high[:2])
+                grasp_z = float(0.5 * (object_low[2] + object_high[2]))
             T_eef_grasp = np.eye(4, dtype=np.float64)
             T_eef_grasp[:3, :3] = np.column_stack([lateral_vec, y_axis, approach])
-            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z])
+            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z]) - (
+                0.004 * approach if under_cabinet else 0.0
+            )
         else:
             T_eef_grasp = top_down_grasp_T(
                 np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
@@ -690,12 +695,11 @@ def main(argv: list[str] | None = None) -> int:
         eef_in_hand = np.linalg.inv(T_hand_eef)
         T_hand_grasp = T_eef_grasp @ eef_in_hand
         T_hand_pregrasp = T_hand_grasp.copy()
-        effective_pregrasp_h = min(args.pregrasp_height, 0.065) if under_cabinet else args.pregrasp_height
-        if side:
-            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * effective_pregrasp_h
+        if side or under_cabinet:
+            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * args.pregrasp_height
         else:
             # Always descend straight vertically so open pads straddle without lateral sweep.
-            T_hand_pregrasp[2, 3] += effective_pregrasp_h
+            T_hand_pregrasp[2, 3] += args.pregrasp_height
         grasp_pos = T_hand_grasp[:3, 3].copy()
         grasp_quat = Rotation.from_matrix(T_hand_grasp[:3, :3]).as_quat()
         pregrasp = T_hand_pregrasp[:3, 3].copy()
@@ -708,9 +712,16 @@ def main(argv: list[str] | None = None) -> int:
             f"table={[(round(z, 3), round(w, 3)) for z, w in table[::4]]}",
             flush=True,
         )
-        if not under_cabinet and float(object_high[2]) > 1.06:
+        under_cabinet = "cab" in args.receptacle_body
+        if under_cabinet:
+            backend.set_torso_target(0.02)
+            for _ in range(30):
+                _, _, terminated, truncated, _ = wbc.step(action())
+                if terminated or truncated:
+                    break
+        elif float(object_high[2]) > 1.06:
             backend.set_torso_target(0.32)
-            for _ in range(15):
+            for _ in range(20):
                 _, _, terminated, truncated, _ = wbc.step(action())
                 if terminated or truncated:
                     break
@@ -869,7 +880,16 @@ def main(argv: list[str] | None = None) -> int:
             place_height_m=args.place_height,
         )
         if front_out is not None:
+            # Elevate torso in the open aisle (holding arm joints steady) so the
+            # shoulder is already settled at shelf height before transport/place.
+            if args.teacher:
+                backend._target_q = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
             backend.set_torso_target(0.34)
+            for _ in range(40):
+                _, _, terminated, truncated, _ = wbc.step(action())
+                if terminated or truncated:
+                    break
+            retract_pos = _body_T(env, "robot0_right_hand")[:3, 3].copy()
             cab_standoff = max(args.place_standoff, 0.65)
             standoff_xy = place_xy + front_out * cab_standoff
             place_base_yaw = float(np.arctan2(place_xy[1] - standoff_xy[1], place_xy[0] - standoff_xy[0]))
