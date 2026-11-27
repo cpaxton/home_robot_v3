@@ -684,7 +684,11 @@ def main(argv: list[str] | None = None) -> int:
                 np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
                 z_offset_m=0.0,
             )
-            T_eef_grasp[:3, :3] = Rotation.from_euler("z", grasp_yaw).as_matrix() @ T_eef_grasp[:3, :3]
+            R_grasp = Rotation.from_euler("z", grasp_yaw).as_matrix() @ T_eef_grasp[:3, :3]
+            if under_cabinet:
+                lateral_axis = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
+                R_grasp = Rotation.from_rotvec(-np.deg2rad(18.0) * lateral_axis).as_matrix() @ R_grasp
+            T_eef_grasp[:3, :3] = R_grasp
 
         T_hand_eef = np.linalg.inv(_body_T(env, "robot0_right_hand")) @ _body_T(env, "gripper0_right_eef")
         eef_in_hand = np.linalg.inv(T_hand_eef)
@@ -709,8 +713,8 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         if under_cabinet:
-            backend.set_torso_target(0.02)
-            for _ in range(30):
+            backend.set_torso_target(0.11)
+            for _ in range(20):
                 _, _, terminated, truncated, _ = wbc.step(action())
                 if terminated or truncated:
                     break
