@@ -117,7 +117,9 @@ To separate “hard carry” from “learn the load,” the suite now includes
 `carry_easy`: a 0.4–0.6 kg payload, held base, ±0.10 rad arm targets, and torso
 0.24–0.26 m. The next run trains `carry_easy` before widening to `carry`. A PPO
 fine-tune of `policy_iter3` on the full carry suite is also in flight; if it
-does not close the gap, the easy carry curriculum is the next step.
+does not close the gap, the easy carry curriculum is the next step. The PPO
+launcher is `scripts/finetune_wbc_contact_ppo.py`; the mask ablation is
+`scripts/eval_wbc_contact_ablation.py`.
 
 ## 3. Robot matrix
 
