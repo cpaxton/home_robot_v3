@@ -23,6 +23,8 @@ from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
 from emet.controller.task.tamp.grasp_frames import top_down_grasp_T
 from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 
+HAND_BODY = "robot0_right_hand"
+
 
 def _pose(position: np.ndarray, quat: np.ndarray) -> tuple[float, ...]:
     return tuple(float(v) for v in np.r_[position, quat])
@@ -75,7 +77,7 @@ def _solve_ik(
     for _ in range(iterations):
         backend.data.qpos[backend._arm_q] = q
         env.sim.forward()
-        current_T = _body_T(env, backend._ee_body)
+        current_T = _body_T(env, HAND_BODY)
         position_error = target_T[:3, 3] - current_T[:3, 3]
         rotation_error = (
             Rotation.from_matrix(target_T[:3, :3]) * Rotation.from_matrix(current_T[:3, :3]).inv()
@@ -94,7 +96,7 @@ def _solve_ik(
         q = np.clip(q + step_scale * delta, low, high)
     backend.data.qpos[backend._arm_q] = best_q
     env.sim.forward()
-    position, angle = _pose_error(env, backend._ee_body, target_T)
+    position, angle = _pose_error(env, HAND_BODY, target_T)
     return best_q, position, angle
 
 
