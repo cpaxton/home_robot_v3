@@ -262,6 +262,11 @@ def _run_base_ramp(
     # carried object.
     saved_base_target = backend._target_base
     backend._target_base = None
+    # Hold the arm joints rigid relative to the base; the Cartesian tracker can
+    # lag during the base move and let a free object slip through the pads.
+    arm_q = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
+    backend._target_q = arm_q
+    backend._target_ee = None
     for index in range(1, steps + 1):
         # Smoothstep: zero velocity at both ends so the free object is not
         # stepped relative to the pads at the start of the base motion.
@@ -283,6 +288,7 @@ def _run_base_ramp(
             break
     backend.apply_base_qpos(target_q)
     backend._target_base = saved_base_target
+    backend._target_q = None
     if base_hold is not None:
         backend.set_ee_target(_pose_from_T(_body_T(env, "mobilebase0_base") @ base_hold))
     print(
