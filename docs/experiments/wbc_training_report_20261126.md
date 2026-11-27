@@ -189,9 +189,12 @@ first full-carry (±0.35 rad, 0.1–1.2 kg, base+arm) pass on the screen.
 **10-episode gate:** full **0.80** success, **2.25 cm** mean tracking, **3.04 cm**
 settled max, **0 collisions**, `contact_state_rate=1.0`. Masking wrist wrench,
 finger force, and joint torque drops success to **0.50** with 2.46 cm tracking.
-The checkpoint therefore passes the planned carry gate (0.75 success, 5 cm
-tracking, zero collisions) and the contact channels are materially used.
-Candidate: `/tmp/opencode/wbc_contact_carry_full_from_wide/policy_iter1.pt`.
+On seed 30000 the checkpoint passes the planned carry gate (0.75 success, 5 cm
+tracking, zero collisions) and the contact channels are materially used. The
+3-seed gate is **0.80 / 0.70 / 0.50** at seeds 30000/40000/50000, mean
+**0.667**, min **0.50**, so it **fails** the 0.75 gate. The seed-30000 pass was
+optimistic. Candidate: `/tmp/opencode/wbc_contact_carry_full_from_wide/policy_iter1.pt`;
+the carry case stays `planned` in `configs/wbc/pandaomron_carry_cases.json`.
 
 RoboCasa task sweep with the full-carry checkpoint: **0/3**, all
 `grasp_failed`. The wide checkpoint was better (one canned food reached retreat
@@ -202,6 +205,14 @@ A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
+
+**Mixed-suite stability:** training `arm`, `base`, `combined`, and
+`carry_wide` from the wide checkpoint reaches **0.75** aggregate after two
+DAgger iterations with **0 collisions** on all tasks. Per task:
+`arm` 1.00 (1.85 cm), `base` 1.00 (0.0 cm), `combined` **0.33** (3.88 cm),
+`carry_wide` **0.67** (3.94 cm). The mixed suite removes the collisions and
+preserves arm/base, but combined and carry_wide are still below their gates;
+more iterations are needed before promotion.
 
 ## 3. Robot matrix
 
