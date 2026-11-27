@@ -40,6 +40,20 @@ def _step(backend: RoboCasaPandaBackend, adapter: TorqueAdapter, steps: int) -> 
         backend.step(command, dt)
 
 
+def _geom_aabb(model, data, geom: int) -> tuple[np.ndarray, np.ndarray]:
+    if int(model.geom_type[geom]) == 7:
+        mesh = int(model.geom_dataid[geom])
+        start = int(model.mesh_vertadr[mesh])
+        count = int(model.mesh_vertnum[mesh])
+        verts = np.asarray(model.mesh_vert[start : start + count], dtype=np.float64)
+        rotation = np.asarray(data.geom_xmat[geom], dtype=np.float64).reshape(3, 3)
+        points = verts @ rotation.T + np.asarray(data.geom_xpos[geom], dtype=np.float64)
+        return points.min(axis=0), points.max(axis=0)
+    center = np.asarray(data.geom_xpos[geom], dtype=np.float64)
+    radius = float(np.linalg.norm(model.geom_size[geom]))
+    return center - radius, center + radius
+
+
 def _describe_object(env, name: str) -> None:
     model = env.sim.model
     data = env.sim.data
@@ -52,28 +66,39 @@ def _describe_object(env, name: str) -> None:
             f"axis={np.round(model.jnt_axis[j], 3).tolist()} range={np.round(model.jnt_range[j], 3).tolist()}",
             flush=True,
         )
-    for g in range(model.ngeom):
-        if int(model.geom_bodyid[g]) != body:
-            continue
-        print(
-            f"  geom={model.geom_id2name(g)} type={int(model.geom_type[g])} "
-            f"size={np.round(model.geom_size[g], 4).tolist()} "
-            f"pos={np.round(model.geom_pos[g], 4).tolist()} "
-            f"friction={np.round(model.geom_friction[g], 3).tolist()} "
-            f"contype={int(model.geom_contype[g])} conaffinity={int(model.geom_conaffinity[g])}",
-            flush=True,
-        )
     low = np.full(3, np.inf)
     high = np.full(3, -np.inf)
     for g in range(model.ngeom):
         if int(model.geom_bodyid[g]) != body:
             continue
-        center = np.asarray(data.geom_xpos[g], dtype=np.float64)
-        size = np.asarray(model.geom_size[g], dtype=np.float64)
-        radius = float(np.linalg.norm(size))
-        low = np.minimum(low, center - radius)
-        high = np.maximum(high, center + radius)
-    print(f"  aabb(approx) low={np.round(low, 4).tolist()} high={np.round(high, 4).tolist()}", flush=True)
+        geom_low, geom_high = _geom_aabb(model, data, g)
+        low = np.minimum(low, geom_low)
+        high = np.maximum(high, geom_high)
+        print(
+            f"  geom={model.geom_id2name(g)} type={int(model.geom_type[g])} "
+            f"size={np.round(model.geom_size[g], 4).tolist()} "
+            f"pos={np.round(model.geom_pos[g], 4).tolist()} "
+            f"friction={np.round(model.geom_friction[g], 3).tolist()} "
+            f"aabb_low={np.round(geom_low, 4).tolist()} aabb_high={np.round(geom_high, 4).tolist()} "
+            f"contype={int(model.geom_contype[g])} conaffinity={int(model.geom_conaffinity[g])}",
+            flush=True,
+        )
+    print(f"  aabb low={np.round(low, 4).tolist()} high={np.round(high, 4).tolist()} size={np.round(high - low, 4).tolist()}", flush=True)
+
+
+def _describe_pads(env) -> None:
+    model = env.sim.model
+    data = env.sim.data
+    for g in range(model.ngeom):
+        name = model.geom_id2name(g)
+        if name is None or "pad_collision" not in name:
+            continue
+        low, high = _geom_aabb(model, data, g)
+        print(
+            f"pad={name} center={np.round(data.geom_xpos[g], 4).tolist()} "
+            f"low={np.round(low, 4).tolist()} high={np.round(high, 4).tolist()}",
+            flush=True,
+        )
 
 
 def _print_contacts(backend: RoboCasaPandaBackend, target: str) -> None:
@@ -159,8 +184,26 @@ def main(argv: list[str] | None = None) -> int:
     backend.set_gripper(True)
     backend.set_ee_target(_pose(grasp + np.array([0.0, 0.0, 0.12]), quat))
     _step(backend, adapter, 40)
-    backend.set_ee_target(_pose(grasp, quat))
-    _step(backend, adapter, 30)
+    pregrasp_object = _body_pos(env, args.object_body)
+    print(
+        f"at_pregrasp finger_q={np.round(backend.data.qpos[backend._grip_q], 4).tolist()} "
+        f"object={np.round(pregrasp_object, 4).tolist()} "
+        f"moved={np.round(pregrasp_object - object_pos, 4).tolist()}",
+        flush=True,
+    )
+    _describe_pads(env)
+    previous = pregrasp_object
+    for index in range(30):
+        backend.set_ee_target(_pose(grasp, quat))
+        _step(backend, adapter, 1)
+        current = _body_pos(env, args.object_body)
+        if index % 5 == 0 or np.linalg.norm(current - previous) > 0.005:
+            print(
+                f"descent step={index + 1} object={np.round(current, 4).tolist()} "
+                f"delta={np.round(current - object_pos, 4).tolist()}",
+                flush=True,
+            )
+            previous = current
     ee = np.asarray(backend._observation().arms[0].ee_pose[:3], dtype=np.float64)
     ee_world, _ = backend._world_pose(tuple(np.r_[ee, [0, 0, 0, 1]]))
     print(f"before_close ee_world={np.round(ee_world, 4).tolist()} object={np.round(_body_pos(env, args.object_body), 4).tolist()}", flush=True)
