@@ -2,7 +2,7 @@
 
 ## RoboCasa benchmark landing + regression gates (2026-11-26)
 
-Plan: [RoboCasa benchmark landing + regression gates](docs/plans/robocasa_benchmark_landing_20261126.md).
+Plan: [RoboCasa benchmark landing + regression gates](docs/plans/robocasa_benchmark_landing_20261126.md) · Next-stage no-GT & DAgger plan: [RoboCasa PandaOmron no-GT perception & task-posture DAgger](docs/plans/robocasa_no_gt_and_wbc_dagger_20261127.md).
 
 The stack is #264 (merged) → #265 (held) → #267 → #266. Landing code and claiming
 a benchmark are separate decisions: #265 may land as infrastructure only after

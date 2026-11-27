@@ -84,6 +84,8 @@ uv run emet jobs run --name omron-cab-teacher --need-mib 6000 -- \
 
 ## 5. Next steps
 
+Detailed execution plan and line-by-line GT provenance audit: [`docs/plans/robocasa_no_gt_and_wbc_dagger_20261127.md`](../plans/robocasa_no_gt_and_wbc_dagger_20261127.md).
+
 1. **Task-distribution BC / DAgger fine-tuning for RL-WBC:** Collect multi-seed `(observations, teacher_actions)` `.npz` rollouts from `run_wbc_robocasa_pick_place.py --teacher --save-rollout ...` (and expand `PandaOmronWbcBackend` target sampling to cover top-down and $55^\circ$ cabinet postures), then DAgger-finetune `pandaomron_robust` while gating no-regression on the clean 5-robot WBC suite.
 2. **Observed (no-GT) target provider + strict no-GT gate:** Feed segmented RGB-D point clouds (`robot0_eye_in_hand` + `robot0_agentview_*` via Dynagraph / depth back-projection) into `_plan_topdown_grasp` (which operates purely on 3D surface points/segments) and enforce a hard no-GT guard on actor/benchmark evaluation paths.
 3. **Broader seed/layout & hollow-rim object coverage:** Sweep 20–50 seeds across RoboCasa kitchen layouts/styles, add single-wall rim pinching for wide hollow bowls/pans (`>7.9 cm` outer diameter), and wire articulated door/drawer opening (`open_fixture` / `close_fixture`).
