@@ -214,6 +214,13 @@ DAgger iterations with **0 collisions** on all tasks. Per task:
 preserves arm/base, but combined and carry_wide are still below their gates;
 more iterations are needed before promotion.
 
+A longer continuation (3 iterations, 8,192 teacher steps, 4,096 DAgger steps
+per iteration) peaks at **0.83 aggregate** on iteration 2: arm 1.00, base 1.00,
+combined **0.67** (2.58 cm, 0 collisions), carry_wide **0.67** (2.11 cm, 0
+collisions). Iteration 3 is 0.75. The 10-episode evaluation of iteration 2 is
+in flight; the 3-episode screen is below both the 0.85 combined and 0.75
+carry_wide gates, so no promotion yet.
+
 ## 3. Robot matrix
 
 | Robot | Plant | DoF summary | Base | Training notes |
