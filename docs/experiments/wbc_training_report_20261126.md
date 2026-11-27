@@ -93,10 +93,25 @@ effort and finger force rather than a 6-axis wrist sensor. This is the
 two-archetype check: true-torque + F/T (PandaOmron) and position-servo +
 joint-torque/finger-force (Stretch).
 
-Pilot result: the Panda carry teacher succeeds **1/1** with a 0.8 kg payload,
-and the short BC/DAgger smoke is **0/1** (BC loss 0.63, DAgger loss 0.052,
-0.68 m tracking). A longer carry run is in flight; no contact-aware checkpoint
-is promoted yet.
+Pilot result: the Panda carry teacher succeeds **3/3** with 2.1 cm tracking.
+The longer BC/DAgger run (4,096 teacher steps, 3 × 2,048 DAgger steps, 300 BC
+epochs) reached **1/3** after teacher BC and **0/3** after each DAgger
+iteration, but DAgger cut the mean tracking to 6.5–6.8 cm. A 10-episode
+re-evaluation gives **2/10** for `policy_iter3` (0.196 m mean tracking).
+
+Contact ablation on the same 10 episodes:
+
+| Checkpoint | Full success | Masked success | Full tracking | Masked tracking |
+|---|---:|---:|---:|---:|
+| `policy_iter1` | 0.10 | 0.00 | 0.034 m | 0.053 m |
+| `policy_iter3` | 0.20 | 0.20 | 0.196 m | 0.311 m |
+
+Masking the measured wrist wrench, contact flag, and finger force measurably
+worsens tracking, so the actor is using the load channels rather than only
+averaging the payload. It is still far below the planned carry gate (0.75); no
+contact-aware checkpoint is promoted. A PPO fine-tune of `policy_iter3` on the
+carry suite is in flight to see whether reward pressure closes the remaining
+tracking gap.
 
 ## 3. Robot matrix
 
