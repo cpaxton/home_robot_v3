@@ -805,7 +805,7 @@ class RoboCasaPandaBackend:
             position=(float(self.data.qpos[self._torso_q]),),
             velocity=(float(self.data.qvel[self._torso_v]),),
             torque=(float(self.data.qfrc_actuator[self._torso_v]),),
-            target=(float(self._torso_target),),
+            target=(float(self._target_torso),),
         )
         arm = ArmObservation(
             name="right",
