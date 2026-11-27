@@ -410,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-lift-m", type=float, default=0.01, help="object rise required to accept the grasp")
     parser.add_argument("--transport-height", type=float, default=0.18, help="carry height above the grasp")
     parser.add_argument("--carry-speed", type=float, default=0.04, help="bounded lift speed for the carry raise")
+    parser.add_argument("--retract-m", type=float, default=0.25, help="pull the carried object back from the counter")
     parser.add_argument("--transport-steps", type=int, default=60, help="kinematic base ramp steps for transport")
     parser.add_argument("--place-height", type=float, default=0.15, help="EEF height above the receptacle base")
     parser.add_argument("--lift-speed", type=float, default=0.02, help="Cartesian lift speed in m/s")
@@ -651,12 +652,14 @@ def main(argv: list[str] | None = None) -> int:
             print("GRASP FAILED: object was not retained through the lift", flush=True)
             return 1
 
-        # Raise the carried object to the transport height with a bounded speed.
-        carry_steps = max(1, int(round(args.transport_height / args.carry_speed / wbc.control_dt)))
+        # Lift and retract the carried object before moving the base. Without
+        # the retract, a yaw sweep can pin the object against the backsplash.
+        forward = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
+        retract_pos = grasp_pos + np.array([0.0, 0.0, args.transport_height]) - forward * args.retract_m
+        retract_distance = float(np.linalg.norm(retract_pos - grasp_pos))
+        carry_steps = max(1, int(round(retract_distance / args.carry_speed / wbc.control_dt)))
         for index in range(1, carry_steps + 1):
-            position = grasp_pos + np.array(
-                [0.0, 0.0, args.transport_height * (index / carry_steps)]
-            )
+            position = grasp_pos + (retract_pos - grasp_pos) * (index / carry_steps)
             backend.set_ee_target(_pose(position, grasp_quat))
             _, _, terminated, truncated, _ = wbc.step(action())
             if terminated or truncated:
@@ -669,11 +672,11 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         if carry_left < args.grasp_force_n or carry_right < args.grasp_force_n:
-            print("GRASP FAILED: object was not retained while raising to transport", flush=True)
+            print("GRASP FAILED: object was not retained while retracting to transport", flush=True)
             return 1
-        lift = grasp_pos + np.array([0.0, 0.0, args.transport_height])
+        lift = retract_pos
         T_hand_transport = T_hand_grasp.copy()
-        T_hand_transport[2, 3] += args.transport_height
+        T_hand_transport[:3, 3] = retract_pos
 
         # Move the base to the receptacle while holding the arm target.
         place_base = base_target_for(receptacle_pos[:2])
