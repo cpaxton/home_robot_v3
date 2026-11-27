@@ -411,6 +411,30 @@ class RoboCasaPandaBackend:
                 out["other_N"] += normal
         return out
 
+    def finger_target_forces(self, target_body: str) -> tuple[float, float]:
+        """Privileged diagnostic: split target load by left/right finger.
+
+        Returns ``(left_N, right_N)``. Never call this from the actor path; the
+        target body is GT metadata.
+        """
+        from emet.rl.contact import solved_contact_force
+
+        target = int(self.model.body(target_body).id)
+        fingers = [int(body) for body in self._contact_sensor.finger_bodies]
+        totals = [0.0, 0.0]
+        for index in range(int(self.data.ncon)):
+            contact = self.data.contact[index]
+            first = int(self.model.geom_bodyid[contact.geom1])
+            second = int(self.model.geom_bodyid[contact.geom2])
+            if target not in (first, second):
+                continue
+            other = first if second == target else second
+            if other not in fingers:
+                continue
+            normal, _ = solved_contact_force(self.model, self.data, index)
+            totals[fingers.index(other)] += normal
+        return float(totals[0]), float(totals[1])
+
     def close(self) -> None:
         self.env.close()
 
