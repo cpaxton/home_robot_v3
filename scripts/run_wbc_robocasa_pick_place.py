@@ -308,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--style", type=int, default=1)
     parser.add_argument("--object-body", default="obj_main")
     parser.add_argument("--receptacle-body", default="sink_main")
+    parser.add_argument("--obj-groups", default="all", help="RoboCasa object group for a deterministic object type")
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--base-standoff", type=float, default=0.55)
     parser.add_argument("--teacher", action="store_true", help="use the privileged teacher; no checkpoint")
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap the base to its target")
@@ -350,6 +352,8 @@ def main(argv: list[str] | None = None) -> int:
         ignore_done=True,
         use_camera_obs=False,
         control_freq=20,
+        obj_groups=args.obj_groups,
+        seed=args.seed,
     )
     backend = RoboCasaPandaBackend(env, base_backoff=0.45, target_mode="offset")
     horizon_s = max(120.0, args.steps * 0.05)
@@ -386,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     try:
-        observation, _ = wbc.reset(seed=0)
+        observation, _ = wbc.reset(seed=args.seed)
         object_pos, _ = _body_pose(env, args.object_body)
         receptacle_pos, _ = _body_pose(env, args.receptacle_body)
         fixture_pos = _fixture_pos(env, "sink")
