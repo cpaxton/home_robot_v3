@@ -420,8 +420,8 @@ class RoboCasaPandaBackend:
         from emet.rl.contact import solved_contact_force
 
         target = int(self.model.body(target_body).id)
-        fingers = [int(body) for body in self._contact_sensor.finger_bodies]
-        totals = [0.0, 0.0]
+        finger_sets = self._contact_sensor.finger_bodies_set
+        totals = [0.0] * len(finger_sets)
         for index in range(int(self.data.ncon)):
             contact = self.data.contact[index]
             first = int(self.model.geom_bodyid[contact.geom1])
@@ -429,10 +429,11 @@ class RoboCasaPandaBackend:
             if target not in (first, second):
                 continue
             other = first if second == target else second
-            if other not in fingers:
+            finger = next((i for i, bodies in enumerate(finger_sets) if other in bodies), None)
+            if finger is None:
                 continue
             normal, _ = solved_contact_force(self.model, self.data, index)
-            totals[fingers.index(other)] += normal
+            totals[finger] += normal
         return float(totals[0]), float(totals[1])
 
     def close(self) -> None:
