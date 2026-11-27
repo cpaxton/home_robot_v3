@@ -298,10 +298,10 @@ def _receptacle_place_target(
             if "cab" in receptacle_body:
                 v_xy = v[:2]
                 front_out = -v_xy / max(float(np.linalg.norm(v_xy)), 1e-6)
-                place_xy = (p0 + 0.50 * u + 0.28 * v)[:2]
-                shelf_eef_z = floor_z + 0.035 + object_bottom_offset_m
+                place_xy = (p0 + 0.50 * u + 0.36 * v)[:2]
+                shelf_eef_z = floor_z + 0.015 + object_bottom_offset_m
                 preplace_eef = np.array(
-                    [place_xy[0] + 0.26 * front_out[0], place_xy[1] + 0.26 * front_out[1], shelf_eef_z + 0.02],
+                    [place_xy[0] + 0.26 * front_out[0], place_xy[1] + 0.26 * front_out[1], shelf_eef_z + 0.025],
                     dtype=np.float64,
                 )
                 place_eef = np.array([place_xy[0], place_xy[1], shelf_eef_z], dtype=np.float64)
@@ -667,18 +667,24 @@ def main(argv: list[str] | None = None) -> int:
             table = []
 
         under_cabinet = "cab" in args.receptacle_body
-        side = args.grasp_mode == "side"
+        tall_under_cabinet = under_cabinet and float(object_high[2] - object_low[2]) > 0.08
+        side = args.grasp_mode == "side" or tall_under_cabinet
         if side:
-            tilt = float(np.deg2rad(args.grasp_tilt_deg))
+            tilt = float(np.deg2rad(48.0 if tall_under_cabinet else args.grasp_tilt_deg))
             forward_vec = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
             lateral_vec = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
             down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
             approach = np.sin(tilt) * forward_vec + np.cos(tilt) * down
             approach /= max(float(np.linalg.norm(approach)), 1e-9)
             y_axis = np.cross(approach, lateral_vec)
+            if tall_under_cabinet:
+                grasp_xy = 0.5 * (object_low[:2] + object_high[:2])
+                grasp_z = float(0.5 * (object_low[2] + object_high[2]))
             T_eef_grasp = np.eye(4, dtype=np.float64)
             T_eef_grasp[:3, :3] = np.column_stack([lateral_vec, y_axis, approach])
-            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z])
+            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z]) - (
+                0.004 * approach if tall_under_cabinet else 0.0
+            )
         else:
             T_eef_grasp = top_down_grasp_T(
                 np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
@@ -687,7 +693,7 @@ def main(argv: list[str] | None = None) -> int:
             R_grasp = Rotation.from_euler("z", grasp_yaw).as_matrix() @ T_eef_grasp[:3, :3]
             if under_cabinet:
                 lateral_axis = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
-                R_grasp = Rotation.from_rotvec(-np.deg2rad(18.0) * lateral_axis).as_matrix() @ R_grasp
+                R_grasp = Rotation.from_rotvec(-np.deg2rad(15.0) * lateral_axis).as_matrix() @ R_grasp
             T_eef_grasp[:3, :3] = R_grasp
 
         T_hand_eef = np.linalg.inv(_body_T(env, "robot0_right_hand")) @ _body_T(env, "gripper0_right_eef")
@@ -713,8 +719,8 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         if under_cabinet:
-            backend.set_torso_target(0.11)
-            for _ in range(20):
+            backend.set_torso_target(0.04 if tall_under_cabinet else 0.14)
+            for _ in range(25):
                 _, _, terminated, truncated, _ = wbc.step(action())
                 if terminated or truncated:
                     break
