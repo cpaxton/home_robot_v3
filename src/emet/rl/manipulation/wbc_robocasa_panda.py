@@ -183,11 +183,14 @@ class RoboCasaPandaBackend:
         )
         self.collision_measured = True
 
-    def set_ee_target(self, pose: tuple[float, ...] | None) -> None:
+    def set_ee_target(self, pose: tuple[float, ...] | None, *, solve_ik: bool = False) -> None:
         """Set a world-frame target (7 values) or restore the reset offset.
 
         The actor observation stores targets in the reset-anchored robot frame;
         a task/skill layer naturally supplies world poses, so convert here.
+        When ``solve_ik`` is True (teacher mode), also solve a warm-started
+        joint target so the joint-PD teacher tracks wrist rotations cleanly
+        without Jacobian-transpose local minima.
         """
         if pose is not None and len(pose) != 7:
             raise ValueError("EE target must be a 7-value position/quaternion pose")
@@ -198,6 +201,65 @@ class RoboCasaPandaBackend:
         self._target_q = None
         if pose is not None:
             self._target_ee = self._target_ee_override
+            if solve_ik:
+                self._target_q = self.solve_ee_ik(tuple(float(v) for v in pose))
+
+    def solve_ee_ik(
+        self,
+        world_pose: tuple[float, ...],
+        *,
+        iterations: int = 12,
+        damping: float = 1.5e-2,
+    ) -> np.ndarray | None:
+        """Warm-started damped-least-squares IK for ``robot0_right_hand``."""
+        if self.data is None or len(world_pose) != 7:
+            return None
+        target_pos = np.asarray(world_pose[:3], dtype=np.float64)
+        target_rot = Rotation.from_quat(world_pose[3:])
+        q_saved = np.asarray(self.data.qpos[self._arm_q], dtype=np.float64).copy()
+        low = self._arm_low + 0.015
+        high = self._arm_high - 0.015
+
+        def _run_from(seed_q: np.ndarray, max_iter: int) -> tuple[np.ndarray, float, float]:
+            q = np.clip(seed_q.copy(), low, high)
+            for _ in range(max_iter):
+                self.data.qpos[self._arm_q] = q
+                self.env.sim.forward()
+                pos_err = target_pos - self.data.xpos[self._ee_body]
+                rot_err = (
+                    target_rot * Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3)).inv()
+                ).as_rotvec()
+                p_norm = float(np.linalg.norm(pos_err))
+                r_norm = float(np.linalg.norm(rot_err))
+                if p_norm < 4e-4 and r_norm < 4e-3:
+                    return q, p_norm, r_norm
+                jac = self._numerical_jacobian(q)
+                jjt = jac @ jac.T + (damping**2) * np.eye(6)
+                j_pinv = jac.T @ np.linalg.solve(jjt, np.eye(6))
+                null = (np.eye(len(q)) - j_pinv @ jac) @ (0.04 * (_READY_Q - q))
+                dq = j_pinv @ np.r_[pos_err, rot_err] + null
+                q = np.clip(q + np.clip(dq, -0.20, 0.20), low, high)
+            self.data.qpos[self._arm_q] = q
+            self.env.sim.forward()
+            p_norm = float(np.linalg.norm(target_pos - self.data.xpos[self._ee_body]))
+            r_norm = float(
+                np.linalg.norm(
+                    (target_rot * Rotation.from_matrix(self.data.xmat[self._ee_body].reshape(3, 3)).inv()).as_rotvec()
+                )
+            )
+            return q, p_norm, r_norm
+
+        try:
+            seed_q = self._target_q if self._target_q is not None else q_saved
+            best_q, p_err, r_err = _run_from(seed_q, iterations)
+            if p_err > 0.012 or r_err > 0.12:
+                alt_q, alt_p, alt_r = _run_from(_READY_Q, 45)
+                if alt_p + 0.1 * alt_r < p_err + 0.1 * r_err:
+                    best_q, p_err, r_err = alt_q, alt_p, alt_r
+            return best_q if (p_err <= 0.025 and r_err <= 0.25) else None
+        finally:
+            self.data.qpos[self._arm_q] = q_saved
+            self.env.sim.forward()
 
     def hold_ee_in_base_frame(self, enabled: bool = True) -> None:
         """Keep the active EE target fixed in the moving base frame during transport."""

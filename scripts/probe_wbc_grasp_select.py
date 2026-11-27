@@ -107,22 +107,15 @@ def _trial(
     quat = Rotation.from_matrix(T_hand_des[:3, :3]).as_quat()
 
     backend.set_gripper(True)
-    backend.set_ee_target(_pose_from_T(T_hand_pre))
+    backend.set_ee_target(_pose_from_T(T_hand_pre), solve_ik=True)
     _step(backend, adapter, 50)
-    eef_xy = _body_T(env, "gripper0_right_eef")[:2, 3]
-    xy_trim = np.clip(grasp_center - eef_xy, -0.025, 0.025)
     start_hand = T_hand_pre[:3, 3].copy()
     end_hand = T_hand_des[:3, 3].copy()
-    if float(np.linalg.norm(xy_trim)) > 0.002:
-        start_hand[:2] += xy_trim
-        end_hand[:2] += xy_trim
-        backend.set_ee_target(_pose(start_hand, quat))
-        _step(backend, adapter, 20)
 
     at_pregrasp = _body_pos(env, object_body)
     for index in range(descent_steps):
         alpha = 0.5 - 0.5 * float(np.cos(np.pi * (index + 1) / descent_steps))
-        backend.set_ee_target(_pose(start_hand + (end_hand - start_hand) * alpha, quat))
+        backend.set_ee_target(_pose(start_hand + (end_hand - start_hand) * alpha, quat), solve_ik=True)
         _step(backend, adapter, 1)
     at_grasp = _body_pos(env, object_body)
 
@@ -138,7 +131,7 @@ def _trial(
     before_lift = _body_pos(env, object_body)
     for index in range(30):
         alpha = 0.5 - 0.5 * float(np.cos(np.pi * (index + 1) / 30))
-        backend.set_ee_target(_pose(end_hand + np.array([0.0, 0.0, lift_m * alpha]), quat))
+        backend.set_ee_target(_pose(end_hand + np.array([0.0, 0.0, lift_m * alpha]), quat), solve_ik=True)
         _step(backend, adapter, 1)
     after_lift = _body_pos(env, object_body)
     rise = float(after_lift[2] - before_lift[2])

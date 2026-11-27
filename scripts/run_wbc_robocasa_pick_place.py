@@ -376,6 +376,7 @@ def _ramp_ee(
     quat: np.ndarray,
     start_quat: np.ndarray | None = None,
     speed_m_s: float,
+    solve_ik: bool = False,
 ) -> int:
     distance = float(np.linalg.norm(end_pos - start_pos))
     ang_dist = 0.0
@@ -392,7 +393,7 @@ def _ramp_ee(
         alpha = 0.5 - 0.5 * float(np.cos(np.pi * index / steps))
         position = start_pos + (end_pos - start_pos) * alpha
         q_step = slerp([alpha])[0].as_quat() if slerp is not None else quat
-        backend.set_ee_target(_pose(position, q_step))
+        backend.set_ee_target(_pose(position, q_step), solve_ik=solve_ik)
         _, _, terminated, truncated, _ = wbc.step(action_source())
         if terminated or truncated:
             return index
@@ -604,21 +605,12 @@ def main(argv: list[str] | None = None) -> int:
             yaw = float(np.arctan2(target_xy[1] - xy[1], target_xy[0] - xy[0]))
             return np.array([xy[0], xy[1], yaw], dtype=np.float64)
 
-        # Raise the arm 18 cm in the open aisle BEFORE driving to the counter so
-        # the ready-posture gripper (z_eef ~ 0.95 m) never bumps counter objects.
-        wbc.hold_base = True
-        backend.set_base_target(None)
-        ready_hand_T = _body_T(env, "robot0_right_hand")
-        high_ready_pos = ready_hand_T[:3, 3].copy() + np.array([0.0, 0.0, 0.18])
-        high_ready_quat = Rotation.from_matrix(ready_hand_T[:3, :3]).as_quat()
-        backend.set_ee_target(_pose(high_ready_pos, high_ready_quat))
-        wbc._observation = backend._observation()
-        for _ in range(25):
-            _, _, terminated, truncated, _ = wbc.step(action())
-            if terminated or truncated:
-                break
-
-        # Keep the raised arm locked in the base frame during unloaded base approach.
+        # Keep the collision-free ready posture (z_hand ~ 1.16 m) locked in the
+        # base frame during unloaded base approach.
+        ready_local = backend._observation().arms[0].ee_pose
+        backend.set_local_ee_target(ready_local)
+        if args.teacher:
+            backend._target_q = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
         backend.hold_ee_in_base_frame(True)
         base_target = base_target_for(object_pos[:2], standoff=args.base_standoff)
         backend.set_world_base_target(tuple(float(v) for v in base_target))
@@ -713,34 +705,40 @@ def main(argv: list[str] | None = None) -> int:
             f"table={[(round(z, 3), round(w, 3)) for z, w in table[::4]]}",
             flush=True,
         )
+        if not under_cabinet and float(object_high[2]) > 1.06:
+            backend.set_torso_target(0.32)
+            for _ in range(15):
+                _, _, terminated, truncated, _ = wbc.step(action())
+                if terminated or truncated:
+                    break
+
         backend.set_gripper(True)
-        backend.set_ee_target(_pose(pregrasp, grasp_quat))
+        T_hand_start = _body_T(env, "robot0_right_hand")
+        _ramp_ee(
+            wbc,
+            backend,
+            action_source=action,
+            start_pos=T_hand_start[:3, 3].copy(),
+            end_pos=pregrasp,
+            quat=grasp_quat,
+            start_quat=Rotation.from_matrix(T_hand_start[:3, :3]).as_quat(),
+            speed_m_s=0.14,
+            solve_ik=args.teacher,
+        )
         _run_until(
             wbc,
             backend,
             action_source=action,
             target_tolerance_m=min(args.tolerance, 0.01),
-            timeout_s=8.0,
+            timeout_s=4.0,
             label="pregrasp",
         )
-        # Proprioceptive FK trim: remove steady-state Cartesian PD offset in XY
-        # before descending so the open pads straddle tight objects cleanly.
-        eef_actual_xy = _body_T(env, "gripper0_right_eef")[:2, 3]
-        xy_trim = np.clip(grasp_xy - eef_actual_xy, -0.025, 0.025)
-        if float(np.linalg.norm(xy_trim)) > 0.002:
-            pregrasp[:2] += xy_trim
-            grasp_pos[:2] += xy_trim
-            backend.set_ee_target(_pose(pregrasp, grasp_quat))
-            for _ in range(20):
-                _, _, terminated, truncated, _ = wbc.step(action())
-                if terminated or truncated:
-                    break
 
         pregrasp_object, _ = _body_pose(env, args.object_body)
         for index in range(1, args.descent_steps + 1):
             alpha = 0.5 - 0.5 * float(np.cos(np.pi * index / args.descent_steps))
             position = pregrasp + (grasp_pos - pregrasp) * alpha
-            backend.set_ee_target(_pose(position, grasp_quat))
+            backend.set_ee_target(_pose(position, grasp_quat), solve_ik=args.teacher)
             _, _, terminated, truncated, _ = wbc.step(action())
             if terminated or truncated:
                 break
@@ -788,6 +786,7 @@ def main(argv: list[str] | None = None) -> int:
             end_pos=verify_pos,
             quat=grasp_quat,
             speed_m_s=0.03,
+            solve_ik=args.teacher,
         )
         lift_end, _ = _body_pose(env, args.object_body)
         rise = float(lift_end[2] - lift_start[2])
@@ -811,6 +810,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=out_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
+                solve_ik=args.teacher,
             )
             retract_pos = out_pos + np.array([0.0, 0.0, max(0.0, args.transport_height - args.lift_height)])
             s2 = _ramp_ee(
@@ -821,6 +821,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=retract_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
+                solve_ik=args.teacher,
             )
         else:
             high_pos = grasp_pos + np.array([0.0, 0.0, args.transport_height])
@@ -832,6 +833,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=high_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
+                solve_ik=args.teacher,
             )
             retract_pos = high_pos - forward_xy * args.retract_m
             s2 = _ramp_ee(
@@ -842,6 +844,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=retract_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
+                solve_ik=args.teacher,
             )
         carried, _ = _body_pose(env, args.object_body)
         carry_left, carry_right = backend.finger_target_forces(resolved_object)
@@ -870,7 +873,7 @@ def main(argv: list[str] | None = None) -> int:
             place_base_target = np.array([standoff_xy[0], standoff_xy[1], place_base_yaw], dtype=np.float64)
         else:
             place_base_target = base_target_for(place_xy, standoff=args.place_standoff)
-        backend.set_ee_target(_pose(retract_pos, grasp_quat))
+        backend.set_ee_target(_pose(retract_pos, grasp_quat), solve_ik=args.teacher)
         backend.hold_ee_in_base_frame(True)
         backend.set_base_speed_scale(args.transport_base_scale)
         backend.set_world_base_target(tuple(float(v) for v in place_base_target))
@@ -948,6 +951,7 @@ def main(argv: list[str] | None = None) -> int:
             quat=place_quat,
             start_quat=Rotation.from_matrix(T_hand_now[:3, :3]).as_quat(),
             speed_m_s=args.carry_speed,
+            solve_ik=args.teacher,
         )
         _run_until(
             wbc,
@@ -965,6 +969,7 @@ def main(argv: list[str] | None = None) -> int:
             end_pos=place_hand_pos,
             quat=place_quat,
             speed_m_s=args.carry_speed,
+            solve_ik=args.teacher,
         )
         _run_until(
             wbc,
@@ -1001,6 +1006,7 @@ def main(argv: list[str] | None = None) -> int:
             end_pos=retreat_hand_pos,
             quat=place_quat,
             speed_m_s=0.08,
+            solve_ik=args.teacher,
         )
         _run_until(
             wbc,

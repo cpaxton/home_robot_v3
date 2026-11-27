@@ -85,3 +85,20 @@ def test_body_twist_joint_velocity_round_trip_with_rotated_yaw_and_lever():
     recovered = backend._joint_vel_to_body_twist()
     np.testing.assert_allclose(recovered, desired, atol=1e-9)
 
+
+def test_reanchor_origin_preserves_world_ee_target():
+    backend = _backend()
+    backend.model = object()
+    backend.data = object()
+    backend._ee_in_base_T = None
+    backend._target_q = None
+    backend.set_ee_target((2.0, 3.5, 1.1, 0.0, 0.0, 0.0, 1.0))
+    before_pos, before_rot = backend._world_pose(backend._target_ee)
+    backend._world_base_pose = lambda: (1.8, 2.4, -0.7)
+    backend.reanchor_origin()
+    np.testing.assert_allclose(backend._base_pose(), [0.0, 0.0, 0.0], atol=1e-9)
+    after_pos, after_rot = backend._world_pose(backend._target_ee)
+    np.testing.assert_allclose(after_pos, before_pos, atol=1e-9)
+    np.testing.assert_allclose(after_rot.as_matrix(), before_rot.as_matrix(), atol=1e-9)
+
+
