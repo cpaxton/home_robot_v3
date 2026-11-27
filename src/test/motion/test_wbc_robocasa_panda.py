@@ -136,6 +136,3 @@ def test_topdown_grasp_planner_slices_8_vertex_box_and_aligns_eef_x_to_narrow_ax
     eef_x = np.array([np.cos(grasp_yaw), np.sin(grasp_yaw)])
     minor_axis = rot_z[:2, 1]
     assert abs(float(np.dot(eef_x, minor_axis))) > 0.98
-
-
-

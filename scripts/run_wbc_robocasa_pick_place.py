@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -416,18 +417,19 @@ def _run_base(
     settle_steps: int = 4,
     teleport: bool = False,
     carried_object: str | None = None,
-) -> None:
+) -> dict[str, Any]:
     if teleport and carried_object is None and backend.teleport_base_target():
         print(
             f"{label}: teleported base={np.round(backend._base_pose(), 3).tolist()} "
             f"target={np.round(backend._target_base, 3).tolist()}",
             flush=True,
         )
-        return
+        return {"status": "teleported", "steps": 0}
     steps = 0
     good = 0
     xy_error = float("inf")
     yaw_error = float("inf")
+    terminated = truncated = False
     limit = int(round(timeout_s / wbc.control_dt))
     target = np.asarray(backend._target_base, dtype=np.float64)
     resolved_carried = _resolve_body(env, carried_object) if carried_object is not None else None
@@ -456,6 +458,16 @@ def _run_base(
         flush=True,
     )
 
+    return {
+        "steps": steps,
+        "xy_error_m": xy_error if steps else None,
+        "yaw_error_rad": yaw_error if steps else None,
+        "settled": good >= settle_steps,
+        "terminated": terminated,
+        "truncated": truncated,
+        "timed_out": good < settle_steps and not (terminated or truncated),
+    }
+
 
 def _run_until(
     wbc: WbcGymEnv,
@@ -470,6 +482,7 @@ def _run_until(
     steps = 0
     good = 0
     last: dict[str, Any] = {}
+    terminated = truncated = False
     limit = int(round(timeout_s / wbc.control_dt))
     while steps < limit:
         _, _, terminated, truncated, info = wbc.step(action_source())
@@ -486,7 +499,16 @@ def _run_until(
         f"base={np.round(backend._base_pose(), 3).tolist()}",
         flush=True,
     )
-    return last
+    terms = last.get("reward_terms", {})
+    return {
+        "steps": steps,
+        "position_error_m": terms.get("pos_err"),
+        "orientation_error_rad": terms.get("quat_err"),
+        "settled": good >= settle_steps,
+        "terminated": terminated,
+        "truncated": truncated,
+        "timed_out": good < settle_steps and not (terminated or truncated),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -535,8 +557,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--json-out", type=Path, default=None, help="write structured episode summary JSON")
-    parser.add_argument("--save-rollout", type=Path, default=None, help="save (observations, teacher_actions, executed_actions) .npz")
+    parser.add_argument("--save-rollout", type=Path, default=None, help="save observations, expert labels, and requested actions as .npz")
     args = parser.parse_args(argv)
+    if args.teleport_base and not args.teacher:
+        parser.error("--teleport-base requires --teacher")
+    if args.save_rollout is not None and args.save_rollout.suffix != ".npz":
+        args.save_rollout = Path(f"{args.save_rollout}.npz")
+    if args.json_out is not None and args.save_rollout is not None:
+        if args.json_out.resolve() == args.save_rollout.resolve():
+            parser.error("--json-out and --save-rollout must write to different files")
+    label_with_teacher = args.teacher or args.save_rollout is not None
 
     import robocasa  # noqa: F401
     import robosuite
@@ -568,18 +598,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     policy = None
     device = args.device
-    if not args.teacher:
-        trainer, _ = WbcPPO.load(args.checkpoint, pandaomron_sim_profile(), device=args.device)
-        policy = trainer.policy
-        device = str(trainer.device)
 
     rollout_obs: list[np.ndarray] = []
     rollout_teacher_act: list[np.ndarray] = []
-    rollout_exec_act: list[np.ndarray] = []
+    rollout_requested_act: list[np.ndarray] = []
 
     def action() -> np.ndarray:
         obs_vec = wbc.encode(backend._observation())
-        teacher_vec = np.asarray(backend.teacher_action(), dtype=np.float32) if args.save_rollout is not None or args.teacher else None
+        teacher_vec = None
+        if label_with_teacher:
+            teacher_vec = np.asarray(backend.teacher_action(), dtype=np.float32)
         if args.teacher:
             assert teacher_vec is not None
             exec_vec = teacher_vec
@@ -599,10 +627,23 @@ def main(argv: list[str] | None = None) -> int:
         if args.save_rollout is not None and teacher_vec is not None:
             rollout_obs.append(obs_vec.copy())
             rollout_teacher_act.append(teacher_vec.copy())
-            rollout_exec_act.append(exec_vec.copy())
+            rollout_requested_act.append(exec_vec.copy())
         return exec_vec
 
+    source_revision = None
+    if args.json_out is not None or args.save_rollout is not None:
+        try:
+            source_revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent,
+                stderr=subprocess.DEVNULL, text=True,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            pass
+
+    stages: dict[str, Any] = {}
     summary: dict[str, Any] = {
+        "source_revision": source_revision,
+        "stages": stages,
         "env_name": args.env_name,
         "layout": args.layout,
         "style": args.style,
@@ -618,6 +659,10 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     try:
+        if not args.teacher:
+            trainer, _ = WbcPPO.load(args.checkpoint, pandaomron_sim_profile(), device=args.device)
+            policy = trainer.policy
+            device = str(trainer.device)
         wbc.reset(seed=args.seed)
         lang = env.get_ep_meta().get("lang", "")
         object_pos, _ = _body_pose(env, args.object_body)
@@ -647,7 +692,7 @@ def main(argv: list[str] | None = None) -> int:
         # base frame during unloaded base approach.
         ready_local = backend._observation().arms[0].ee_pose
         backend.set_local_ee_target(ready_local)
-        if args.teacher:
+        if label_with_teacher:
             backend._target_q = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
         backend.hold_ee_in_base_frame(True)
         base_target = base_target_for(object_pos[:2], standoff=args.base_standoff)
@@ -659,7 +704,7 @@ def main(argv: list[str] | None = None) -> int:
             f"base_world={np.round(base_world, 3).tolist()} base_target={np.round(base_target, 3).tolist()}",
             flush=True,
         )
-        _run_base(
+        stages["base_approach"] = _run_base(
             wbc,
             backend,
             env=env,
@@ -777,9 +822,9 @@ def main(argv: list[str] | None = None) -> int:
             quat=grasp_quat,
             start_quat=Rotation.from_matrix(T_hand_start[:3, :3]).as_quat(),
             speed_m_s=0.14,
-            solve_ik=args.teacher,
+            solve_ik=label_with_teacher,
         )
-        _run_until(
+        stages["pregrasp"] = _run_until(
             wbc,
             backend,
             action_source=action,
@@ -792,7 +837,7 @@ def main(argv: list[str] | None = None) -> int:
         for index in range(1, args.descent_steps + 1):
             alpha = 0.5 - 0.5 * float(np.cos(np.pi * index / args.descent_steps))
             position = pregrasp + (grasp_pos - pregrasp) * alpha
-            backend.set_ee_target(_pose(position, grasp_quat), solve_ik=args.teacher)
+            backend.set_ee_target(_pose(position, grasp_quat), solve_ik=label_with_teacher)
             _, _, terminated, truncated, _ = wbc.step(action())
             if terminated or truncated:
                 break
@@ -828,6 +873,7 @@ def main(argv: list[str] | None = None) -> int:
                 "grasp_yaw": round(float(grasp_yaw), 4),
                 "pinch_width_m": round(float(section_width), 4),
                 "close_accepted": bool(accepted),
+                "close_hold_s": round(float(hold), 3),
                 "close_left_N": round(float(left_force), 3),
                 "close_right_N": round(float(right_force), 3),
             }
@@ -852,7 +898,7 @@ def main(argv: list[str] | None = None) -> int:
             end_pos=verify_pos,
             quat=grasp_quat,
             speed_m_s=0.03,
-            solve_ik=args.teacher,
+            solve_ik=label_with_teacher,
         )
         lift_end, _ = _body_pose(env, args.object_body)
         rise = float(lift_end[2] - lift_start[2])
@@ -880,7 +926,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=clear_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
-                solve_ik=args.teacher,
+                solve_ik=label_with_teacher,
             )
             retract_pos = clear_pos - forward_xy * max(args.retract_m, 0.25)
             s2 = _ramp_ee(
@@ -891,7 +937,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=retract_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
-                solve_ik=args.teacher,
+                solve_ik=label_with_teacher,
             )
         else:
             high_pos = grasp_pos + np.array([0.0, 0.0, args.transport_height])
@@ -903,7 +949,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=high_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
-                solve_ik=args.teacher,
+                solve_ik=label_with_teacher,
             )
             retract_pos = high_pos - forward_xy * args.retract_m
             s2 = _ramp_ee(
@@ -914,7 +960,7 @@ def main(argv: list[str] | None = None) -> int:
                 end_pos=retract_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
-                solve_ik=args.teacher,
+                solve_ik=label_with_teacher,
             )
         carried, _ = _body_pose(env, args.object_body)
         carry_left, carry_right = backend.finger_target_forces(resolved_object)
@@ -939,7 +985,7 @@ def main(argv: list[str] | None = None) -> int:
         if front_out is not None:
             # Elevate torso in the open aisle (holding arm joints steady) so the
             # shoulder is already settled at shelf height before transport/place.
-            if args.teacher:
+            if label_with_teacher:
                 backend._target_q = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
             backend.set_torso_target(0.34)
             for _ in range(40):
@@ -953,13 +999,13 @@ def main(argv: list[str] | None = None) -> int:
             place_base_target = np.array([standoff_xy[0], standoff_xy[1], place_base_yaw], dtype=np.float64)
         else:
             place_base_target = base_target_for(place_xy, standoff=args.place_standoff)
-        backend.set_ee_target(_pose(retract_pos, grasp_quat), solve_ik=args.teacher)
+        backend.set_ee_target(_pose(retract_pos, grasp_quat), solve_ik=label_with_teacher)
         backend.hold_ee_in_base_frame(True)
         backend.set_base_speed_scale(args.transport_base_scale)
         backend.set_world_base_target(tuple(float(v) for v in place_base_target))
         wbc.hold_base = False
         wbc._observation = backend._observation()
-        _run_base(
+        stages["transport"] = _run_base(
             wbc,
             backend,
             env=env,
@@ -1034,9 +1080,9 @@ def main(argv: list[str] | None = None) -> int:
             quat=place_quat,
             start_quat=Rotation.from_matrix(T_hand_now[:3, :3]).as_quat(),
             speed_m_s=args.carry_speed,
-            solve_ik=args.teacher,
+            solve_ik=label_with_teacher,
         )
-        _run_until(
+        stages["preplace"] = _run_until(
             wbc,
             backend,
             action_source=action,
@@ -1052,9 +1098,9 @@ def main(argv: list[str] | None = None) -> int:
             end_pos=place_hand_pos,
             quat=place_quat,
             speed_m_s=args.carry_speed,
-            solve_ik=args.teacher,
+            solve_ik=label_with_teacher,
         )
-        _run_until(
+        stages["place"] = _run_until(
             wbc,
             backend,
             action_source=action,
@@ -1089,9 +1135,9 @@ def main(argv: list[str] | None = None) -> int:
             end_pos=retreat_hand_pos,
             quat=place_quat,
             speed_m_s=0.08,
-            solve_ik=args.teacher,
+            solve_ik=label_with_teacher,
         )
-        _run_until(
+        stages["retreat"] = _run_until(
             wbc,
             backend,
             action_source=action,
@@ -1125,6 +1171,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if task_success else 1
     finally:
+        wbc.close()
         if args.json_out is not None:
             args.json_out.parent.mkdir(parents=True, exist_ok=True)
             args.json_out.write_text(json.dumps(summary, indent=2) + "\n")
@@ -1134,10 +1181,10 @@ def main(argv: list[str] | None = None) -> int:
                 args.save_rollout,
                 observations=np.stack(rollout_obs, axis=0),
                 teacher_actions=np.stack(rollout_teacher_act, axis=0),
-                executed_actions=np.stack(rollout_exec_act, axis=0),
+                requested_actions=np.stack(rollout_requested_act, axis=0),
+                source_revision=np.asarray(source_revision or ""),
                 task_success=np.asarray([bool(summary.get("task_success", False))]),
             )
-        wbc.close()
 
 
 if __name__ == "__main__":

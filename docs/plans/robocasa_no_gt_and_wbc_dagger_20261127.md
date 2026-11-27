@@ -1,14 +1,14 @@
 # Plan: RoboCasa PandaOmron No-GT Perception, Proprioceptive Retention Gates, and Task-Posture WBC DAgger
 
 Date: 2026-11-27
-Branch / PR: `feat/omron-benchmark-harness` (PR #273, head `3eb4bb6b` → `main` `cd1bfcee`)
+Branch / PR: `feat/omron-benchmark-harness` (PR #273 → `main`)
 Baseline qualification: [`docs/experiments/robocasa_pandaomron_pick_place_20261127.md`](../experiments/robocasa_pandaomron_pick_place_20261127.md)
 
 ---
 
 ## 1. Ground-Truth (GT) Provenance Audit
 
-Every simulator read in the current RoboCasa PandaOmron stack falls into one of four categories. The low-level WBC actor contract is **already 100% GT-free**; GT usage is confined to the outer task-harness planner and teacher-mode gates in `scripts/run_wbc_robocasa_pick_place.py` and diagnostic helpers in `src/emet/rl/manipulation/wbc_robocasa_panda.py`.
+Every simulator read in the current RoboCasa PandaOmron stack falls into one of four categories. The low-level WBC actor contract is **already 100% GT-free**; Scene GT usage is confined to the outer task-harness planner, execution gates in both controller modes in `scripts/run_wbc_robocasa_pick_place.py` and diagnostic helpers in `src/emet/rl/manipulation/wbc_robocasa_panda.py`.
 
 ### 1.1 Zero-GT Actor & Control Contract (Keep as-is)
 
@@ -16,7 +16,7 @@ Every simulator read in the current RoboCasa PandaOmron stack falls into one of 
 |---|---|---|---|
 | WBC observation & encoding | `wbc_env.py:encode_observation`, `wbc_robocasa_panda.py:_observation` | Reset-anchored base pose/twist, joint `q/qd/tau`, hand FK pose, active EE/base target, gripper `q/qd`, robot tactile `MuJoCoContactSensor` | **0 GT** (proprioceptive only) |
 | Dynamic base & torso actuation | `wbc_robocasa_panda.py:step`, `_body_twist_to_joint_vel`, `reanchor_origin`, `hold_ee_in_base_frame` | Robot joint axes (`xaxis`), yaw anchor (`xanchor`), robot `dof_frictionloss`, robot FK | **0 GT** (robot URDF/MJCF parameters + encoders) |
-| Wrist-to-EEF rigid offset & arm IK | `run_wbc_robocasa_pick_place.py:T_hand_eef`, `wbc_robocasa_panda.py:solve_ee_ik` | Robot `robot0_right_hand` and `gripper0_right_eef` FK ($R_z(-\pi/2), (0,0,0.097\,\text{m})$) | **0 GT** (fixed robot kinematics; `solve_ee_ik` only runs when `--teacher` is active) |
+| Wrist-to-EEF rigid offset & arm IK | `run_wbc_robocasa_pick_place.py:T_hand_eef`, `wbc_robocasa_panda.py:solve_ee_ik` | Robot `robot0_right_hand` and `gripper0_right_eef` FK ($R_z(-\pi/2), (0,0,0.097\,\text{m})$) | **0 GT** (fixed robot kinematics; `solve_ee_ik` runs with `--teacher` and for expert labeling with `--save-rollout`) |
 | Task language prompt | `env.get_ep_meta()["lang"]` | Natural-language instruction (e.g. *"Pick the pear from the counter and place it in the sink."*) | **0 GT** (standard benchmark task specification) |
 
 ### 1.2 Privileged Execution Gates → Proprioceptive Replacements (Phase 1)

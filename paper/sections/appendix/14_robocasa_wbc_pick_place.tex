@@ -14,8 +14,8 @@ The actor interface remains strictly sensor-only (reset-anchored base pose and
 body twist, joint positions/velocities/torques, end-effector pose and target,
 gripper encoders, and measured robot contact state); simulator body identifiers
 and object poses never enter the actor observation or checkpoint.
-For teacher qualification and rollout generation (\texttt{--teacher}), task-level
-grasp and receptacle targets are derived from privileged simulator geometry and
+In both the teacher and learned-controller runs reported here, task-level grasp
+and receptacle targets are derived from privileged simulator geometry and
 explicitly tagged \texttt{privileged\_gt\_metadata}. All robot and object motion
 executes in continuous native MuJoCo contact physics with zero object
 attachments/welds and zero loaded \texttt{qpos} teleportation.
@@ -120,8 +120,8 @@ qualification episodes archived in
 \texttt{paper/data/whole\_body\_control/robocasa\_pandaomron\_pick\_place\_20261127.json}:
 7/7 pass on \texttt{PickPlaceCounterToSink} and 4/4 pass on
 \texttt{PickPlaceCounterToCabinet} (11/11 overall), retaining $13.2\text{--}20.1\,\text{N}$
-per-finger normal load across up to $1.04\,\text{m}$ of dynamic mobile-base
-transport and placing within $0.08\text{--}7.63\,\text{cm}$ XY of the target
+per-finger normal load at the end of dynamic mobile-base transport, with up to
+$1.04\,\text{m}$ of start-to-final object displacement and placing within $0.08\text{--}7.63\,\text{cm}$ XY of the target
 interior site.
 Evaluating the direct-plant reach checkpoint (\texttt{pandaomron\_robust})
 zero-shot through the identical harness transfers dynamic base navigation directly

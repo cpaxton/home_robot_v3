@@ -6,7 +6,7 @@ Structured ledger: [`paper/data/whole_body_control/robocasa_pandaomron_pick_plac
 
 Scope: end-to-end physical mobile-manipulation qualification above the PandaOmron WBC contract in RoboCasa (`PickPlaceCounterToSink` and `PickPlaceCounterToCabinet`).
 
-> **Provenance boundary:** Task-level object and receptacle geometry in `--teacher` runs come from simulator metadata (`privileged_gt_metadata`), while all robot motion executes in continuous native MuJoCo contact physics with **zero `qpos` teleportation** and **zero object welds/latches**. Do not present teacher-path numbers as observed/no-GT actor benchmark scores.
+> **Provenance boundary:** Task-level object and receptacle geometry in both controller modes come from simulator metadata (`privileged_gt_metadata`), while all robot motion executes in continuous native MuJoCo contact physics with **zero `qpos` teleportation** and **zero object welds/latches**. Do not present teacher-path numbers as observed/no-GT actor benchmark scores.
 
 ---
 
@@ -62,6 +62,8 @@ Running the promoted direct-plant reach policy (`logs/eval/wbc_multirobot_202611
 ---
 
 ## 4. Reproducible commands & rollout export
+
+The rollout archive stores `observations`, `teacher_actions`, and `requested_actions`. Requested actions are the normalized controller outputs before base hold and scripted torso/gripper overrides. Actor runs with export enabled evaluate the IK-backed expert at actor-visited states. Both modes use privileged task targets.
 
 Run via `emet jobs` (`--need-mib 6000` on 8 GiB GPUs) and record structured JSON / `.npz` rollouts:
 
