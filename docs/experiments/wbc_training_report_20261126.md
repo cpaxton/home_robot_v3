@@ -144,8 +144,14 @@ stage. The easy checkpoint already evaluates **1.00** on medium, and teacher BC
 and two DAgger iterations stay **1.00** on 5 episodes (BC loss 0.00065). The
 0.2–1.0 kg load range is therefore learnable with a held base and a narrow
 target; the remaining full-carry gap is the base+arm coordination and ±0.35 rad
-targets, not the payload alone. A full-carry run initialized from the medium
-checkpoint is in flight. A fresh
+targets, not the payload alone.
+
+A 10-episode medium ablation still passes **1.00/1.00** when wrist wrench,
+finger force, and joint torque are masked; tracking is essentially unchanged
+(**1.76 vs 1.79 cm**). The easy/medium stages can be solved by averaging the
+payload, so they prove the curriculum is trainable but not that the actor needs
+contact. Full `carry` is the contact gate. A full-carry run initialized from
+the medium checkpoint is in flight. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
