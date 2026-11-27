@@ -3,6 +3,20 @@
 **WBC how-to:** [Whole-body control guide](../wbc.md) — contract, teacher/BC/DAgger, failure-data + scene ingestion, RoboCasa teacher/sweep, and promotion gates.
 
 
+**RoboCasa PandaOmron multi-step mobile pick-place & retention (2026-11-27):** [Dynamic-base teacher qualification on Sink & Cabinet](robocasa_pandaomron_pick_place_20261127.md)
+resolves the hand-to-EEF frame ($R_z(-\pi/2), t=(0,0,0.097\,\text{m})$), EEF $X$
+finger-closing axis, `omron_mobile_base.xml` pre-yaw slide kinematics + Coulomb
+stiction deadzone (`250 N` base / `1000 N` torso), and discrete-`qpos` transport
+drop. With 100% dynamic MuJoCo base driving (no `qpos` teleport, no object
+weld), the privileged teacher passes `env._check_success()` on **11 / 11**
+episodes (`7 / 7` `PickPlaceCounterToSink` across `can`, `pear`, `bar_soap`,
+`egg`, `spray`, `shaker`; `4 / 4` `PickPlaceCounterToCabinet` across `can`,
+`pear`, `egg`, `sugar cube`). Zero-shot `pandaomron_robust/best.pt` drives the
+dynamic base to `1.75 cm` XY error and holds stationary after origin
+re-anchoring, isolating the remaining actor gap to out-of-distribution top-down
+arm postures (`--save-rollout` exports BC/DAgger trajectories). Structured
+ledger: [`paper/data/whole_body_control/robocasa_pandaomron_pick_place_20261127.json`](../../paper/data/whole_body_control/robocasa_pandaomron_pick_place_20261127.json).
+
 **Multi-robot WBC backend matrix (2026-11-26):** [MuJoCo plants and trained policies for Mars/Stretch/Sourccey/RB-Y1/PandaOmron](wbc_multirobot_20261125.md)
 records the direct-MuJoCo backend and the trained policy gates: 50
 episodes/subtask, three seeds, means Mars 0.955, Stretch 0.951, Sourccey

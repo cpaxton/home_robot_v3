@@ -1,0 +1,137 @@
+% Copyright (c) Chris Paxton 2026
+% Licensed under the Apache License, Version 2.0.
+\section{PandaOmron mobile-manipulation harness and grasp-retention qualification in RoboCasa}
+\label{app:robocasa_wbc_pick_place}
+
+\paragraph{Contract and provenance boundary.}
+To evaluate whole-body mobile manipulation in household kitchen scenes~\cite{robocasa2024,nasiriany2026robocasa365}
+above the embodiment-agnostic control contract of Appendix~\ref{app:whole_body_control},
+we bind \texttt{RoboCasaPandaBackend} directly to the composed \texttt{PandaOmron}
+MuJoCo plant (planar three-DoF Omron LD-60 base, one-DoF prismatic torso,
+seven-DoF torque-controlled Panda arm, and position-controlled parallel-jaw
+gripper) at $20\,\text{Hz}$ control ($500\,\text{Hz}$ physics).
+The actor interface remains strictly sensor-only (reset-anchored base pose and
+body twist, joint positions/velocities/torques, end-effector pose and target,
+gripper encoders, and measured robot contact state); simulator body identifiers
+and object poses never enter the actor observation or checkpoint.
+In both the teacher and learned-controller runs reported here, task-level grasp
+and receptacle targets are derived from privileged simulator geometry and
+explicitly tagged \texttt{privileged\_gt\_metadata}. All robot and object motion
+executes in continuous native MuJoCo contact physics with zero object
+attachments/welds and zero loaded \texttt{qpos} teleportation.
+
+\paragraph{Holonomic base kinematics, stiction compensation, and carried transport.}
+Inspecting the composed \texttt{omron\_mobile\_base.xml} plant exposed two
+actuation mismatches that previously stalled non-teleported base driving and
+ejected carried free-joint objects:
+\begin{enumerate}
+  \item \textbf{Pre-yaw slide axes and hinge lever arm.}
+  The planar slides (\texttt{joint\_mobile\_forward}, \texttt{joint\_mobile\_side})
+  precede \texttt{joint\_mobile\_yaw} in the kinematic chain, and the yaw hinge
+  is anchored at $(-0.21, 0, 0)\,\text{m}$ in the chassis frame. Consequently,
+  the slide joints translate in the episode spawn frame rather than the rotated
+  chassis heading. Given chassis forward/left unit vectors
+  $(\hat{\mathbf{x}}_b, \hat{\mathbf{y}}_b)$, world slide axes
+  $(\mathbf{a}_0, \mathbf{a}_1)$, and hinge-to-chassis lever vector
+  $\mathbf{r} = \mathbf{p}_b - \mathbf{p}_{\text{yaw}}$, desired chassis twist
+  $(v_x, v_y, \omega_z)$ maps to joint rates via
+  $\mathbf{v}_{\text{slide}} = v_x \hat{\mathbf{x}}_b + v_y \hat{\mathbf{y}}_b - \omega_z (-r_y, r_x)^\top$
+  and $\dot{q}_i^{\text{des}} = \mathbf{v}_{\text{slide}}^\top \mathbf{a}_i$
+  ($i \in \{0, 1\}$), with the exact inverse applied in \texttt{\_observation()}.
+  \item \textbf{Coulomb frictionloss deadzones.}
+  All three planar joints specify $F_{\text{fric}} = 250\,\text{N}$ dry friction
+  against velocity servos with $k_v \in \{1000, 1000, 1500\}$, creating an
+  uncompensated deadzone $|u| \le F_{\text{fric}} / k_v = 0.25\,\text{m/s}$
+  ($0.167\,\text{rad/s}$ in yaw); similarly, \texttt{joint\_torso\_height}
+  specifies $1000\,\text{N}$ frictionloss. Adding smooth Coulomb feedforward
+  $u_i = \dot{q}_i^{\text{des}} + (F_{\text{fric},i} / k_{v,i})\tanh(\dot{q}_i^{\text{des}} / \epsilon)$
+  with $1.0\,\text{m/s}^2$ slew-rate limiting enables millimeter-accurate dynamic
+  gliding at low transport speeds and full $[0.02, 0.34]\,\text{m}$ torso travel.
+  \item \textbf{Continuous physics transport vs.\ discrete \texttt{qpos} stepping.}
+  Kinematically stepping planar \texttt{qpos} at $20\,\text{Hz}$ while holding a
+  free-joint object teleports the $8\,\text{mm}$-thick finger pads $5\text{--}15\,\text{mm}$
+  in zero simulation time, opening an air gap on one pad while burying the
+  opposing pad into the mesh ($>180\,\text{N}$ solver impulse). Driving the base
+  dynamically through \texttt{sim.step()} ($<0.45\,\text{mm}$ per $2\,\text{ms}$
+  substep) while locking the retracted arm target in the moving chassis frame
+  (\texttt{hold\_ee\_in\_base\_frame}) eliminates transport slip. After each base
+  phase, \texttt{reanchor\_origin()} re-centers \texttt{base\_pose} at $(0,0,0)$
+  while preserving world end-effector targets.
+\end{enumerate}
+
+\paragraph{Grasp-frame geometry, edge-sliced narrow-axis planning, and retention gates.}
+Task-space grasp frames target \texttt{gripper0\_right\_eef}, whereas the WBC
+contract commands \texttt{robot0\_right\_hand}; the fixed rigid transform is
+${}^{\text{hand}}\mathbf{T}_{\text{eef}} = (\mathbf{R}_z(-\pi/2), (0, 0, 0.097\,\text{m})^\top)$.
+In \texttt{panda\_gripper.xml}, finger separation in \texttt{gripper0\_right\_eef}
+lies along the EEF $X$-axis ($[\cos\psi, \sin\psi, 0]^\top$ under top-down yaw
+$\psi$), with $79.0\,\text{mm}$ clear inner-pad opening at $q = [0.04, -0.04]$,
+palm collision $31.0\,\text{mm}$ above EEF, and fingertip collision $9.2\,\text{mm}$
+below EEF. World-fixed grasp yaw pins wrist \texttt{joint7} at its $+2.897\,\text{rad}$
+limit; sweeping $\psi \in [\psi_{\text{base}}, \psi_{\text{base}} + \pi]$ centers
+wrist posture around \texttt{\_READY\_Q[6]} ($+0.785\,\text{rad}$, $\ge 0.54\,\text{rad}$
+joint margin) while covering all undirected 2D pinch directions.
+To handle sparse two-ring cylinder meshes (cans) and eight-vertex boxes (soap
+bars), the planner slices collidable triangle and primitive edges across five
+planes spanning the $16\,\text{mm}$ rubber pad band, enforces counter and palm
+clearance bounds $z_{\text{eef}} \ge \max(z_{\min} + 14.2\,\text{mm}, z_{\max} - 26.0\,\text{mm})$,
+prefers the deepest safe height closest to CoM, and selects $\psi$ minimizing
+projected pinch width along EEF $X$. Execution requires debounced bilateral
+target contact ($>1\,\text{N}$ per finger for $0.9\,\text{s}$), $\ge 1\,\text{cm}$
+measured object rise over a $3\,\text{cm}$ verification lift, post-transport
+bilateral force verification, and RoboCasa's official \texttt{\_check\_success()}
+(object inside fixture interior sites and gripper retracted $>0.25\,\text{m}$).
+For upper wall cabinets (\texttt{PickPlaceCounterToCabinet}), the teacher lowers
+the torso to $0.04\text{--}0.14\,\text{m}$ with a height-adaptive aisle-lean pitch to
+grasp beneath the open cabinet door, retracts into the aisle, elevates the torso
+to $0.34\,\text{m}$, and slides onto the $1.42\,\text{m}$ shelf at $55^\circ$
+forward pitch.
+
+\begin{table}[t]
+  \centering
+  \caption{PandaOmron multi-step mobile pick-place qualification in RoboCasa at revision \texttt{7a2fbeed} (100\% dynamic MuJoCo base driving; zero \texttt{qpos} teleportation, zero object welds). Teacher rows use privileged object/fixture geometry; the last row evaluates the zero-shot direct-plant reach checkpoint (\texttt{pandaomron\_robust}) without teacher actions.}
+  \label{tab:robocasa_pandaomron_pick_place}
+  \small
+  \begin{tabular}{@{}llrrrrrc@{}}
+    \toprule
+    Task & Object (\texttt{seed}) & Pinch (cm) & Close (N) & Carry (N) & Disp.\ (m) & XY err.\ (cm) & Success \\
+    \midrule
+    Counter$\to$Sink (teacher) & \texttt{can} (0) & 5.73 & 20.0 / 20.0 & 20.0 / 20.0 & 1.022 & 3.19 & Pass \\
+    Counter$\to$Sink (teacher) & \texttt{pear} (0) & 7.10 & 19.4 / 19.6 & 18.2 / 18.6 & 1.038 & 6.26 & Pass \\
+    Counter$\to$Sink (teacher) & \texttt{bar\_soap} (0) & 6.07 & 20.2 / 19.7 & 19.7 / 19.7 & 0.995 & 0.12 & Pass \\
+    Counter$\to$Sink (teacher) & \texttt{egg} (0) & 4.76 & 19.9 / 20.0 & 19.8 / 19.9 & 1.004 & 1.99 & Pass \\
+    Counter$\to$Sink (teacher) & \texttt{all}: can (0) & 6.03 & 19.6 / 19.6 & 20.1 / 19.9 & 0.402 & 7.63 & Pass \\
+    Counter$\to$Sink (teacher) & \texttt{all}: spray (1) & 3.70 & 19.3 / 19.6 & 18.1 / 18.1 & 0.350 & 3.64 & Pass \\
+    Counter$\to$Sink (teacher) & \texttt{all}: shaker (2) & 3.51 & 17.0 / 17.0 & 16.5 / 16.5 & 0.426 & 0.08 & Pass \\
+    \midrule
+    Counter$\to$Cab.\ (teacher) & \texttt{can} (0) & 6.04 & 19.8 / 20.0 & 19.9 / 19.9 & 0.540 & 0.95 & Pass \\
+    Counter$\to$Cab.\ (teacher) & \texttt{pear} (0) & 6.17 & 19.4 / 19.5 & 18.6 / 17.4 & 0.538 & 6.45 & Pass \\
+    Counter$\to$Cab.\ (teacher) & \texttt{egg} (0) & 4.71 & 19.4 / 19.7 & 18.8 / 18.2 & 0.542 & 3.04 & Pass \\
+    Counter$\to$Cab.\ (teacher) & \texttt{all}: sugar cube (0) & 2.84 & 13.3 / 16.5 & 13.2 / 13.2 & 0.559 & 1.56 & Pass \\
+    \midrule
+    Counter$\to$Sink (RL-WBC) & \texttt{can} (0, zero-shot) & 5.74 & 0.0 / 0.0 & --- & 0.010 & --- & Fail \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Qualification summary and zero-shot policy diagnostic.}
+Table~\ref{tab:robocasa_pandaomron_pick_place} summarizes the eleven teacher
+qualification episodes archived in
+\texttt{paper/data/whole\_body\_control/robocasa\_pandaomron\_pick\_place\_20261127.json}:
+7/7 pass on \texttt{PickPlaceCounterToSink} and 4/4 pass on
+\texttt{PickPlaceCounterToCabinet} (11/11 overall), retaining $13.2\text{--}20.1\,\text{N}$
+per-finger normal load at the end of dynamic mobile-base transport, with up to
+$1.04\,\text{m}$ of start-to-final object displacement and placing within $0.08\text{--}7.63\,\text{cm}$ XY of the target
+interior site.
+Evaluating the direct-plant reach checkpoint (\texttt{pandaomron\_robust})
+zero-shot through the identical harness transfers dynamic base navigation directly
+to the kitchen scene ($1.75\,\text{cm}$ XY arrival error in 237 steps) and holds
+the base stationary during arm commands ($[+0.5, -1.1]\,\text{cm}$ drift) once
+\texttt{reanchor\_origin()} is applied, but stops at \texttt{close\_gate} due to
+a $0.296\,\text{m}$ / $2.19\,\text{rad}$ pregrasp residual: its direct-plant
+training distribution sampled only $\pm 0.15\,\text{rad}$ joint offsets around
+\texttt{\_READY\_Q} rather than $90^\circ$ top-down grasp postures.
+The qualified teacher now exports paired $(\text{observation}, \text{teacher action})$
+rollouts (\texttt{--save-rollout}) to close this task-posture distribution gap via
+BC/DAgger, while observed RGB-D point-cloud target estimation remains a separate
+gate before claiming unassisted benchmark task success.

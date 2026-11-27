@@ -108,6 +108,8 @@ scene contact/placement and the approximate torso hold.
 
 ## Next
 
+> **Follow-up (2026-11-27):** Items 1 and 3 below are now implemented and verified in [`robocasa_pandaomron_pick_place_20261127.md`](robocasa_pandaomron_pick_place_20261127.md) (`11 / 11` dynamic-base privileged teacher `env._check_success()` across `PickPlaceCounterToSink` and `PickPlaceCounterToCabinet`, plus `--save-rollout` export for task-posture DAgger).
+
 1. Add a task-target bridge from the benchmark/TAMP skill layer into
    `set_ee_target` (object grasp, lift, place), then sweep those Cartesian
    targets with the Cartesian teacher.

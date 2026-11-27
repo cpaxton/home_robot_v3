@@ -1,8 +1,12 @@
 # RoboCasa benchmark landing + regression gates
 
-Date: 2026-11-26
-Status: landing plan. #264 is merged; #265 is the held bring-up; #267 and #266 are
-ready but stacked behind it.
+Date: 2026-11-26 (updated 2026-11-27)
+Status: #264, #265, #267, and #266 are merged on `main` (`cd1bfcee`). PR #273 adds the
+dynamic-base PandaOmron multi-step pick-place harness and passes privileged-teacher
+qualification (`11/11` `env._check_success()` across Sink and Cabinet; see
+[`docs/experiments/robocasa_pandaomron_pick_place_20261127.md`](../experiments/robocasa_pandaomron_pick_place_20261127.md)).
+Learned-actor task-posture DAgger and observed/no-GT target perception remain open before
+claiming a no-GT benchmark row.
 
 This document separates **landing code** from **claiming a benchmark result**. The
 new PandaOmron RoboCasa path can land as infrastructure before every benchmark row
