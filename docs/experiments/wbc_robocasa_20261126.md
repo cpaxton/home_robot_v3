@@ -157,8 +157,14 @@ heights, front-side grasps, 6-DOF IK, and closed-loop visual servoing). The
 candidate selector found solid patches on the brush and avoided the bbox gap,
 but the arm could not track several side/lower targets without pushing the
 object, and the fallback chain regressed the simpler bbox path (0/3 in the
-three-seed check). It is not merged. The next grasp gate is a collision-aware
-approach and a retained-grasp check, not more candidate scoring.
+three-seed check). It is not merged.
+
+A smaller retry was also tested: if the primary bbox close fails, retry once on
+the nearest solid collision patch (brush head, oil-bottle cap). The arm still
+stopped 1–3 cm above short patches at the counter, and the brush retry pushed
+the object to the side; the three-seed check stayed 2/3 with no new success. It
+is not merged either. The next grasp gate is a collision-aware approach and a
+retained-grasp check, not more candidate scoring.
 
 **Open/close prototype:** a closed left cabinet door was opened by a
 closed-gripper push servo that follows the handle arc about the true hinge.
