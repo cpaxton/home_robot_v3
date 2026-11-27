@@ -289,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
                     pregrasp_m=args.pregrasp_m,
                     lift_m=args.lift_m,
                     execute=args.execute,
+                    execute_mode=args.execute_mode,
                     reset_state=reset_state,
                 )
                 results.append(result)
