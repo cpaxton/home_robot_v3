@@ -57,6 +57,16 @@ def _body_T(env: Any, body: str) -> np.ndarray:
     return T
 
 
+def _finger_axis_center(env: Any) -> tuple[np.ndarray, np.ndarray]:
+    left = np.asarray(env.sim.data.get_body_xpos("gripper0_right_leftfinger"), dtype=np.float64)
+    right = np.asarray(env.sim.data.get_body_xpos("gripper0_right_rightfinger"), dtype=np.float64)
+    axis = right - left
+    norm = float(np.linalg.norm(axis))
+    if norm < 1e-9:
+        return np.array([0.0, 1.0, 0.0]), 0.5 * (left + right)
+    return axis / norm, 0.5 * (left + right)
+
+
 def _fixture_pos(env: Any, attr: str) -> np.ndarray | None:
     fixture = getattr(env, attr, None)
     if fixture is None or not hasattr(fixture, "pos"):
@@ -272,6 +282,14 @@ def main(argv: list[str] | None = None) -> int:
             eef_in_hand = np.linalg.inv(hand_T) @ eef_T
             eef_offset = Rotation.from_quat(grasp_quat).apply(eef_in_hand[:3, 3])
             grasp_pos = grasp_pos - eef_offset
+        finger_axis, finger_center = _finger_axis_center(env)
+        lateral = float(np.dot(object_pos - finger_center, finger_axis))
+        grasp_pos = grasp_pos + finger_axis * lateral
+        print(
+            f"grasp_alignment lateral={lateral:.4f} axis={np.round(finger_axis, 3).tolist()} "
+            f"object={np.round(object_pos, 3).tolist()}",
+            flush=True,
+        )
         pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
         grasp = grasp_pos
         lift = grasp_pos + np.array([0.0, 0.0, 0.20])
