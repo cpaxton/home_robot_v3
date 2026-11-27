@@ -522,24 +522,48 @@ def main(argv: list[str] | None = None) -> int:
         base_yaw = float(
             np.arctan2(grasp_xy[1] - base_world[1], grasp_xy[0] - base_world[0])
         )
-        grasp_yaw = base_yaw + np.pi / 2.0
-        T_eef_grasp = top_down_grasp_T(
-            np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
-            z_offset_m=0.0,
+        points = _body_points(env, args.object_body)
+        object_low = points.min(axis=0)
+        object_high = points.max(axis=0)
+        object_width = float(np.max(object_high[:2] - object_low[:2]))
+        object_height = float(object_high[2] - object_low[2])
+        side = args.grasp_mode == "side" or (
+            args.grasp_mode == "auto"
+            and object_height > 1.2 * object_width
+            and object_width <= args.gripper_opening
         )
-        T_eef_grasp[:3, :3] = Rotation.from_euler("z", grasp_yaw).as_matrix() @ T_eef_grasp[:3, :3]
+        if side:
+            grasp_xy = 0.5 * (object_low[:2] + object_high[:2])
+            grasp_z = float(0.5 * (object_low[2] + object_high[2]))
+            approach = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
+            up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+            lateral = np.cross(approach, up)
+            T_eef_grasp = np.eye(4, dtype=np.float64)
+            T_eef_grasp[:3, :3] = np.column_stack([up, lateral, approach])
+            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z])
+            grasp_yaw = base_yaw
+        else:
+            grasp_yaw = base_yaw + np.pi / 2.0
+            T_eef_grasp = top_down_grasp_T(
+                np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
+                z_offset_m=0.0,
+            )
+            T_eef_grasp[:3, :3] = Rotation.from_euler("z", grasp_yaw).as_matrix() @ T_eef_grasp[:3, :3]
         T_hand_eef = np.linalg.inv(_body_T(env, "robot0_right_hand")) @ _body_T(env, "gripper0_right_eef")
         eef_in_hand = np.linalg.inv(T_hand_eef)
         T_hand_grasp = T_eef_grasp @ eef_in_hand
         T_hand_pregrasp = T_hand_grasp.copy()
-        T_hand_pregrasp[2, 3] += args.pregrasp_height
+        if side:
+            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * args.pregrasp_height
+        else:
+            T_hand_pregrasp[2, 3] += args.pregrasp_height
         grasp_pos = T_hand_grasp[:3, 3].copy()
         grasp_quat = Rotation.from_matrix(T_hand_grasp[:3, :3]).as_quat()
         pregrasp = T_hand_pregrasp[:3, 3].copy()
         print(
             f"grasp_plan object={np.round(grasp_object_pos, 3).tolist()} "
             f"grasp_xy={np.round(grasp_xy, 3).tolist()} z={grasp_z:.4f} "
-            f"section_width={section_width:.4f} yaw={grasp_yaw:.3f} "
+            f"section_width={section_width:.4f} yaw={grasp_yaw:.3f} side={side} "
             f"hand_grasp={np.round(grasp_pos, 3).tolist()} "
             f"table={[(round(z, 3), round(w, 3)) for z, w in table[::5]]}",
             flush=True,
