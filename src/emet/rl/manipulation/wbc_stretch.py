@@ -52,9 +52,10 @@ from emet.controller.manipulation.wbc_contract import (
 )
 from emet.controller.manipulation.wbc_profiles import stretch_sim_profile
 from emet.rl.manipulation.control import ManipulationControl
-from emet.rl.manipulation.models import build_manipulation_model
+from emet.rl.manipulation.models import build_manipulation_model, set_wbc_payload
 from emet.rl.manipulation.profiles import PROFILES
 from emet.rl.manipulation.wbc_contact import MuJoCoContactSensor
+from emet.rl.manipulation.wbc_env import WbcPerturbation
 
 # The packaged scene's zero posture folds the wrist into the chassis, so the
 # plant resets to a raised ready pose instead. Lift and the virtual telescope
@@ -141,7 +142,7 @@ class StretchWbcBackend:
         self.rng = np.random.default_rng(seed)
 
         self.control_profile = PROFILES["stretch"]
-        self.model, self.model_fingerprint = build_manipulation_model("stretch")
+        self.model, self.model_fingerprint = build_manipulation_model("stretch", payload_body=True)
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
         self.control = ManipulationControl(self.model, self.data, self.control_profile)
@@ -159,6 +160,9 @@ class StretchWbcBackend:
             if int(self.model.geom_bodyid[index]) == base_body
             and int(self.model.geom_type[index]) == int(mujoco.mjtGeom.mjGEOM_SPHERE)
         )
+        self._payload_body = int(self.model.body("wbc_payload").id)
+        self._perturbation: WbcPerturbation | None = None
+        self._teacher_gripper = 0.04
         self._contact_sensor = MuJoCoContactSensor(
             self.model,
             base_body="base_link",
@@ -222,14 +226,20 @@ class StretchWbcBackend:
     # ------------------------------------------------------------------
     # WbcBackend protocol
     # ------------------------------------------------------------------
+    def set_perturbation(self, perturbation: WbcPerturbation | None) -> None:
+        self._perturbation = perturbation
+
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> WbcObservation:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         mujoco.mj_resetData(self.model, self.data)
+        perturbation = self._perturbation or WbcPerturbation()
+        set_wbc_payload(self.model, self.data, self._payload_body, perturbation.payload_mass, perturbation.payload_com)
         self._set_arm_q(_READY_Q)
         self.data.qpos[self._grip_q] = self._grip_open
         mujoco.mj_forward(self.model, self.data)
         self.control.reset()
+        self._teacher_gripper = 0.0 if self._perturbation is not None and self._perturbation.gripper_close else 0.04
 
         self._joint_command = self.control.positions().copy()
         self._base_command = np.zeros(2)
@@ -332,7 +342,8 @@ class StretchWbcBackend:
 
         The base stage moves a sampled forward goal while the arm is damped;
         once the base settles, the arm drives to the sampled five-axis target.
-        The gripper is always commanded open. The function is deterministic and
+        The gripper is open by default and closes for a carry perturbation. The
+        function is deterministic and
         does not advance physics or consume the RNG.
         """
         if self._target_q is None:
@@ -361,7 +372,7 @@ class StretchWbcBackend:
                 ArmAction(
                     name=arm_spec.name,
                     joint_torques=tuple(float(v) for v in torque),
-                    gripper=GripperCommand(values=(self._grip_open,), mode=arm_spec.gripper.command_mode),
+                    gripper=GripperCommand(values=(self._teacher_gripper,), mode=arm_spec.gripper.command_mode),
                 ),
             ),
         )
@@ -524,6 +535,7 @@ class StretchWbcBackend:
             gripper=GripperObservation(
                 position=(float(self.data.qpos[self._grip_q]),),
                 velocity=(float(self.data.qvel[self._grip_v]),),
+                target=(float(self._grip_command),),
             ),
         )
         return WbcObservation(

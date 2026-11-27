@@ -34,7 +34,7 @@ from emet.controller.manipulation.wbc_contract import (
     reach_reward,
 )
 
-OBSERVATION_LAYOUT_VERSION = 3
+OBSERVATION_LAYOUT_VERSION = 4
 
 # Measured contact channels are normalized by fixed physical scales so a
 # checkpoint carries an interpretable force range. The values are clipped only
@@ -77,6 +77,7 @@ class ObservationLayout:
     slices: dict[str, slice]
     occupancy_shape: tuple[int, int, int] | None = None
     include_contact: bool = True
+    layout_version: int = OBSERVATION_LAYOUT_VERSION
 
     @property
     def size(self) -> int:
@@ -84,6 +85,29 @@ class ObservationLayout:
 
     def encode(self, observation: WbcObservation, *, normalize: bool = True) -> np.ndarray:
         return encode_observation(observation, self.profile, layout=self, normalize=normalize)
+
+
+@dataclass(frozen=True)
+class WbcPerturbation:
+    """Episode-level physical perturbation for contact/payload training.
+
+    ``payload_mass`` is attached to the backends that support an inertial
+    payload body; ``gripper_close`` asks the teacher to hold the gripper closed
+    for carry. `payload_com` offsets the center of mass in the payload body frame.
+    The actor never receives the mass, offset, or privileged flag.
+    """
+
+    payload_mass: float = 0.0
+    payload_com: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    gripper_close: bool = False
+
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.payload_mass) or self.payload_mass < 0:
+            raise ValueError("payload_mass must be finite and nonnegative")
+        if len(self.payload_com) != 3 or not np.isfinite(self.payload_com).all():
+            raise ValueError("payload_com must contain three finite values")
+        if not isinstance(self.gripper_close, bool):
+            raise ValueError("gripper_close must be a bool")
 
 
 def _normalized_joint(value: float, joint: JointSpec) -> float:
@@ -104,13 +128,24 @@ def wbc_observation_layout(
     *,
     occupancy_shape: tuple[int, int, int] | None = None,
     include_contact: bool = True,
+    layout_version: int = OBSERVATION_LAYOUT_VERSION,
 ) -> ObservationLayout:
     """Build the canonical scalar layout for one embodiment.
 
-    Optional measured fields (torque, gripper velocity/force, targets) keep a
-    fixed width and are paired with presence flags. Occupancy is only included
-    when the caller declares a crop shape; its flattening order is C order.
+    Optional measured fields (torque, gripper velocity/force/target, targets)
+    keep a fixed width and are paired with presence flags. Occupancy is only
+    included when the caller declares a crop shape; its flattening order is C
+    order.
+
+    ``layout_version`` exists so checkpoint migration can reconstruct a legacy
+    field order. Version 2 has no contact channels; version 3 adds contact;
+    version 4 adds the commanded gripper target. New code should use the
+    default.
     """
+    if layout_version not in (2, 3, 4):
+        raise ValueError("layout_version must be 2, 3, or 4")
+    if layout_version < 3:
+        include_contact = False
     shape = None
     if occupancy_shape is not None:
         shape = tuple(int(v) for v in occupancy_shape)
@@ -177,6 +212,13 @@ def wbc_observation_layout(
                     (f"{prefix}.gripper_force", m),
                 ]
             )
+            if layout_version >= 4:
+                fields.extend(
+                    [
+                        (f"{prefix}.has_gripper_target", 1),
+                        (f"{prefix}.gripper_target", m),
+                    ]
+                )
         if include_contact:
             fields.extend(
                 [
@@ -199,6 +241,7 @@ def wbc_observation_layout(
         slices=slices,
         occupancy_shape=shape,
         include_contact=include_contact,
+        layout_version=layout_version,
     )
 
 
@@ -352,6 +395,14 @@ def encode_observation(
                     for value in force
                 ]
             put(f"{prefix}.gripper_force", force)
+            if layout.layout_version >= 4:
+                put(f"{prefix}.has_gripper_target", [bool(gripper.target)])
+                target = gripper.target or (0.0,) * arm_spec.gripper.dof
+                if gripper.target and limits is not None and normalize:
+                    target = [
+                        _normalized_gripper(value, low, high) for value, (low, high) in zip(target, limits, strict=True)
+                    ]
+                put(f"{prefix}.gripper_target", target)
 
         if layout.include_contact:
             contact = arm.contact

@@ -11,8 +11,37 @@ from emet.rl.model import robot_xml
 from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
+def set_wbc_payload(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    body_id: int,
+    mass_kg: float,
+    local_com: tuple[float, float, float],
+) -> None:
+    """Apply an inertial payload and refresh MuJoCo's derived constants."""
+    mass = max(mass_kg, 1e-9)
+    inertia = 0.4 * mass * 0.03**2
+    if (
+        model.body_mass[body_id] == mass
+        and np.all(model.body_inertia[body_id] == inertia)
+        and np.array_equal(model.body_ipos[body_id], local_com)
+    ):
+        return
+    model.body_mass[body_id] = mass
+    model.body_inertia[body_id] = inertia
+    model.body_ipos[body_id] = local_com
+    mujoco.mj_setConst(model, data)
+
+
 def build_manipulation_model(
-    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0, two_supports=False
+    robot,
+    *,
+    diagnostics=False,
+    payload_asset_set="training",
+    contact_cone="pyramidal",
+    contact_impratio=1.0,
+    two_supports=False,
+    payload_body=False,
 ):
     if type(two_supports) is not bool or (two_supports and robot != "innate_mars"):
         raise ValueError("two-support fixtures require Mars")
@@ -61,6 +90,22 @@ def build_manipulation_model(
         root = scene_xml("left")
         for child in list(root.findall("keyframe")):
             root.remove(child)
+        if payload_body:
+            gripper = root.find(".//body[@name='link_gripper_slider']")
+            if gripper is None:
+                raise ValueError("Stretch scene has no link_gripper_slider body for the payload")
+            payload = ET.SubElement(gripper, "body", name="wbc_payload", pos="0 0 -0.04")
+            ET.SubElement(
+                payload,
+                "geom",
+                name="wbc_payload_geom",
+                type="sphere",
+                size="0.03",
+                mass="0.000000001",
+                contype="0",
+                conaffinity="0",
+                rgba="0.2 0.8 0.2 1",
+            )
     else:
         raise ValueError("unsupported manipulation robot")
     if payload_asset_set != "training":

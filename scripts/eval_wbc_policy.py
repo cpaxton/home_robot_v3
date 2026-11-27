@@ -73,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
             success_hold_s=float(contract["success_hold_s"]),
             collision_force_n=float(contract["collision_force_n"]),
         )
+        # Layout v4 extended the version-1 subtask schema with optional fields.
+        # Compare old checkpoints using the defaults that were implicit then.
+        defaults = {"payload_mass_range": (0.0, 0.0), "gripper_close": False, "torso_range": None}
+        contract = {**contract, "subtasks": [{**defaults, **task} for task in contract["subtasks"]]}
         if env.contract() != contract:
             raise ValueError(f"checkpoint task contract mismatch: {contract} != {env.contract()}")
     if trainer.policy.observation_size != env.observation_space.shape[0]:

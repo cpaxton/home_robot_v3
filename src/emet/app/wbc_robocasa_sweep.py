@@ -22,6 +22,7 @@ import numpy as np
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
 from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 from emet.rl.manipulation.wbc_robocasa_task import RoboCasaPandaTask, TaskResult
+from emet.rl.manipulation.wbc_env import OBSERVATION_LAYOUT_VERSION
 from emet.rl.manipulation.wbc_training import WbcPPO
 
 
@@ -186,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             teacher_slip_rad=np.asarray(teacher_slip_rad, dtype=np.float32),
             intents=np.asarray(intents),
             episode_ids=np.asarray(episode_ids, dtype=np.int32),
+            observation_layout_version=np.asarray(OBSERVATION_LAYOUT_VERSION),
         )
         (args.output / "loaded_task_data_meta.json").write_text(
             json.dumps(

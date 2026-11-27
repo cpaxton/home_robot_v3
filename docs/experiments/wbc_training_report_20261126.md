@@ -20,7 +20,8 @@ RB-Y1, and PandaOmron:
 - **Sensor-only actor.** The privileged teacher may use simulator targets and
   phase state, but the exported actor and checkpoint receive only contract
   observations: base pose/twist, joint encoders, EE pose, EE target, gripper
-  state, measured contact (layout v3), and derived target errors.
+  state/target, measured contact, and derived target errors. Layout v4 adds the commanded
+gripper target to the v3 contact channels.
 - **MuJoCo first.** Every robot is trained and gated against its own direct
   plant. RoboCasa/Robosuite comes second, behind the same `WbcBackend` contract.
 - **A benchmark path.** The long-term target is to run these policies as the
@@ -38,7 +39,7 @@ The contract is `EmbodimentProfile` + `WbcObservation` + `WbcAction`
 joint order, torque limits, and identified servo gains. The observation layout
 is versioned; v3 added measured contact channels (presence, flag, EE-frame
 wrench). A v2 checkpoint is migrated on load by remapping the first-layer
-observation columns and zeroing the new contact inputs.
+observation columns and zeroing the newly added contact/gripper-target inputs.
 
 Training has three stages:
 
@@ -70,6 +71,80 @@ Training has three stages:
 - **Warm starts and bounded replay.** `--init` loads a profile-checked
   checkpoint; `--max-bc-samples` caps the growing DAgger buffer.
 
+### Contact/payload curriculum (layout v4)
+
+Layout v4 adds `has_gripper_target` + `gripper_target` per gripper. This is the
+commanded open/close/hold setpoint, not a measured object state; it sits beside
+the v3 measured wrench/finger-force channels so the actor can tell a commanded
+squeeze from an accidental contact.
+
+The PandaOmron contact suite adds two subtasks to the existing arm/base/combined
+set:
+
+- `wide_arm`: ±0.55 rad arm targets with torso height sampled over 0.12–0.32 m.
+- `carry`: arm + base goals with a 0.1–1.2 kg inertial payload attached to a
+  body downstream of the wrist F/T sensor, and a closed-gripper teacher command.
+
+The payload mass and the `gripper_close` flag are teacher-side only. The actor
+sees the resulting measured wrist wrench, finger force, joint torque, and the
+commanded gripper target. A separate Stretch suite uses a 0.05–0.8 kg payload
+on the gripper slider; Stretch observes the load through joint torque/servo
+effort and finger force rather than a 6-axis wrist sensor. This is the
+two-archetype check: true-torque + F/T (PandaOmron) and position-servo +
+joint-torque/finger-force (Stretch).
+
+Pilot result: the Panda carry teacher succeeds **3/3** with 2.1 cm tracking.
+The longer BC/DAgger run (4,096 teacher steps, 3 × 2,048 DAgger steps, 300 BC
+epochs) reached **1/3** after teacher BC and **0/3** after each DAgger
+iteration, but DAgger cut the mean tracking to 6.5–6.8 cm. A 10-episode
+re-evaluation gives **2/10** for `policy_iter3` (0.196 m mean tracking).
+
+Contact ablation on the same 10 episodes:
+
+| Checkpoint | Full success | Masked success | Full tracking | Masked tracking |
+|---|---:|---:|---:|---:|
+| `policy_iter1` | 0.10 | 0.00 | 0.034 m | 0.053 m |
+| `policy_iter3` | 0.20 | 0.20 | 0.196 m | 0.311 m |
+
+Masking the measured wrist wrench, contact flag, and finger force measurably
+worsens tracking, so the actor is using the load channels rather than only
+averaging the payload. Masking joint torque as well drops success to **0/10**
+for both checkpoints and worsens tracking further (iter1 **3.4 → 9.4 cm**;
+iter3 **19.6 → 33.5 cm**). It is still far below the planned carry gate (0.75);
+no contact-aware checkpoint is promoted.
+
+To separate “hard carry” from “learn the load,” the suite now includes
+`carry_easy`: a 0.4–0.6 kg payload, held base, ±0.10 rad arm targets, and torso
+0.24–0.26 m. The PPO launcher is `scripts/finetune_wbc_contact_ppo.py`; the mask ablation is
+`scripts/eval_wbc_contact_ablation.py`.
+
+PPO fine-tune result: 8,192 steps raised carry success from **0.20 to 0.30**
+(3/10), but mean tracking moved from **0.196 to 0.344 m** and the settled max
+reached **1.20 m**. The reward is still optimizing a mix of position, action,
+and base terms rather than the carry success gate. Do not promote this
+checkpoint.
+
+**Easy-carry curriculum (first contact-aware pass):** `carry_easy` (0.4–0.6 kg,
+held base, ±0.10 rad, torso 0.24–0.26 m) reaches **1.00** after teacher BC and
+remains **1.00** through two DAgger iterations on 5 eval episodes. Mean tracking
+is **1.05 cm**, settled max **3.5 cm**, and BC loss is 0.616 → 0.0016 through
+DAgger. This is the first contact/payload policy to pass a carry task, but it is
+the narrow curriculum stage, not the full `carry` gate. The checkpoint is
+`/tmp/opencode/wbc_contact_carry_easy/best.pt`. A 10-episode ablation still
+passes **1.00/1.00** when wrist wrench, finger force, and joint torque are
+masked, but tracking worsens from **1.26 to 1.73 cm**. The narrow payload range
+is learnable by averaging; the full `carry` task remains the contact test.
+
+Full-carry ramp from the easy checkpoint: teacher BC **0.20**, DAgger iter1
+**0.20**, iter2 **0.40** on 5 episodes. The BC loss is already 0.005, so the
+remaining gap is closed-loop tracking, not label fit. This is better than the
+0.30 PPO result but still below 0.75. The suite now adds `carry_medium`
+(0.2–1.0 kg, held base, ±0.15 rad, torso 0.20–0.30 m) as the next curriculum
+stage; it is training from the easy checkpoint. A fresh
+paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
+constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
+on `carry` (15.49 cm) with the same checkpoint.
+
 ## 3. Robot matrix
 
 | Robot | Plant | DoF summary | Base | Training notes |
@@ -86,8 +161,8 @@ with the exact profile fingerprint and (after migration) the observation layout.
 ## 4. Results
 
 Held-out clean suite: 50 episodes per subtask, three fresh seeds. All rows are
-from the strict re-gate: v2 checkpoints are migrated to layout v3 (zero contact
-inputs, gripper-force columns rescaled), collisions are measured, and tracking
+from the strict re-gate: v2/v3 checkpoints load into layout v4 by copying matching fields and zeroing
+new inputs. Migration resizes gripper-force weights only for v2, collisions are measured, and tracking
 is the settled-window mean. The previously reported Panda clean 0.996 row was
 not reproducible from the shipped checkpoint; it re-gates to **0.942**.
 
@@ -176,7 +251,8 @@ needs:
   direct Mars and Panda plants already had measured contact paths.
 - **Checkpoint compatibility.** Layout v3 added contact channels. `WbcPPO.load`
   migrates v2 checkpoints by remapping the first-layer observation columns and
-  zeroing the new contact inputs; migrated checkpoints are marked in metadata.
+  zeroing the newly added contact/gripper-target inputs; migrated checkpoints are
+  marked in metadata.
 - **Seeding and aliases.** `dagger_train` seeds before constructing the actor;
   `default_subtasks` canonicalizes `mars`, `rb_y1`, `panda_omron`, etc.
 - **Resume and CLI checks.** Periodic checkpoints carry the task contract and a
@@ -228,7 +304,7 @@ Training commands and per-robot hyperparameters are recorded in
    skill/TAMP layer emits EE targets and gripper commands for grasp, lift, and
    place phases. PandaOmron is the native path; Stretch/Sourccey/RB-Y1 need the
    merged-scene adapter.
-2. **Contact and carry.** The layout-v3 contact channels are measured plant
+2. **Contact and carry.** The layout-v4 contact/gripper-target channels are measured plant
    state; shelf entry and payload carry still need occupancy and contact-rich
    training cases.
 3. **Family gates.** Promote a policy only when free-space, base+arm,

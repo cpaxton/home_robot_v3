@@ -26,7 +26,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation, Slerp
 
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
-from emet.rl.manipulation.wbc_env import WbcGymEnv
+from emet.rl.manipulation.wbc_env import OBSERVATION_LAYOUT_VERSION, WbcGymEnv
 from emet.rl.manipulation.wbc_robocasa_panda import RoboCasaPandaBackend
 from emet.rl.manipulation.wbc_training import WbcPPO
 
@@ -523,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--base-standoff", type=float, default=0.55)
     parser.add_argument("--place-standoff", type=float, default=0.58)
+    parser.add_argument("--observe-contact", action="store_true", help="include wrist and finger measurements in WBC inputs")
     parser.add_argument("--teacher", action="store_true", help="use the privileged teacher; no checkpoint")
     parser.add_argument("--teleport-base", action="store_true", help="teacher-only: snap unloaded base approach")
     parser.add_argument("--grasp-z-offset", type=float, default=0.02, help="EEF offset above object center in offset mode")
@@ -586,7 +587,7 @@ def main(argv: list[str] | None = None) -> int:
         obj_groups=args.obj_groups,
         seed=args.seed,
     )
-    backend = RoboCasaPandaBackend(env, base_backoff=0.45, target_mode="offset")
+    backend = RoboCasaPandaBackend(env, base_backoff=0.45, target_mode="offset", observe_contact=args.observe_contact)
     horizon_s = max(180.0, args.steps * 0.05)
     wbc = WbcGymEnv(
         backend,
@@ -643,6 +644,8 @@ def main(argv: list[str] | None = None) -> int:
     stages: dict[str, Any] = {}
     summary: dict[str, Any] = {
         "source_revision": source_revision,
+        "observation_layout_version": OBSERVATION_LAYOUT_VERSION,
+        "observe_contact": args.observe_contact,
         "stages": stages,
         "env_name": args.env_name,
         "layout": args.layout,
@@ -1182,6 +1185,7 @@ def main(argv: list[str] | None = None) -> int:
                 observations=np.stack(rollout_obs, axis=0),
                 teacher_actions=np.stack(rollout_teacher_act, axis=0),
                 requested_actions=np.stack(rollout_requested_act, axis=0),
+                observation_layout_version=np.asarray(OBSERVATION_LAYOUT_VERSION),
                 source_revision=np.asarray(source_revision or ""),
                 task_success=np.asarray([bool(summary.get("task_success", False))]),
             )

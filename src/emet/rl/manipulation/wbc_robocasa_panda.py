@@ -182,6 +182,8 @@ class RoboCasaPandaBackend:
             ee_body=_EE_BODY,
             finger_bodies=("gripper0_right_leftfinger", "gripper0_right_rightfinger"),
             support_bodies=("mobilebase0_fixed_support", "mobilebase0_support"),
+            force_sensor="gripper0_right_force_ee",
+            torque_sensor="gripper0_right_torque_ee",
         )
         self.collision_measured = True
 
@@ -465,7 +467,7 @@ class RoboCasaPandaBackend:
         self._ee_in_base_T = None
         self._teacher_base_speed_scale = 1.0
         self._target_torso = float(_READY_TORSO)
-        self._grip_command = np.asarray((0.04, -0.04))
+        self.set_gripper(True, force=False)
         self._elapsed = 0.0
         world_base = self._world_base_pose()
         self._origin_xy = np.asarray(world_base[:2], dtype=np.float64)
@@ -803,6 +805,7 @@ class RoboCasaPandaBackend:
             position=(float(self.data.qpos[self._torso_q]),),
             velocity=(float(self.data.qvel[self._torso_v]),),
             torque=(float(self.data.qfrc_actuator[self._torso_v]),),
+            target=(float(self._target_torso),),
         )
         arm = ArmObservation(
             name="right",
@@ -816,6 +819,7 @@ class RoboCasaPandaBackend:
                 position=tuple(float(v) for v in self.data.qpos[self._grip_q]),
                 velocity=tuple(float(v) for v in self.data.qvel[self._grip_v]),
                 force=() if contact is None else contact.finger_force,
+                target=tuple(float(v) for v in self._grip_command),
             ),
             contact=None if contact is None else contact.contact,
         )

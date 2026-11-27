@@ -416,6 +416,7 @@ class MuJoCoWbcBackend:
             gripper=GripperObservation(
                 position=(float(self.data.qpos[self._grip_q]),),
                 velocity=(float(self.data.qvel[self._grip_v]),),
+                target=(float(self._grip_command),),
             ),
         )
         return WbcObservation(

@@ -372,6 +372,7 @@ class RoboCasaPandaTask:
             action = teacher_action.copy()
         else:
             assert self.policy is not None
+            assert observation is not None
             import torch
 
             with torch.no_grad():
@@ -425,6 +426,7 @@ class RoboCasaPandaTask:
 
     def _close_until_force(self, q: np.ndarray, pose: tuple[float, ...]) -> list[TaskStep]:
         self._set_phase("close", q, pose)
+        self.backend.set_gripper(False, force=False)
         steps: list[TaskStep] = []
         observation = self.layout.encode(self.backend._observation())
         for _ in range(40):
@@ -452,6 +454,7 @@ class RoboCasaPandaTask:
         joint: bool = False,
     ) -> list[TaskStep]:
         self._set_phase(phase, q, pose, joint=joint)
+        self.backend.set_gripper(bool(gripper[0] > 0), force=False)
         steps: list[TaskStep] = []
         observation = self.layout.encode(self.backend._observation())
         for _ in range(self.max_move_steps):

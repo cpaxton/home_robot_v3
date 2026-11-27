@@ -677,6 +677,7 @@ class Rby1WbcBackend:
                         position=tuple(float(self.data.qpos[self._gripper_q[name]]) for name in names),
                         velocity=tuple(float(self.data.qvel[self._gripper_v[name]]) for name in names),
                         force=tuple(float(self.data.qfrc_actuator[self._gripper_v[name]]) for name in names),
+                        target=tuple(float(self._gripper_command[name]) for name in names),
                     ),
                 )
             )

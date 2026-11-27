@@ -135,7 +135,7 @@ WbcObservation:
     { name,
       joint_position, joint_velocity, joint_torque?,
       ee_pose, ee_target?, target_mask=(position, orientation),
-      gripper?, contact? }
+      gripper? {position, velocity?, force?, target?}, contact? }
   ]
   occupancy: (H, W, D) uint8 | null
   occupancy_origin?, occupancy_resolution?   # required together
@@ -167,6 +167,11 @@ WbcObservation:
   a checkpoint cannot confuse missing contact with zero load.
 - `gripper.force` is the measured per-finger load when available. It is separate
   from the wrist wrench so a two-finger grasp can report bilateral contact.
+- `gripper.target` is the commanded aperture/force setpoint in the same units as
+  `gripper.position`; the layout normalizes it with the gripper command limits.
+  Layout v4 adds this channel (with a presence flag) after the v3 contact
+  channels, so the actor can distinguish commanded open/close/hold from a
+  measured squeeze or an unintended collision.
 - The training encoder adds derived, sensor-only error features that are not
   part of the semantic contract: base x/y and wrapped heading error, plus EE
   position and orientation (rotation-vector) error per arm. These helped the

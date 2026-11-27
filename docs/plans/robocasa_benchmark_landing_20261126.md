@@ -194,7 +194,7 @@ farther object/cabinet target exits the reach tolerance.
 
 ### Phase C — carry, contact, and place
 
-- Use the measured wrist wrench/finger loads from layout v3 during carry.
+- Use the measured wrist wrench/finger loads from layout v4 during carry.
 - Require `contact_state_rate == 1.0` for carry/contact cases.
 - Gate: lift, transport, release, and support are measured; no GT body IDs in the
   actor path.

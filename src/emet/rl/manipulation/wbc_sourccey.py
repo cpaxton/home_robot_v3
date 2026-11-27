@@ -497,6 +497,7 @@ class SourcceyWbcBackend:
                 position=tuple(float(self.data.qpos[self._joint_q[name]]) for name in gripper_names),
                 velocity=tuple(float(self.data.qvel[self._joint_v[name]]) for name in gripper_names),
                 force=tuple(float(self.data.qfrc_actuator[self._joint_v[name]]) for name in gripper_names),
+                target=tuple(float(self._gripper_command[name]) for name in gripper_names),
             )
             arms.append(
                 ArmObservation(

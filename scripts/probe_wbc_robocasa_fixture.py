@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         task._move("pregrasp", pregrasp_q, _pose7(pregrasp_pose, rotation), _GRIPPER_OPEN)
         task._move("grasp", grasp_q, _pose7(grasp_pose, rotation), _GRIPPER_OPEN)
         for _ in range(15):
-            task._step_action(None, _GRIPPER_CLOSE)
+            task._step_action(None, _GRIPPER_CLOSE)[0]
 
         # The left door opens with +z rotation; the right door mirrors it.
         sign = 1.0 if "left" in handle_name or len(fixture.door_joint_names) == 1 else -1.0
@@ -151,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
             backend._target_q = target_q
             backend.set_ee_target(_pose7(target_pose, target_rotation))
             for _ in range(3):
-                task._step_action(None, _GRIPPER_CLOSE)
+                task._step_action(None, _GRIPPER_CLOSE)[0]
             states = fixture.get_joint_state(env, fixture.door_joint_names)
             history.append({"iteration": iteration, "doors": {key: float(value) for key, value in states.items()}})
             if iteration % 5 == 0:

@@ -138,11 +138,11 @@ class WbcActorCritic(nn.Module):
 
 
 def _expand_layout_weights(state_dict: dict, old_layout, new_layout) -> dict:
-    """Move v2 observation columns into the v3 layout, zeroing contact inputs.
+    """Move legacy observation columns into the new layout.
 
-    v3 also normalizes the gripper-force channel by a fixed physical scale.
-    Rescaling the old column makes ``w_old * force == w_new * (force / scale)``
-    for a migrated policy.
+    Fields are remapped by name; fields new to the target layout stay zero.
+    Version 2 stored raw gripper force, while v3+ normalize it by a fixed
+    physical scale, so only the v2 force column needs rescaling.
     """
     from emet.rl.manipulation.wbc_env import GRIPPER_FORCE_SCALE_N
 
@@ -156,14 +156,15 @@ def _expand_layout_weights(state_dict: dict, old_layout, new_layout) -> dict:
             for name, _ in old_layout.fields:
                 if name not in new_layout.slices:
                     raise ValueError(f"legacy layout field {name!r} is missing from the new layout")
-                scale = GRIPPER_FORCE_SCALE_N if name.endswith(".gripper_force") else 1.0
+                rescale_force = not old_layout.include_contact and name.endswith(".gripper_force")
+                scale = GRIPPER_FORCE_SCALE_N if rescale_force else 1.0
                 weight[:, new_layout.slices[name]] = value[:, old_layout.slices[name]] * scale
             expanded[key] = weight
             migrated += 1
         else:
             expanded[key] = value
     if migrated == 0:
-        raise ValueError("v2 checkpoint has no first-layer observation weights to migrate")
+        raise ValueError("legacy checkpoint has no first-layer observation weights to migrate")
     return expanded
 
 
@@ -449,12 +450,16 @@ class WbcPPO:
         migrated_from = None
         if layout_version == OBSERVATION_LAYOUT_VERSION:
             observation_size = int(payload["observation_size"])
-        elif layout_version == 2 and OBSERVATION_LAYOUT_VERSION == 3:
-            old_layout = wbc_observation_layout(profile, include_contact=False)
+        elif layout_version in (2, 3) and OBSERVATION_LAYOUT_VERSION == 4:
+            old_layout = wbc_observation_layout(
+                profile,
+                include_contact=layout_version >= 3,
+                layout_version=layout_version,
+            )
             new_layout = wbc_observation_layout(profile)
             if int(payload["observation_size"]) != old_layout.size:
                 raise ValueError(
-                    "v2 checkpoint observation size does not match the legacy layout; "
+                    f"v{layout_version} checkpoint observation size does not match the legacy layout; "
                     "occupancy-conditioned checkpoints need an explicit migration"
                 )
             state_dict = _expand_layout_weights(state_dict, old_layout, new_layout)
@@ -462,7 +467,7 @@ class WbcPPO:
                 reference_state = _expand_layout_weights(reference_state, old_layout, new_layout)
             observation_size = new_layout.size
             optimizer_state = None
-            migrated_from = 2
+            migrated_from = layout_version
         else:
             raise ValueError("whole-body policy observation layout mismatch")
         if payload.get("profile_fingerprint") != profile.fingerprint:

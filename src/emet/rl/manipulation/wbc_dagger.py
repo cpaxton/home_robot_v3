@@ -24,7 +24,7 @@ import torch
 
 from emet.controller.manipulation.wbc_robots import get_wbc_robot
 from emet.rl.manipulation.wbc_backends import make_wbc_backend
-from emet.rl.manipulation.wbc_env import WbcGymEnv
+from emet.rl.manipulation.wbc_env import WbcGymEnv, WbcPerturbation
 from emet.rl.manipulation.wbc_hard_cases import hard_case_split, load_hard_cases
 from emet.rl.manipulation.wbc_training import (
     WbcActorCritic,
@@ -54,6 +54,9 @@ class WbcSubtask:
     base_goal_mode: str = "forward"
     weight: float = 1.0
     active_arms: tuple[str, ...] | None = None
+    payload_mass_range: tuple[float, float] = (0.0, 0.0)
+    gripper_close: bool = False
+    torso_range: tuple[float, float] | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -73,6 +76,19 @@ class WbcSubtask:
                 raise ValueError(f"{self.name} active_arms must be non-empty arm names")
             if len(set(self.active_arms)) != len(self.active_arms):
                 raise ValueError(f"{self.name} active_arms must be unique")
+        if len(self.payload_mass_range) != 2:
+            raise ValueError(f"{self.name} payload_mass_range must contain two values")
+        low, high = (float(v) for v in self.payload_mass_range)
+        if not np.isfinite([low, high]).all() or low < 0 or low > high:
+            raise ValueError(f"{self.name} payload_mass_range must be finite and ordered")
+        if not isinstance(self.gripper_close, bool):
+            raise ValueError(f"{self.name} gripper_close must be a bool")
+        if self.torso_range is not None:
+            if len(self.torso_range) != 2:
+                raise ValueError(f"{self.name} torso_range must contain two values")
+            low, high = (float(v) for v in self.torso_range)
+            if not np.isfinite([low, high]).all() or low > high:
+                raise ValueError(f"{self.name} torso_range must be finite and ordered")
 
 
 def default_subtasks(robot: str = "innate_mars") -> tuple[WbcSubtask, ...]:
@@ -107,6 +123,117 @@ def default_subtasks(robot: str = "innate_mars") -> tuple[WbcSubtask, ...]:
     )
 
 
+def contact_subtasks(robot: str = "pandaomron") -> tuple[WbcSubtask, ...]:
+    """Contact/payload curriculum for robots with an inertial payload body.
+
+    The free-space suite stays the default so promoted checkpoints keep their
+    stored contract. This suite adds a wide posture and a closed-gripper carry
+    task whose payload load is visible only through measured wrench/torque and
+    finger force, not through the observation.
+    """
+    robot = get_wbc_robot(robot).name
+    if robot == "stretch":
+        return (
+            WbcSubtask("arm", True, False, True, 0.15, 5.0, "forward", 0.15),
+            WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.05),
+            WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.2),
+            WbcSubtask("wide_arm", True, False, True, 0.55, 8.0, "forward", 0.2),
+            WbcSubtask(
+                "carry_easy",
+                True,
+                False,
+                True,
+                0.10,
+                6.0,
+                "forward",
+                0.2,
+                payload_mass_range=(0.2, 0.4),
+                gripper_close=True,
+            ),
+            WbcSubtask(
+                "carry_medium",
+                True,
+                False,
+                True,
+                0.15,
+                7.0,
+                "forward",
+                0.2,
+                payload_mass_range=(0.1, 0.6),
+                gripper_close=True,
+            ),
+            WbcSubtask(
+                "carry",
+                True,
+                True,
+                False,
+                0.35,
+                8.0,
+                "forward",
+                0.2,
+                payload_mass_range=(0.05, 0.8),
+                gripper_close=True,
+            ),
+        )
+    if robot != "pandaomron":
+        raise ValueError(f"no contact curriculum for {robot!r}")
+    return (
+        WbcSubtask("arm", True, False, True, 0.15, 5.0, "forward", 0.15),
+        WbcSubtask("base", False, True, False, 0.0, 5.0, "forward", 0.05),
+        WbcSubtask("combined", True, True, False, 0.15, 8.0, "forward", 0.15),
+        WbcSubtask(
+            "wide_arm",
+            True,
+            False,
+            True,
+            0.55,
+            8.0,
+            "forward",
+            0.15,
+            torso_range=(0.12, 0.32),
+        ),
+        WbcSubtask(
+            "carry_easy",
+            True,
+            False,
+            True,
+            0.10,
+            6.0,
+            "forward",
+            0.2,
+            payload_mass_range=(0.4, 0.6),
+            gripper_close=True,
+            torso_range=(0.24, 0.26),
+        ),
+        WbcSubtask(
+            "carry_medium",
+            True,
+            False,
+            True,
+            0.15,
+            7.0,
+            "forward",
+            0.2,
+            payload_mass_range=(0.2, 1.0),
+            gripper_close=True,
+            torso_range=(0.20, 0.30),
+        ),
+        WbcSubtask(
+            "carry",
+            True,
+            True,
+            False,
+            0.35,
+            8.0,
+            "forward",
+            0.2,
+            payload_mass_range=(0.1, 1.2),
+            gripper_close=True,
+            torso_range=(0.15, 0.32),
+        ),
+    )
+
+
 def subtasks_from_contract(contract: dict[str, Any]) -> tuple[WbcSubtask, ...]:
     """Reconstruct a task suite from a checkpoint contract.
 
@@ -137,6 +264,9 @@ def subtasks_from_contract(contract: dict[str, Any]) -> tuple[WbcSubtask, ...]:
                 base_goal_mode=str(raw["base_goal_mode"]),
                 weight=float(raw["weight"]),
                 active_arms=None if raw.get("active_arms") is None else tuple(str(v) for v in raw["active_arms"]),
+                payload_mass_range=tuple(float(v) for v in raw.get("payload_mass_range", (0.0, 0.0))),
+                gripper_close=bool(raw.get("gripper_close", False)),
+                torso_range=None if raw.get("torso_range") is None else tuple(float(v) for v in raw["torso_range"]),
             )
         except KeyError as exc:
             raise ValueError(f"checkpoint contract subtask is missing {exc.args[0]!r}") from exc
@@ -173,6 +303,11 @@ class WbcTaskSuiteEnv(gym.Env):
             raise ValueError("duplicate subtask names")
         if not 0.0 <= float(hard_case_probability) <= 1.0:
             raise ValueError("hard_case_probability must be in [0, 1]")
+        for task in subtasks:
+            if (task.payload_mass_range[1] > 0 or task.gripper_close) and robot not in {"pandaomron", "stretch"}:
+                raise ValueError(f"payload and gripper perturbations are unsupported for {robot}")
+            if task.torso_range is not None and robot != "pandaomron":
+                raise ValueError(f"torso perturbations are unsupported for {robot}")
         self.robot = robot
         self.control_dt = float(control_dt)
         self.success_hold_s = float(success_hold_s)
@@ -195,6 +330,8 @@ class WbcTaskSuiteEnv(gym.Env):
             }
             if task.active_arms is not None:
                 kwargs["active_arms"] = task.active_arms
+            if task.torso_range is not None and robot == "pandaomron":
+                kwargs["torso_range"] = task.torso_range
             backend = make_wbc_backend(robot, sim="mujoco", **kwargs)
             self.envs[task.name] = WbcGymEnv(
                 backend,
@@ -228,6 +365,11 @@ class WbcTaskSuiteEnv(gym.Env):
         }
 
     @property
+    def profile(self):
+        """Shared contract profile; all subtask environments must match it."""
+        return next(iter(self.envs.values())).profile
+
+    @property
     def active(self) -> WbcGymEnv:
         if self.active_name is None:
             raise RuntimeError("reset the suite before accessing the active environment")
@@ -247,6 +389,17 @@ class WbcTaskSuiteEnv(gym.Env):
             index = int(self.np_random.choice(len(self.names), p=self.weights))
             name = self.names[index]
         self.active_name = name
+        task = next(task for task in self.subtasks if task.name == name)
+        perturbation = None
+        if task.payload_mass_range[1] > 0 or task.gripper_close:
+            mass = float(self.np_random.uniform(task.payload_mass_range[0], task.payload_mass_range[1]))
+            perturbation = WbcPerturbation(
+                payload_mass=mass,
+                gripper_close=task.gripper_close,
+            )
+        setter = getattr(self.envs[name].backend, "set_perturbation", None)
+        if setter is not None:
+            setter(perturbation)
         observation, info = self.envs[name].reset(seed=seed)
         use_hard_case = options is None or options.get("hard_case", True) is not False
         if use_hard_case and self.hard_cases and self.np_random.random() < self.hard_case_probability:
@@ -484,6 +637,7 @@ def dagger_train(
     eval_episodes: int = 10,
     max_bc_samples: int = 20000,
     selection: str = "aggregate",
+    contact_curriculum: bool = False,
     seed: int = 0,
     device: str = "cpu",
     noise_std: float = 0.05,
@@ -496,7 +650,7 @@ def dagger_train(
     if type(max_bc_samples) is not int or max_bc_samples < 1:
         raise ValueError("max_bc_samples must be positive")
     if subtasks is None:
-        subtasks = default_subtasks(robot)
+        subtasks = contact_subtasks(robot) if contact_curriculum else default_subtasks(robot)
     if selection not in {"aggregate", "balanced"}:
         raise ValueError(f"unknown checkpoint selection mode: {selection!r}")
     output = Path(output).expanduser()
@@ -656,6 +810,11 @@ def main(argv: list[str] | None = None) -> int:
         default="aggregate",
         help="checkpoint ranking: aggregate success or aggregate + 0.25 * weakest subtask",
     )
+    parser.add_argument(
+        "--contact-curriculum",
+        action="store_true",
+        help="use the payload/wide-posture suite instead of the default free-space suite",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--noise-std", type=float, default=0.05)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
@@ -664,7 +823,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hard-case-probability", type=float, default=0.0)
     args = parser.parse_args(argv)
 
-    tasks = {task.name: task for task in default_subtasks(args.robot)}
+    suite = contact_subtasks(args.robot) if args.contact_curriculum else default_subtasks(args.robot)
+    tasks = {task.name: task for task in suite}
     requested = (
         list(tasks) if args.subtasks is None else [name.strip() for name in args.subtasks.split(",") if name.strip()]
     )
@@ -704,6 +864,7 @@ def main(argv: list[str] | None = None) -> int:
         eval_episodes=args.eval_episodes,
         max_bc_samples=args.max_bc_samples,
         selection=args.selection,
+        contact_curriculum=args.contact_curriculum,
         seed=args.seed,
         device=device,
         noise_std=args.noise_std,
@@ -722,6 +883,7 @@ __all__ = [
     "WbcTaskSuiteEnv",
     "collect_dagger_data",
     "dagger_train",
+    "contact_subtasks",
     "default_subtasks",
     "evaluate_suite",
     "main",

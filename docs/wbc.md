@@ -25,7 +25,7 @@ There are two layers:
    tracks the targets it is given.
 
 The actor observation is sensor-only: base pose/twist, joint encoders, EE pose,
-EE target, gripper state, measured contact (layout v3), and derived target
+EE target, gripper state/target, measured contact (layout v4), and derived target
 errors. A privileged teacher may use simulator targets and phase state during
 training, but **teacher targets never enter the exported actor or checkpoint**.
 
@@ -87,7 +87,7 @@ uv run python -m emet.rl.manipulation.wbc_coverage \
 
 A checkpoint must load with the exact profile fingerprint. Layout-v2
 checkpoints are migrated to v3 automatically: old observation columns are
-remapped, new contact inputs are zeroed, and the normalized gripper-force
+remapped, new contact and gripper-target inputs are zeroed, and the normalized gripper-force
 columns are rescaled. New DAgger checkpoints also store the task contract
 (subtask goals, target range, base-goal probability, hold-base, control period,
 success hold, collision threshold). `eval_wbc_policy.py` and
@@ -388,7 +388,8 @@ plants resolve them through explicit alias maps and verify the result.
   goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
 
 Use the CLI to run either RoboCasa experiment from Emet. Both routes use
-privileged task targets. The fixed-base sweep exports pre-step observations
+privileged task targets. Pass `--observe-contact` to include measured wrist and
+finger channels in the dynamic runner. The fixed-base sweep exports pre-step observations
 with their same-step expert labels. Regenerate earlier task-bridge archives
 before using them for BC or DAgger.
 
