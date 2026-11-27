@@ -105,17 +105,20 @@ uv run python scripts/sweep_wbc_robocasa_tasks.py \
   --output /tmp/opencode/wbc_task_sweep_policy
 ```
 
-Development result (3 seeds, one scene):
+Development result (10 teacher seeds, one scene):
 
-- 1/3 seeds had a closed cabinet and were skipped.
+- **0/10 task success**; 5/10 seeds had a closed cabinet and were skipped.
+- The 3 open-cabinet seeds below show where tracking breaks.
 - Teacher: pregrasp **0.7 cm**, grasp **3.2–3.8 cm**, centered grasp **0.6 cm**,
   lift **8.7–10.2 cm**, preplace **12–19 cm**, place **3.4–11.6 cm**, release
   **1.7–2.6 cm**; task success **0/3**. Object displacement was 5.3 and 16.2 cm.
 - Policy (robust checkpoint): pregrasp **3.7–5.9 cm**, grasp **15–20 cm**,
   centered grasp **4–7 cm**, lift **29–98 cm**, place **79–117 cm**; task
   success **0/3**.
-- The latest loaded task data has 728 actor-visited observations and teacher
-  labels (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
+- The 10-episode teacher sweep moved the object 0–28 cm but never placed it in
+  the cabinet. The latest policy-mode loaded data has 728 actor-visited
+  observations and teacher labels
+  (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
 
 **Interpretation:** pose extraction, IK target generation, pregrasp tracking,
 and finger centering work. The teacher can now reach the place/release area,

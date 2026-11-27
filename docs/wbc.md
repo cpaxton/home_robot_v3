@@ -374,10 +374,11 @@ plants resolve them through explicit alias maps and verify the result.
   sweep = 20/20, mean 0.87 cm, p95 1.54 cm.
 - **Task-target bridge:** `wbc_robocasa_task.py` derives object/cabinet poses and
   pregrasp/grasp/lift/place/retreat targets via IK; `sweep_wbc_robocasa_tasks.py`
-  runs the sequence with teacher or policy and records task success. A 3-episode
-  development sweep is **0/3**: pregrasp and centered grasp track, but grasp
-  retention is unreliable and the free-space policy degrades after pregrasp.
-  This is a scaffold, not task success; the latest loaded data has 728 samples.
+  runs the sequence with teacher or policy and records task success. A 10-episode
+  teacher sweep is **0/10** (5 closed cabinets skipped); pregrasp and centered
+  grasp track, but grasp retention is unreliable and the free-space policy
+  degrades after pregrasp. This is a scaffold, not task success; the latest
+  loaded data has 728 samples.
 - **Not task success:** object/cabinet place planning, grasp retention, base
   goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
 
