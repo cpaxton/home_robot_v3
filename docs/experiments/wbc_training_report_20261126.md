@@ -157,7 +157,14 @@ teacher BC, and after both DAgger iterations. The medium stage overfits to the
 held base and ±0.15 rad targets and does not retain the base+arm skill. The best
 full-carry result remains the easy-to-full ramp at **0.40**. The suite now adds
 `carry_wide` (0.2–1.0 kg, base+arm, ±0.20 rad, torso 0.18–0.30 m) as the bridge
-between medium and full; it is training from the 0.40 full-carry checkpoint. A fresh
+between medium and full. Trained from the 0.40 full-carry checkpoint, it reaches
+**0.80** after one DAgger iteration (5 episodes, **2.03 cm** mean tracking,
+**3.56 cm** settled max, 0 collisions). The second iteration also succeeds 0.80
+but its settled max is 7.14 cm, so `policy_iter1.pt` is the gate candidate. This
+is the first contact-aware policy to pass a base+arm carry task. It is still a
+curriculum stage, not the full ±0.35 rad carry; a full-carry run initialized
+from it, a 10-episode joint-torque ablation, and a RoboCasa task sweep are in
+flight. A fresh
 paired sweep from seed 31000, after refreshing MuJoCo’s derived payload
 constants, gave **10/10** on `carry_easy` (1.15 cm mean tracking) and **0/10**
 on `carry` (15.49 cm) with the same checkpoint.
