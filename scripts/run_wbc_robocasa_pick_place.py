@@ -128,20 +128,25 @@ def _choose_grasp_z(
     min_width = max(0.015, 0.5 * max_width)
     candidate_top = high - 0.015
     candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
+    center_z = 0.5 * (low + high)
     table: list[tuple[float, float]] = []
+    valid: list[tuple[float, np.ndarray, float]] = []
     best: tuple[float, np.ndarray, float] | None = None
     z = candidate_top
     while z >= candidate_bottom - 1e-9:
         center, width = _cross_section(points, z, pad_half_height_m)
         table.append((z, width))
         if center is not None and min_width <= width <= opening_m - margin_m:
-            return z, center, width, table
+            valid.append((z, center, width))
         if center is not None and (
             best is None
             or abs(width - 0.5 * (min_width + opening_m)) < abs(best[2] - 0.5 * (min_width + opening_m))
         ):
             best = (z, center, width)
         z -= 0.002
+    if valid:
+        chosen = min(valid, key=lambda item: abs(item[0] - center_z))
+        return chosen[0], chosen[1], chosen[2], table
     if best is None:
         raise ValueError("could not find a grasp cross-section")
     return best[0], best[1], best[2], table
