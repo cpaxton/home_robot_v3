@@ -221,8 +221,15 @@ collisions). Iteration 3 is 0.75. The 10-episode evaluation of iteration 2 is
 **0.85 aggregate, zero collisions**: arm 1.00 (1.56 cm), base 1.00,
 combined **0.80** (2.04 cm, 0 collisions), carry_wide **0.60** (5.26 cm,
 settled max 31 cm, 0 collisions). Combined is one episode short of 0.85 and
-carry_wide is below 0.75, so no promotion. A focused `combined,carry_wide`
-continuation from iteration 2 is the next run.
+carry_wide is below 0.75, so no promotion.
+
+**Focused combined + carry_wide pass (5-episode screen):** three DAgger
+iterations from the mixed checkpoint reach **0.90 aggregate, zero collisions**.
+Combined is **1.00** (1.94 cm mean, 3.48 cm settled max) and carry_wide is
+**0.80** (2.34 cm mean, 4.39 cm settled max). Both clear their gates on the
+screen. Candidate: `/tmp/opencode/wbc_contact_combined_carry/policy_iter3.pt`.
+A 10-episode evaluation is in flight; promotion requires that and the 3-seed
+gate.
 
 ## 3. Robot matrix
 
