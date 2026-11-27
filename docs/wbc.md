@@ -9,7 +9,8 @@ This is the how-to guide. Result tables and caveats live in:
 
 - [WBC training report](experiments/wbc_training_report_20261126.md)
 - [multi-robot result matrix](experiments/wbc_multirobot_20261125.md)
-- [RoboCasa adapter](experiments/wbc_robocasa_20261126.md)
+- [RoboCasa reach adapter](experiments/wbc_robocasa_20261126.md)
+- [RoboCasa multi-step pick-place & retention](experiments/robocasa_pandaomron_pick_place_20261127.md)
 - [whole-body control plan](plans/whole-body-rl-control.md)
 
 ## 1. Mental model
@@ -385,6 +386,16 @@ plants resolve them through explicit alias maps and verify the result.
   one scene, not a benchmark result.
 - **Not task success:** object/cabinet place planning, grasp retention, base
   goals, and the merged Stretch/Sourccey/RB-Y1 scenes remain open.
+
+Use the CLI to run either RoboCasa experiment from Emet. Both routes use
+privileged task targets. The fixed-base sweep exports pre-step observations
+with their same-step expert labels. Regenerate earlier task-bridge archives
+before using them for BC or DAgger.
+
+```bash
+MUJOCO_GL=egl uv run emet wbc-robocasa pick-place --teacher --obj-groups can --json-out /tmp/panda-sink.json
+MUJOCO_GL=egl uv run emet wbc-robocasa sweep --teacher --episodes 1 --save-data --output /tmp/panda-cabinet-sweep
+```
 
 ## 7. Troubleshooting
 

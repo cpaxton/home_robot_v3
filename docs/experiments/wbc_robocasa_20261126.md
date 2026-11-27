@@ -235,10 +235,11 @@ scene contact/placement and the approximate torso hold.
 
 ## Next
 
-1. Add collision-aware base/cabinet planning and a place approach that does not
-   require the arm to reach through the cabinet front.
-2. Run a small RoboCasa task DAgger/fine-tune from the loaded task data; the
-   free-space policy currently fails after pregrasp.
-3. Improve grasp retention: the teacher reaches the object but the object is
-   not consistently lifted, so the task bridge is not yet a task-success gate.
-4. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.
+The later [dynamic-base qualification](robocasa_pandaomron_pick_place_20261127.md)
+recorded 11/11 privileged teacher successes across sink and cabinet tasks. The
+fixed-base bridge above supports task-target sweeps and DAgger collection. Its
+earlier policy checkpoints remain unpromoted.
+
+1. Evaluate task-posture training with aligned observation and teacher-action pairs.
+2. Improve the fixed-base grasp and retention path for the objects that failed its sweep.
+3. Reuse the direct-write adapter for the merged Stretch/Sourccey/RB-Y1 scenes.

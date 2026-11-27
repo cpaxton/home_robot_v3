@@ -68,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args(argv)
 
+    if min(args.rounds, args.episodes, args.eval_episodes, args.epochs) < 1:
+        parser.error("rounds, episodes, eval episodes, and epochs must be positive")
+
     repo = Path(__file__).resolve().parents[1]
     sweep = repo / "scripts" / "sweep_wbc_robocasa_tasks.py"
     finetune = repo / "scripts" / "finetune_wbc_task_bc.py"
@@ -79,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     history: list[dict] = []
     for round_index in range(args.rounds):
         round_dir = args.output / f"round_{round_index}"
+        round_dir.mkdir(exist_ok=False)
         rollout_dir = round_dir / "rollout"
         _run(
             [
@@ -94,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.layout),
                 "--style",
                 str(args.style),
+                "--device",
+                args.device,
                 "--backoff",
                 "0.0",
                 "--max-move-steps",
@@ -149,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.layout),
                 "--style",
                 str(args.style),
+                "--device",
+                args.device,
                 "--backoff",
                 "0.0",
                 "--max-move-steps",
@@ -176,8 +184,6 @@ def main(argv: list[str] | None = None) -> int:
             flush=True,
         )
         current = policy_path
-        if success_rate > 0:
-            break
     return 0
 
 
