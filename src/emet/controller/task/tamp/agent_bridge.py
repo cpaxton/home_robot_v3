@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import re
 import uuid
 from dataclasses import dataclass, replace
@@ -24,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from emet.controller.task.tamp.task_search import TaskPlan, execute_task_plan, plan_pick_place_mcts
+from emet.simulation.fixture_tokens import robocasa_fixture_token as _robocasa_fixture_token
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -125,25 +125,8 @@ def resolve_body_alias(body: str | None, placements: dict[str, dict[str, Any]]) 
     return next((candidate for candidate in _body_aliases(body) if candidate in placements), None)
 
 
-# RoboCasa task-name → fixture-key aliases (task names use long words, the wizard
-# fixture scan uses short group keys like ``cab`` / ``counter`` / ``sink``).
-_ROBOCASA_FIXTURE_ALIASES: dict[str, str] = {
-    "cabinet": "cab",
-    "countertop": "counter",
-    "toaster": "toaster",
-    "toasteroven": "toasteroven",
-    "standmixer": "standmixer",
-    "fridgedrawer": "fridgedrawer",
-    "fridgeshelf": "fridgeshelf",
-    "electrickettle": "electrickettle",
-    "coffeemachine": "coffeemachine",
-}
-_ROBOCASA_KNOWN_FIXTURES = frozenset(_ROBOCASA_FIXTURE_ALIASES) | frozenset(_ROBOCASA_FIXTURE_ALIASES.values())
-
-
-def _robocasa_fixture_token(name: str) -> str:
-    token = str(name).strip().lower().replace(" ", "")
-    return _ROBOCASA_FIXTURE_ALIASES.get(token, token)
+# RoboCasa task-name → fixture-key aliases live in a neutral module so the
+# articulation matcher and teacher use the same normal form.
 
 
 def _match_placement_by_category(
@@ -187,45 +170,16 @@ def _match_placement_by_category(
         cat = str(info.get("cat") or "").lower()
         if k == want or cat == want:
             exact.append(str(key))
-        elif k and len(k) >= 3 and (k.startswith(want) or want.startswith(k)):
+        elif (
+            k.startswith(want + "_")
+            or want.startswith(k + "_")
+            or cat.startswith(want + "_")
+            or want.startswith(cat + "_")
+        ):
             prefix.append(str(key))
     for group in (exact, prefix):
         if group:
             return sorted(group, key=rank)[0]
-    return None
-
-
-def _robocasa_task_tokens(task_name: str, placements: dict[str, dict[str, Any]]) -> tuple[str, str] | None:
-    """Split ``PickPlace<Start>To<Goal>`` on the CamelCase delimiter.
-
-    RoboCasa task names are CamelCase, so the start/goal delimiter is a capital
-    ``To``. Fixture names can contain it too (``Toaster``, ``ToasterOven``), so
-    prefer the split where both sides resolve against the live placements; a
-    case-insensitive greedy match would read ``PickPlaceCounterToStove`` as
-    ``countertos`` → ``ve``.
-    """
-    match = re.match(r"PickPlace(.+)", str(task_name or "").strip())
-    if not match:
-        return None
-    rest = match.group(1)
-    splits = [index for index in range(len(rest) - 1) if rest.startswith("To", index)]
-    if not splits:
-        return None
-
-    def known(token: str) -> bool:
-        return (
-            _robocasa_fixture_token(token) in _ROBOCASA_KNOWN_FIXTURES
-            or _match_placement_by_category(placements, token) is not None
-        )
-
-    for index in splits:
-        start, goal = rest[:index], rest[index + 2 :]
-        if start and goal and known(start) and known(goal):
-            return start, goal
-    if len(splits) == 1:
-        start, goal = rest[: splits[0]], rest[splits[0] + 2 :]
-        if start and goal:
-            return start, goal
     return None
 
 
@@ -290,7 +244,9 @@ def robocasa_pick_place_task(environment: Any) -> Any | None:
 
 def gt_teacher_enabled() -> bool:
     """Explicit privileged-GT path for teacher/critic data generation only."""
-    return os.environ.get("EMET_GT_TEACHER", "").strip().lower() in {"1", "true", "yes"}
+    from emet.agent.env_flags import env_gt_teacher
+
+    return env_gt_teacher()
 
 
 def build_semantic_task_refs(tasks: list[Any]) -> list[AgentTaskRef]:
@@ -308,6 +264,61 @@ def build_semantic_task_refs(tasks: list[Any]) -> list[AgentTaskRef]:
     ]
 
 
+def _token_matches_fixture(body: str, info: dict[str, Any], token: str) -> bool:
+    """Exact or token-delimited fixture match; never a bare substring."""
+    want = _robocasa_fixture_token(token)
+    if not want:
+        return False
+    for raw in (body, info.get("cat")):
+        label = str(raw or "").strip().lower()
+        if not label:
+            continue
+        if label == want or label.startswith(want + "_"):
+            return True
+        if _robocasa_fixture_token(label) == want:
+            return True
+    return False
+
+
+def _nearest_object_to_start(
+    placements: dict[str, dict[str, Any]],
+    objects: list[str],
+    start_receptacle: str,
+) -> str | None:
+    """Pick the task object nearest its start counter when the category is shared.
+
+    Fail closed when the start receptacle has no token-delimited match. A loose
+    substring match would let ``cab`` select a ``cable`` fixture.
+    """
+    starts = [
+        body
+        for body, info in placements.items()
+        if isinstance(info, dict) and _token_matches_fixture(body, info, start_receptacle)
+    ] if start_receptacle else []
+    if not starts:
+        return None
+    try:
+        start_positions = [
+            np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3)[:2]
+            for body in starts
+            if body in placements
+        ]
+        if not start_positions:
+            return None
+        return min(
+            objects,
+            key=lambda body: (
+                min(
+                    float(np.linalg.norm(np.asarray(placements[body]["pos"], dtype=np.float64)[:2] - start))
+                    for start in start_positions
+                ),
+                body,
+            ),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def privileged_task_from_semantic(
     ref: AgentTaskRef,
     placements: dict[str, dict[str, Any]] | None,
@@ -319,14 +330,17 @@ def privileged_task_from_semantic(
     objects = bodies_matching_category(live, ref.object_query)
     if not objects:
         return None
-    goal = _match_placement_by_category(live, ref.receptacle_query)
+    object_body = _nearest_object_to_start(live, objects, ref.start_receptacle)
+    if object_body is None:
+        return None
+    goal = _match_placement_by_category(live, ref.receptacle_query, reference_body=object_body)
     if goal is None:
         return None
     return AgentTaskRef(
         ref=ref.ref,
         object_query=ref.object_query,
         receptacle_query=ref.receptacle_query,
-        object_body=objects[0],
+        object_body=object_body,
         receptacle_body=goal,
         start_receptacle=ref.start_receptacle,
         task_name=ref.task_name,

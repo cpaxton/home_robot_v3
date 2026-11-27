@@ -435,6 +435,38 @@ def test_scenario_from_attempt_and_record_scenario(tmp_path, monkeypatch):
     assert record_scenario(rec) is False
 
 
+def test_record_scenario_serializes_on_the_case_library_lock(tmp_path, monkeypatch):
+    import fcntl
+    import threading
+    import time
+
+    from emet.controller.manipulation.failure_record import (
+        default_library_path,
+        record_scenario,
+        scenario_from_attempt,
+    )
+
+    monkeypatch.setenv("EMET_CASE_LIBRARY_DIR", str(tmp_path))
+    rec = scenario_from_attempt(
+        {"failure_mode": "lock_test", "joint_names": ["j1"], "trace": [{"qpos": [0.0]}]},
+        context={"object_query": "mug", "receptacle_query": "cab"},
+    )
+    library = default_library_path()
+    lock_path = library.with_name(library.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    result: list[bool] = []
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        thread = threading.Thread(target=lambda: result.append(record_scenario(rec)))
+        thread.start()
+        time.sleep(0.1)
+        assert thread.is_alive(), "record_scenario did not wait for the case-library lock"
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        thread.join(timeout=2)
+    assert result == [True]
+    assert library.is_file()
+
+
 def test_export_initial_voxel_map_from_mock():
     from emet.controller.manipulation.failure_record import export_initial_voxel_map
 
@@ -468,3 +500,17 @@ def test_export_initial_voxel_map_never_raises():
     out = export_initial_voxel_map(Boom())
     assert out["kind"] == "voxel_map_2d_unavailable"
     assert out["obstacles"] == []
+
+
+def test_scenario_uses_pre_motion_initial_q_when_present():
+    from emet.controller.manipulation.failure_record import scenario_from_attempt
+
+    attempt = {
+        "target_xyz": [0.0, 0.0, 0.9],
+        "initial_q": [0.5, 0.4],
+        "trace": [{"qpos": [0.1, 0.2]}],
+        "joint_names": ["joint1", "joint2"],
+        "failure_mode": "tracking_failed",
+    }
+    rec = scenario_from_attempt(attempt, context={"object_query": "mug"})
+    assert rec.robot_state["q"] == [0.5, 0.4]

@@ -14,6 +14,7 @@ Set ``EMET_MANIP_FAILURE_DIR`` to redirect the sink (default ``~/runs/emet/manip
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import time
@@ -105,12 +106,13 @@ def scenario_from_attempt(
     from emet.controller.manipulation.case_library import ScenarioRecord
 
     trace = attempt.get("trace") or []
-    q0: list[float] = []
-    if trace and isinstance(trace[0], dict):
+    q0: list[float] = list(attempt.get("initial_q") or [])
+    if not q0 and trace and isinstance(trace[0], dict):
         q0 = list(trace[0].get("qpos") or [])
     ctx = dict(context or {})
     goal: dict[str, Any] = {
         "kind": "ee_target",
+        "op": attempt.get("op"),
         "ee_target_pos": attempt.get("target_xyz"),
         "object": ctx.get("object_query") or ctx.get("object"),
         "receptacle": ctx.get("receptacle_query") or ctx.get("receptacle"),
@@ -150,11 +152,15 @@ def record_scenario(record: Any, *, library_dir: str | Path | None = None) -> bo
     from emet.controller.manipulation.case_library import CaseLibrary
 
     lib_path = default_library_path(library_dir)
-    lib = CaseLibrary.load(lib_path) if lib_path.is_file() else CaseLibrary(lib_path)
-    if not lib.add(record):
-        return False
+    lock_path = lib_path.with_name(lib_path.name + ".lock")
     try:
-        lib.save(lib_path)
-        return True
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a", encoding="utf-8") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            lib = CaseLibrary.load(lib_path) if lib_path.is_file() else CaseLibrary(lib_path)
+            if not lib.add(record):
+                return False
+            lib.save(lib_path)
+            return True
     except OSError:
         return False

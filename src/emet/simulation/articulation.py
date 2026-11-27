@@ -114,6 +114,59 @@ def articulation_geometry_changed(current, previous, *, tolerance=1e-6):
     )
 
 
+def articulation_for_query(session, query):
+    """Match a semantic receptacle query to one articulation group.
+
+    Returns ``None`` when the query matches zero or multiple fixture groups.
+    The group's body names stay internal; callers receive only state/actions.
+    """
+    from emet.simulation.fixture_tokens import robocasa_fixture_token
+
+    token = robocasa_fixture_token(str(query or "").strip().lower())
+    if not token:
+        return None
+    groups = session.get("sim_articulations")
+    if not isinstance(groups, list):
+        return None
+    matches = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        bodies = [str(body).lower() for body in (group.get("bodies") or ())]
+        # Match an exact body or a token-delimited body name (``cab`` ->
+        # ``cab_main``). A bare prefix would also match unrelated names such as
+        # ``cable`` and silently open the wrong fixture.
+        if any(body == token or body.startswith(token + "_") for body in bodies):
+            matches.append(group)
+    return matches[0] if len(matches) == 1 else None
+
+
+def articulation_access_for_query(session, query):
+    """Access evidence for a semantic receptacle query without exposing a body id."""
+    caps = session.get("capabilities") or {}
+    if not caps.get("sim_articulation_state"):
+        return {"state": "unknown", "required_action": None, "available_actions": []}
+    group = articulation_for_query(session, query)
+    if group is None:
+        return {"state": "unknown", "required_action": None, "available_actions": []}
+    from emet.simulation.physical_execution import physical_execution_enabled
+
+    supported = bool(group.get("supported"))
+    state = str(group.get("state") or "unknown")
+    actionable = (
+        supported
+        and caps.get("sim_set_joint_qpos")
+        and session.get("is_simulation")
+        and not physical_execution_enabled()
+    )
+    required = None if state == "open" else ("receptacle_requires_open" if supported else "articulation_unsupported")
+    return {
+        "state": state,
+        "required_action": required,
+        "available_actions": ["open", "closed"] if actionable else [],
+    }
+
+
 def articulation_access(session, body):
     """Public access evidence and available assisted actions for task admission."""
     caps = session.get("capabilities") or {}

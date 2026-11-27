@@ -561,9 +561,9 @@ def test_privileged_task_from_semantic_resolves_gt_for_teacher():
     privileged = privileged_task_from_semantic(
         ref,
         {
-            "obj_main": {"cat": "sugar_cube"},
-            "counter_main": {"cat": "counter"},
-            "cab_main": {"cat": "cab"},
+            "obj_main": {"cat": "sugar_cube", "pos": [0.0, 0.0, 1.0]},
+            "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 1.0]},
+            "cab_main": {"cat": "cab", "pos": [0.0, 3.0, 1.0]},
         },
     )
     assert privileged is not None
@@ -759,3 +759,128 @@ def test_teleport_collision_surfaces_refusal_through_plan_and_data():
     assert "cabinet_y" not in json.dumps(data)
 
 
+
+
+def test_privileged_teacher_resolves_the_goal_cabinet_nearest_the_start_counter():
+    from emet.controller.task.tamp.agent_bridge import AgentTaskRef, privileged_task_from_semantic
+
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 1.0]},
+        "obj_2": {"cat": "mug", "pos": [2.0, 0.0, 1.0]},
+        "counter_main": {"cat": "counter", "pos": [0.0, 1.0, 1.0]},
+        "cab_a": {"cat": "cabinet", "pos": [0.0, 3.0, 1.0]},
+        "cab_b": {"cat": "cabinet", "pos": [2.0, 3.0, 1.0]},
+    }
+    ref = AgentTaskRef(
+        ref="query",
+        object_query="mug",
+        receptacle_query="cab",
+        start_receptacle="counter",
+        semantic_only=True,
+    )
+    resolved = privileged_task_from_semantic(ref, placements)
+    assert resolved is not None
+    assert resolved.object_body == "obj_main"
+    assert resolved.receptacle_body == "cab_a"
+    assert resolved.privileged is True
+
+
+def test_semantic_access_query_matches_one_fixture_without_exposing_a_body():
+    from emet.simulation.articulation import articulation_access_for_query
+
+    session = {
+        "capabilities": {"sim_articulation_state": True, "sim_set_joint_qpos": True},
+        "is_simulation": True,
+        "sim_articulations": [
+            {"bodies": ["sink_main"], "supported": True, "state": "open", "joint_positions": {}},
+        ],
+    }
+    access = articulation_access_for_query(session, "sink")
+    assert access["state"] == "open"
+    assert access["required_action"] is None
+    assert access["available_actions"] == ["open", "closed"]
+
+    ambiguous = dict(session)
+    ambiguous["sim_articulations"] = [
+        {"bodies": ["cab_main"], "supported": True, "state": "open"},
+        {"bodies": ["cab_2"], "supported": True, "state": "closed"},
+    ]
+    assert articulation_access_for_query(ambiguous, "cab") == {
+        "state": "unknown",
+        "required_action": None,
+        "available_actions": [],
+    }
+
+
+def test_privileged_teacher_fails_closed_without_a_delimited_start_match():
+    from emet.controller.task.tamp.agent_bridge import AgentTaskRef, privileged_task_from_semantic
+
+    placements = {
+        "obj_main": {"cat": "mug", "pos": [0.0, 0.0, 1.0]},
+        "cable_main": {"cat": "cable", "pos": [0.0, 1.0, 1.0]},
+    }
+    ref = AgentTaskRef(
+        ref="query",
+        object_query="mug",
+        receptacle_query="cab",
+        start_receptacle="cab",
+        semantic_only=True,
+    )
+    assert privileged_task_from_semantic(ref, placements) is None
+
+
+def test_articulation_query_accepts_the_cabinet_alias():
+    from emet.simulation.articulation import articulation_for_query
+
+    session = {"sim_articulations": [{"bodies": ["cab_main"], "supported": True, "state": "open"}]}
+    assert articulation_for_query(session, "cabinet") is session["sim_articulations"][0]
+
+
+def test_articulation_query_requires_a_token_delimiter():
+    from emet.simulation.articulation import articulation_for_query
+
+    session = {
+        "sim_articulations": [
+            {"bodies": ["cable_main"], "supported": True, "state": "open"},
+        ]
+    }
+    assert articulation_for_query(session, "cab") is None
+    session["sim_articulations"] = [{"bodies": ["cab_main"], "supported": True, "state": "open"}]
+    assert articulation_for_query(session, "cab") is session["sim_articulations"][0]
+
+
+def test_planning_attempt_records_pre_motion_q_and_empty_waypoints():
+    import mujoco
+
+    from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="ee">
+              <joint name="j1" type="hinge" axis="0 0 1"/>
+              <geom name="g" type="box" size="0.01 0.01 0.01"/>
+              <joint name="j2" type="hinge" axis="0 0 1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    data.qpos[:] = [0.1, 0.2]
+    mujoco.mj_forward(model, data)
+
+    executor = object.__new__(KinematicPickPlaceExecutor)
+    executor._model = model
+    executor._data = data
+    executor.ee_body = "ee"
+    executor.joint_names = ["j1", "j2"]
+    executor._placement_support_bounds = None
+    attempt = executor.planning_attempt("place", "placement_geometry_missing")
+    assert attempt["op"] == "place"
+    assert attempt["failure_mode"] == "placement_geometry_missing"
+    assert attempt["initial_q"] == pytest.approx([0.1, 0.2])
+    assert attempt["initial_q_synced"] is False
+    assert attempt["trace"][0]["qpos"] == pytest.approx([0.1, 0.2])
+    assert attempt["planned_waypoints"] == []

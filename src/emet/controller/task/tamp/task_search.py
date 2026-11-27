@@ -467,7 +467,11 @@ def execute_task_plan(
         # Persist the failed motion attempt (EE target, observed trajectory, failure
         # mode) for offline RL-WBC replay; the agent-facing result stays a summary.
         attempt = getattr(executor, "last_attempt", None)
+        if (not isinstance(attempt, dict) or not attempt) and hasattr(executor, "planning_attempt"):
+            attempt = executor.planning_attempt(op, code)
         if isinstance(attempt, dict) and attempt:
+            attempt = dict(attempt)
+            attempt.setdefault("op", op)
             from emet.controller.manipulation.failure_record import (
                 record_manip_attempt,
                 record_scenario,
@@ -487,7 +491,9 @@ def execute_task_plan(
                 "robot_id": str(getattr(spec, "name", "") or ""),
                 "job_id": os.environ.get("EMET_JOB_ID") or "",
             }
-            if os.environ.get("EMET_GT_TEACHER", "").strip().lower() in {"1", "true", "yes"}:
+            from emet.agent.env_flags import env_gt_teacher
+
+            if env_gt_teacher():
                 context["privileged"] = True
                 context["object_body"] = plan.object_body
                 context["receptacle_body"] = plan.receptacle_body
@@ -507,6 +513,7 @@ def execute_task_plan(
             if refusal is not None:
                 plan.refusal = refusal
 
+    plan.refusal = None
     for step in plan.steps:
         op = step.op
         args = step.args

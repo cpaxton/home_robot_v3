@@ -61,7 +61,8 @@ tracking fix, the failure-data training pipeline, and the open/close skill.
       `obj_main` + start/goal receptacles) from `environment.task` + GT placements,
       semantic-only (opaque `task_ref`, no body IDs). Lives in
       `chat_tamp.scene_tasks` on current `main`; handles Stove/Toaster/ToasterOven
-      task names and is deterministic with multiple cabinets.
+      task names and is deterministic with multiple cabinets. The teacher path
+      resolves the goal cabinet nearest the task object's start counter.
 - [x] Collision-free place approach: `_search_placement` selects from bounded
       base rings and rejects blocked endpoints via `check_base_poses`.
 - [x] Failed-manip replay sink: `KinematicPickPlaceExecutor.last_attempt` (EE target,
@@ -80,8 +81,9 @@ tracking fix, the failure-data training pipeline, and the open/close skill.
       −0.25 is legal, and the observed 0.08 was the joint never arriving. Covered by
       `test_final_posture_is_recommanded_until_the_torso_settles`.
 - [ ] **RoboCasa counter-height grasp — actuator authority, not planning.** The
-      no-VLM counter path now reaches execution: `scene_tasks` returns one ref
-      (`cab_main`), the 5-radius approach ring picks a clear 0.85 m side pose, and
+      no-VLM counter path now reaches execution: `scene_tasks` returns one
+      semantic task ref (e.g. `sugar_cube` → `cab`), the 5-radius approach ring
+      picks a clear 0.85 m side pose, and
       `plan_pick_place` succeeds. Grasp still fails `pregrasp_tracking_failed`
       (EE error 0.52 m) because torso2/3 settle ~0.4 rad short under the extended
       arm while torso1/4 track. The Galaxea torso PD has `kp=150` with no gravity

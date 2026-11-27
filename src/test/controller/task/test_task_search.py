@@ -237,6 +237,19 @@ def test_task_plan_dataclass():
     assert p.steps[0].op == "approach"
 
 
+def test_execute_task_plan_clears_stale_refusal():
+    robot = _FakeRobot({})
+    plan = TaskPlan(
+        steps=[TaskPlanStep("approach", {"xyt": [0.08, 0.0, 1.57], "world_frame": True})],
+        object_body="obj_a",
+        receptacle_body="cube_b",
+    )
+    plan.refusal = {"code": "teleport_collision", "margin_m": -0.1}
+    out = execute_task_plan(robot, plan, executor=None, grasp_poses=[], manip_mode="teleport")
+    assert out.success
+    assert out.refusal is None
+
+
 def test_execute_task_plan_dumps_stills_per_op():
     robot = _FakeRobot({})
     video = _FakeVideo()
