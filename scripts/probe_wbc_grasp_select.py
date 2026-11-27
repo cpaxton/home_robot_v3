@@ -94,8 +94,8 @@ def _choose_grasp_z(
 ) -> tuple[float, float, list[tuple[float, float]]]:
     high = float(points[:, 2].max())
     low = float(points[:, 2].min())
-    candidate_top = high - 0.008
-    candidate_bottom = max(low + 0.25 * (high - low), high - 0.06)
+    candidate_top = high - 0.020
+    candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
     table: list[tuple[float, float]] = []
     best: tuple[float, float] | None = None
     z = candidate_top
@@ -103,7 +103,7 @@ def _choose_grasp_z(
         width_x, width_y = _cross_section(points, z, pad_half_height_m)
         width = max(width_x, width_y)
         table.append((z, width))
-        if width <= opening_m - margin_m:
+        if 0.015 <= width <= opening_m - margin_m:
             return z, width, table
         if best is None or width < best[1]:
             best = (z, width)
@@ -147,8 +147,17 @@ def _trial(
     descent_steps: int,
     lift_m: float,
     settle_s: float,
+    reset_state: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None,
 ) -> dict[str, object]:
-    backend.reset(seed=seed)
+    if reset_state is None:
+        backend.reset(seed=seed)
+    else:
+        qpos, qvel, origin_xy, origin_yaw = reset_state
+        backend.data.qpos[:] = qpos
+        backend.data.qvel[:] = qvel
+        backend._origin_xy = np.asarray(origin_xy, dtype=np.float64).copy()
+        backend._origin_yaw = float(origin_yaw)
+        env.sim.forward()
     object_pos = _body_pos(env, object_body)
     if not np.array_equal(object_pos, object_pos):  # NaN guard
         return {"error": "object_pose_nan"}
@@ -277,6 +286,12 @@ def main(argv: list[str] | None = None) -> int:
     backend = RoboCasaPandaBackend(env, base_backoff=0.45)
     adapter = TorqueAdapter(pandaomron_sim_profile())
     backend.reset(seed=args.seed)
+    reset_state = (
+        backend.data.qpos.copy(),
+        backend.data.qvel.copy(),
+        np.asarray(backend._origin_xy, dtype=np.float64).copy(),
+        float(backend._origin_yaw),
+    )
     print(f"lang={env.get_ep_meta().get('lang')!r}", flush=True)
 
     for standoff in (float(value) for value in args.standoffs.split(",") if value.strip()):
@@ -294,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             descent_steps=args.descent_steps,
             lift_m=args.lift_m,
             settle_s=args.settle_s,
+            reset_state=reset_state,
         )
         print({"standoff": standoff, **result}, flush=True)
     backend.close()
