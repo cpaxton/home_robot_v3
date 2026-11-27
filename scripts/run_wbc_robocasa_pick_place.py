@@ -160,6 +160,12 @@ def main(argv: list[str] | None = None) -> int:
         default="ready",
         help="wrist orientation for grasp/place targets",
     )
+    parser.add_argument(
+        "--grasp-frame",
+        choices=("hand", "eef"),
+        default="eef",
+        help="target the wrist body directly or offset it so the gripper EEF is at the object",
+    )
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -259,6 +265,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             grasp_quat = tool_quat
         grasp_pos = object_pos + np.array([0.0, 0.0, args.grasp_z_offset])
+        eef_offset = np.zeros(3)
+        if args.grasp_frame == "eef":
+            hand_T = _body_T(env, "robot0_right_hand")
+            eef_T = _body_T(env, "gripper0_right_eef")
+            eef_in_hand = np.linalg.inv(hand_T) @ eef_T
+            eef_offset = Rotation.from_quat(grasp_quat).apply(eef_in_hand[:3, 3])
+            grasp_pos = grasp_pos - eef_offset
         pregrasp = grasp_pos + np.array([0.0, 0.0, 0.12])
         grasp = grasp_pos
         lift = grasp_pos + np.array([0.0, 0.0, 0.20])
@@ -286,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             wbc, backend, action_source=action, timeout_s=12.0, label="transport", teleport=args.teleport_base
         )
 
-        place = receptacle_pos + np.array([0.0, 0.0, 0.10])
+        place = receptacle_pos + np.array([0.0, 0.0, 0.10]) - eef_offset
         backend.set_ee_target(_pose(place, grasp_quat))
         _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="place")
         backend.set_gripper(True)
