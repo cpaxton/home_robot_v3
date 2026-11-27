@@ -152,6 +152,52 @@ def _run_until(
     return last
 
 
+def _run_lift(
+    wbc: WbcGymEnv,
+    backend: RoboCasaPandaBackend,
+    *,
+    env: Any,
+    object_body: str,
+    action_source,
+    start: np.ndarray,
+    end: np.ndarray,
+    quat: np.ndarray,
+    speed_m_s: float,
+    settle_s: float,
+    label: str = "lift",
+) -> dict[str, Any]:
+    """Ramp a Cartesian lift with a bounded EE speed, then settle."""
+    if speed_m_s <= 0:
+        raise ValueError("lift speed must be positive")
+    distance = float(np.linalg.norm(end - start))
+    steps = max(1, int(np.ceil(distance / speed_m_s / wbc.control_dt)))
+    start_object, _ = _body_pose(env, object_body)
+    last: dict[str, Any] = {}
+    for index in range(1, steps + 1):
+        target = start + (end - start) * (index / steps)
+        backend.set_ee_target(_pose(target, quat))
+        _, _, terminated, truncated, last = wbc.step(action_source())
+        if terminated or truncated:
+            break
+    if settle_s > 0:
+        last = _run_until(
+            wbc,
+            backend,
+            action_source=action_source,
+            target_tolerance_m=0.03,
+            timeout_s=settle_s,
+            label=f"{label}_settle",
+        )
+    final_object, _ = _body_pose(env, object_body)
+    rise = float(final_object[2] - start_object[2])
+    print(
+        f"{label}: steps={steps} object_rise={rise:.4f} "
+        f"object={np.round(final_object, 3).tolist()}",
+        flush=True,
+    )
+    return last
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, default=Path("logs/eval/wbc_multirobot_20261126/pandaomron_robust/best.pt"))
@@ -306,8 +352,19 @@ def main(argv: list[str] | None = None) -> int:
             f"hand_force={reading.hand_force:.3f} in_contact={reading.contact.in_contact}",
             flush=True,
         )
-        backend.set_ee_target(_pose(lift, grasp_quat))
-        _run_until(wbc, backend, action_source=action, target_tolerance_m=args.tolerance, timeout_s=8.0, label="lift")
+        _run_lift(
+            wbc,
+            backend,
+            env=env,
+            object_body=args.object_body,
+            action_source=action,
+            start=grasp_pos,
+            end=lift,
+            quat=grasp_quat,
+            speed_m_s=args.lift_speed,
+            settle_s=args.lift_settle,
+            label="lift",
+        )
 
         # Move the base to the receptacle while holding the arm target.
         place_base = base_target_for(receptacle_pos[:2])
