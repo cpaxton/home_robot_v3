@@ -87,6 +87,28 @@ class ObservationLayout:
         return encode_observation(observation, self.profile, layout=self, normalize=normalize)
 
 
+@dataclass(frozen=True)
+class WbcPerturbation:
+    """Episode-level physical perturbation for contact/payload training.
+
+    ``payload_mass`` is attached to the backends that support an inertial
+    payload body; ``gripper_close`` asks the teacher to hold the gripper closed
+    for carry. The actor never receives the mass or the privileged flag.
+    """
+
+    payload_mass: float = 0.0
+    payload_com: tuple[float, float, float] = (0.0, 0.0, -0.06)
+    gripper_close: bool = False
+
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.payload_mass) or self.payload_mass < 0:
+            raise ValueError("payload_mass must be finite and nonnegative")
+        if len(self.payload_com) != 3 or not np.isfinite(self.payload_com).all():
+            raise ValueError("payload_com must contain three finite values")
+        if not isinstance(self.gripper_close, bool):
+            raise ValueError("gripper_close must be a bool")
+
+
 def _normalized_joint(value: float, joint: JointSpec) -> float:
     low, high = joint.position_limit
     midpoint = 0.5 * (low + high)

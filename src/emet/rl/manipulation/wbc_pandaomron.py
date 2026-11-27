@@ -40,6 +40,7 @@ from emet.controller.manipulation.wbc_profiles import (
     resolve_joint_names,
 )
 from emet.rl.manipulation.wbc_contact import ContactReading, MuJoCoContactSensor
+from emet.rl.manipulation.wbc_env import WbcPerturbation
 
 _BASE_JOINTS = (
     "mobilebase0_joint_mobile_forward",
@@ -87,6 +88,7 @@ class PandaOmronWbcBackend:
         arm_goal_probability: float = 1.0,
         base_goal_probability: float = 0.5,
         base_goal_mode: str = "forward",
+        torso_range: tuple[float, float] | None = None,
     ) -> None:
         self.profile = profile or pandaomron_sim_profile()
         if self.profile.meta("robot") != "pandaomron":
@@ -115,6 +117,11 @@ class PandaOmronWbcBackend:
         self.arm_goal_probability = float(arm_goal_probability)
         self.base_goal_probability = float(base_goal_probability)
         self.base_goal_mode = base_goal_mode
+        self.torso_range = None if torso_range is None else (float(torso_range[0]), float(torso_range[1]))
+        if self.torso_range is not None:
+            low, high = self.profile.torso.joints[0].position_limit
+            if not np.isfinite(self.torso_range).all() or not low <= self.torso_range[0] <= self.torso_range[1] <= high:
+                raise ValueError(f"torso_range must be finite and inside [{low}, {high}]")
         self.rng = np.random.default_rng(seed)
 
         self.model, self.model_fingerprint = _build_model()
@@ -152,6 +159,9 @@ class PandaOmronWbcBackend:
         self._grip_act = np.asarray([self.model.actuator(name).id for name in _GRIPPER_ACTUATORS], dtype=int)
         self._base_body = self.model.body(_BASE_BODY).id
         self._ee_body = self.model.body(_EE_BODY).id
+        self._payload_body = int(self.model.body("wbc_payload").id)
+        self._perturbation: WbcPerturbation | None = None
+        self._teacher_gripper = (0.04, -0.04)
         self._arm_low = np.asarray(
             [self.profile.joint_group("panda_arm").joints[i].position_limit[0] for i in range(7)]
         )
@@ -179,12 +189,26 @@ class PandaOmronWbcBackend:
         self._teacher_phase = "base"
         self._elapsed = 0.0
 
+    def set_perturbation(self, perturbation: WbcPerturbation | None) -> None:
+        self._perturbation = perturbation
+
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> WbcObservation:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         mujoco.mj_resetData(self.model, self.data)
+        payload_mass = 0.0 if self._perturbation is None else float(self._perturbation.payload_mass)
+        self.model.body_mass[self._payload_body] = max(payload_mass, 1e-9)
+        payload_radius = 0.03
+        self.model.body_inertia[self._payload_body] = 0.4 * payload_mass * payload_radius**2
+        self._teacher_gripper = (
+            (0.0, 0.0) if self._perturbation is not None and self._perturbation.gripper_close else self._grip_open
+        )
+        if self.torso_range is not None:
+            self._target_torso = float(self.rng.uniform(*self.torso_range))
+        else:
+            self._target_torso = _READY_TORSO
         self.data.qpos[self._base_q] = 0.0
-        self.data.qpos[self._torso_q] = _READY_TORSO
+        self.data.qpos[self._torso_q] = self._target_torso
         self.data.qpos[self._arm_q] = _READY_Q
         self.data.qpos[self._grip_q] = self._grip_open
         mujoco.mj_forward(self.model, self.data)
@@ -320,7 +344,7 @@ class PandaOmronWbcBackend:
                 ArmAction(
                     name="right",
                     joint_torques=tuple(float(v) for v in torque),
-                    gripper=GripperCommand(values=(0.04, -0.04)),
+                    gripper=GripperCommand(values=self._teacher_gripper),
                 ),
             ),
         )
@@ -453,6 +477,7 @@ class PandaOmronWbcBackend:
             position=(float(self.data.qpos[self._torso_q]),),
             velocity=(float(self.data.qvel[self._torso_v]),),
             torque=(float(self.data.qfrc_actuator[self._torso_v]),),
+            target=(float(self._target_torso),),
         )
         arm = ArmObservation(
             name="right",
@@ -506,6 +531,21 @@ def _build_model() -> tuple[mujoco.MjModel, str]:
             conaffinity="0",
         )
         ET.SubElement(world, "light", pos="0 0 3", dir="0 0 -1")
+    hand = root.find(".//body[@name='gripper0_right_gripper']")
+    if hand is None:
+        raise ValueError("PandaOmron XML has no gripper0_right_gripper body")
+    payload = ET.SubElement(hand, "body", name="wbc_payload", pos="0 0 -0.06")
+    ET.SubElement(
+        payload,
+        "geom",
+        name="wbc_payload_geom",
+        type="sphere",
+        size="0.03",
+        mass="0.000000001",
+        contype="0",
+        conaffinity="0",
+        rgba="0.2 0.8 0.2 1",
+    )
     xml = ET.tostring(root, encoding="unicode")
     return mujoco.MjModel.from_xml_string(xml), hashlib.sha256(xml.encode()).hexdigest()
 

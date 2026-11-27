@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from emet.controller.manipulation.wbc_profiles import pandaomron_sim_profile
-from emet.rl.manipulation.wbc_env import WbcGymEnv
+from emet.rl.manipulation.wbc_env import WbcGymEnv, WbcPerturbation
 from emet.rl.manipulation.wbc_pandaomron import PandaOmronWbcBackend
 
 
@@ -92,3 +92,22 @@ def test_pandaomron_env_reports_contact_availability():
     assert np.isfinite(info["contact_force"])
     assert np.isfinite(info["hand_contact_force"])
     env.close()
+
+
+@pytest.mark.sim
+def test_pandaomron_payload_mass_changes_measured_wrench():
+    baseline = PandaOmronWbcBackend(seed=0, base_goal_probability=0.0)
+    baseline_observation = baseline.reset(seed=0)
+    baseline_wrench = abs(float(baseline_observation.arm("right").contact.wrench[2]))
+    baseline.close()
+
+    loaded = PandaOmronWbcBackend(seed=0, base_goal_probability=0.0, torso_range=(0.20, 0.32))
+    loaded.set_perturbation(WbcPerturbation(payload_mass=1.0, gripper_close=True))
+    observation = loaded.reset(seed=0)
+    loaded_wrench = abs(float(observation.arm("right").contact.wrench[2]))
+    assert loaded.model.body_mass[loaded._payload_body] == pytest.approx(1.0)
+    assert loaded_wrench > baseline_wrench + 2.0
+    action = loaded.teacher_action()
+    assert action[-2] < -0.5
+    assert action[-1] > 0.5
+    loaded.close()
