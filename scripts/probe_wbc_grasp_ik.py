@@ -118,6 +118,7 @@ def _trial(
     pregrasp_m: float,
     lift_m: float,
     execute: bool,
+    execute_mode: str,
     reset_state: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None,
 ) -> dict[str, object]:
     if reset_state is None:
@@ -175,14 +176,27 @@ def _trial(
     if not execute or grasp_pos_err > 0.01 or grasp_ang_err > 0.1:
         return result
 
-    # Joint-space move to pregrasp, then to the grasp pose.
-    backend._target_q = q_pre.copy()
-    backend._target_ee = None
-    _step(backend, adapter, 60)
-    start_object = _body_pos(env, object_body)
-    at_pregrasp = _body_pos(env, object_body)
-    backend._target_q = q_grasp.copy()
-    _step(backend, adapter, 80)
+    backend.set_gripper(True)
+    if execute_mode == "joint":
+        backend._target_q = q_pre.copy()
+        backend._target_ee = None
+        _step(backend, adapter, 60)
+        start_object = _body_pos(env, object_body)
+        at_pregrasp = _body_pos(env, object_body)
+        backend._target_q = q_grasp.copy()
+        _step(backend, adapter, 80)
+    else:
+        backend._target_q = None
+        backend.set_ee_target(_pose_from_T(T_hand_pre))
+        _step(backend, adapter, 60)
+        start_object = _body_pos(env, object_body)
+        at_pregrasp = _body_pos(env, object_body)
+        for index in range(60):
+            alpha = (index + 1) / 60
+            T_step = T_hand_des.copy()
+            T_step[:3, 3] = T_hand_pre[:3, 3] + (T_hand_des[:3, 3] - T_hand_pre[:3, 3]) * alpha
+            backend.set_ee_target(_pose_from_T(T_step))
+            _step(backend, adapter, 1)
     at_grasp = _body_pos(env, object_body)
     backend.set_gripper(False)
     _step(backend, adapter, 10)
@@ -192,11 +206,17 @@ def _trial(
     q_before_lift = np.asarray(backend.data.qpos[backend._arm_q], dtype=np.float64).copy()
     T_hand_lift = T_hand_des.copy()
     T_hand_lift[2, 3] += lift_m
+    T_eef_lift = T_eef_des.copy()
+    T_eef_lift[2, 3] += lift_m
     q_lift, _, _ = _solve_ik(backend, env, T_hand_lift)
     backend.data.qpos[backend._arm_q] = q_before_lift
     env.sim.forward()
-    backend._target_q = q_lift.copy()
-    _step(backend, adapter, 30)
+    if execute_mode == "joint":
+        backend._target_q = q_lift.copy()
+        _step(backend, adapter, 30)
+    else:
+        backend.set_ee_target(_pose_from_T(T_eef_lift))
+        _step(backend, adapter, 30)
     after_lift = _body_pos(env, object_body)
     result.update(
         {
@@ -224,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pregrasp-m", type=float, default=0.12)
     parser.add_argument("--lift-m", type=float, default=0.03)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--execute-mode", choices=("cartesian", "joint"), default="cartesian")
     args = parser.parse_args(argv)
 
     import robocasa  # noqa: F401
