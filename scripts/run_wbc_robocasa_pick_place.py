@@ -668,22 +668,17 @@ def main(argv: list[str] | None = None) -> int:
 
         under_cabinet = "cab" in args.receptacle_body
         side = args.grasp_mode == "side"
-        if side or under_cabinet:
-            tilt = float(np.deg2rad(args.grasp_tilt_deg if side else 55.0))
+        if side:
+            tilt = float(np.deg2rad(args.grasp_tilt_deg))
             forward_vec = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
             lateral_vec = np.array([-np.sin(base_yaw), np.cos(base_yaw), 0.0], dtype=np.float64)
             down = np.array([0.0, 0.0, -1.0], dtype=np.float64)
             approach = np.sin(tilt) * forward_vec + np.cos(tilt) * down
             approach /= max(float(np.linalg.norm(approach)), 1e-9)
             y_axis = np.cross(approach, lateral_vec)
-            if under_cabinet:
-                grasp_xy = 0.5 * (object_low[:2] + object_high[:2])
-                grasp_z = float(0.5 * (object_low[2] + object_high[2]))
             T_eef_grasp = np.eye(4, dtype=np.float64)
             T_eef_grasp[:3, :3] = np.column_stack([lateral_vec, y_axis, approach])
-            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z]) - (
-                0.004 * approach if under_cabinet else 0.0
-            )
+            T_eef_grasp[:3, 3] = np.array([grasp_xy[0], grasp_xy[1], grasp_z])
         else:
             T_eef_grasp = top_down_grasp_T(
                 np.array([grasp_xy[0], grasp_xy[1], grasp_z], dtype=np.float64),
@@ -695,11 +690,12 @@ def main(argv: list[str] | None = None) -> int:
         eef_in_hand = np.linalg.inv(T_hand_eef)
         T_hand_grasp = T_eef_grasp @ eef_in_hand
         T_hand_pregrasp = T_hand_grasp.copy()
-        if side or under_cabinet:
-            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * args.pregrasp_height
+        effective_pregrasp_h = min(args.pregrasp_height, 0.08) if under_cabinet else args.pregrasp_height
+        if side:
+            T_hand_pregrasp[:3, 3] -= T_eef_grasp[:3, 2] * effective_pregrasp_h
         else:
             # Always descend straight vertically so open pads straddle without lateral sweep.
-            T_hand_pregrasp[2, 3] += args.pregrasp_height
+            T_hand_pregrasp[2, 3] += effective_pregrasp_h
         grasp_pos = T_hand_grasp[:3, 3].copy()
         grasp_quat = Rotation.from_matrix(T_hand_grasp[:3, :3]).as_quat()
         pregrasp = T_hand_pregrasp[:3, 3].copy()
@@ -712,7 +708,6 @@ def main(argv: list[str] | None = None) -> int:
             f"table={[(round(z, 3), round(w, 3)) for z, w in table[::4]]}",
             flush=True,
         )
-        under_cabinet = "cab" in args.receptacle_body
         if under_cabinet:
             backend.set_torso_target(0.02)
             for _ in range(30):
@@ -815,23 +810,25 @@ def main(argv: list[str] | None = None) -> int:
         # Stage 2: pull out from any overhead cabinet while rising to carry pose.
         forward_xy = np.array([np.cos(base_yaw), np.sin(base_yaw), 0.0], dtype=np.float64)
         if under_cabinet:
-            out_pos = verify_pos - forward_xy * max(args.retract_m, 0.25)
+            # With torso at 0.02 m, a 10 cm vertical lift clears counter distractors
+            # while staying >25 cm below the 1.42 m upper cabinet floor.
+            clear_pos = grasp_pos + np.array([0.0, 0.0, 0.10])
             s1 = _ramp_ee(
                 wbc,
                 backend,
                 action_source=action,
                 start_pos=verify_pos,
-                end_pos=out_pos,
+                end_pos=clear_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
                 solve_ik=args.teacher,
             )
-            retract_pos = out_pos + np.array([0.0, 0.0, max(0.0, args.transport_height - args.lift_height)])
+            retract_pos = clear_pos - forward_xy * max(args.retract_m, 0.25)
             s2 = _ramp_ee(
                 wbc,
                 backend,
                 action_source=action,
-                start_pos=out_pos,
+                start_pos=clear_pos,
                 end_pos=retract_pos,
                 quat=grasp_quat,
                 speed_m_s=args.carry_speed,
