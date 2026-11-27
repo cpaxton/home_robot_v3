@@ -64,6 +64,8 @@ def _object_points(env, body: str) -> np.ndarray:
     for geom in range(model.ngeom):
         if int(model.geom_bodyid[geom]) != body_id:
             continue
+        if int(model.geom_contype[geom]) == 0 and int(model.geom_conaffinity[geom]) == 0:
+            continue
         if int(model.geom_type[geom]) == 7:
             mesh = int(model.geom_dataid[geom])
             start = int(model.mesh_vertadr[mesh])
@@ -78,11 +80,15 @@ def _object_points(env, body: str) -> np.ndarray:
     return np.concatenate(points, axis=0)
 
 
-def _cross_section(points: np.ndarray, z: float, half_height: float) -> tuple[float, float]:
+def _cross_section(
+    points: np.ndarray, z: float, half_height: float
+) -> tuple[np.ndarray | None, float]:
     slab = points[np.abs(points[:, 2] - z) <= half_height]
     if len(slab) == 0:
-        return 0.0, 0.0
-    return float(slab[:, 0].max() - slab[:, 0].min()), float(slab[:, 1].max() - slab[:, 1].min())
+        return None, 0.0
+    low = slab[:, :2].min(axis=0)
+    high = slab[:, :2].max(axis=0)
+    return 0.5 * (low + high), float(np.max(high - low))
 
 
 def _choose_grasp_z(
@@ -91,25 +97,31 @@ def _choose_grasp_z(
     opening_m: float,
     margin_m: float,
     pad_half_height_m: float,
-) -> tuple[float, float, list[tuple[float, float]]]:
+) -> tuple[float, np.ndarray, float, list[tuple[float, float]]]:
     high = float(points[:, 2].max())
     low = float(points[:, 2].min())
-    candidate_top = high - 0.020
+    max_width = 0.0
+    probe = low
+    while probe <= high:
+        _, width = _cross_section(points, probe, 0.005)
+        max_width = max(max_width, width)
+        probe += 0.005
+    min_width = max(0.015, 0.5 * max_width)
+    candidate_top = high - 0.015
     candidate_bottom = max(low + 0.20 * (high - low), high - 0.08)
     table: list[tuple[float, float]] = []
-    best: tuple[float, float] | None = None
+    best: tuple[float, np.ndarray, float] | None = None
     z = candidate_top
     while z >= candidate_bottom - 1e-9:
-        width_x, width_y = _cross_section(points, z, pad_half_height_m)
-        width = max(width_x, width_y)
+        center, width = _cross_section(points, z, pad_half_height_m)
         table.append((z, width))
-        if 0.015 <= width <= opening_m - margin_m:
-            return z, width, table
-        if best is None or width < best[1]:
-            best = (z, width)
+        if center is not None and min_width <= width <= opening_m - margin_m:
+            return z, center, width, table
+        if center is not None and (best is None or abs(width - 0.5 * (min_width + opening_m)) < abs(best[2] - 0.5 * (min_width + opening_m))):
+            best = (z, center, width)
         z -= 0.002
     assert best is not None
-    return best[0], best[1], table
+    return best[0], best[1], best[2], table
 
 
 def _finger_force(backend: RoboCasaPandaBackend, target_body: str) -> tuple[float, float]:
@@ -173,7 +185,7 @@ def _trial(
     points = _object_points(env, object_body)
     low = points.min(axis=0)
     high = points.max(axis=0)
-    grasp_z, width, table = _choose_grasp_z(
+    grasp_z, grasp_center, width, table = _choose_grasp_z(
         points,
         opening_m=opening_m,
         margin_m=margin_m,
@@ -181,7 +193,7 @@ def _trial(
     )
     # Fingers close along the base->object direction, so make the eef X axis lateral.
     yaw = base_yaw + np.pi / 2.0
-    T_eef_des = top_down_grasp_T(np.array([object_pos[0], object_pos[1], grasp_z]), z_offset_m=0.0)
+    T_eef_des = top_down_grasp_T(np.array([grasp_center[0], grasp_center[1], grasp_z]), z_offset_m=0.0)
     T_eef_des[:3, :3] = Rotation.from_euler("z", yaw).as_matrix() @ T_eef_des[:3, :3]
     T_hand_eef = np.linalg.inv(_body_T(env, HAND_BODY)) @ _body_T(env, "gripper0_right_eef")
     eef_in_hand = np.linalg.inv(T_hand_eef)
@@ -234,6 +246,7 @@ def _trial(
         "aabb_low": np.round(low, 4).tolist(),
         "aabb_high": np.round(high, 4).tolist(),
         "grasp_z": float(grasp_z),
+        "grasp_center": np.round(grasp_center, 4).tolist(),
         "section_width": float(width),
         "table": [(round(z, 3), round(w, 3)) for z, w in table[::5]],
         "pregrasp_moved": float(np.linalg.norm(at_pregrasp - object_pos)),
