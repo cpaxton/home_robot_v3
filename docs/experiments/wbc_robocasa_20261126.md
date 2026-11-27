@@ -119,6 +119,13 @@ Development result (10 teacher seeds, one scene):
   the cabinet. The latest policy-mode loaded data has 728 actor-visited
   observations and teacher labels
   (`/tmp/opencode/wbc_task_sweep_policy/loaded_task_data.npz`).
+- Per-episode diagnostics now separate the failure modes. In the 3-episode
+  detailed run, the dish brush was grasped at close but lost during lift; the
+  canned food was grasped and lifted ~12 cm but was not inside the cabinet at
+  release. `object_inside_cabinet` and `gripper_far` are recorded independently.
+- A 728-sample BC fine-tune (loss 0.017) was tried; the subsequent 3-episode
+  policy task sweep was still **0/3** and tracked worse after pregrasp. The
+  free-space actor is not a task policy yet; do not promote the fine-tune.
 
 **Interpretation:** pose extraction, IK target generation, pregrasp tracking,
 and finger centering work. The teacher can now reach the place/release area,

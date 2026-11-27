@@ -128,6 +128,16 @@ class RoboCasaPandaBackend:
         self._arm_low = np.asarray([joint.position_limit[0] for joint in arm_joints])
         self._arm_high = np.asarray([joint.position_limit[1] for joint in arm_joints])
         self._target_q: np.ndarray | None = None
+        self._torso_target = _READY_TORSO
+
+    def set_torso_target(self, height: float) -> None:
+        """Set the privileged torso-height servo target in meters."""
+        value = float(height)
+        joint = self.profile.torso.joints[0]
+        low, high = joint.position_limit
+        if not np.isfinite(value) or not low <= value <= high:
+            raise ValueError(f"torso target {height!r} outside [{low}, {high}]")
+        self._torso_target = value
 
     def _initialize_sim(self) -> None:
         self.model = self.env.sim.model
@@ -222,6 +232,7 @@ class RoboCasaPandaBackend:
         self._base_command[:] = 0.0
         self._grip_command = np.asarray((0.04, -0.04))
         self._elapsed = 0.0
+        self._torso_target = _READY_TORSO
         world_base = self._world_base_pose()
         self._origin_xy = np.asarray(world_base[:2], dtype=np.float64)
         self._origin_yaw = float(world_base[2])
@@ -255,7 +266,9 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
-        torso_torque = float(np.clip(1000.0 * (_READY_TORSO - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0))
+        torso_torque = float(
+            np.clip(1000.0 * (self._torso_target - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+        )
         self.data.ctrl[self._torso_act] = torso_torque
         base = np.asarray(command.base_velocity, dtype=np.float64).reshape(-1)
         if base.shape != (3,) or not np.isfinite(base).all():
@@ -390,7 +403,9 @@ class RoboCasaPandaBackend:
         torso = float(self.data.qpos[self._torso_q])
         torso_qd = float(self.data.qvel[self._torso_v])
         torso_bias = float(self.data.qfrc_bias[self._torso_v])
-        torso_torque = float(np.clip(1000.0 * (_READY_TORSO - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0))
+        torso_torque = float(
+            np.clip(1000.0 * (self._torso_target - torso) - 200.0 * torso_qd + torso_bias, -2000.0, 2000.0)
+        )
         action = WbcAction(
             base_velocity=(0.0, 0.0, 0.0),
             torso_torques=(torso_torque,),

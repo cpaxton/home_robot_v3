@@ -76,6 +76,11 @@ class TaskResult:
     poses: TaskPoses
     steps: list[TaskStep]
     object_displacement_m: float
+    max_object_lift_m: float
+    object_inside_cabinet: bool
+    gripper_far: bool
+    grasped_after_close: bool
+    grasped_after_lift: bool
     final_object_pose: tuple[float, ...]
     final_ee_pose: tuple[float, ...]
 
@@ -99,12 +104,14 @@ class RoboCasaPandaTask:
         control_dt: float = 0.05,
         max_move_steps: int = 70,
         position_tolerance_m: float = 0.015,
+        torso_height: float = 0.30,
     ) -> None:
         self.env = env
         self.backend = backend
         self.control_dt = float(control_dt)
         self.max_move_steps = int(max_move_steps)
         self.position_tolerance_m = float(position_tolerance_m)
+        self.torso_height = float(torso_height)
         self.profile = backend.profile
         self.layout = wbc_observation_layout(self.profile)
         self.curr_phase = ""
@@ -214,6 +221,10 @@ class RoboCasaPandaTask:
         """Reset the backend and derive all task poses for the current scene."""
         observation = self.backend.reset(seed=seed)
         del observation
+        self.backend.set_torso_target(self.torso_height)
+        self.backend.data.qpos[self.backend._torso_q] = self.torso_height
+        self.backend.data.qvel[self.backend._torso_v] = 0.0
+        self.env.sim.forward()
         q0 = np.asarray(self.backend.data.qpos[self.backend._arm_q], dtype=np.float64).copy()
         obj_pose = self.object_pose()
         obj_position = np.asarray(obj_pose[:3], dtype=np.float64)
@@ -361,6 +372,24 @@ class RoboCasaPandaTask:
                 break
         return steps
 
+    def _grasped(self) -> bool:
+        try:
+            from robocasa.utils.object_utils import check_obj_grasped
+
+            return bool(check_obj_grasped(self.env, "obj"))
+        except Exception:
+            return False
+
+    def _task_parts(self) -> tuple[bool, bool]:
+        try:
+            from robocasa.utils.object_utils import gripper_obj_far, obj_inside_of
+
+            inside = bool(obj_inside_of(self.env, "obj", self.env.cab))
+            far = bool(gripper_obj_far(self.env))
+            return inside, far
+        except Exception:
+            return False, False
+
     def execute(self, *, teacher: bool = True, policy=None, seed: int | None = None) -> TaskResult:
         """Run one scripted counter-to-cabinet attempt through the WBC backend."""
         self.configure(teacher=teacher, policy=policy)
@@ -372,10 +401,19 @@ class RoboCasaPandaTask:
                 poses=poses,
                 steps=[],
                 object_displacement_m=0.0,
+                max_object_lift_m=0.0,
+                object_inside_cabinet=False,
+                gripper_far=False,
+                grasped_after_close=False,
+                grasped_after_lift=False,
                 final_object_pose=poses.object_pose,
                 final_ee_pose=poses.pregrasp_pose,
             )
         steps: list[TaskStep] = []
+        initial_z = float(poses.object_pose[2])
+        max_lift = 0.0
+        grasped_after_close = False
+        grasped_after_lift = False
         steps += self._move("pregrasp", poses.pregrasp_q, poses.pregrasp_pose, _GRIPPER_OPEN)
         steps += self._move("grasp", poses.grasp_q, poses.grasp_pose, _GRIPPER_OPEN)
         for _ in range(2):
@@ -387,8 +425,13 @@ class RoboCasaPandaTask:
             steps += self._move("grasp_center", center_q, center_pose, _GRIPPER_OPEN)
         # Close in place.
         steps += self._move("close", poses.grasp_q, poses.grasp_pose, _GRIPPER_CLOSE)
+        grasped_after_close = self._grasped()
+        max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
         steps += self._move("lift", poses.lift_q, poses.lift_pose, _GRIPPER_CLOSE)
+        grasped_after_lift = self._grasped()
+        max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
         steps += self._move("preplace", poses.preplace_q, poses.preplace_pose, _GRIPPER_CLOSE, joint=True)
+        max_lift = max(max_lift, float(self.object_pose()[2]) - initial_z)
         steps += self._move("place", poses.place_q, poses.place_pose, _GRIPPER_CLOSE, joint=True)
         steps += self._move("release", poses.place_q, poses.place_pose, _GRIPPER_OPEN, joint=True)
         steps += self._move("retreat", poses.retreat_q, poses.retreat_pose, _GRIPPER_OPEN, joint=True)
@@ -396,6 +439,7 @@ class RoboCasaPandaTask:
         final_object = self.object_pose()
         displacement = float(np.linalg.norm(np.asarray(final_object[:3]) - np.asarray(poses.object_pose[:3])))
         success = bool(self.env._check_success())
+        inside, far = self._task_parts()
         failure_phase = ""
         if not success:
             bad = [
@@ -410,6 +454,11 @@ class RoboCasaPandaTask:
             poses=poses,
             steps=steps,
             object_displacement_m=displacement,
+            max_object_lift_m=float(max_lift),
+            object_inside_cabinet=inside,
+            gripper_far=far,
+            grasped_after_close=grasped_after_close,
+            grasped_after_lift=grasped_after_lift,
             final_object_pose=final_object,
             final_ee_pose=self._forward_pose(np.asarray(self.backend.data.qpos[self.backend._arm_q])),
         )
