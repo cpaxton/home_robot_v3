@@ -229,23 +229,37 @@ def _run_base_ramp(
     wbc: WbcGymEnv,
     backend: RoboCasaPandaBackend,
     *,
+    env: Any,
     action_source,
     steps: int,
     label: str,
+    hold_T: np.ndarray | None = None,
 ) -> bool:
-    """Smooth kinematic base move while the arm holds a world-frame target."""
+    """Smooth kinematic base move while holding a pose in the base frame.
+
+    Holding a world pose makes the arm counter-rotate as the base yaws, which
+    swings a carried object. Holding the pose in the base frame keeps the arm
+    configuration fixed and lets the object ride with the base.
+    """
     target_q = backend.solve_base_target_qpos()
     if target_q is None:
         print(f"{label}: base target solve failed", flush=True)
         return False
     start_q = np.asarray(backend.data.qpos[backend._base_q], dtype=np.float64).copy()
+    base_hold = None
+    if hold_T is not None:
+        base_hold = np.linalg.inv(_body_T(env, "mobilebase0_base")) @ hold_T
     for index in range(1, steps + 1):
         alpha = index / steps
         backend.apply_base_qpos(start_q + (target_q - start_q) * alpha)
+        if base_hold is not None:
+            backend.set_ee_target(_pose_from_T(_body_T(env, "mobilebase0_base") @ base_hold))
         _, _, terminated, truncated, _ = wbc.step(action_source())
         if terminated or truncated:
             break
     backend.apply_base_qpos(target_q)
+    if base_hold is not None:
+        backend.set_ee_target(_pose_from_T(_body_T(env, "mobilebase0_base") @ base_hold))
     print(
         f"{label}: ramped base={np.round(backend._base_pose(), 3).tolist()} "
         f"target={np.round(backend._target_base, 3).tolist()}",
@@ -590,9 +604,11 @@ def main(argv: list[str] | None = None) -> int:
             _run_base_ramp(
                 wbc,
                 backend,
+                env=env,
                 action_source=action,
                 steps=args.transport_steps,
                 label="transport",
+                hold_T=T_hand_transport,
             )
         else:
             _run_base(
