@@ -33,6 +33,25 @@ def _body_pos(env, body: str) -> np.ndarray:
     return np.asarray(env.sim.data.get_body_xpos(body), dtype=np.float64).copy()
 
 
+def _finger_target_contacts(backend: RoboCasaPandaBackend, target_body: str) -> list[np.ndarray]:
+    target = int(backend.model.body(target_body).id)
+    finger_bodies = set().union(*backend._contact_sensor.finger_bodies_set)
+    points = []
+    for index in range(int(backend.data.ncon)):
+        contact = backend.data.contact[index]
+        first = int(backend.model.geom_bodyid[contact.geom1])
+        second = int(backend.model.geom_bodyid[contact.geom2])
+        if (first in finger_bodies and second == target) or (second in finger_bodies and first == target):
+            points.append(np.asarray(contact.pos, dtype=np.float64).copy())
+    return points
+
+
+def _target_error(backend: RoboCasaPandaBackend) -> tuple[float, float]:
+    target = np.asarray(backend._target_ee[:3], dtype=np.float64)
+    pose = np.asarray(backend._observation().arms[0].ee_pose[:3], dtype=np.float64)
+    return float(np.linalg.norm(target - pose)), 0.0
+
+
 def _step(backend: RoboCasaPandaBackend, adapter: TorqueAdapter, steps: int) -> None:
     dt = backend.control_dt
     for _ in range(steps):
@@ -104,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
             backend.set_gripper(False)
             _step(backend, adapter, 10)
             breakdown = backend.contact_breakdown(args.object_body)
+            contacts = _finger_target_contacts(backend, args.object_body)
+            target_error, _ = _target_error(backend)
             finger_q = np.asarray(backend.data.qpos[backend._grip_q], dtype=np.float64).copy()
             before_lift = _body_pos(env, args.object_body)
             backend.set_ee_target(_pose(grasp + np.array([0.0, 0.0, args.lift_m]), quat))
@@ -117,13 +138,16 @@ def main(argv: list[str] | None = None) -> int:
                 "finger_environment_N": float(breakdown["finger_environment_N"]),
                 "object_rise_m": rise,
                 "finger_q": finger_q.tolist(),
+                "target_error_m": target_error,
+                "contact_z": [float(point[2]) for point in contacts],
                 "retained": bool(breakdown["finger_target_N"] > 1.0 and rise > 0.01),
             }
             results.append(row)
             print(
                 f"{orientation:7s} z={z_offset:+.2f} target_N={row['finger_target_N']:7.2f} "
                 f"env_N={row['finger_environment_N']:7.2f} rise={rise:+.4f} "
-                f"fingers={np.round(finger_q, 3).tolist()} retained={row['retained']}",
+                f"err={target_error:.4f} contact_z={np.round(row['contact_z'], 3).tolist() if row['contact_z'] else []} "
+                f"object_z={start[2]:.3f} fingers={np.round(finger_q, 3).tolist()} retained={row['retained']}",
                 flush=True,
             )
     retained = [row for row in results if row["retained"]]
