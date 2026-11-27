@@ -217,32 +217,49 @@ class RoboCasaPandaBackend:
     def teleport_base_target(self) -> bool:
         """Privileged teacher convenience: snap the planar base to its target.
 
-        The RoboCasa merged scene can carry a non-zero world offset; solve the
-        planar joints through FK instead of writing the reset-frame XYT into qpos.
+        The RoboCasa model is a robosuite binding wrapper, so solve the three
+        planar qpos values numerically through the base body FK instead of
+        calling the native MuJoCo API.
         """
         if self._target_base is None or self.data is None:
             return False
-        from emet.simulation.spawn_planar import write_planar_base_xyt
-
         rotation = Rotation.from_euler("z", self._origin_yaw)
-        world_xy = rotation.apply(
+        target_xy = rotation.apply(
             np.r_[np.asarray(self._target_base[:2], dtype=np.float64), 0.0]
         )[:2] + self._origin_xy
-        world_yaw = _wrap(float(self._target_base[2]) + self._origin_yaw)
-        if not write_planar_base_xyt(
-            self.model,
-            self.data,
-            joint_names=_BASE_JOINTS,
-            world_x=float(world_xy[0]),
-            world_y=float(world_xy[1]),
-            world_yaw=world_yaw,
-            base_body_name=_BASE_BODY,
-        ):
-            return False
+        target_yaw = _wrap(float(self._target_base[2]) + self._origin_yaw)
+
+        def pose_for(q: np.ndarray) -> tuple[np.ndarray, float]:
+            self.data.qpos[self._base_q] = q
+            self.env.sim.forward()
+            world = self._world_base_pose()
+            return np.asarray(world[:2], dtype=np.float64), float(world[2])
+
+        q = np.asarray(self.data.qpos[self._base_q], dtype=np.float64).copy()
+        for _ in range(12):
+            xy, yaw = pose_for(q)
+            error = np.r_[target_xy - xy, _wrap(target_yaw - yaw)]
+            if float(np.linalg.norm(error[:2])) <= 1e-4 and abs(float(error[2])) <= 1e-4:
+                break
+            jac = np.zeros((3, 3), dtype=np.float64)
+            for index in range(3):
+                probe = q.copy()
+                probe[index] += 1e-4
+                probe_xy, probe_yaw = pose_for(probe)
+                jac[:2, index] = (probe_xy - xy) / 1e-4
+                jac[2, index] = _wrap(probe_yaw - yaw) / 1e-4
+            try:
+                step = np.linalg.lstsq(jac, error, rcond=None)[0]
+            except np.linalg.LinAlgError:
+                pose_for(q)
+                return False
+            q += np.clip(step, -0.25, 0.25)
+        pose_for(q)
         self.data.qvel[self._base_v] = 0.0
         self.env.sim.forward()
         self._base_command[:] = 0.0
-        return True
+        xy, yaw = pose_for(q)
+        return bool(np.linalg.norm(target_xy - xy) <= 5e-3 and abs(_wrap(target_yaw - yaw)) <= 5e-3)
 
     def set_local_ee_target(self, pose: tuple[float, ...] | None) -> None:
         """Set an end-effector target in the reset-anchored robot frame."""
